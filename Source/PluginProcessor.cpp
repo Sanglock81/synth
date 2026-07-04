@@ -121,14 +121,20 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 // --- state ---------------------------------------------------------------
 void VASynthProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xml = apvts.copyState().createXml())
+    auto state = apvts.copyState();
+    midiLearn.saveToTree (state);                 // append MIDILEARN child
+    if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
 void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
-        apvts.replaceState (juce::ValueTree::fromXml (*xml));
+    {
+        auto tree = juce::ValueTree::fromXml (*xml);
+        midiLearn.loadFromTree (tree);            // read MIDILEARN child (if any)
+        apvts.replaceState (tree);                // APVTS ignores the extra child
+    }
 }
 
 juce::AudioProcessorEditor* VASynthProcessor::createEditor()

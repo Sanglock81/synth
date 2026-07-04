@@ -1,9 +1,12 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <map>
+#include <array>
+#include <atomic>
+#include <vector>
 
 // ============================================================================
-// MIDI-learn: maps incoming (channel, CC#) -> APVTS parameter.
+// MIDI-learn: maps incoming CC# -> APVTS parameter. Lock-free and
+// allocation-free on the audio thread.
 //
 // Works identically standalone and as a plugin, because it keys on message
 // content, not device. (In standalone, JUCE merges all enabled MIDI inputs —
@@ -13,79 +16,132 @@
 // Launchkey Mini default knob CCs: 21-28. A sensible starter map is provided;
 // learn mode overrides it.
 //
-// Flow:
-//   1. UI arms learn mode with a target parameter ID.
-//   2. Next CC that arrives gets bound to that parameter.
-//   3. Thereafter, matching CCs set the parameter (0-127 -> normalized 0-1,
-//      via setValueNotifyingHost so DAW automation + GUI stay in sync).
+// DESIGN (RT-safety):
+//   * ccToParam[cc] is a fixed std::array<std::atomic<int>,128> holding a
+//     parameter INDEX (-1 = unmapped). No std::map, no node allocation.
+//   * Learn arming crosses the thread boundary via a single std::atomic<int>
+//     (the param index to bind, -1 = disarmed). No SpinLock, no juce::String
+//     on the audio thread.
+//   * handleCC therefore never allocates and never blocks.
 //
-// State is stored inside the APVTS ValueTree, so mappings persist with the
-// plugin state / presets automatically.
-//
-// THREADING NOTE: handleCC is called from processBlock (audio thread).
-// setValueNotifyingHost is safe to call there. Learn-mode arming happens
-// on the message thread; the armed target is a std::atomic-backed exchange.
+// Mappings persist inside the APVTS state (see save/loadFromTree), keyed by the
+// stable parameter ID string, so custom maps survive restarts and presets.
 // ============================================================================
 
 class MidiLearnManager
 {
 public:
+    static constexpr int numCCs = 128;
+
     explicit MidiLearnManager (juce::AudioProcessorValueTreeState& state)
         : apvts (state)
     {
-        // Starter map for Launchkey Mini (mode-dependent; learn to override).
-        addDefaultMapping (21, "filter_cutoff");
-        addDefaultMapping (22, "filter_reso");
-        addDefaultMapping (23, "osc_mix");
-        addDefaultMapping (24, "filter_env_amt");
-        addDefaultMapping (25, "amp_attack");
-        addDefaultMapping (26, "amp_release");
-        addDefaultMapping (27, "lfo_rate");
-        addDefaultMapping (28, "lfo_depth");
+        // Build the index tables from the processor's parameters (message
+        // thread, at construction). index -> (param*, paramID).
+        for (auto* p : apvts.processor.getParameters())
+            if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (p))
+            {
+                paramPtrs.push_back (p);
+                paramIDs.add (withId->paramID);
+            }
+
+        for (auto& a : ccToParam)
+            a.store (-1, std::memory_order_relaxed);
+
+        // Starter map for Launchkey Mini (learn to override).
+        setDefault (21, "filter_cutoff");
+        setDefault (22, "filter_reso");
+        setDefault (23, "osc_mix");
+        setDefault (24, "filter_env_amt");
+        setDefault (25, "amp_attack");
+        setDefault (26, "amp_release");
+        setDefault (27, "lfo_rate");
+        setDefault (28, "lfo_depth");
     }
 
-    // Message thread: arm learn for a parameter (empty string disarms).
+    // ---- message thread -----------------------------------------------------
+    // Arm learn for a parameter (empty string disarms).
     void armLearn (const juce::String& parameterID)
     {
-        const juce::SpinLock::ScopedLockType lock (mapLock);
-        learnTarget = parameterID;
+        learnTarget.store (indexOf (parameterID), std::memory_order_release);
     }
 
-    // Audio thread: called for every incoming CC message.
+    bool isLearning() const { return learnTarget.load (std::memory_order_acquire) >= 0; }
+
+    // ---- audio thread: lock-free, allocation-free ---------------------------
     void handleCC (int /*channel*/, int ccNumber, int ccValue)
     {
-        const juce::SpinLock::ScopedTryLockType lock (mapLock);
-        if (! lock.isLocked())
-            return;   // UI is editing the map right now; drop one CC, no big deal
-
-        if (learnTarget.isNotEmpty())
-        {
-            mappings[ccNumber] = learnTarget;
-            learnTarget.clear();
-            // TODO: persist mapping into apvts.state ValueTree here.
-        }
-
-        auto it = mappings.find (ccNumber);
-        if (it == mappings.end())
+        if (ccNumber < 0 || ccNumber >= numCCs)
             return;
 
-        if (auto* param = apvts.getParameter (it->second))
+        // Bind first if learn is armed (consume the arming).
+        const int target = learnTarget.load (std::memory_order_acquire);
+        if (target >= 0)
         {
-            param->setValueNotifyingHost (ccValue / 127.0f);
+            ccToParam[(size_t) ccNumber].store (target, std::memory_order_release);
+            learnTarget.store (-1, std::memory_order_release);
+        }
+
+        const int idx = ccToParam[(size_t) ccNumber].load (std::memory_order_acquire);
+        if (idx >= 0)
+            paramPtrs[(size_t) idx]->setValueNotifyingHost (ccValue / 127.0f);
+    }
+
+    // ---- persistence (message thread) ---------------------------------------
+    // Writes the current CC->paramID map as a MIDILEARN child of `parent`,
+    // replacing any existing one.
+    void saveToTree (juce::ValueTree parent) const
+    {
+        parent.removeChild (parent.getChildWithName (treeType), nullptr);
+        juce::ValueTree ml (treeType);
+        for (int cc = 0; cc < numCCs; ++cc)
+        {
+            const int idx = ccToParam[(size_t) cc].load (std::memory_order_acquire);
+            if (idx >= 0)
+            {
+                juce::ValueTree m ("MAP");
+                m.setProperty ("cc", cc, nullptr);
+                m.setProperty ("param", paramIDs[idx], nullptr);
+                ml.addChild (m, -1, nullptr);
+            }
+        }
+        parent.addChild (ml, -1, nullptr);
+    }
+
+    // Applies a MIDILEARN child if present. Absent child => keep current map.
+    void loadFromTree (const juce::ValueTree& parent)
+    {
+        auto ml = parent.getChildWithName (treeType);
+        if (! ml.isValid())
+            return;
+
+        for (auto& a : ccToParam)
+            a.store (-1, std::memory_order_release);
+
+        for (auto m : ml)
+        {
+            const int cc  = (int) m.getProperty ("cc", -1);
+            const int idx = indexOf (m.getProperty ("param", juce::String()).toString());
+            if (cc >= 0 && cc < numCCs && idx >= 0)
+                ccToParam[(size_t) cc].store (idx, std::memory_order_release);
         }
     }
 
-    // TODO: serialize/deserialize mappings to/from apvts.state so custom
-    // maps survive restarts. Default map above covers v1.
-
 private:
-    void addDefaultMapping (int cc, const juce::String& paramID)
+    inline static const juce::Identifier treeType { "MIDILEARN" };
+
+    int indexOf (const juce::String& id) const { return paramIDs.indexOf (id); }
+
+    void setDefault (int cc, const char* id)
     {
-        mappings[cc] = paramID;
+        const int i = indexOf (id);
+        if (i >= 0) ccToParam[(size_t) cc].store (i, std::memory_order_relaxed);
     }
 
     juce::AudioProcessorValueTreeState& apvts;
-    std::map<int, juce::String> mappings;   // CC# -> parameter ID
-    juce::String learnTarget;
-    juce::SpinLock mapLock;
+
+    std::vector<juce::AudioProcessorParameter*> paramPtrs;  // index -> param
+    juce::StringArray                           paramIDs;   // index -> id (stable key)
+    std::array<std::atomic<int>, numCCs>        ccToParam;  // cc -> param index (-1 none)
+    std::atomic<int>                            learnTarget { -1 };  // index to bind
 };
