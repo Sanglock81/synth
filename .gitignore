@@ -1,0 +1,13 @@
+# Build output
+/build/
+*.o
+*.a
+*.so
+# JUCE fetch cache if placed locally
+/JUCE/
+# Editor/OS cruft
+.DS_Store
+*.swp
+# Session artifacts
+/vasynth-skeleton.zip
+/VASynth-README.md
