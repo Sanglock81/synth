@@ -44,6 +44,11 @@ target_compile_definitions(dsp_tests PRIVATE
 
 catch_discover_tests(dsp_tests)
 
+# --- performance benchmark (not a CTest gate; wall time is machine-specific) -
+add_executable(dsp_bench bench/bench_engine.cpp)
+target_include_directories(dsp_bench PRIVATE ${CMAKE_SOURCE_DIR}/Source/DSP)
+target_compile_features(dsp_bench PRIVATE cxx_std_17)
+
 # --- Plugin-layer tests (need JUCE + the processor) -------------------------
 add_executable(plugin_tests
     plugin/test_state.cpp
