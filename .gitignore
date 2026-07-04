@@ -11,3 +11,6 @@
 # Session artifacts
 /vasynth-skeleton.zip
 /VASynth-README.md
+
+# pluginval (fetched by run-all-checks.sh)
+/tools/

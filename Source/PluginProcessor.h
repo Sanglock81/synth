@@ -57,6 +57,9 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
+    // Exposed for the (v2) right-click MIDI-learn GUI and for tests.
+    MidiLearnManager& getMidiLearn() { return midiLearn; }
+
 private:
     VoiceParams snapshotParams() const;
 

@@ -48,3 +48,15 @@ target_link_libraries(VASynth PRIVATE
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags)
+
+# ---------------------------------------------------------------------------
+# Tests. Off by default for a plain plugin build; run-all-checks.sh turns it on.
+# DSP tests link NO JUCE (Source/DSP/ is dependency-free by design); the
+# plugin-layer tests link the shared-code target.
+# ---------------------------------------------------------------------------
+option(VASYNTH_BUILD_TESTS "Build the VA Synth test suite" OFF)
+
+if (VASYNTH_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

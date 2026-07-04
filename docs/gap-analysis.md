@@ -14,6 +14,14 @@ Legend for the task checkboxes at the bottom: `[ ]` open, `[x]` done, `[~]` in p
   residual and look correct. Square gets PWM by placing the second BLEP at the
   pulse-width edge. Sine is a plain `sin`. `polyBlep` guards against `dt==0`
   implicitly (no division taken when `phaseInc==0`).
+- **VERIFIED (Phase 2):** The saw matches a canonical 2-point PolyBLEP reference
+  bit-for-bit — the header is correct, not buggy. But 2-point PolyBLEP's real
+  aliasing capability is limited: ~−55 dB at 110 Hz, −43 dB at 440 Hz, **−26 dB
+  at 3 kHz** (worst image sits near Nyquist). It **cannot** meet the −60 dB @
+  3 kHz "soul" spec. Also, *exactly* 3 kHz at 48 kHz is degenerate (48000/3000=16),
+  so aliases fold onto harmonics and the test measures nothing (~−158 dB) — even a
+  naive saw "passes". **Decision (approved): add 4× oversampling** (reaches
+  −69.6 dB @ 3 kHz) and keep the strict test at a non-degenerate ~3 kHz. See P3.
 - **Suspect:**
   - **Triangle amplitude is pitch- and sample-rate-dependent.** The triangle is a
     leaky integrator of the BLEP'd square: `triState = 0.995*triState + 4*phaseInc*sq`.
@@ -217,39 +225,48 @@ Legend for the task checkboxes at the bottom: `[ ]` open, `[x]` done, `[~]` in p
 Order follows the mandated sequence: **build works → tests pass → correctness fixes →
 v1 roadmap features.** Test-first for every fix (write the failing test, then fix).
 
-### P1 — Build (Phase 1)
-- [ ] Install missing deps (cmake, jack, freetype, fontconfig, xinerama, xcursor, curl).
-- [ ] Configure + build Release; fix all compile errors in the JUCE-facing files.
-- [ ] Build **both** Standalone and VST3; zero new warnings (no suppression).
+### P1 — Build (Phase 1) ✅ DONE
+- [x] Install missing deps (cmake, jack, freetype, fontconfig, xinerama, xcursor, curl).
+- [x] Configure + build Release; fixed the one warning (`-Woverloaded-virtual`:
+      un-hid the base `processBlock(double)` with a `using` declaration).
+- [x] Build **both** Standalone and VST3; zero warnings from our code (no suppression).
 
-### P2 — Test harness (Phase 2, non-negotiable)
-- [ ] Catch2 via FetchContent, wired into CTest.
-- [ ] JUCE-free DSP test target (includes only `Source/DSP/`).
-- [ ] Port `dsp_smoke_test` into the framework.
-- [ ] Oscillator tests: boundedness (all 4 waves, 20 Hz–8 kHz), phase continuity,
-      **3 kHz saw aliasing < −60 dB** (the soul test), square PWM 0.1/0.5/0.9.
-- [ ] Filter tests: 10 s white-noise stability over type×cutoff×resonance grid;
-      LP/HP frequency-response sanity; full-range cutoff sweep in one block.
-- [ ] Envelope tests: attack `≤ ×1.5`, release `≤ −80 dB in ×2`, retrigger continuity
-      (Δ < 0.1), `steal() < 10 ms`. **(Expect failures → drives finding A2.)**
-- [ ] LFO tests: boundedness, S&H once/cycle, rate accuracy ≤ 1 %.
-- [ ] Voice/Engine tests: determinism (bit-exact), note lifecycle frees voice,
-      17-on-16 steal without click, silence-in→silence-out.
-- [ ] RT-safety: 1000-block render with **zero heap allocations** in `render`
-      (override global `new`/counting hook).
-- [ ] Plugin layer: pluginval strictness ≥ 8; state round-trip; MIDI-learn (mapped CC
-      moves target, learn binds new CC, survives round-trip).
-- [ ] Golden render: 2 s chord + filter-sweep → committed WAV, tolerance compare.
-- [ ] `./run-all-checks.sh`: build both configs + ctest + pluginval; nonzero on failure.
+### P2 — Test harness (Phase 2, non-negotiable) ✅ DONE
+- [x] Catch2 v3 via FetchContent, wired into CTest.
+- [x] JUCE-free DSP test target (`dsp_tests`, includes only `Source/DSP/`).
+- [x] Ported the smoke test into the framework (`test_smoke.cpp`).
+- [x] Oscillator tests: boundedness, phase continuity, aliasing (Blackman-Harris
+      FFT, non-degenerate ~3 kHz, naive-must-fail), square PWM 0.1/0.5/0.9.
+      _Aliasing + triangle-bound currently fail → drive P3._
+- [x] Filter tests: 10 s noise stability over the full grid; LP/HP response; sweep.
+- [x] Envelope tests to spec. _Release-timing + steal-timing fail → drive P3._
+- [x] LFO tests: boundedness, S&H once/cycle, rate accuracy (interval-timed).
+- [x] Voice/Engine: determinism (bit-exact), lifecycle, 17-on-16 steal, silence.
+- [x] RT-safety: 1000-block zero-alloc guard on `SynthEngine::render` — **passes**
+      (engine is alloc-free; the processor-layer alloc test is added in P3).
+- [x] Plugin layer: pluginval strictness 8 (**passes**); state round-trip; MIDI-learn
+      CC + learn-bind. _Persistence round-trip fails → drives P3._
+- [x] Golden render harness (self-bootstrapping; reference committed after P3 DSP
+      settles, since oversampling/envelope/smoothing change the sound).
+- [x] `./run-all-checks.sh`: fetch pluginval → build both artefacts → ctest.
+
+**Remaining test failures after P2 (all expected P3 drivers):** oscillator triangle
+bound (1.22 > 1.1), aliasing (−26 > −60 dB), release-to-−80 dB timing, steal < 10 ms,
+MIDI-learn persistence round-trip.
 
 ### P3 — Correctness fixes (Phase 3, test-first)
-- [ ] **RT-safety:** preallocate `monoScratch`; lock-free/alloc-free `MidiLearnManager`.
+- [ ] **RT-safety:** preallocate `monoScratch`; lock-free/alloc-free `MidiLearnManager`;
+      add a JUCE-side allocation test guarding `processBlock`.
+- [ ] **4× oversampled oscillator** (NEW, approved): oversample OSC + halfband/decimation
+      FIR so the −60 dB @ 3 kHz aliasing test passes honestly. Stays JUCE-free.
 - [ ] **ADSR timing** re-calibration so nominal seconds match; `quickRelease` < 10 ms.
 - [ ] **Click-free steal/retrigger:** stop resetting osc phase on retrigger; make steal
       fade to silence before reuse (or steal-fade gain).
 - [ ] **Denormal safety** inside `Source/DSP/` (or documented in tests).
-- [ ] **Triangle** amplitude/leak fix (sample-rate-scaled leak or DC-blocker).
+- [ ] **Triangle** amplitude/leak fix (sample-rate-scaled leak or DC-blocker; also
+      re-normalise after oversampling changes `phaseInc`).
 - [ ] **Parameter smoothing:** one-pole on cutoff/reso/gain/oscMix; zipper test first.
+- [ ] Regenerate + commit the golden reference once the above land.
 
 ### P4 — v1 roadmap features (Phase 3)
 - [ ] Pitch bend (±2 semis default) — from any device.
