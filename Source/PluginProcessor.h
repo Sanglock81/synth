@@ -30,6 +30,10 @@ public:
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    // Float-only synth; keep the base double-precision overload in scope so it
+    // isn't hidden (-Woverloaded-virtual). supportsDoublePrecisionProcessing()
+    // is false by default, so the double version is never actually called.
+    using juce::AudioProcessor::processBlock;
 
     // -- editor ----------------------------------------------------------------
     juce::AudioProcessorEditor* createEditor() override;
