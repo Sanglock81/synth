@@ -103,6 +103,24 @@ TEST_CASE ("note-on/off lifecycle frees the voice (silence after release)", "[en
     REQUIRE (tu::peak (more) > 0.01f);
 }
 
+TEST_CASE ("retriggering a held note does not click", "[engine][retrigger]")
+{
+    SynthEngine e; e.prepare (kSR);
+    VoiceParams p = sineParams();
+
+    const int reAt = 12000;                            // retrigger point (past attack)
+    auto out = renderScript (e, p, reAt + 4096, {
+        { 0,    [](SynthEngine& en){ en.noteOn (60, 0.8f); } },
+        { reAt, [](SynthEngine& en){ en.noteOn (60, 0.8f); } },   // same note again
+    });
+
+    const float pre  = maxDeltaRange (out, reAt - 2048, reAt - 64);
+    const float atEv = maxDeltaRange (out, reAt - 8,    reAt + 512);
+    INFO ("pre=" << pre << " at-retrigger=" << atEv);
+    REQUIRE (tu::allFinite (out));
+    REQUIRE (atEv <= pre + 0.05f);                     // no phase-reset discontinuity
+}
+
 TEST_CASE ("17 notes on 16 voices steals oldest without a click", "[engine][steal]")
 {
     SynthEngine e; e.prepare (kSR);

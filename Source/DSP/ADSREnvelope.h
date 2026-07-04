@@ -55,9 +55,11 @@ public:
     }
 
     // Hard steal: fast fade used by the voice allocator to avoid clicks.
+    // ~4 ms — long enough to be click-free, short enough that steal() completes
+    // well under the 10 ms budget even from a full-level note.
     void quickRelease()
     {
-        releaseCoef = coefForTime (0.005);
+        releaseCoef = coefForTime (0.004);
         stage = Stage::Release;
     }
 
@@ -94,12 +96,19 @@ public:
     }
 
 private:
-    // One-pole coefficient that traverses ~most of the distance in `seconds`.
+    // One-pole coefficient calibrated so a segment converges to within ~-60 dB
+    // (0.001) of its target span in `seconds`. Derivation: after n = seconds*sr
+    // samples the remaining fraction (1-coef)^n must equal 1e-3, so
+    // coef = 1 - exp(ln(1e-3) / (seconds*sr)) = 1 - exp(-6.908 / (seconds*sr)).
+    // This makes nominal envelope times honest: a 0.2 s release reaches -80 dB
+    // in ~1.3x the release time, and quickRelease settles in a few ms.
     double coefForTime (double seconds) const
     {
         seconds = std::max (seconds, 0.0005);
-        return 1.0 - std::exp (-1.0 / (seconds * sampleRate * 0.3));
+        return 1.0 - std::exp (kConvergence / (seconds * sampleRate));
     }
+
+    static constexpr double kConvergence = -6.907755278982137;   // ln(1e-3)
 
     static constexpr double attackTarget = 1.3;   // overshoot -> finite attack
 

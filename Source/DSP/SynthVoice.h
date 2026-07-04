@@ -62,13 +62,23 @@ public:
 
     void noteOn (int note, float vel, std::uint64_t stamp)
     {
+        // Only clear DSP state for a genuinely fresh voice. On a retrigger or a
+        // steal (voice already sounding) we keep oscillator phase and filter
+        // state continuous — a phase reset there is an audible click. The amp
+        // envelope retriggers from its current level, so the transition is
+        // click-free (fresh voices start from level 0, so phase is irrelevant).
+        const bool wasIdle = ! active;
+
         midiNote  = note;
         velocity  = vel;
         timestamp = stamp;
 
-        osc1.reset();
-        osc2.reset();
-        filter.reset();
+        if (wasIdle)
+        {
+            osc1.reset();
+            osc2.reset();
+            filter.reset();
+        }
         ampEnv.noteOn();
         fltEnv.noteOn();
         active = true;

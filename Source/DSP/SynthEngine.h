@@ -47,13 +47,15 @@ public:
             if (! v.isActive())
                 { v.noteOn (note, velocity, ++eventCounter); return; }
 
-        // ...or steal the oldest.
+        // ...or steal the oldest. The voice keeps its oscillator phase and
+        // filter state (SynthVoice::noteOn only clears them for an idle voice)
+        // and the amp envelope retriggers from its current level, so the steal
+        // is click-free without a separate fade.
         auto* oldest = &voices[0];
         for (auto& v : voices)
             if (v.getTimestamp() < oldest->getTimestamp())
                 oldest = &v;
 
-        oldest->steal();
         oldest->noteOn (note, velocity, ++eventCounter);
     }
 
