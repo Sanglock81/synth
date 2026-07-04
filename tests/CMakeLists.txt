@@ -47,9 +47,13 @@ catch_discover_tests(dsp_tests)
 # --- Plugin-layer tests (need JUCE + the processor) -------------------------
 add_executable(plugin_tests
     plugin/test_state.cpp
-    plugin/test_midi_learn.cpp)
+    plugin/test_midi_learn.cpp
+    plugin/test_rt_safety.cpp
+    dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests
 
-target_include_directories(plugin_tests PRIVATE ${CMAKE_SOURCE_DIR}/Source)
+target_include_directories(plugin_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/Source
+    ${CMAKE_CURRENT_SOURCE_DIR}/dsp)   # for alloc_hook.h
 target_link_libraries(plugin_tests PRIVATE
     Catch2::Catch2WithMain
     VASynth                       # plugin shared-code (processor/editor object code)

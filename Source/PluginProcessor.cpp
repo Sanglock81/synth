@@ -10,7 +10,9 @@ VASynthProcessor::VASynthProcessor()
 void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     engine.prepare (sampleRate);
-    monoScratch.setSize (1, samplesPerBlock);
+    // Allocate the mono mixdown buffer ONCE, at the host's max block size.
+    // processBlock never resizes it (JUCE guarantees numSamples <= this).
+    monoScratch.setSize (1, juce::jmax (1, samplesPerBlock), false, false, true);
 }
 
 // Helper: read a float parameter's current value from the APVTS.
@@ -60,10 +62,13 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 {
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
-    monoScratch.setSize (1, buffer.getNumSamples(), false, false, true);
-    monoScratch.clear();
 
+    const int numSamples = buffer.getNumSamples();
+    // No resize on the audio thread — monoScratch was sized in prepareToPlay.
+    // Guard against a misbehaving host sending an oversized block.
+    jassert (numSamples <= monoScratch.getNumSamples());
     auto* mono = monoScratch.getWritePointer (0);
+    juce::FloatVectorOperations::clear (mono, numSamples);
     const auto params = snapshotParams();
 
     namespace ID = ParamID;
