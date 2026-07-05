@@ -273,8 +273,13 @@ MIDI-learn persistence round-trip.
 - [~] **Denormal safety** inside `Source/DSP/`: voices deactivate on envelope end (no long
       silent filtering) and `processBlock` has `ScopedNoDenormals`; explicit DSP-level flush
       still TODO (low risk).
-- [ ] **Parameter smoothing:** one-pole on cutoff/reso/gain/oscMix; zipper test first.
-- [ ] Regenerate + commit the golden reference once smoothing lands.
+- [x] **Parameter smoothing:** engine sub-block one-pole on cutoff/resonance/oscMix
+      (~8 ms), processor `SmoothedValue` per-sample ramp on master gain (~20 ms).
+      Zipper tests written first: cutoff probe-tone ramp (dsp) + master-gain click
+      (plugin), both failed unsmoothed then pass. _Note: the TPT SVF is graceful
+      with cutoff changes (no per-sample click), so cutoff smoothing targets
+      knob/automation staircase, not clicks; master gain is the true click source._
+- [ ] Regenerate + commit the golden reference once P3.6/P3.7 land.
 
 **Oscillator boundedness note:** a *properly* band-limited saw/square exhibits Gibbs
 overshoot (~15%), so the [-1.1,1.1] spec is physically too tight for discontinuous waves;

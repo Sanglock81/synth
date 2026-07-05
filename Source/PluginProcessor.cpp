@@ -24,6 +24,10 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     // Allocate the mono mixdown buffer ONCE, at the host's max block size.
     // processBlock never resizes it (JUCE guarantees numSamples <= this).
     monoScratch.setSize (1, juce::jmax (1, samplesPerBlock), false, false, true);
+
+    masterGain.reset (sampleRate, 0.02);                       // ~20 ms ramp
+    masterGain.setCurrentAndTargetValue (
+        apvts.getRawParameterValue (ParamID::masterGain)->load());
 }
 
 // Helper: read a float parameter's current value from the APVTS.
@@ -124,9 +128,18 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         engine.render (mono + renderedUpTo, buffer.getNumSamples() - renderedUpTo,
                        params, lfoRate, lfoShape, lfoDepth, lfoDest);
 
-    // --- mono -> stereo out, master gain -------------------------------------
+    // --- master gain: bake the per-sample ramp into the mono buffer, then copy
+    //     to every output channel. The ramp (SmoothedValue) kills zipper on gain
+    //     steps/automation without a per-channel double-ramp.
+    masterGain.setTargetValue (master);
+    if (masterGain.isSmoothing())
+        for (int i = 0; i < numSamples; ++i)
+            mono[i] *= masterGain.getNextValue();
+    else
+        juce::FloatVectorOperations::multiply (mono, masterGain.getTargetValue(), numSamples);
+
     for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-        buffer.addFrom (ch, 0, mono, buffer.getNumSamples(), master);
+        buffer.addFrom (ch, 0, mono, numSamples, 1.0f);
 }
 
 // --- state ---------------------------------------------------------------

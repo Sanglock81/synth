@@ -67,5 +67,8 @@ private:
     MidiLearnManager midiLearn { apvts };
     juce::AudioBuffer<float> monoScratch;
 
+    // Per-sample master gain ramp to kill zipper on gain steps/automation.
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> masterGain;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VASynthProcessor)
 };
