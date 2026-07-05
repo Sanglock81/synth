@@ -84,6 +84,17 @@ target_compile_definitions(plugin_tests PRIVATE
 
 catch_discover_tests(plugin_tests)
 
+# --- soak: memory stability under a MIDI storm (built with the sanitizers) ---
+add_executable(soak soak/soak_main.cpp)
+target_include_directories(soak PRIVATE ${CMAKE_SOURCE_DIR}/Source)
+target_link_libraries(soak PRIVATE
+    VASynth
+    juce::juce_audio_utils
+    juce::juce_dsp
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags)
+target_compile_definitions(soak PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+
 # --- pluginval integration test ---------------------------------------------
 # Validates the built VST3 at strictness 8. run-all-checks.sh fetches pluginval
 # into tools/ before configuring, so find_program picks it up here.

@@ -12,6 +12,12 @@ namespace alloc_hook
     std::atomic<std::size_t> deleteCount { 0 };
 }
 
+// Under AddressSanitizer, do NOT override global new/delete — ASan provides its
+// own and needs them for allocation tracking / leak detection. The RT-alloc
+// counters then stay zero (AllocGuard sees no bumps), which is fine: the alloc
+// guarantee is verified in normal builds; sanitizer builds verify leaks/UB.
+#if ! defined(__SANITIZE_ADDRESS__)
+
 namespace
 {
     inline void bumpNew()
@@ -46,3 +52,5 @@ void operator delete (void* p) noexcept                { bumpDelete(); std::free
 void operator delete[] (void* p) noexcept              { bumpDelete(); std::free (p); }
 void operator delete (void* p, std::size_t) noexcept   { bumpDelete(); std::free (p); }
 void operator delete[] (void* p, std::size_t) noexcept { bumpDelete(); std::free (p); }
+
+#endif // ! __SANITIZE_ADDRESS__

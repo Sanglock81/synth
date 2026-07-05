@@ -1,25 +1,65 @@
 #!/usr/bin/env bash
 # ===========================================================================
-# VA Synth CI gate. Builds both artefacts (Standalone + VST3) and the test
-# suite, runs the full CTest set (DSP unit tests, plugin-layer tests, and the
-# pluginval integration test). Exits non-zero on ANY failure.
+# VA Synth CI gate.
 #
-#   ./run-all-checks.sh            # Release build + all checks
+#   ./run-all-checks.sh              # Release: build both artefacts, ctest, pluginval
+#   ./run-all-checks.sh --sanitize   # ASan+LSan and UBSan: build tests+soak, ctest,
+#                                      soak — the memory-leak / UB monitoring gate
 #
-# Run this before declaring any task complete. No task is done with failing or
-# skipped tests.
+# Exits non-zero on ANY failure. Run before declaring any task complete.
 # ===========================================================================
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
-BUILD_DIR="build"
 JOBS="$(nproc)"
 
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 fail() { printf '\n\033[1;31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 
-# --- 1. Ensure pluginval is available --------------------------------------
+SANITIZE=0
+for arg in "$@"; do case "$arg" in --sanitize) SANITIZE=1 ;; esac; done
+
+# Ensure a display for GUI/editor tests (pluginval, ScopedJuceInitialiser).
+if [[ -z "${DISPLAY:-}" ]] && command -v xvfb-run >/dev/null 2>&1; then
+    step "No DISPLAY; re-executing under xvfb-run"
+    exec xvfb-run -a "$0" "$@"
+fi
+
+# ---------------------------------------------------------------------------
+if [[ $SANITIZE -eq 1 ]]; then
+    # Sanitizer suite: unit + plugin tests + soak under ASan/LSan then UBSan.
+    # pluginval is a prebuilt (uninstrumented) binary and the VST3 isn't built
+    # here, so it's excluded; correctness is covered by the normal gate.
+    export ASAN_OPTIONS="detect_leaks=1:halt_on_error=1:abort_on_error=1"
+    export LSAN_OPTIONS="suppressions=$ROOT/tests/lsan.supp:print_suppressions=0"
+    export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
+
+    for SAN in ASAN UBSAN; do
+        DIR="build-$(echo "$SAN" | tr '[:upper:]' '[:lower:]')"
+        step "[$SAN] configure"
+        cmake -B "$DIR" -DCMAKE_BUILD_TYPE=Debug -DVASYNTH_BUILD_TESTS=ON \
+              -DVASYNTH_ENABLE_LTO=OFF -DVASYNTH_$SAN=ON >/dev/null \
+              || fail "$SAN configure"
+        step "[$SAN] build tests + soak (-j$JOBS)"
+        cmake --build "$DIR" --target dsp_tests plugin_tests soak -j"$JOBS" \
+              || fail "$SAN build"
+        step "[$SAN] ctest (unit + plugin, excluding pluginval)"
+        ( cd "$DIR" && ctest --output-on-failure -j"$JOBS" -E pluginval ) \
+              || fail "$SAN ctest"
+        step "[$SAN] soak (60 audio-seconds)"
+        "$DIR/tests/soak" 60 || fail "$SAN soak"
+    done
+
+    step "ALL SANITIZER CHECKS PASSED"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Normal Release gate.
+BUILD_DIR="build"
+
+# pluginval
 PLUGINVAL="$ROOT/tools/pluginval"
 if [[ ! -x "$PLUGINVAL" ]]; then
     step "Fetching pluginval (Linux prebuilt)"
@@ -31,32 +71,15 @@ if [[ ! -x "$PLUGINVAL" ]]; then
 fi
 "$PLUGINVAL" --version >/dev/null 2>&1 || fail "pluginval not runnable"
 
-# --- 2. Display for GUI/editor tests ---------------------------------------
-if [[ -z "${DISPLAY:-}" ]]; then
-    if command -v xvfb-run >/dev/null 2>&1; then
-        step "No DISPLAY; re-executing under xvfb-run"
-        exec xvfb-run -a "$0" "$@"
-    else
-        printf '\033[1;33mWARNING: no DISPLAY and no xvfb-run; pluginval/editor tests may fail.\033[0m\n'
-    fi
-fi
-
-# --- 3. Configure (tests ON) ------------------------------------------------
 step "Configuring (Release, tests ON)"
-cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DVASYNTH_BUILD_TESTS=ON \
-    || fail "configure failed"
+cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DVASYNTH_BUILD_TESTS=ON || fail "configure failed"
 
-# --- 4. Build both artefacts + tests ---------------------------------------
 step "Building Standalone + VST3 + tests (-j$JOBS)"
 cmake --build "$BUILD_DIR" -j"$JOBS" || fail "build failed"
 
-# Confirm both artefacts exist.
-[[ -x "$BUILD_DIR/VASynth_artefacts/Release/Standalone/VA Synth" ]] \
-    || fail "Standalone artefact missing"
-[[ -e "$BUILD_DIR/VASynth_artefacts/Release/VST3/VA Synth.vst3" ]] \
-    || fail "VST3 artefact missing"
+[[ -x "$BUILD_DIR/VASynth_artefacts/Release/Standalone/VA Synth" ]] || fail "Standalone artefact missing"
+[[ -e "$BUILD_DIR/VASynth_artefacts/Release/VST3/VA Synth.vst3" ]]   || fail "VST3 artefact missing"
 
-# --- 5. Run the whole CTest set (unit + plugin + pluginval) -----------------
 step "Running CTest"
 ( cd "$BUILD_DIR" && ctest --output-on-failure -j"$JOBS" ) || fail "ctest reported failures"
 

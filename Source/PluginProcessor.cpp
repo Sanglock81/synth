@@ -21,7 +21,7 @@ static constexpr float kPitchBendRange = 2.0f;
 // JUCE logger, so writeToLog reaches the same file (and flushes).
 static void vaSynthCrashHandler (void*)
 {
-    juce::Logger::writeToLog ("*** VA SYNTH CRASH — application crash handler ***");
+    juce::Logger::writeToLog ("*** VA SYNTH CRASH - application crash handler ***");
     juce::Logger::writeToLog (juce::SystemStats::getStackBacktrace());
 }
 

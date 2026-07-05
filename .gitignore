@@ -14,3 +14,5 @@
 
 # pluginval (fetched by run-all-checks.sh)
 /tools/
+/build-asan/
+/build-ubsan/

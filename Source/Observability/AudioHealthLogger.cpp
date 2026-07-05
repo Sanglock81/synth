@@ -9,7 +9,7 @@ AudioHealthLogger::AudioHealthLogger (Sink sinkToUse, bool startBackgroundThread
         // Platform default app log location (Linux: ~/.config per JUCE convention).
         fileLogger.reset (juce::FileLogger::createDefaultAppLogger (
             "VASynth", "VASynth.log",
-            "VA Synth log — session start " + juce::Time::getCurrentTime().toString (true, true)));
+            "VA Synth log - session start " + juce::Time::getCurrentTime().toString (true, true)));
         // Route JUCE's global logger (incl. the crash handler's writeToLog) here.
         juce::Logger::setCurrentLogger (fileLogger.get());
     }

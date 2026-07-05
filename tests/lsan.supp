@@ -1,0 +1,11 @@
+# LeakSanitizer suppressions.
+#
+# Our own code must be leak-free. Entries here are ONLY for known third-party
+# leaks — never suppress a leak in Source/.
+#
+# The audio-device fallback test opens a real audio device; the ALSA and
+# PipeWire (SPA) backends leak one-time internal state on device open. These are
+# outside our control and unrelated to VA Synth's correctness.
+leak:libasound
+leak:libspa
+leak:snd_pcm

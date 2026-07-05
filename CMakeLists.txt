@@ -5,6 +5,20 @@ project(VASynth VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# --- Sanitizer builds (memory-leak / UB monitoring) -------------------------
+# Applied build-wide (JUCE + our code + tests). Use via run-all-checks.sh
+# --sanitize, or: cmake -B build-asan -DVASYNTH_ASAN=ON -DVASYNTH_BUILD_TESTS=ON
+option(VASYNTH_ASAN  "Build with Address + Leak sanitizer" OFF)
+option(VASYNTH_UBSAN "Build with Undefined Behaviour sanitizer" OFF)
+if (VASYNTH_ASAN)
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=address)
+endif()
+if (VASYNTH_UBSAN)
+    add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=undefined)
+endif()
+
 # Fetch JUCE. Pin the tag so builds are reproducible; bump deliberately.
 include(FetchContent)
 FetchContent_Declare(
