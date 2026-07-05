@@ -48,6 +48,10 @@ TEST_CASE ("processBlock does not allocate while rendering voices", "[plugin][rt
     }
     for (int i = 0; i < 20; ++i) { buf.clear(); juce::MidiBuffer m; p.processBlock (buf, m); }
 
+    // This also covers the observability logging path: processBlock now pushes
+    // render-time / voice-count / steal / overrun events into the RT-safe ring
+    // every block. Zero allocations here proves that logging stays RT-safe (the
+    // drain thread's allocations happen on another thread and aren't counted).
     const std::size_t news = allocsDuring (p, 200, /*withCCs=*/false);
     INFO ("allocations in 200 note-rendering blocks = " << news);
     REQUIRE (news == 0);

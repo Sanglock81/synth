@@ -104,8 +104,18 @@ public:
                 oldest = i;
 
         sustained[oldest] = false;
+        ++stealCounter;
         voices[oldest].noteOn (note, velocity, ++eventCounter);
     }
+
+    // ---- observability accessors (const; for the processor's telemetry) ----
+    int activeVoiceCount() const
+    {
+        int c = 0;
+        for (auto& v : voices) if (v.isActive()) ++c;
+        return c;
+    }
+    std::uint64_t stealCount() const { return stealCounter; }
 
     void noteOff (int note)
     {
@@ -246,6 +256,7 @@ private:
     std::size_t activeVoiceLimit = maxVoices;      // <= maxVoices; see setMaxVoices
     LFO lfo, vibratoLFO;
     std::uint64_t eventCounter = 0;
+    std::uint64_t stealCounter = 0;
     double sampleRate = 0.0;
     PolyBlepOscillator::Quality oscQuality = PolyBlepOscillator::Quality::Efficient;
 

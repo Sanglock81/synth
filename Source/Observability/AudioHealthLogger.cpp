@@ -10,6 +10,8 @@ AudioHealthLogger::AudioHealthLogger (Sink sinkToUse, bool startBackgroundThread
         fileLogger.reset (juce::FileLogger::createDefaultAppLogger (
             "VASynth", "VASynth.log",
             "VA Synth log — session start " + juce::Time::getCurrentTime().toString (true, true)));
+        // Route JUCE's global logger (incl. the crash handler's writeToLog) here.
+        juce::Logger::setCurrentLogger (fileLogger.get());
     }
     renderTimes.reserve (8192);
     if (startBackgroundThread)
@@ -23,6 +25,9 @@ AudioHealthLogger::~AudioHealthLogger()
     stopThread (1000);
     drainNow();          // best-effort final drain
     flushStats();
+
+    if (fileLogger != nullptr && juce::Logger::getCurrentLogger() == fileLogger.get())
+        juce::Logger::setCurrentLogger (nullptr);
 }
 
 void AudioHealthLogger::prepare (double newSampleRate, int blockSize)

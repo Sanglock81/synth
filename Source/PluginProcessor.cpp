@@ -1,14 +1,35 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <chrono>
 
 // Default pitch-bend range in semitones (+/-). The Launchkey touch strip is the
 // only bend source in the rig; the Korg B2 sends none (stays centred).
 static constexpr float kPitchBendRange = 2.0f;
 
+#ifndef VASYNTH_VERSION
+ #define VASYNTH_VERSION "?"
+#endif
+#ifndef VASYNTH_GIT_HASH
+ #define VASYNTH_GIT_HASH "?"
+#endif
+#ifndef VASYNTH_BUILD_TYPE
+ #define VASYNTH_BUILD_TYPE "?"
+#endif
+
+// Flush the log with a final marker on a crash so post-mortem logs show where
+// things stopped. The AudioHealthLogger installs its FileLogger as the current
+// JUCE logger, so writeToLog reaches the same file (and flushes).
+static void vaSynthCrashHandler (void*)
+{
+    juce::Logger::writeToLog ("*** VA SYNTH CRASH — application crash handler ***");
+    juce::Logger::writeToLog (juce::SystemStats::getStackBacktrace());
+}
+
 VASynthProcessor::VASynthProcessor()
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMS", createParameterLayout())
 {
+    juce::SystemStats::setApplicationCrashHandler (vaSynthCrashHandler);
 }
 
 // Oscillator anti-aliasing quality. Compile-time default is Efficient (glitch-
@@ -40,6 +61,19 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     masterGain.reset (sampleRate, 0.02);                       // ~20 ms ramp
     masterGain.setCurrentAndTargetValue (
         apvts.getRawParameterValue (ParamID::masterGain)->load());
+
+    budgetMs = (sampleRate > 0.0) ? (double (samplesPerBlock) / sampleRate * 1000.0) : 2.667;
+
+    // Startup banner (processor-accessible fields; device/type/MIDI-inputs are
+    // logged by the standalone app which owns the device manager).
+    const char* quality =
+        (VASYNTH_OSC_QUALITY == PolyBlepOscillator::Quality::HQ)   ? "HQ"
+      : (VASYNTH_OSC_QUALITY == PolyBlepOscillator::Quality::None) ? "None" : "Efficient";
+    health.logMessage (juce::String ("VA Synth ") + VASYNTH_VERSION + " (" + VASYNTH_GIT_HASH
+                       + ", " + VASYNTH_BUILD_TYPE + ")  wrapper=" + juce::String ((int) wrapperType)
+                       + "  osc-quality=" + quality
+                       + "  maxVoices=" + juce::String (VASYNTH_MAX_VOICES));
+    health.prepare (sampleRate, samplesPerBlock);
 }
 
 // Helper: read a float parameter's current value from the APVTS.
@@ -90,6 +124,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                      juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
+    const auto tStart = std::chrono::steady_clock::now();   // cheap, RT-safe (vDSO)
     buffer.clear();
 
     const int numSamples = buffer.getNumSamples();
@@ -175,6 +210,18 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
         buffer.addFrom (ch, 0, mono, numSamples, 1.0f);
+
+    // --- audio-health telemetry (RT-safe: pushes POD events only) -----------
+    const auto tEnd = std::chrono::steady_clock::now();
+    const float renderMs = (float) std::chrono::duration<double, std::milli> (tEnd - tStart).count();
+    health.logRenderTime (renderMs, blockIndex);
+    if (renderMs > (float) budgetMs)
+        health.logOverrun (renderMs, (float) budgetMs, blockIndex);   // xrun early-warning
+    health.logVoiceCount (engine.activeVoiceCount());
+    const std::uint64_t steals = engine.stealCount();
+    health.logSteals ((int) (steals - lastSteals));
+    lastSteals = steals;
+    ++blockIndex;
 }
 
 // --- state ---------------------------------------------------------------

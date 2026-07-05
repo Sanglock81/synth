@@ -33,6 +33,17 @@ target_sources(VASynth PRIVATE
     Source/PluginEditor.cpp
     Source/Observability/AudioHealthLogger.cpp)
 
+# Capture the short git hash at configure time for the startup log banner.
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE VASYNTH_GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+if (NOT VASYNTH_GIT_HASH)
+    set(VASYNTH_GIT_HASH "unknown")
+endif()
+
 target_compile_definitions(VASynth PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
@@ -40,7 +51,11 @@ target_compile_definitions(VASynth PUBLIC
     # Standalone: allow runtime selection of audio device (Scarlett 2i2)
     # and enabling multiple MIDI inputs (Korg B2 + Launchkey Mini).
     JUCE_ALSA=1
-    JUCE_JACK=1)
+    JUCE_JACK=1
+    # Startup-banner metadata (observability).
+    VASYNTH_VERSION="${PROJECT_VERSION}"
+    VASYNTH_GIT_HASH="${VASYNTH_GIT_HASH}"
+    VASYNTH_BUILD_TYPE="$<CONFIG>")
 
 # LTO on by default (release artefacts); turn OFF for fast dev rebuilds:
 #   cmake -B build -DVASYNTH_ENABLE_LTO=OFF

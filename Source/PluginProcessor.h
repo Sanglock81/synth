@@ -3,6 +3,7 @@
 #include "Parameters.h"
 #include "MidiLearnManager.h"
 #include "DSP/SynthEngine.h"
+#include "Observability/AudioHealthLogger.h"
 
 // ============================================================================
 // The AudioProcessor is the seam between JUCE-land and our engine:
@@ -66,12 +67,21 @@ public:
     // keyboard, so this simply stays silent.)
     juce::MidiKeyboardState qwertyKeyboardState;
 
+    // Audio-health telemetry + RT-safe logging. The editor reads health.snapshot()
+    // for the debug overlay.
+    AudioHealthLogger health;
+
 private:
     VoiceParams snapshotParams() const;
 
     SynthEngine      engine;
     MidiLearnManager midiLearn { apvts };
     juce::AudioBuffer<float> monoScratch;
+
+    // Telemetry bookkeeping (audio thread).
+    double        budgetMs   = 2.667;
+    std::uint64_t blockIndex = 0;
+    std::uint64_t lastSteals = 0;
 
     // Per-sample master gain ramp to kill zipper on gain steps/automation.
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> masterGain;
