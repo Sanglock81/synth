@@ -87,6 +87,30 @@ ASIO SDK support later.
 4. Play the Korg; twist Launchkey knobs (CC 21–28 pre-mapped: cutoff, reso,
    osc mix, env amt, attack, release, LFO rate, LFO depth).
 
+### Laptop-only operation (no hardware)
+
+**Audio device fallback.** The standalone's Audio/MIDI Settings offers device-type
+selection (ALSA + JACK are compiled in) and any output including built-in laptop
+audio. If a previously-selected device is gone at launch (Scarlett unplugged), it
+falls back to the system default automatically — it won't crash or launch silent
+(`selectDefaultDeviceOnFailure`). The dialog shows which device is active.
+
+**QWERTY computer keyboard.** The standalone editor plays notes from the computer
+keyboard — chromatic, one semitone per key, left to right (US layout):
+
+```
+  q w e r t y u i o p [ ]     C4 … B4   (MIDI 60–71)
+  1 2 3 4 5 6 7 8 9 0 - =     C5 … B5   (MIDI 72–83)
+
+  z / x  = octave shift down / up   (extends to the full range for bass patches)
+```
+
+Fixed velocity 0.8. OS auto-repeat is ignored (clean one note-on / one note-off
+per press). Notes merge into the same engine path as hardware MIDI and coexist
+with it. Keys are ignored while a text field is focused; all notes release when
+the window loses focus (Alt-Tab) or closes — no stuck notes. Standalone only; in
+a plugin the host owns the keyboard.
+
 ## Roadmap
 
 **v1 (make it sound good)**

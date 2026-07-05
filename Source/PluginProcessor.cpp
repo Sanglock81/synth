@@ -98,6 +98,11 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     jassert (numSamples <= monoScratch.getNumSamples());
     auto* mono = monoScratch.getWritePointer (0);
     juce::FloatVectorOperations::clear (mono, numSamples);
+
+    // Merge QWERTY computer-keyboard notes into the MIDI stream (empty and free
+    // when no keys are held), so they share the exact hardware-MIDI path below.
+    qwertyKeyboardState.processNextMidiBuffer (midi, 0, numSamples, true);
+
     const auto params = snapshotParams();
 
     namespace ID = ParamID;

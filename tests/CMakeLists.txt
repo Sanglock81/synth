@@ -58,6 +58,8 @@ add_executable(plugin_tests
     plugin/test_rt_safety.cpp
     plugin/test_smoothing.cpp
     plugin/test_performance_midi.cpp
+    plugin/test_audio_device.cpp
+    plugin/test_qwerty.cpp
     dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests
 
 target_include_directories(plugin_tests PRIVATE

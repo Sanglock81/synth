@@ -60,6 +60,12 @@ public:
     // Exposed for the (v2) right-click MIDI-learn GUI and for tests.
     MidiLearnManager& getMidiLearn() { return midiLearn; }
 
+    // Computer-keyboard (QWERTY) note input from the standalone editor. Merged
+    // into the MIDI stream in processBlock so it flows through the same engine
+    // path as hardware MIDI and coexists with it. (In a plugin the host owns the
+    // keyboard, so this simply stays silent.)
+    juce::MidiKeyboardState qwertyKeyboardState;
+
 private:
     VoiceParams snapshotParams() const;
 
