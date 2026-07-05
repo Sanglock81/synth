@@ -90,12 +90,21 @@ ASIO SDK support later.
 ## Roadmap
 
 **v1 (make it sound good)**
-- [ ] Verify PolyBLEP output vs amsynth/Surge by ear and spectrogram
+- [x] Verify PolyBLEP output — automated aliasing test (FFT, ≤−60 dB, naive fails).
+      Oscillator is now 4× oversampled with a configurable quality/CPU tradeoff
+      (`Efficient` audible-band-clean default, `HQ` full-band-clean for studio).
 - [ ] Pitch bend + mod wheel + sustain pedal handling (Korg B2 sends all)
 - [ ] Mono/legato modes + glide (slew note frequency in `SynthVoice`)
 - [ ] Smooth per-block parameter changes (one-pole smoothing on cutoff/gain
       to kill zipper noise)
-- [ ] Persist MIDI-learn mappings in APVTS state
+- [x] Persist MIDI-learn mappings in APVTS state
+
+**Deployment / validation (not yet done)**
+- [ ] ThinkPad X1 Carbon 3rd gen (2015, dual-core Broadwell) is the live Linux
+      machine: measure real round-trip MIDI-to-audio latency of the standalone
+      under PipeWire at 128 samples / 48 kHz, and document recommended buffer
+      settings (128 vs 256) for that machine. DSP headroom is benched
+      (`tests/bench/dsp_bench`); this is the end-to-end I/O latency check.
 
 **v2 (make it deep)**
 - [ ] Mod matrix (any source → any destination, replaces single LFO dest)

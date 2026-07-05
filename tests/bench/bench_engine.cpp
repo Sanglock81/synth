@@ -1,87 +1,95 @@
 // ============================================================================
-// DSP performance benchmark (JUCE-free). Reports how much CPU the engine needs
-// so we can keep VA Synth runnable on modest hardware. Not a CTest gate — wall
-// time is machine-dependent — but run it before/after DSP changes to watch the
-// budget. Prints xRealtime and single-core CPU% for continuous full polyphony.
+// DSP performance benchmark (JUCE-free). Measures worst-case 128-sample block
+// render time at 48 kHz for the full engine, across oscillator quality modes,
+// so we can keep VA Synth glitch-free on modest hardware (2-core Broadwell
+// ThinkPad X1 Carbon 3rd gen, the live machine).
 //
-//   build:  cmake --build build --target dsp_bench
-//   run:    ./build/tests/dsp_bench
+// Not a CTest gate (wall time is machine-dependent). Run before/after DSP
+// changes to watch the budget:  ./build/tests/dsp_bench
+//
+// Real-time budget for a 128-sample block at 48 kHz = 128/48000 = 2.667 ms.
+// The synth must render one block in well under that, with headroom.
 // ============================================================================
 #include "SynthEngine.h"
 #include <chrono>
 #include <cstdio>
 #include <vector>
+#include <algorithm>
 #include <string>
 
 namespace
 {
     using clk = std::chrono::steady_clock;
-    constexpr double kSR = 48000.0;
+    constexpr double kSR       = 48000.0;
+    constexpr int    kBlock    = 128;
+    constexpr double kBudgetMs = kBlock / kSR * 1000.0;     // 2.667 ms
+    // Conservative derating: this dev machine (Ryzen 7) is ~3.5x faster single-
+    // thread than the 2015 Broadwell ThinkPad. Scale measured times up by this.
+    constexpr double kThinkpadDerate = 3.5;
 
-    struct Result { double xRealtime, cpuPct, nsPerSample; };
+    struct Stat { double medMs, p99Ms, maxMs; };
 
-    // Render `audioSeconds` of audio with `numVoices` held, in `block`-sample
-    // chunks, and time it. Returns throughput metrics.
-    Result run (VoiceParams p, int numVoices, int block, double audioSeconds)
+    // Render `blocks` blocks of `voices` held notes; return median / p99 / max
+    // block ms. p99 is the robust "worst-case" (max on a non-realtime dev box is
+    // dominated by OS preemption outliers, not DSP cost).
+    Stat measure (PolyBlepOscillator::Quality q, int voices, int blocks)
     {
         SynthEngine engine;
+        engine.setOscQuality (q);
         engine.prepare (kSR);
-        for (int i = 0; i < numVoices; ++i)
-            engine.noteOn (36 + i, 0.7f);
 
-        const int totalSamples = int (kSR * audioSeconds);
-        std::vector<float> out (block, 0.0f);
+        VoiceParams p;                       // saw/saw, worst case (oversampled)
+        p.cutoffHz = 2000.0f; p.resonance = 0.4f; p.filterEnvAmt = 0.5f;
+        for (int i = 0; i < voices; ++i) engine.noteOn (36 + i, 0.7f);
 
-        // warm up
-        for (int i = 0; i < 20; ++i)
-            engine.render (out.data(), block, p, 3.0f, 0, 0.3f, 2);
+        std::vector<float> out (kBlock, 0.0f);
+        for (int i = 0; i < 64; ++i)         // warm caches / branch predictors
+            engine.render (out.data(), kBlock, p, 3.0f, 0, 0.3f, 2);
 
-        const auto t0 = clk::now();
-        int done = 0;
-        while (done < totalSamples)
+        std::vector<double> times (blocks);
+        for (int b = 0; b < blocks; ++b)
         {
-            const int n = std::min (block, totalSamples - done);
-            engine.render (out.data(), n, p, 3.0f, 0, 0.3f, 2);
-            done += n;
+            const auto t0 = clk::now();
+            engine.render (out.data(), kBlock, p, 3.0f, 0, 0.3f, 2);
+            const auto t1 = clk::now();
+            times[b] = std::chrono::duration<double, std::milli> (t1 - t0).count();
         }
-        const auto t1 = clk::now();
-
-        const double wall = std::chrono::duration<double> (t1 - t0).count();
-        const double xrt  = audioSeconds / wall;
-        return { xrt, 100.0 / xrt, wall / totalSamples * 1e9 };
+        std::sort (times.begin(), times.end());
+        return { times[blocks / 2], times[(int) (blocks * 0.99)], times.back() };
     }
 
-    VoiceParams sawParams()
+    void row (const std::string& label, Stat s)
     {
-        VoiceParams p;                       // default saw/saw + 2 kHz LP
-        p.cutoffHz = 2000.0f; p.resonance = 0.3f; p.filterEnvAmt = 0.4f;
-        return p;
-    }
-
-    void report (const std::string& label, const Result& r, int voices)
-    {
-        std::printf ("  %-28s  %8.1fx RT   %6.2f%% CPU   %6.2f ns/smp   %6.3f ns/voice-smp\n",
-                     label.c_str(), r.xRealtime, r.cpuPct, r.nsPerSample,
-                     r.nsPerSample / voices);
+        const double tpP99 = s.p99Ms * kThinkpadDerate;      // robust worst-case, derated
+        const double tpPct = tpP99   / kBudgetMs * 100.0;
+        std::printf ("  %-22s  p50 %6.3f  p99 %6.3f  max %6.3f ms  | "
+                     "ThinkPad~ p99 %6.3f ms (%5.1f%% budget)  %s\n",
+                     label.c_str(), s.medMs, s.p99Ms, s.maxMs, tpP99, tpPct,
+                     tpPct < 30.0 ? "OK<30%" : (tpPct < 100.0 ? "runs" : "OVERRUN"));
     }
 }
 
 int main()
 {
-    std::printf ("VA Synth engine benchmark @ %.0f kHz, 128-sample blocks\n", kSR / 1000.0);
-    std::printf ("(xRT = times faster than real-time; CPU%% = one core, continuous)\n\n");
+    std::printf ("VA Synth block benchmark @ 48 kHz, 128-sample block "
+                 "(budget %.3f ms)\n", kBudgetMs);
+    std::printf ("Worst-case = saw+saw, per-sample filter-env cutoff mod. "
+                 "ThinkPad~ = measured x%.1f.\n\n", kThinkpadDerate);
 
-    auto p = sawParams();
-    std::printf ("Full signal chain (saw+saw -> SVF LP w/ per-sample cutoff mod -> VCA):\n");
-    report ("16 voices (full poly)", run (p, 16, 128, 5.0), 16);
-    report ("8 voices",             run (p,  8, 128, 5.0), 8);
-    report ("1 voice",              run (p,  1, 128, 5.0), 1);
+    struct Qc { const char* name; PolyBlepOscillator::Quality q; };
+    const Qc modes[] {
+        { "(a) None 1x (raw)",   PolyBlepOscillator::Quality::None },
+        { "(b) Efficient 4x",    PolyBlepOscillator::Quality::Efficient },
+        { "(c) HQ 4x/320",       PolyBlepOscillator::Quality::HQ },
+    };
 
-    VoiceParams sine = p; sine.osc1Wave = 3; sine.osc2Wave = 3;
-    std::printf ("\nSine oscillators (isolates filter+env+mix cost from PolyBLEP):\n");
-    report ("16 voices sine",       run (sine, 16, 128, 5.0), 16);
+    std::printf ("16 voices (full polyphony):\n");
+    for (auto m : modes) row (m.name, measure (m.q, 16, 4000));
 
-    std::printf ("\nInterpretation: full-poly CPU%% is the headline number. Multiple\n"
-                 "instances / other plugins share the core, so keep it low.\n");
+    std::printf ("\n1 voice:\n");
+    for (auto m : modes) row (m.name, measure (m.q, 1, 4000));
+
+    std::printf ("\nBudget = 2.667 ms/block. Target: worst-case ThinkPad < 30%% "
+                 "leaves headroom for GUI, other tracks, and OS jitter.\n");
     return 0;
 }

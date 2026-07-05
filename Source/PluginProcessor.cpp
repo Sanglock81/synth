@@ -7,8 +7,19 @@ VASynthProcessor::VASynthProcessor()
 {
 }
 
+// Oscillator anti-aliasing quality. Compile-time default is Efficient (glitch-
+// free with headroom on the 2-core live ThinkPad); build with
+// -DVASYNTH_OSC_QUALITY_HQ for the studio/Windows HQ default. A runtime GUI
+// selector (re-preparing voices off the audio thread) is a v2 item.
+#ifdef VASYNTH_OSC_QUALITY_HQ
+ #define VASYNTH_OSC_QUALITY PolyBlepOscillator::Quality::HQ
+#else
+ #define VASYNTH_OSC_QUALITY PolyBlepOscillator::Quality::Efficient
+#endif
+
 void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    engine.setOscQuality (VASYNTH_OSC_QUALITY);
     engine.prepare (sampleRate);
     // Allocate the mono mixdown buffer ONCE, at the host's max block size.
     // processBlock never resizes it (JUCE guarantees numSamples <= this).

@@ -26,12 +26,29 @@ class SynthEngine
 public:
     static constexpr int maxVoices = 16;
 
-    void prepare (double sampleRate)
+    void prepare (double newSampleRate)
     {
+        sampleRate = newSampleRate;
         for (auto& v : voices)
+        {
+            v.setOscQuality (oscQuality);
             v.prepare (sampleRate);
+        }
         lfo.prepare (sampleRate);
         eventCounter = 0;
+    }
+
+    // Oscillator anti-aliasing quality. Re-prepares the voices if already
+    // prepared. Efficient (default) for the live ThinkPad; HQ for studio use.
+    void setOscQuality (PolyBlepOscillator::Quality q)
+    {
+        oscQuality = q;
+        if (sampleRate > 0.0)
+            for (auto& v : voices)
+            {
+                v.setOscQuality (q);
+                v.prepare (sampleRate);
+            }
     }
 
     // ---- MIDI (called from processBlock with sample-accurate offsets) -----
@@ -101,4 +118,6 @@ private:
     std::array<SynthVoice, maxVoices> voices;
     LFO lfo;
     std::uint64_t eventCounter = 0;
+    double sampleRate = 0.0;
+    PolyBlepOscillator::Quality oscQuality = PolyBlepOscillator::Quality::Efficient;
 };

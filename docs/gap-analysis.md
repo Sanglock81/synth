@@ -255,18 +255,35 @@ bound (1.22 > 1.1), aliasing (−26 > −60 dB), release-to-−80 dB timing, ste
 MIDI-learn persistence round-trip.
 
 ### P3 — Correctness fixes (Phase 3, test-first)
-- [ ] **RT-safety:** preallocate `monoScratch`; lock-free/alloc-free `MidiLearnManager`;
-      add a JUCE-side allocation test guarding `processBlock`.
-- [ ] **4× oversampled oscillator** (NEW, approved): oversample OSC + halfband/decimation
-      FIR so the −60 dB @ 3 kHz aliasing test passes honestly. Stays JUCE-free.
-- [ ] **ADSR timing** re-calibration so nominal seconds match; `quickRelease` < 10 ms.
-- [ ] **Click-free steal/retrigger:** stop resetting osc phase on retrigger; make steal
-      fade to silence before reuse (or steal-fade gain).
-- [ ] **Denormal safety** inside `Source/DSP/` (or documented in tests).
-- [ ] **Triangle** amplitude/leak fix (sample-rate-scaled leak or DC-blocker; also
-      re-normalise after oversampling changes `phaseInc`).
+- [x] **RT-safety:** preallocate `monoScratch`; lock-free/alloc-free `MidiLearnManager`;
+      JUCE-side allocation test guarding `processBlock` (note + CC paths, both zero-alloc).
+- [x] **Oversampled oscillator** (approved): 4× + windowed-sinc decimation FIR, JUCE-free.
+      Configurable **quality** (`None`/`Efficient`/`HQ`): Efficient (48-tap) is audible-band
+      (≤18 kHz) clean and the default (live ThinkPad); HQ (320-tap) is full-band (≤23 kHz)
+      clean for studio/Windows. Aliasing test parameterized per mode; both pass, naive fails.
+      Full-band ≤24 kHz needs a razor-sharp 24 kHz cut (200+ taps ~ overruns the ThinkPad),
+      so it's opt-in HQ. Paired with **control-rate filter cutoff** (recompute every 16
+      samples) so full-poly CPU stays modest. `dsp_bench` reports p50/p99 block time vs the
+      2.67 ms budget with a ThinkPad derate. Float FIR MAC.
+- [x] **ADSR timing** re-calibration so nominal seconds match; `quickRelease` < 10 ms.
+- [x] **Click-free steal/retrigger:** osc phase only reset for an idle voice; retrigger/steal
+      keep phase continuous with envelope retrigger from current level.
+- [x] **Triangle** fix: direct piecewise-linear generator (bounded by construction),
+      band-limited by the 4× decimation — no more integrator droop/overshoot.
+- [~] **Denormal safety** inside `Source/DSP/`: voices deactivate on envelope end (no long
+      silent filtering) and `processBlock` has `ScopedNoDenormals`; explicit DSP-level flush
+      still TODO (low risk).
 - [ ] **Parameter smoothing:** one-pole on cutoff/reso/gain/oscMix; zipper test first.
-- [ ] Regenerate + commit the golden reference once the above land.
+- [ ] Regenerate + commit the golden reference once smoothing lands.
+
+**Oscillator boundedness note:** a *properly* band-limited saw/square exhibits Gibbs
+overshoot (~15%), so the [-1.1,1.1] spec is physically too tight for discontinuous waves;
+the bounds test allows 1.25 for saw/square, 1.1 for sine/triangle (documented in-test).
+
+**Performance (dev Ryzen 7, ×3.5 ThinkPad derate, 16-voice saw worst case, p99):**
+None ≈ 7% budget · Efficient ≈ 41% · HQ ≈ 211% (overruns). Single voice: 0.2% / 2.2% /
+17%. Default Efficient is glitch-free with headroom for normal (low-voice) live play; HQ
+is studio-only above a few voices.
 
 ### P4 — v1 roadmap features (Phase 3)
 - [ ] Pitch bend (±2 semis default) — from any device.

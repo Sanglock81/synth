@@ -51,6 +51,13 @@ struct VoiceParams
 class SynthVoice
 {
 public:
+    // Set before prepare(): oscillator anti-aliasing quality.
+    void setOscQuality (PolyBlepOscillator::Quality q)
+    {
+        osc1.setQuality (q);
+        osc2.setQuality (q);
+    }
+
     void prepare (double sampleRate)
     {
         osc1.prepare (sampleRate);
@@ -104,6 +111,8 @@ public:
 
         applyParams (p);
 
+        const float trackOct = p.keytrack * (midiNote - 60) / 12.0f;
+
         for (int i = 0; i < numSamples; ++i)
         {
             const float ampLevel = ampEnv.nextSample();
@@ -116,11 +125,15 @@ public:
             }
 
             // --- filter cutoff modulation, all in octaves then to Hz -------
-            // TODO(perf): move cutoff recompute to every 8-16 samples.
-            const float envOct   = p.filterEnvAmt * fltLevel * 5.0f;         // +/-5 oct sweep
-            const float trackOct = p.keytrack * (midiNote - 60) / 12.0f;
-            const float fc = p.cutoffHz * std::exp2 (envOct + trackOct + p.cutoffModOct);
-            filter.setCutoff (fc, p.resonance);
+            // Control-rate: recompute the (expensive: std::tan) coefficient every
+            // kCutoffInterval samples. At 48 kHz that's ~0.33 ms granularity —
+            // inaudible for envelope/LFO sweeps and a big CPU saving vs per-sample.
+            if ((i & (kCutoffInterval - 1)) == 0)
+            {
+                const float envOct = p.filterEnvAmt * fltLevel * 5.0f;       // +/-5 oct sweep
+                const float fc = p.cutoffHz * std::exp2 (envOct + trackOct + p.cutoffModOct);
+                filter.setCutoff (fc, p.resonance);
+            }
 
             // --- oscillators ----------------------------------------------
             float s = osc1.nextSample() * (1.0f - p.oscMix)
@@ -133,6 +146,9 @@ public:
     }
 
 private:
+    // Filter-coefficient update interval (power of two for the bit mask).
+    static constexpr int kCutoffInterval = 16;
+
     void applyParams (const VoiceParams& p)
     {
         const double f0 = 440.0 * std::exp2 ((midiNote - 69 + p.pitchModSemis) / 12.0);
