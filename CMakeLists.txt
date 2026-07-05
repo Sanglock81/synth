@@ -41,13 +41,20 @@ target_compile_definitions(VASynth PUBLIC
     JUCE_ALSA=1
     JUCE_JACK=1)
 
+# LTO on by default (release artefacts); turn OFF for fast dev rebuilds:
+#   cmake -B build -DVASYNTH_ENABLE_LTO=OFF
+option(VASYNTH_ENABLE_LTO "Enable JUCE recommended link-time optimisation" ON)
+
 target_link_libraries(VASynth PRIVATE
     juce::juce_audio_utils
     juce::juce_dsp
     PUBLIC
     juce::juce_recommended_config_flags
-    juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags)
+
+if (VASYNTH_ENABLE_LTO)
+    target_link_libraries(VASynth PUBLIC juce::juce_recommended_lto_flags)
+endif()
 
 # ---------------------------------------------------------------------------
 # Tests. Off by default for a plain plugin build; run-all-checks.sh turns it on.
