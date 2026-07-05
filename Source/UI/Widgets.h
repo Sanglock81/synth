@@ -132,13 +132,13 @@ public:
     {
         g.setColour (VASynthLookAndFeel::dim());
         g.setFont (juce::Font (juce::FontOptions (11.5f)));
-        g.drawText (name, getLocalBounds().removeFromTop (16), juce::Justification::centred, false);
+        g.drawFittedText (name, getLocalBounds().removeFromTop (16), juce::Justification::centred, 1);
 
-        // live value readout with the parameter's own units/text
+        // live value readout with the parameter's own units/text (auto-fit width)
         g.setColour (VASynthLookAndFeel::ink());
         g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 11.5f, juce::Font::plain)));
         const juce::String text = param != nullptr ? param->getCurrentValueAsText() : juce::String();
-        g.drawText (text, getLocalBounds().removeFromBottom (16), juce::Justification::centred, false);
+        g.drawFittedText (text, getLocalBounds().removeFromBottom (16), juce::Justification::centred, 1);
 
         paintLearnDecorations (g);
     }

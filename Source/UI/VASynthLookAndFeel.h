@@ -73,6 +73,23 @@ public:
         g.fillRect (thumb.reduced (5.0f, 0.0f).withHeight (2.0f).withY (thumb.getCentreY() - 1.0f));
     }
 
+    // Fit button text to the button width (shrink the font rather than truncate),
+    // so no label is ever clipped at any size.
+    void drawButtonText (juce::Graphics& g, juce::TextButton& b, bool, bool) override
+    {
+        auto area = b.getLocalBounds().reduced (5, 2);
+        auto text = b.getButtonText();
+        auto font = getTextButtonFont (b, b.getHeight());
+        const float w = juce::GlyphArrangement::getStringWidth (font, text);
+        if (w > (float) area.getWidth() && w > 0.0f)
+            font.setHeight (juce::jmax (8.0f, font.getHeight() * (float) area.getWidth() / w));
+        g.setFont (font);
+        g.setColour (b.findColour (b.getToggleState() ? juce::TextButton::textColourOnId
+                                                      : juce::TextButton::textColourOffId)
+                        .withMultipliedAlpha (b.isEnabled() ? 1.0f : 0.5f));
+        g.drawText (text, area, juce::Justification::centred, false);
+    }
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VASynthLookAndFeel)
 };
 

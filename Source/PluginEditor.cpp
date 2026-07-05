@@ -1,35 +1,32 @@
 #include "PluginEditor.h"
 
-// Preset controls (Random / Save / name / Load) inside the Global section.
-// A small owned panel so the Section's even FlexBox layout treats it as one cell.
+// Preset controls (Random / Save / Load) inside the Global section.
+//
+// No persistent text field lives on the main panel — that would take keyboard
+// focus at startup and starve the QWERTY note path. Naming happens in a modal
+// Save dialog; focus returns to the editor when it closes.
 void VASynthEditor::buildGlobalExtras (Section& s)
 {
     struct PresetPanel : public juce::Component
     {
-        PresetPanel (VASynthProcessor& p, PresetManager& pm) : proc (p), presets (pm)
+        PresetPanel (VASynthProcessor& p, PresetManager& pm, std::function<void()> restore)
+            : proc (p), presets (pm), restoreFocus (std::move (restore))
         {
-            random.setButtonText ("Random");
-            random.setWantsKeyboardFocus (false);
-            random.onClick = [this]
-            {
-                juce::Random rng;
-                presets.randomize (rng);
-            };
-            addAndMakeVisible (random);
+            // Give the panel enough width that button labels never truncate.
+            getProperties().set ("layoutFlex", 3.4);
 
-            name.setTextToShowWhenEmpty ("preset name", VASynthLookAndFeel::dim());
-            name.setWantsKeyboardFocus (true);      // typing here suppresses QWERTY (editor checks focus)
-            addAndMakeVisible (name);
+            for (auto* b : { &random, &save })
+            {
+                b->setWantsKeyboardFocus (false);
+                addAndMakeVisible (b);
+            }
+            random.setButtonText ("Random");
+            random.onClick = [this] { juce::Random rng; presets.randomize (rng); };
 
             save.setButtonText ("Save");
-            save.setWantsKeyboardFocus (false);
-            save.onClick = [this]
-            {
-                if (presets.save (name.getText())) refreshList();
-            };
-            addAndMakeVisible (save);
+            save.onClick = [this] { showSaveDialog(); };
 
-            load.setTextWhenNothingSelected ("Load preset...");
+            load.setTextWhenNothingSelected ("Load");
             load.setWantsKeyboardFocus (false);
             load.onChange = [this]
             {
@@ -38,6 +35,22 @@ void VASynthEditor::buildGlobalExtras (Section& s)
             };
             addAndMakeVisible (load);
             refreshList();
+        }
+
+        void showSaveDialog()
+        {
+            auto* aw = new juce::AlertWindow ("Save Preset", "Preset name:",
+                                              juce::MessageBoxIconType::NoIcon, this);
+            aw->addTextEditor ("name", "");
+            aw->addButton ("Save",   1, juce::KeyPress (juce::KeyPress::returnKey));
+            aw->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+            aw->enterModalState (true, juce::ModalCallbackFunction::create (
+                [this, aw] (int result)
+                {
+                    if (result == 1 && presets.save (aw->getTextEditorContents ("name")))
+                        refreshList();
+                    if (restoreFocus) restoreFocus();      // QWERTY resumes
+                }), true);                                  // deleteWhenDismissed
         }
 
         void refreshList()
@@ -49,22 +62,22 @@ void VASynthEditor::buildGlobalExtras (Section& s)
 
         void resized() override
         {
-            auto r = getLocalBounds();
-            const int h = juce::jmax (24, r.getHeight() / 4 - 4);
-            random.setBounds (r.removeFromTop (h)); r.removeFromTop (4);
-            name.setBounds   (r.removeFromTop (h)); r.removeFromTop (4);
-            save.setBounds   (r.removeFromTop (h)); r.removeFromTop (4);
+            auto r = getLocalBounds().reduced (0, 2);
+            const int gap = 6;
+            const int h = juce::jmax (30, (r.getHeight() - 2 * gap) / 3);
+            random.setBounds (r.removeFromTop (h)); r.removeFromTop (gap);
+            save.setBounds   (r.removeFromTop (h)); r.removeFromTop (gap);
             load.setBounds   (r.removeFromTop (h));
         }
 
         VASynthProcessor& proc;
         PresetManager& presets;
+        std::function<void()> restoreFocus;
         juce::TextButton random, save;
-        juce::TextEditor name;
         juce::ComboBox load;
     };
 
-    auto panel = std::make_unique<PresetPanel> (proc, presets);
+    auto panel = std::make_unique<PresetPanel> (proc, presets, [this] { restoreQwertyFocus(); });
     s.addAndMakeVisible (*panel);
     presetPanel = std::move (panel);
 }

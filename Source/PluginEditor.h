@@ -31,7 +31,17 @@ public:
 
         setResizable (true, true);
         setResizeLimits (900, 480, 3000, 1600);
-        setSize (1180, 620);
+
+        // Default startup size (20% wider than the original 1180), clamped to the
+        // display so it never opens off-screen on a smaller monitor.
+        int w = 1416, h = 620;
+        if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+        {
+            const auto area = disp->userArea;
+            w = juce::jmin (w, area.getWidth()  - 40);
+            h = juce::jmin (h, area.getHeight() - 40);
+        }
+        setSize (w, h);
 
         if (isStandalone())
         {
@@ -48,6 +58,18 @@ public:
     }
 
     void paint (juce::Graphics& g) override { g.fillAll (VASynthLookAndFeel::panel()); }
+
+    // Clicking the panel background returns keyboard focus to the editor so
+    // QWERTY resumes (controls refuse focus, so this only fires on the backdrop).
+    void mouseDown (const juce::MouseEvent&) override { grabQwertyFocus(); }
+
+    // Deterministically own keyboard focus once we're actually on screen — not
+    // in the constructor (too early). Async re-grab defeats any startup race.
+    void parentHierarchyChanged() override { grabQwertyFocus(); }
+    void visibilityChanged() override      { grabQwertyFocus(); }
+
+    // Restores QWERTY focus after a transient dialog (e.g. Save-preset) closes.
+    void restoreQwertyFocus() { grabQwertyFocus(); }
 
     void resized() override
     {
@@ -69,8 +91,6 @@ public:
         return false;
     }
 
-    void parentHierarchyChanged() override { if (isStandalone() && isShowing()) grabKeyboardFocus(); }
-
     bool keyStateChanged (bool) override
     {
         if (! isStandalone()) return false;
@@ -85,6 +105,18 @@ private:
     struct SectionEntry { std::unique_ptr<Section> panel; float flex; };
 
     bool isStandalone() const { return proc.wrapperType == juce::AudioProcessor::wrapperType_Standalone; }
+
+    void grabQwertyFocus()
+    {
+        if (! isStandalone() || ! isShowing()) return;
+        grabKeyboardFocus();
+        // Re-grab after the message loop settles, to win any startup focus race
+        // (e.g. a dialog or child that momentarily grabbed focus).
+        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<VASynthEditor> (this)]
+        {
+            if (safe != nullptr && safe->isShowing()) safe->grabKeyboardFocus();
+        });
+    }
 
     Section& addSection (juce::String title, juce::Colour tint, float flex)
     {
