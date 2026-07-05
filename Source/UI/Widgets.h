@@ -109,6 +109,35 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// Hardware-style on/off kill switch bound to a bool parameter (lit = on).
+class PowerToggle : public juce::Component
+{
+public:
+    PowerToggle (juce::AudioProcessorValueTreeState& apvts, const juce::String& pid, juce::String label)
+        : name (std::move (label))
+    {
+        btn.setClickingTogglesState (true);
+        btn.setWantsKeyboardFocus (false);
+        btn.setButtonText (name);
+        btn.setColour (juce::TextButton::buttonColourId,   VASynthLookAndFeel::track());
+        btn.setColour (juce::TextButton::buttonOnColourId, VASynthLookAndFeel::accent());
+        btn.setColour (juce::TextButton::textColourOnId,   juce::Colours::black);
+        btn.setColour (juce::TextButton::textColourOffId,  VASynthLookAndFeel::dim());
+        addAndMakeVisible (btn);
+        attachment = std::make_unique<juce::ButtonParameterAttachment> (*apvts.getParameter (pid), btn);
+        getProperties().set ("layoutFlex", 0.55);
+    }
+    void resized() override { btn.setBounds (getLocalBounds().reduced (2)); }
+
+private:
+    juce::String name;
+    juce::TextButton btn;
+    std::unique_ptr<juce::ButtonParameterAttachment> attachment;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PowerToggle)
+};
+
+// ---------------------------------------------------------------------------
 // Vertical fader + name + live value readout, bound to a float parameter.
 class LabelledFader : public LearnableComponent
 {

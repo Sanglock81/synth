@@ -29,9 +29,27 @@ namespace ParamID
     inline constexpr auto osc2Detune  = "osc2_detune";
     inline constexpr auto osc2PW      = "osc2_pw";
 
-    // Mixer
-    inline constexpr auto oscMix      = "osc_mix";       // 0 = osc1 only, 1 = osc2 only
+    // Oscillator 3 (6A)
+    inline constexpr auto osc3Wave    = "osc3_wave";
+    inline constexpr auto osc3Octave  = "osc3_octave";
+    inline constexpr auto osc3Detune  = "osc3_detune";
+    inline constexpr auto osc3PW      = "osc3_pw";
+
+    // Mixer. osc_mix is FROZEN (legacy crossfade) — kept registered for state
+    // compatibility; the engine now uses independent per-source levels + kill
+    // switches. Old patches migrate osc_mix -> osc1/2 levels on load.
+    inline constexpr auto oscMix      = "osc_mix";       // legacy: 0 = osc1 only, 1 = osc2 only
     inline constexpr auto noiseLevel  = "noise_level";
+    inline constexpr auto osc1Level   = "osc1_level";    // 0..1
+    inline constexpr auto osc2Level   = "osc2_level";
+    inline constexpr auto osc3Level   = "osc3_level";
+    inline constexpr auto osc1On      = "osc1_on";       // kill switch (bool)
+    inline constexpr auto osc2On      = "osc2_on";
+    inline constexpr auto osc3On      = "osc3_on";
+
+    // Velocity routing (6A)
+    inline constexpr auto velToAmp    = "vel_to_amp";    // 0..1
+    inline constexpr auto velToCutoff = "vel_to_cutoff"; // 0..1 (max ~+3 oct)
 
     // Filter (state-variable, multimode)
     inline constexpr auto filterType    = "filter_type";   // LP / HP / BP / Notch
@@ -68,6 +86,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 {
     using P  = juce::AudioParameterFloat;
     using Pc = juce::AudioParameterChoice;
+    using Pb = juce::AudioParameterBool;
     namespace ID = ParamID;
 
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
@@ -92,9 +111,24 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2Detune, 1},"Osc2 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 7.0f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2PW, 1},    "Osc2 PW", juce::NormalisableRange<float>(0.05f, 0.95f), 0.5f));
 
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc3Wave, 1},  "Osc3 Wave", waveNames, 0));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Octave, 1},"Osc3 Octave", juce::NormalisableRange<float>(-2.0f, 2.0f, 1.0f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Detune, 1},"Osc3 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3PW, 1},    "Osc3 PW", juce::NormalisableRange<float>(0.05f, 0.95f), 0.5f));
+
     // --- Mixer -------------------------------------------------------------
-    params.push_back(std::make_unique<P>(juce::ParameterID{ID::oscMix, 1},     "Osc Mix", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::oscMix, 1},     "Osc Mix", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));   // FROZEN legacy
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::osc1Level, 1},  "Osc1 Level", juce::NormalisableRange<float>(0.0f, 1.0f), 0.8f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::osc2Level, 1},  "Osc2 Level", juce::NormalisableRange<float>(0.0f, 1.0f), 0.8f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::osc3Level, 1},  "Osc3 Level", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::noiseLevel, 1}, "Noise", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::osc1On, 1},    "Osc1 On", true));
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::osc2On, 1},    "Osc2 On", true));
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::osc3On, 1},    "Osc3 On", false));
+
+    // --- Velocity ----------------------------------------------------------
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::velToAmp, 1},    "Vel->Amp", juce::NormalisableRange<float>(0.0f, 1.0f), 0.7f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::velToCutoff, 1}, "Vel->Cutoff", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
 
     // --- Filter ------------------------------------------------------------
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::filterType, 1},   "Filter Type", juce::StringArray{ "LP", "HP", "BP", "Notch" }, 0));
@@ -126,4 +160,29 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::polyMode, 1},  "Mode", juce::StringArray{ "Poly", "Mono", "Legato" }, 0));
 
     return { params.begin(), params.end() };
+}
+
+// True if `loaded` predates the per-source level mixer (6A): it carries the
+// legacy `osc_mix` but no `osc1_level` child. MUST be checked on the raw loaded
+// tree BEFORE apvts.replaceState() — replaceState back-fills the missing level
+// children into that same (reference-counted) tree, which would hide the gap.
+inline bool stateNeedsLevelMigration (const juce::ValueTree& loaded)
+{
+    for (auto child : loaded)
+        if (child.getProperty ("id").toString() == ParamID::osc1Level)
+            return false;
+    return true;
+}
+
+// Derive the three per-source levels from the legacy `osc_mix` crossfade
+// (osc1 = 1-mix, osc2 = mix, osc3 off) so patches — including the user's own
+// saved presets — sound unchanged. Call AFTER replaceState, only when
+// stateNeedsLevelMigration() returned true for the loaded tree.
+inline void applyLegacyOscLevelMigration (juce::AudioProcessorValueTreeState& apvts)
+{
+    namespace ID = ParamID;
+    const float mix = apvts.getRawParameterValue (ID::oscMix)->load();
+    apvts.getParameter (ID::osc1Level)->setValueNotifyingHost (1.0f - mix);
+    apvts.getParameter (ID::osc2Level)->setValueNotifyingHost (mix);
+    apvts.getParameter (ID::osc3Level)->setValueNotifyingHost (0.0f);
 }

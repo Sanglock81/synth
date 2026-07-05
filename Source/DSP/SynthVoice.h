@@ -26,11 +26,20 @@
 struct VoiceParams
 {
     // osc
-    int    osc1Wave = 0, osc2Wave = 0;
-    float  osc1Octave = 0, osc2Octave = 0;
-    float  osc1Detune = 0, osc2Detune = 0;     // cents
-    float  osc1PW = 0.5f, osc2PW = 0.5f;
+    int    osc1Wave = 0, osc2Wave = 0, osc3Wave = 0;
+    float  osc1Octave = 0, osc2Octave = 0, osc3Octave = 0;
+    float  osc1Detune = 0, osc2Detune = 0, osc3Detune = 0;   // cents
+    float  osc1PW = 0.5f, osc2PW = 0.5f, osc3PW = 0.5f;
+
+    // mixer: independent per-source levels (engine writes SMOOTHED effective
+    // levels here — already folded in the on/off kill switch, so a level of ~0
+    // means "skip this oscillator"). oscMix stays as a legacy/no-op field.
     float  oscMix = 0.5f, noiseLevel = 0.0f;
+    float  osc1Level = 0.8f, osc2Level = 0.8f, osc3Level = 0.0f;
+
+    // velocity routing
+    float  velToAmp    = 0.7f;                  // amp = (1-v2a) + v2a*velocity
+    float  velToCutoff = 0.0f;                  // adds up to +3 oct at vel=1
 
     // filter
     int    filterType = 0;
@@ -59,6 +68,7 @@ public:
     {
         osc1.setQuality (q);
         osc2.setQuality (q);
+        osc3.setQuality (q);
     }
 
     void prepare (double newSampleRate)
@@ -66,6 +76,7 @@ public:
         sampleRate = newSampleRate;
         osc1.prepare (newSampleRate);
         osc2.prepare (newSampleRate);
+        osc3.prepare (newSampleRate);
         filter.prepare (newSampleRate);
         ampEnv.prepare (newSampleRate);
         fltEnv.prepare (newSampleRate);
@@ -88,6 +99,7 @@ public:
         {
             osc1.reset();
             osc2.reset();
+            osc3.reset();
             filter.reset();
             glideNote = (float) note;      // fresh voice: no glide into the first note
         }
@@ -133,6 +145,17 @@ public:
         applyParams (p);
 
         const float trackOct = p.keytrack * (midiNote - 60) / 12.0f;
+        const float velOct   = p.velToCutoff * velocity * 3.0f;              // vel -> cutoff
+        const float ampScale = (1.0f - p.velToAmp) + p.velToAmp * velocity;  // vel -> amp
+
+        // Kill-skip: an oscillator whose (smoothed, on/off-folded) level is ~0 is
+        // NOT rendered at all — the CPU saving the kill switch exists for, and
+        // what makes osc3-off genuinely free. Level smoothing (engine side) means
+        // this crosses the threshold while inaudibly quiet, so toggling is click-free.
+        const bool o1 = p.osc1Level > 1.0e-4f;
+        const bool o2 = p.osc2Level > 1.0e-4f;
+        const bool o3 = p.osc3Level > 1.0e-4f;
+        const bool useNoise = p.noiseLevel > 1.0e-4f;
 
         for (int i = 0; i < numSamples; ++i)
         {
@@ -152,17 +175,19 @@ public:
             if ((i & (kCutoffInterval - 1)) == 0)
             {
                 const float envOct = p.filterEnvAmt * fltLevel * 5.0f;       // +/-5 oct sweep
-                const float fc = p.cutoffHz * std::exp2 (envOct + trackOct + p.cutoffModOct);
+                const float fc = p.cutoffHz * std::exp2 (envOct + trackOct + velOct + p.cutoffModOct);
                 filter.setCutoff (fc, p.resonance);
             }
 
-            // --- oscillators ----------------------------------------------
-            float s = osc1.nextSample() * (1.0f - p.oscMix)
-                    + osc2.nextSample() * p.oscMix
-                    + noise() * p.noiseLevel;
+            // --- oscillators (per-source level; skip silent/off sources) ---
+            float s = 0.0f;
+            if (o1) s += osc1.nextSample() * p.osc1Level;
+            if (o2) s += osc2.nextSample() * p.osc2Level;
+            if (o3) s += osc3.nextSample() * p.osc3Level;
+            if (useNoise) s += noise() * p.noiseLevel;
 
             s = filter.process (s);
-            out[i] += s * ampLevel * velocity;
+            out[i] += s * ampLevel * ampScale;
         }
     }
 
@@ -177,10 +202,13 @@ private:
 
         osc1.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc1Wave));
         osc2.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc2Wave));
+        osc3.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc3Wave));
         osc1.setFrequency (f0 * std::exp2 (p.osc1Octave + p.osc1Detune / 1200.0f));
         osc2.setFrequency (f0 * std::exp2 (p.osc2Octave + p.osc2Detune / 1200.0f));
+        osc3.setFrequency (f0 * std::exp2 (p.osc3Octave + p.osc3Detune / 1200.0f));
         osc1.setPulseWidth (std::clamp (p.osc1PW + p.pwMod, 0.05f, 0.95f));
         osc2.setPulseWidth (std::clamp (p.osc2PW + p.pwMod, 0.05f, 0.95f));
+        osc3.setPulseWidth (std::clamp (p.osc3PW + p.pwMod, 0.05f, 0.95f));
 
         filter.setType (static_cast<SVFilter::Type> (p.filterType));
         ampEnv.setParameters (p.ampA, p.ampD, p.ampS, p.ampR);
@@ -194,7 +222,7 @@ private:
         return static_cast<float> (static_cast<std::int32_t> (nz)) / 2147483648.0f;
     }
 
-    PolyBlepOscillator osc1, osc2;
+    PolyBlepOscillator osc1, osc2, osc3;
     SVFilter           filter;
     ADSREnvelope       ampEnv, fltEnv;
 

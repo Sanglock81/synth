@@ -23,7 +23,7 @@ class VASynthEditor : public juce::AudioProcessorEditor,
 public:
     // Default window width — sized so 56 px fader thumbs are met at default
     // scale for the full control count (grows as sections are added).
-    static constexpr int kDefaultWidth = 2000;
+    static constexpr int kDefaultWidth = 2400;
 
     explicit VASynthEditor (VASynthProcessor& p)
         : AudioProcessorEditor (p), proc (p), presets (p.apvts)
@@ -144,6 +144,12 @@ private:
         controls.add (c);
         s.addAndMakeVisible (c);
     }
+    void addToggle (Section& s, const char* pid, juce::String name)
+    {
+        auto* t = new PowerToggle (proc.apvts, pid, std::move (name));
+        controls.add (t);
+        s.addAndMakeVisible (t);
+    }
 
     void buildSections()
     {
@@ -154,21 +160,26 @@ private:
         const auto tLfo = juce::Colour (0xfff0a04b);
         const auto tGlobal = juce::Colour (0xff8a929c);
 
-        { auto& s = addSection ("Osc 1", tOsc, 1.7f);
-          addChoice (s, ID::osc1Wave, "Wave"); addFader (s, ID::osc1Octave, "Oct");
+        { auto& s = addSection ("Osc 1", tOsc, 1.9f);
+          addToggle (s, ID::osc1On, "ON"); addChoice (s, ID::osc1Wave, "Wave"); addFader (s, ID::osc1Octave, "Oct");
           addFader (s, ID::osc1Detune, "Detune"); addFader (s, ID::osc1PW, "PW"); }
 
-        { auto& s = addSection ("Osc 2", tOsc, 1.7f);
-          addChoice (s, ID::osc2Wave, "Wave"); addFader (s, ID::osc2Octave, "Oct");
+        { auto& s = addSection ("Osc 2", tOsc, 1.9f);
+          addToggle (s, ID::osc2On, "ON"); addChoice (s, ID::osc2Wave, "Wave"); addFader (s, ID::osc2Octave, "Oct");
           addFader (s, ID::osc2Detune, "Detune"); addFader (s, ID::osc2PW, "PW"); }
 
-        { auto& s = addSection ("Mix", tOsc, 0.8f);
-          addFader (s, ID::oscMix, "Osc Mix"); addFader (s, ID::noiseLevel, "Noise"); }
+        { auto& s = addSection ("Osc 3", tOsc, 1.9f);
+          addToggle (s, ID::osc3On, "ON"); addChoice (s, ID::osc3Wave, "Wave"); addFader (s, ID::osc3Octave, "Oct");
+          addFader (s, ID::osc3Detune, "Detune"); addFader (s, ID::osc3PW, "PW"); }
 
-        { auto& s = addSection ("Filter", tFilt, 1.7f);
+        { auto& s = addSection ("Mix", tOsc, 1.4f);
+          addFader (s, ID::osc1Level, "Osc1"); addFader (s, ID::osc2Level, "Osc2");
+          addFader (s, ID::osc3Level, "Osc3"); addFader (s, ID::noiseLevel, "Noise"); }
+
+        { auto& s = addSection ("Filter", tFilt, 2.2f);
           addChoice (s, ID::filterType, "Type"); addFader (s, ID::filterCutoff, "Cutoff");
           addFader (s, ID::filterReso, "Reso"); addFader (s, ID::filterEnvAmt, "Env");
-          addFader (s, ID::filterKeytrack, "Track"); }
+          addFader (s, ID::filterKeytrack, "Track"); addFader (s, ID::velToCutoff, "Vel>Cut"); }
 
         { auto& s = addSection ("Amp Env", tEnv, 1.4f);
           addFader (s, ID::ampAttack, "A"); addFader (s, ID::ampDecay, "D");
@@ -182,9 +193,9 @@ private:
           addFader (s, ID::lfoRate, "Rate"); addFader (s, ID::lfoDepth, "Depth");
           addChoice (s, ID::lfoShape, "Shape"); addChoice (s, ID::lfoDest, "Dest"); }
 
-        { auto& s = addSection ("Global", tGlobal, 1.8f);
-          addFader (s, ID::glideTime, "Glide"); addFader (s, ID::masterGain, "Master");
-          addChoice (s, ID::polyMode, "Mode");
+        { auto& s = addSection ("Global", tGlobal, 2.2f);
+          addFader (s, ID::glideTime, "Glide"); addFader (s, ID::velToAmp, "Vel>Amp");
+          addFader (s, ID::masterGain, "Master"); addChoice (s, ID::polyMode, "Mode");
           buildGlobalExtras (s); }
     }
 

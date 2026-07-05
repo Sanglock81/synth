@@ -22,7 +22,9 @@ namespace
         Fixture()
         {
             p.apvts.getParameter ("osc1_wave")->setValueNotifyingHost (1.0f);  // Sine (last choice)
-            p.apvts.getParameter ("osc_mix")->setValueNotifyingHost (0.0f);    // osc1 only
+            p.apvts.getParameter ("osc1_level")->setValueNotifyingHost (1.0f); // osc1 only
+            p.apvts.getParameter ("osc2_level")->setValueNotifyingHost (0.0f);
+            p.apvts.getParameter ("osc3_level")->setValueNotifyingHost (0.0f);
             p.apvts.getParameter ("filter_cutoff")->setValueNotifyingHost (1.0f);
             p.apvts.getParameter ("amp_attack")->setValueNotifyingHost (0.0f);
             p.apvts.getParameter ("amp_sustain")->setValueNotifyingHost (1.0f);

@@ -15,7 +15,7 @@ namespace
     VoiceParams sineP (float glide = 0.0f)
     {
         VoiceParams p;
-        p.osc1Wave = 3; p.osc2Wave = 3; p.oscMix = 0.0f; p.noiseLevel = 0.0f;
+        p.osc1Wave = 3; p.osc2Wave = 3; p.oscMix = 0.0f; p.noiseLevel = 0.0f; p.osc1Level = 0.8f; p.osc2Level = 0.0f;
         p.cutoffHz = 18000.0f; p.resonance = 0.0f; p.filterEnvAmt = 0.0f;
         p.ampA = 0.002f; p.ampD = 0.01f; p.ampS = 1.0f; p.ampR = 0.05f;
         p.glideTime = glide;

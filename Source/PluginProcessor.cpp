@@ -90,14 +90,27 @@ VoiceParams VASynthProcessor::snapshotParams() const
 
     p.osc1Wave   = (int) rp (apvts, ID::osc1Wave);
     p.osc2Wave   = (int) rp (apvts, ID::osc2Wave);
+    p.osc3Wave   = (int) rp (apvts, ID::osc3Wave);
     p.osc1Octave = rp (apvts, ID::osc1Octave);
     p.osc2Octave = rp (apvts, ID::osc2Octave);
+    p.osc3Octave = rp (apvts, ID::osc3Octave);
     p.osc1Detune = rp (apvts, ID::osc1Detune);
     p.osc2Detune = rp (apvts, ID::osc2Detune);
+    p.osc3Detune = rp (apvts, ID::osc3Detune);
     p.osc1PW     = rp (apvts, ID::osc1PW);
     p.osc2PW     = rp (apvts, ID::osc2PW);
-    p.oscMix     = rp (apvts, ID::oscMix);
+    p.osc3PW     = rp (apvts, ID::osc3PW);
+    p.oscMix     = rp (apvts, ID::oscMix);        // legacy; unused by the engine
     p.noiseLevel = rp (apvts, ID::noiseLevel);
+
+    // Fold each kill switch into its level (off -> 0); the engine smooths these
+    // effective levels, so toggling is click-free and off oscillators are skipped.
+    p.osc1Level  = rp (apvts, ID::osc1On) > 0.5f ? rp (apvts, ID::osc1Level) : 0.0f;
+    p.osc2Level  = rp (apvts, ID::osc2On) > 0.5f ? rp (apvts, ID::osc2Level) : 0.0f;
+    p.osc3Level  = rp (apvts, ID::osc3On) > 0.5f ? rp (apvts, ID::osc3Level) : 0.0f;
+
+    p.velToAmp    = rp (apvts, ID::velToAmp);
+    p.velToCutoff = rp (apvts, ID::velToCutoff);
 
     p.filterType   = (int) rp (apvts, ID::filterType);
     p.cutoffHz     = rp (apvts, ID::filterCutoff);
@@ -238,8 +251,16 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
     {
         auto tree = juce::ValueTree::fromXml (*xml);
+
+        // Detect pre-level-mixer states BEFORE replaceState back-fills the levels.
+        const bool needsMigration = stateNeedsLevelMigration (tree);
+
         midiLearn.loadFromTree (tree);            // read MIDILEARN child (if any)
         apvts.replaceState (tree);                // APVTS ignores the extra child
+
+        // Old sessions (osc_mix, no osc1_level) derive the per-source levels from
+        // the legacy crossfade so they sound the same.
+        if (needsMigration) applyLegacyOscLevelMigration (apvts);
     }
 }
 

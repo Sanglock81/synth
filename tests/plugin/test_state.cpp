@@ -25,7 +25,14 @@ TEST_CASE ("APVTS state round-trips every parameter", "[plugin][state]")
             rp->setValueNotifyingHost (dist (rng));
     }
     for (auto* p : params)
-        expected.push_back (p->getValue());
+    {
+        // AudioParameterBool::getValue() reports the raw set value un-snapped,
+        // but state persists the boolean (0/1). Compare against the snapped value
+        // so the round-trip assertion is meaningful for the kill-switch toggles.
+        float v = p->getValue();
+        if (dynamic_cast<juce::AudioParameterBool*> (p) != nullptr) v = v >= 0.5f ? 1.0f : 0.0f;
+        expected.push_back (v);
+    }
 
     juce::MemoryBlock blob;
     src.getStateInformation (blob);

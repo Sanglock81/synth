@@ -61,6 +61,13 @@ public:
     // Exposed for the (v2) right-click MIDI-learn GUI and for tests.
     MidiLearnManager& getMidiLearn() { return midiLearn; }
 
+    // Test seam: build the plugin's binary state format from an XML tree (so the
+    // osc_mix->levels migration can be tested with a synthetic pre-level state).
+    static void xmlToBinaryForTest (const juce::XmlElement& xml, juce::MemoryBlock& out)
+    {
+        copyXmlToBinary (xml, out);
+    }
+
     // Computer-keyboard (QWERTY) note input from the standalone editor. Merged
     // into the MIDI stream in processBlock so it flows through the same engine
     // path as hardware MIDI and coexists with it. (In a plugin the host owns the

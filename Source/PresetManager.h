@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "Parameters.h"
 
 // ============================================================================
 // Preset save / load + randomize for sound exploration. Presets are the APVTS
@@ -44,22 +45,34 @@ public:
         auto file = presetDir().getChildFile (name + ".vasynth");
         if (auto xml = juce::XmlDocument::parse (file))
         {
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+            auto tree = juce::ValueTree::fromXml (*xml);
+            // Presets the user saved before 6A carry osc_mix but no per-source
+            // levels — detect before replaceState back-fills them, then migrate so
+            // their existing patches still sound right.
+            const bool needsMigration = stateNeedsLevelMigration (tree);
+            apvts.replaceState (tree);
+            if (needsMigration) applyLegacyOscLevelMigration (apvts);
             return true;
         }
         return false;
     }
 
-    // Shuffle every parameter within its range. Master gain is constrained to an
-    // audible band so a random patch is never silent from gain alone.
+    // Shuffle every parameter within its range, but keep the result musical:
+    //  - master gain constrained to an audible band (never gain-silent),
+    //  - oscillator 1 forced ON so a random patch always has a live source,
+    //  - the frozen legacy osc_mix left alone (the engine ignores it; shuffling
+    //    a dead control would only confuse).
     void randomize (juce::Random& rng)
     {
         for (auto* p : apvts.processor.getParameters())
         {
             if (auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (p))
             {
+                if (withId->paramID == "osc_mix") continue;                // frozen legacy
+
                 float v = rng.nextFloat();
                 if (withId->paramID == "master_gain") v = 0.5f + 0.3f * rng.nextFloat();  // 0.5..0.8
+                else if (withId->paramID == "osc1_on") v = 1.0f;           // guarantee a source
                 p->setValueNotifyingHost (v);
             }
         }

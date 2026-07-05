@@ -160,14 +160,17 @@ public:
         lfo.setShape (static_cast<LFO::Shape> (lfoShape));
 
         // Prime smoothers to the first targets so notes don't sweep from stale
-        // state on the very first block.
+        // state on the very first block. The osc levels the processor passes are
+        // already the on/off-folded effective levels (off -> 0), so smoothing
+        // them gives click-free kill-switch toggles.
         if (! smoothPrimed)
         {
-            smCutoff = params.cutoffHz; smReso = params.resonance; smMix = params.oscMix;
+            smCutoff = params.cutoffHz; smReso = params.resonance;
+            smL1 = params.osc1Level; smL2 = params.osc2Level; smL3 = params.osc3Level;
             smoothPrimed = true;
         }
 
-        // Render in sub-chunks so cutoff/resonance/osc-mix (and the LFO) update
+        // Render in sub-chunks so cutoff/resonance/osc levels (and the LFO) update
         // smoothly across the block instead of stepping once per block.
         int done = 0;
         while (done < numSamples)
@@ -176,12 +179,16 @@ public:
 
             smCutoff += smoothCoef * (params.cutoffHz  - smCutoff);
             smReso   += smoothCoef * (params.resonance - smReso);
-            smMix    += smoothCoef * (params.oscMix    - smMix);
+            smL1     += smoothCoef * (params.osc1Level - smL1);
+            smL2     += smoothCoef * (params.osc2Level - smL2);
+            smL3     += smoothCoef * (params.osc3Level - smL3);
 
             VoiceParams p = params;
             p.cutoffHz  = smCutoff;
             p.resonance = smReso;
-            p.oscMix    = smMix;
+            p.osc1Level = smL1;
+            p.osc2Level = smL2;
+            p.osc3Level = smL3;
 
             const float lfoVal = lfo.advance (chunk) * lfoDepth;
             switch (lfoDest)
@@ -270,6 +277,7 @@ private:
     int   numHeld = 0;
 
     // Zipper smoothing state (global params).
-    float smoothCoef = 0.05f, smCutoff = 0.0f, smReso = 0.0f, smMix = 0.0f;
+    float smoothCoef = 0.05f, smCutoff = 0.0f, smReso = 0.0f;
+    float smL1 = 0.8f, smL2 = 0.8f, smL3 = 0.0f;   // smoothed effective osc levels
     bool  smoothPrimed = false;
 };

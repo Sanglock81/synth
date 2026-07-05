@@ -29,10 +29,13 @@ namespace
 
         VoiceParams p;
         p.osc1Wave = 0; p.osc2Wave = 0;            // saw/saw
-        p.oscMix = 0.5f; p.osc2Detune = 8.0f;      // slight detune for motion
+        p.osc1Level = 0.5f; p.osc2Level = 0.5f;    // matches the legacy osc_mix=0.5 crossfade
+        p.osc2Detune = 8.0f;                       // slight detune for motion
         p.filterType = 0;                          // LP
         p.resonance = 0.4f; p.filterEnvAmt = 0.0f; p.keytrack = 0.0f;
         p.ampA = 0.005f; p.ampD = 0.2f; p.ampS = 0.8f; p.ampR = 0.2f;
+        // vel_to_amp default 0.7: at velocity 0.8 the amp scale is 0.86 (was 0.8);
+        // this is the single documented golden change for 6A.
 
         const int total = int (kSR * 2.0);
         const int block = 256;

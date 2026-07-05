@@ -17,6 +17,16 @@ namespace tu
     constexpr double kPi    = 3.14159265358979323846;
     constexpr double kTwoPi = 6.28318530717958647692;
 
+    // Copy a sub-range into a fresh vector. Uses an explicit loop rather than the
+    // vector range-constructor, which trips a GCC 13 -O3 false positive
+    // (-Wfree-nonheap-object) on some slicing patterns.
+    inline std::vector<float> slice (const std::vector<float>& v, std::size_t start, std::size_t len)
+    {
+        std::vector<float> out (len, 0.0f);
+        for (std::size_t i = 0; i < len && start + i < v.size(); ++i) out[i] = v[start + i];
+        return out;
+    }
+
     // ---- metrics -----------------------------------------------------------
     inline float peak (const std::vector<float>& x)
     {

@@ -18,9 +18,10 @@ Designed for: Korg B2 (primary keyboard) + Novation Launchkey Mini
  GUI / DAW ────────▶│ APVTS ◀─────────────────────────────────┘  │
  automation         │   │ snapshot once per block                │
                     │   ▼                                        │
-                    │ SynthEngine (16 voices, global LFO)        │
-                    │   voice: OSC1+OSC2+noise → SVF → VCA       │
-                    │          (PolyBLEP)     (TPT)  (2× ADSR)   │
+                    │ SynthEngine (≤12–16 voices, global LFO)    │
+                    │   voice: OSC1+OSC2+OSC3+noise → SVF → VCA  │
+                    │   per-source mix + kill  (TPT)  (2× ADSR)  │
+                    │   (PolyBLEP)  velocity → amp & cutoff       │
                     │   ▼                                        │
                     │ mono → stereo → master gain → out          │
                     └────────────────────────────────────────────┘
@@ -36,7 +37,16 @@ Key rules baked into the design:
 * **MIDI is sample-accurate.** `processBlock` renders up to each event's
   sample position before dispatching it.
 * **Parameter IDs are forever.** Once presets exist, never rename an ID in
-  `Parameters.h` — add new ones instead.
+  `Parameters.h` — add new ones instead. When a control's *meaning* changes, the
+  old ID stays registered and a migration runs on load. The 2→3-oscillator move
+  (6A) froze the old `osc_mix` crossfade and derives the new independent
+  `osc{1,2,3}_level` faders from it, so pre-6A sessions **and saved presets** load
+  sounding identical (see `migrateLegacyOscLevels` / `PresetManager::load`).
+
+**Oscillators & mixer (6A).** Three PolyBLEP oscillators, each with its own
+level fader and a hardware-style **kill switch** (an off oscillator is skipped
+entirely — measurable CPU savings, not just muted). Velocity routes to amplitude
+(`vel_to_amp`) and filter cutoff (`vel_to_cutoff`) for dynamic playing.
 
 ## File map
 
@@ -50,8 +60,9 @@ Key rules baked into the design:
 | `Source/DSP/SynthVoice.h` | One voice's full signal chain. |
 | `Source/DSP/SynthEngine.h` | Voice pool, oldest-note stealing, LFO routing. |
 | `Source/MidiLearnManager.h` | (channel, CC) → parameter mapping; Launchkey default map. |
-| `Source/PluginProcessor.*` | JUCE seam: MIDI dispatch, param snapshot, render, state. |
-| `Source/PluginEditor.*` | Thin wrapper over GenericAudioProcessorEditor (v1 GUI). |
+| `Source/PluginProcessor.*` | JUCE seam: MIDI dispatch, param snapshot, render, state + legacy migration. |
+| `Source/PluginEditor.*` | Hardware-style custom editor: signal-flow panel sections, touch faders. |
+| `Source/PresetManager.h` | Preset save/load (per-user dir) + musical randomize; migrates legacy patches. |
 
 ## Build
 

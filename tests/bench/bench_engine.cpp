@@ -32,14 +32,18 @@ namespace
     // Render `blocks` blocks of `voices` held notes; return median / p99 / max
     // block ms. p99 is the robust "worst-case" (max on a non-realtime dev box is
     // dominated by OS preemption outliers, not DSP cost).
-    Stat measure (PolyBlepOscillator::Quality q, int voices, int blocks)
+    Stat measure (PolyBlepOscillator::Quality q, int voices, int blocks, int oscsOn = 2)
     {
         SynthEngine engine;
         engine.setOscQuality (q);
         engine.setMaxVoices (voices);
         engine.prepare (kSR);
 
-        VoiceParams p;                       // saw/saw, worst case (oversampled)
+        VoiceParams p;                       // saws, worst case (oversampled)
+        p.osc1Wave = p.osc2Wave = p.osc3Wave = 0;
+        p.osc1Level = 0.8f;
+        p.osc2Level = oscsOn >= 2 ? 0.8f : 0.0f;
+        p.osc3Level = oscsOn >= 3 ? 0.8f : 0.0f;
         p.cutoffHz = 2000.0f; p.resonance = 0.4f; p.filterEnvAmt = 0.5f;
         for (int i = 0; i < voices; ++i) engine.noteOn (36 + i, 0.7f);
 
@@ -92,6 +96,12 @@ int main()
 
     std::printf ("\n1 voice:\n");
     for (auto m : modes) row (m.name, measure (m.q, 1, 4000));
+
+    // 6A gate: 12 voices, Efficient, osc-count sweep (kill-switch savings).
+    std::printf ("\n6A osc-count (12 voices, Efficient, full-level saws):\n");
+    row ("1 osc on", measure (PolyBlepOscillator::Quality::Efficient, 12, 4000, 1));
+    row ("2 osc on", measure (PolyBlepOscillator::Quality::Efficient, 12, 4000, 2));
+    row ("3 osc on", measure (PolyBlepOscillator::Quality::Efficient, 12, 4000, 3));
 
     std::printf ("\nBudget = 2.667 ms/block. Target: worst-case ThinkPad < 30%% "
                  "leaves headroom for GUI, other tracks, and OS jitter.\n");

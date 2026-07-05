@@ -47,7 +47,7 @@ namespace
     {
         VoiceParams p;
         p.osc1Wave = 3; p.osc2Wave = 3;       // sine
-        p.oscMix = 0.0f; p.noiseLevel = 0.0f;
+        p.oscMix = 0.0f; p.noiseLevel = 0.0f; p.osc1Level = 0.8f; p.osc2Level = 0.0f;
         p.cutoffHz = 18000.0f; p.resonance = 0.0f; p.filterEnvAmt = 0.0f;
         p.ampA = 0.002f; p.ampD = 0.05f; p.ampS = 0.9f; p.ampR = 0.1f;
         return p;
