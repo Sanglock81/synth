@@ -49,21 +49,21 @@ public:
         }
 
         const float cx = x + width * 0.5f;
-        const float trackW = 6.0f;
+        const float trackW = 8.0f;
         juce::Rectangle<float> trackR (cx - trackW * 0.5f, (float) y + 4.0f, trackW, (float) height - 8.0f);
 
         g.setColour (track());
-        g.fillRoundedRectangle (trackR, 3.0f);
+        g.fillRoundedRectangle (trackR, 4.0f);
 
         // filled portion from the bottom up to the thumb
         auto filled = trackR;
         filled.setTop (juce::jlimit (trackR.getY(), trackR.getBottom(), sliderPos));
         g.setColour (accent().withAlpha (s.isEnabled() ? 0.95f : 0.4f));
-        g.fillRoundedRectangle (filled, 3.0f);
+        g.fillRoundedRectangle (filled, 4.0f);
 
-        // thumb — finger-sized
-        const float thumbW = juce::jmin ((float) width - 2.0f, 30.0f);
-        const float thumbH = 16.0f;
+        // thumb — big finger target: >= 56 px wide at default scale.
+        const float thumbW = juce::jmin ((float) width - 2.0f, 56.0f);
+        const float thumbH = 20.0f;
         juce::Rectangle<float> thumb (cx - thumbW * 0.5f, sliderPos - thumbH * 0.5f, thumbW, thumbH);
         g.setColour (juce::Colour (0xffdfe3e8));
         g.fillRoundedRectangle (thumb, 4.0f);

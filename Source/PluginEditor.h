@@ -21,6 +21,10 @@ class VASynthEditor : public juce::AudioProcessorEditor,
                       private juce::Timer
 {
 public:
+    // Default window width — sized so 56 px fader thumbs are met at default
+    // scale for the full control count (grows as sections are added).
+    static constexpr int kDefaultWidth = 2000;
+
     explicit VASynthEditor (VASynthProcessor& p)
         : AudioProcessorEditor (p), proc (p), presets (p.apvts)
     {
@@ -32,9 +36,10 @@ public:
         setResizable (true, true);
         setResizeLimits (900, 480, 3000, 1600);
 
-        // Default startup size (20% wider than the original 1180), clamped to the
-        // display so it never opens off-screen on a smaller monitor.
-        int w = 1416, h = 620;
+        // Default startup size. Wide enough that the 56 px fader thumbs are hit
+        // at default scale; clamped to the display so it never opens off-screen
+        // (on a narrower screen the FlexBox scales down proportionally).
+        int w = kDefaultWidth, h = 640;
         if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
         {
             const auto area = disp->userArea;
