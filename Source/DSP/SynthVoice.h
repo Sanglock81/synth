@@ -46,6 +46,9 @@ struct VoiceParams
     float  pitchModSemis = 0.0f;               // LFO -> pitch
     float  cutoffModOct  = 0.0f;               // LFO -> cutoff, in octaves
     float  pwMod         = 0.0f;               // LFO -> pulse width
+
+    // performance
+    float  glideTime     = 0.0f;               // portamento seconds (0 = off)
 };
 
 class SynthVoice
@@ -58,13 +61,14 @@ public:
         osc2.setQuality (q);
     }
 
-    void prepare (double sampleRate)
+    void prepare (double newSampleRate)
     {
-        osc1.prepare (sampleRate);
-        osc2.prepare (sampleRate);
-        filter.prepare (sampleRate);
-        ampEnv.prepare (sampleRate);
-        fltEnv.prepare (sampleRate);
+        sampleRate = newSampleRate;
+        osc1.prepare (newSampleRate);
+        osc2.prepare (newSampleRate);
+        filter.prepare (newSampleRate);
+        ampEnv.prepare (newSampleRate);
+        fltEnv.prepare (newSampleRate);
     }
 
     void noteOn (int note, float vel, std::uint64_t stamp)
@@ -85,10 +89,19 @@ public:
             osc1.reset();
             osc2.reset();
             filter.reset();
+            glideNote = (float) note;      // fresh voice: no glide into the first note
         }
         ampEnv.noteOn();
         fltEnv.noteOn();
         active = true;
+    }
+
+    // Legato: retarget pitch (glides there) without retriggering the envelope or
+    // resetting phase — for mono/legato note changes while a note is held.
+    void changeNote (int note, std::uint64_t stamp)
+    {
+        midiNote  = note;
+        timestamp = stamp;
     }
 
     void noteOff()
@@ -108,6 +121,14 @@ public:
     {
         if (! active)
             return;
+
+        // Glide/portamento: slew glideNote toward the target note over glideTime
+        // (per render segment, so it's time-correct regardless of chunk size).
+        if (p.glideTime <= 0.0005f)
+            glideNote = (float) midiNote;
+        else
+            glideNote += (1.0f - std::exp (-(float) numSamples / (p.glideTime * (float) sampleRate)))
+                         * ((float) midiNote - glideNote);
 
         applyParams (p);
 
@@ -151,7 +172,8 @@ private:
 
     void applyParams (const VoiceParams& p)
     {
-        const double f0 = 440.0 * std::exp2 ((midiNote - 69 + p.pitchModSemis) / 12.0);
+        // Pitch from the (glide-slewed) note plus pitch modulation.
+        const double f0 = 440.0 * std::exp2 ((glideNote - 69.0f + p.pitchModSemis) / 12.0);
 
         osc1.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc1Wave));
         osc2.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc2Wave));
@@ -163,8 +185,6 @@ private:
         filter.setType (static_cast<SVFilter::Type> (p.filterType));
         ampEnv.setParameters (p.ampA, p.ampD, p.ampS, p.ampR);
         fltEnv.setParameters (p.fltA, p.fltD, p.fltS, p.fltR);
-
-        // TODO: glide/portamento — slew f0 toward target in mono/legato modes.
     }
 
     float noise()
@@ -178,7 +198,9 @@ private:
     SVFilter           filter;
     ADSREnvelope       ampEnv, fltEnv;
 
-    int   midiNote  = 60;
+    double sampleRate = 44100.0;
+    int   midiNote  = 60;          // target note
+    float glideNote = 60.0f;       // current (glide-slewed) note, fractional
     float velocity  = 0.0f;
     bool  active    = false;
     std::uint64_t timestamp = 0;   // for oldest-note stealing

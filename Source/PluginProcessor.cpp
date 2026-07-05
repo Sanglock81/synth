@@ -81,6 +81,8 @@ VoiceParams VASynthProcessor::snapshotParams() const
     p.fltS = rp (apvts, ID::fltSustain);
     p.fltR = rp (apvts, ID::fltRelease);
 
+    p.glideTime = rp (apvts, ID::glideTime);
+
     return p;
 }
 
@@ -104,6 +106,8 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const int   lfoShape = (int) rp (apvts, ID::lfoShape);
     const int   lfoDest  = (int) rp (apvts, ID::lfoDest);
     const float master   = rp (apvts, ID::masterGain);
+
+    engine.setPolyMode ((int) rp (apvts, ID::polyMode));   // poly / mono / legato
 
     // --- sample-accurate MIDI dispatch --------------------------------------
     // Render up to each event, dispatch it, continue. This keeps note timing

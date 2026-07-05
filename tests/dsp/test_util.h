@@ -49,6 +49,28 @@ namespace tu
 
     inline double linToDb (double lin) { return 20.0 * std::log10 (std::max (lin, 1e-30)); }
 
+    // Fundamental frequency via zero-up-crossing interval timing (sub-sample
+    // interpolated). Returns 0 if too few crossings in the window.
+    inline double zeroCrossHz (const std::vector<float>& x, int start, int len, double sr)
+    {
+        double firstX = -1.0, lastX = -1.0; int count = 0;
+        float prev = x[(std::size_t) start];
+        for (int i = start + 1; i < start + len; ++i)
+        {
+            float v = x[(std::size_t) i];
+            if (prev < 0.0f && v >= 0.0f)
+            {
+                double frac = double (-prev) / double (v - prev);
+                double xh = double (i - 1) + frac;
+                if (firstX < 0.0) firstX = xh; else lastX = xh;
+                ++count;
+            }
+            prev = v;
+        }
+        if (count < 3) return 0.0;
+        return (count - 1) / ((lastX - firstX) / sr);
+    }
+
     // ---- FFT (iterative radix-2 Cooley-Tukey; n must be a power of two) -----
     inline void fft (std::vector<std::complex<double>>& a)
     {

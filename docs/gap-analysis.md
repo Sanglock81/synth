@@ -291,11 +291,13 @@ None ≈ 7% budget · Efficient ≈ 41% · HQ ≈ 211% (overruns). Single voice:
 is studio-only above a few voices.
 
 ### P4 — v1 roadmap features (Phase 3)
-- [ ] Pitch bend (±2 semis default) — from any device.
-- [ ] Mod wheel CC1 → vibrato depth.
-- [ ] Sustain pedal CC64 → hold note-offs (defer release until pedal-up).
-- [ ] Mono/legato modes + glide (slew note freq in `SynthVoice`).
-- [ ] MIDI-learn persistence into APVTS state.
+- [x] Pitch bend (±2 semis default) — from any device.
+- [x] Mod wheel CC1 → vibrato depth (dedicated 5.5 Hz LFO).
+- [x] Sustain pedal CC64 → hold note-offs (defer release until pedal-up).
+- [x] Mono/legato modes + glide: last-note-priority note stack (voice 0), legato
+      changes pitch without envelope retrigger, glide slews `glideNote` toward the
+      target over `glide_time`. Wired via `poly_mode` param + `glideTime` in VoiceParams.
+- [x] MIDI-learn persistence into APVTS state (done in P3.2).
 
 ---
 

@@ -31,6 +31,7 @@ add_executable(dsp_tests
     dsp/test_lfo.cpp
     dsp/test_engine.cpp
     dsp/test_smoothing.cpp
+    dsp/test_mono_glide.cpp
     dsp/test_golden.cpp
     dsp/test_rt_safety.cpp
     dsp/alloc_hook.cpp)
