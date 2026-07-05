@@ -30,7 +30,8 @@ juce_add_plugin(VASynth
 
 target_sources(VASynth PRIVATE
     Source/PluginProcessor.cpp
-    Source/PluginEditor.cpp)
+    Source/PluginEditor.cpp
+    Source/Observability/AudioHealthLogger.cpp)
 
 target_compile_definitions(VASynth PUBLIC
     JUCE_WEB_BROWSER=0
