@@ -34,11 +34,13 @@ add_executable(dsp_tests
     dsp/test_mono_glide.cpp
     dsp/test_golden.cpp
     dsp/test_rt_safety.cpp
+    dsp/test_rtlogring.cpp
     dsp/alloc_hook.cpp)
 
+find_package(Threads REQUIRED)
 target_include_directories(dsp_tests PRIVATE ${CMAKE_SOURCE_DIR}/Source/DSP)
 target_compile_features(dsp_tests PRIVATE cxx_std_17)
-target_link_libraries(dsp_tests PRIVATE Catch2::Catch2WithMain)
+target_link_libraries(dsp_tests PRIVATE Catch2::Catch2WithMain Threads::Threads)
 
 # Where committed golden reference files live.
 target_compile_definitions(dsp_tests PRIVATE
