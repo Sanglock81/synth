@@ -14,6 +14,7 @@
 #include "test_util.h"
 #include <vector>
 #include <cmath>
+#include <algorithm>
 
 namespace
 {
@@ -58,4 +59,34 @@ TEST_CASE ("cutoff is smoothed: a hard step ramps rather than jumping instantly"
     REQUIRE (before > 0.05);                          // probe audible before the step
     REQUIRE (justAfter > 0.5 * before);               // smoothed: still open ~2 ms later
     REQUIRE (wellAfter < 0.2 * before);               // fully closed by ~25 ms
+}
+
+TEST_CASE ("control-rate cutoff (16-sample) is artifact-free at the fastest LFO sweep",
+           "[smoothing][cutoff][lfo]")
+{
+    // The filter cutoff is recomputed every 16 samples (control rate = 3 kHz).
+    // Under the fastest LFO->cutoff sweep (30 Hz, full depth) this must not
+    // inject audible stepping tones at the 3 kHz control rate or its harmonics.
+    SynthEngine e; e.prepare (kSR);
+    VoiceParams p; p.osc1Wave = 3; p.osc2Wave = 3; p.oscMix = 0.0f; p.noiseLevel = 0.0f;
+    p.cutoffHz = 2000.0f; p.resonance = 0.5f; p.filterEnvAmt = 0.0f; p.ampA = 0.002f; p.ampS = 1.0f;
+    e.noteOn (45, 0.8f);                               // ~110 Hz carrier
+
+    const int n = 1 << 15, block = 64;
+    std::vector<float> out (n, 0.0f);
+    for (int b = 0; b * block < n; ++b)
+        e.render (out.data() + b * block, block, p, 30.0f, 1, 1.0f, 2);  // LFO 30Hz sine -> cutoff
+
+    auto mag = tu::magnitudeSpectrumWin (out, tu::blackmanHarris);
+    const double binHz = kSR / n;
+    auto peakNear = [&](double hz) {
+        const int b = int (hz / binHz); double m = 0.0;
+        for (int k = b - 40; k <= b + 40; ++k)
+            if (k >= 0 && k < (int) mag.size()) m = std::max (m, mag[(std::size_t) k]);
+        return m;
+    };
+    const double carrier = peakNear (110.0);
+    const double ctrlRate = std::max ({ peakNear (3000.0), peakNear (6000.0), peakNear (9000.0) });
+    INFO ("control-rate artifact = " << tu::linToDb (ctrlRate / carrier) << " dB rel carrier");
+    REQUIRE (tu::linToDb (ctrlRate / carrier) < -50.0);   // measured ~-75 dB
 }

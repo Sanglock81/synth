@@ -1,6 +1,10 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+// Default pitch-bend range in semitones (+/-). The Launchkey touch strip is the
+// only bend source in the rig; the Korg B2 sends none (stays centred).
+static constexpr float kPitchBendRange = 2.0f;
+
 VASynthProcessor::VASynthProcessor()
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMS", createParameterLayout())
@@ -17,9 +21,17 @@ VASynthProcessor::VASynthProcessor()
  #define VASYNTH_OSC_QUALITY PolyBlepOscillator::Quality::Efficient
 #endif
 
+// Max simultaneous voices. Default 12 keeps the Efficient oscillator's worst-case
+// (16 saw voices was ~41% of the ThinkPad budget, over the ~30% gate) within
+// budget on the 2-core live ThinkPad. Studio/HQ builds can raise it (<= 16).
+#ifndef VASYNTH_MAX_VOICES
+ #define VASYNTH_MAX_VOICES 12
+#endif
+
 void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     engine.setOscQuality (VASYNTH_OSC_QUALITY);
+    engine.setMaxVoices (VASYNTH_MAX_VOICES);
     engine.prepare (sampleRate);
     // Allocate the mono mixdown buffer ONCE, at the host's max block size.
     // processBlock never resizes it (JUCE guarantees numSamples <= this).
@@ -116,12 +128,26 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             engine.noteOff (msg.getNoteNumber());
         else if (msg.isAllNotesOff() || msg.isAllSoundOff())
             engine.allNotesOff();
+        else if (msg.isPitchWheel())
+        {
+            // 14-bit, centre 8192 -> +/- kPitchBendRange semitones (Launchkey strip).
+            const float norm = (msg.getPitchWheelValue() - 8192) / 8192.0f;
+            engine.setPitchBend (norm * kPitchBendRange);
+        }
         else if (msg.isController())
-            midiLearn.handleCC (msg.getChannel(),
-                                msg.getControllerNumber(),
-                                msg.getControllerValue());
-        // TODO: pitch bend, mod wheel (CC1) -> hardwired vibrato/cutoff,
-        //       sustain pedal (CC64) — the Korg B2 sends all three.
+        {
+            const int cc  = msg.getControllerNumber();
+            const int val = msg.getControllerValue();
+
+            if (cc == 64)                                   // sustain pedal (Korg B2 damper)
+                engine.setSustainPedal (val >= 64);
+            else
+            {
+                if (cc == 1)                                // mod wheel -> vibrato depth
+                    engine.setModWheel (val / 127.0f);
+                midiLearn.handleCC (msg.getChannel(), cc, val);
+            }
+        }
     }
 
     if (renderedUpTo < buffer.getNumSamples())

@@ -35,12 +35,23 @@ public:
             v.prepare (sampleRate);
         }
         lfo.prepare (sampleRate);
+        vibratoLFO.prepare (sampleRate);
+        vibratoLFO.setShape (LFO::Shape::Sine);
+        vibratoLFO.setRate (5.5);                    // classic vibrato rate
         eventCounter = 0;
 
         // One-pole smoothing coefficient (~8 ms) applied per kSmoothChunk samples,
         // to kill zipper on cutoff / resonance / osc-mix under knob/automation steps.
         smoothCoef = 1.0f - std::exp (-float (kSmoothChunk) / (0.008f * float (sampleRate)));
         smoothPrimed = false;
+    }
+
+    // Max simultaneously-sounding voices (voice pool is always maxVoices; this
+    // caps how many are allocated). The live ThinkPad profile caps this to keep
+    // worst-case CPU under budget; studio can use the full pool.
+    void setMaxVoices (int n)
+    {
+        activeVoiceLimit = (std::size_t) std::clamp (n, 1, maxVoices);
     }
 
     // Oscillator anti-aliasing quality. Re-prepares the voices if already
@@ -60,38 +71,56 @@ public:
     void noteOn (int note, float velocity)
     {
         // Reuse a voice already playing this note (retrigger) if present.
-        for (auto& v : voices)
-            if (v.isActive() && v.getNote() == note)
-                { v.noteOn (note, velocity, ++eventCounter); return; }
+        for (std::size_t i = 0; i < activeVoiceLimit; ++i)
+            if (voices[i].isActive() && voices[i].getNote() == note)
+                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter); return; }
 
         // Otherwise find a free voice...
-        for (auto& v : voices)
-            if (! v.isActive())
-                { v.noteOn (note, velocity, ++eventCounter); return; }
+        for (std::size_t i = 0; i < activeVoiceLimit; ++i)
+            if (! voices[i].isActive())
+                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter); return; }
 
         // ...or steal the oldest. The voice keeps its oscillator phase and
         // filter state (SynthVoice::noteOn only clears them for an idle voice)
         // and the amp envelope retriggers from its current level, so the steal
         // is click-free without a separate fade.
-        auto* oldest = &voices[0];
-        for (auto& v : voices)
-            if (v.getTimestamp() < oldest->getTimestamp())
-                oldest = &v;
+        std::size_t oldest = 0;
+        for (std::size_t i = 1; i < activeVoiceLimit; ++i)
+            if (voices[i].getTimestamp() < voices[oldest].getTimestamp())
+                oldest = i;
 
-        oldest->noteOn (note, velocity, ++eventCounter);
+        sustained[oldest] = false;
+        voices[oldest].noteOn (note, velocity, ++eventCounter);
     }
 
     void noteOff (int note)
     {
-        for (auto& v : voices)
-            if (v.isActive() && v.getNote() == note)
-                v.noteOff();
+        for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i)
+            if (voices[i].isActive() && voices[i].getNote() == note)
+            {
+                if (sustainPedal) sustained[i] = true;   // held by damper
+                else              voices[i].noteOff();
+            }
     }
 
     void allNotesOff()
     {
-        for (auto& v : voices)
-            v.noteOff();
+        for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i) { voices[i].noteOff(); sustained[i] = false; }
+        sustainPedal = false;
+    }
+
+    // ---- performance controllers (from any device) -------------------------
+    void setPitchBend (float semitones) { pitchBendSemis = semitones; }
+    void setModWheel   (float amount01) { modWheel = amount01; }        // -> vibrato depth
+
+    // Sustain pedal (CC64). While down, note-offs are deferred; on release the
+    // held notes are let go. The Korg B2's damper is the primary expression.
+    void setSustainPedal (bool on)
+    {
+        if (sustainPedal && ! on)                        // pedal released
+            for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i)
+                if (sustained[i]) { voices[i].noteOff(); sustained[i] = false; }
+        sustainPedal = on;
     }
 
     // ---- rendering ---------------------------------------------------------
@@ -136,6 +165,11 @@ public:
                 default: break;                                    // off
             }
 
+            // Performance pitch: bend (+/-2 semis) + mod-wheel vibrato, on top of
+            // any LFO->pitch routing above.
+            const float vib = vibratoLFO.advance (chunk) * modWheel * kVibratoSemis;
+            p.pitchModSemis += pitchBendSemis + vib;
+
             for (auto& v : voices)
                 v.render (out + done, chunk, p);
 
@@ -146,11 +180,19 @@ public:
 private:
     static constexpr int kSmoothChunk = 16;   // sub-block size for param smoothing
 
+    static constexpr float kVibratoSemis = 0.5f;   // max mod-wheel vibrato depth (+/-)
+
     std::array<SynthVoice, maxVoices> voices;
-    LFO lfo;
+    std::array<bool, maxVoices> sustained {};      // key released but held by pedal
+    std::size_t activeVoiceLimit = maxVoices;      // <= maxVoices; see setMaxVoices
+    LFO lfo, vibratoLFO;
     std::uint64_t eventCounter = 0;
     double sampleRate = 0.0;
     PolyBlepOscillator::Quality oscQuality = PolyBlepOscillator::Quality::Efficient;
+
+    // Performance controllers.
+    float pitchBendSemis = 0.0f, modWheel = 0.0f;
+    bool  sustainPedal = false;
 
     // Zipper smoothing state (global params).
     float smoothCoef = 0.05f, smCutoff = 0.0f, smReso = 0.0f, smMix = 0.0f;

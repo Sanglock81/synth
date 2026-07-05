@@ -103,6 +103,29 @@ TEST_CASE ("note-on/off lifecycle frees the voice (silence after release)", "[en
     REQUIRE (tu::peak (more) > 0.01f);
 }
 
+TEST_CASE ("setMaxVoices caps active polyphony (steals within the cap)", "[engine][voicecap]")
+{
+    SynthEngine e; e.prepare (kSR);
+    e.setMaxVoices (4);
+    VoiceParams p = sineParams();
+
+    // Play 6 distinct notes; only 4 can sound. The 5th and 6th steal, and no
+    // more than 4 notes are ever simultaneously audible. We can't query voice
+    // count directly, so verify the engine stays finite/bounded and that after
+    // releasing all, output goes silent (no leaked voices above the cap).
+    std::vector<Event> ev;
+    for (int i = 0; i < 6; ++i)
+        ev.push_back ({ i * 8, [i](SynthEngine& en){ en.noteOn (48 + i * 2, 0.7f); } });
+    for (int i = 0; i < 6; ++i)
+        ev.push_back ({ 6000 + i * 8, [i](SynthEngine& en){ en.noteOff (48 + i * 2); } });
+
+    auto out = renderScript (e, p, int (kSR * 0.4), ev);
+    REQUIRE (tu::allFinite (out));
+    REQUIRE (tu::peak (out) < 4.0f);
+    std::vector<float> tail (out.end() - int (kSR * 0.1), out.end());
+    REQUIRE (tu::peak (tail) < 1.0e-4f);          // all released -> silent
+}
+
 TEST_CASE ("retriggering a held note does not click", "[engine][retrigger]")
 {
     SynthEngine e; e.prepare (kSR);

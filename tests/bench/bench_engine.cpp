@@ -36,6 +36,7 @@ namespace
     {
         SynthEngine engine;
         engine.setOscQuality (q);
+        engine.setMaxVoices (voices);
         engine.prepare (kSR);
 
         VoiceParams p;                       // saw/saw, worst case (oversampled)
@@ -83,8 +84,11 @@ int main()
         { "(c) HQ 4x/320",       PolyBlepOscillator::Quality::HQ },
     };
 
-    std::printf ("16 voices (full polyphony):\n");
+    std::printf ("16 voices (full pool):\n");
     for (auto m : modes) row (m.name, measure (m.q, 16, 4000));
+
+    std::printf ("\n12 voices (live ThinkPad profile cap):\n");
+    for (auto m : modes) row (m.name, measure (m.q, 12, 4000));
 
     std::printf ("\n1 voice:\n");
     for (auto m : modes) row (m.name, measure (m.q, 1, 4000));
