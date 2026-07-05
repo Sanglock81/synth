@@ -301,6 +301,22 @@ is studio-only above a few voices.
 
 ---
 
+## 5. Status — Phase 3 complete
+
+`./run-all-checks.sh` passes clean: both **Standalone + VST3** build with LTO,
+**43/43 CTest** green (DSP unit + plugin-layer + RT-alloc + golden), **pluginval**
+passes at strictness 8. Golden reference committed.
+
+**Remaining (roadmap, not this session):**
+- On-ThinkPad round-trip MIDI-to-audio latency validation under PipeWire @ 128
+  (also the real worst-case gate for the voice cap; default 12).
+- Denormal flush inside `Source/DSP/` (low risk; plugin covered by `ScopedNoDenormals`).
+- polyBLAMP triangle (current direct triangle is bounded + oversampled; fine for v1).
+- v2 items per README (mod matrix, unison, custom GUI, preset browser, internal
+  multi-core if ever needed).
+
+---
+
 ## 4. Notes on priorities / ambiguity
 
 Nothing here is ambiguous enough to block on. The one judgment call is **finding A2
