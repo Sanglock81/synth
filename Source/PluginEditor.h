@@ -2,25 +2,19 @@
 #include "PluginProcessor.h"
 #include "QwertyKeyboard.h"
 #include "Observability/DebugOverlay.h"
+#include "UI/VASynthLookAndFeel.h"
+#include "UI/Widgets.h"
+#include "PresetManager.h"
 
 // ============================================================================
-// v1 GUI: wraps JUCE's GenericAudioProcessorEditor (a control per APVTS param),
-// plus computer-keyboard (QWERTY) note input for the standalone.
+// Hardware-style custom editor. One surface, panel sections left-to-right in
+// signal-flow order, everything visible at once (no tabs/pages). Vertical
+// faders + segmented buttons bound to the APVTS via attachments; MIDI-learn on
+// every control (right-click / long-press). Dark hardware LookAndFeel.
 //
-// QWERTY design (see QwertyKeyboard.h for the layout):
-//  * keyStateChanged + per-key edge detection (KeyPress::isKeyCurrentlyDown),
-//    so OS auto-repeat is ignored — one note-on per press, one note-off per
-//    release.
-//  * Notes feed the processor's MidiKeyboardState, merged into the MIDI buffer
-//    in processBlock, so they share the exact hardware-MIDI engine path.
-//  * All-notes-off when our window loses keyboard focus (Alt-Tab / click-away)
-//    and on close — no stuck notes.
-//  * Never captured while a text field has focus (param value entry, settings).
-//  * Standalone only; in a plugin the host owns the keyboard (feature disabled,
-//    build unaffected).
-//
-// v2: replace with a custom Component layout + right-click MIDI-learn. Nothing
-// in the engine/processor changes when we do.
+// Standalone: F11 fullscreen. F12 debug overlay (both formats). QWERTY note
+// input preserved (every control refuses keyboard focus). Layout is FlexBox-
+// based and scales with the window — no hardcoded pixel positions.
 // ============================================================================
 
 class VASynthEditor : public juce::AudioProcessorEditor,
@@ -28,97 +22,170 @@ class VASynthEditor : public juce::AudioProcessorEditor,
 {
 public:
     explicit VASynthEditor (VASynthProcessor& p)
-        : AudioProcessorEditor (p), proc (p), genericEditor (p)
+        : AudioProcessorEditor (p), proc (p), presets (p.apvts)
     {
-        addAndMakeVisible (genericEditor);
-        addChildComponent (overlay);        // hidden until F12
-        setSize (520, 700);
+        setLookAndFeel (&lnf);
+
+        buildSections();
+        addChildComponent (overlay);
+
         setResizable (true, true);
+        setResizeLimits (900, 480, 3000, 1600);
+        setSize (1180, 620);
 
         if (isStandalone())
         {
-            setWantsKeyboardFocus (true);   // so keyStateChanged reaches us
-            startTimerHz (30);              // focus-loss watchdog
+            setWantsKeyboardFocus (true);
+            startTimerHz (30);            // focus-loss watchdog
         }
     }
 
     ~VASynthEditor() override
     {
         stopTimer();
-        allNotesOff();                      // no stuck notes on close
+        allNotesOff();
+        setLookAndFeel (nullptr);
     }
+
+    void paint (juce::Graphics& g) override { g.fillAll (VASynthLookAndFeel::panel()); }
 
     void resized() override
     {
-        genericEditor.setBounds (getLocalBounds());
-        overlay.setBounds (getLocalBounds().removeFromTop (60).removeFromRight (300).reduced (4));
+        overlay.setBounds (getWidth() - 320, 8, 312, 58);
+
+        auto area = getLocalBounds().reduced (6);
+        juce::FlexBox row;
+        row.flexDirection = juce::FlexBox::Direction::row;
+        for (auto& s : sections)
+            row.items.add (juce::FlexItem (*s.panel).withFlex (s.flex).withMargin (3.0f));
+        row.performLayout (area);
     }
 
-    // F12 toggles the debug overlay (works standalone and in a plugin).
+    // F11 fullscreen (standalone), F12 debug overlay.
     bool keyPressed (const juce::KeyPress& key) override
     {
-        if (key == juce::KeyPress::F12Key)
-        {
-            overlay.setVisible (! overlay.isVisible());
-            return true;
-        }
+        if (key == juce::KeyPress::F12Key) { overlay.setVisible (! overlay.isVisible()); return true; }
+        if (key == juce::KeyPress::F11Key && isStandalone()) { toggleFullscreen(); return true; }
         return false;
     }
 
-    void parentHierarchyChanged() override
-    {
-        if (isStandalone() && isShowing())
-            grabKeyboardFocus();
-    }
+    void parentHierarchyChanged() override { if (isStandalone() && isShowing()) grabKeyboardFocus(); }
 
     bool keyStateChanged (bool) override
     {
-        if (! isStandalone())
-            return false;                   // host owns the keyboard in a plugin
-
-        // Never steal keys while a text field is focused (param value entry,
-        // audio/MIDI settings). Release anything held so notes don't stick.
+        if (! isStandalone()) return false;
         if (auto* f = juce::Component::getCurrentlyFocusedComponent())
-            if (dynamic_cast<juce::TextEditor*> (f) != nullptr)
-            {
-                allNotesOff();
-                return false;
-            }
-
+            if (dynamic_cast<juce::TextEditor*> (f) != nullptr) { allNotesOff(); return false; }
         qwerty.update ([] (int kc) { return juce::KeyPress::isKeyCurrentlyDown (kc); },
                        [this] (int note, bool on) { emitNote (note, on); });
         return qwerty.anyHeld();
     }
 
 private:
-    bool isStandalone() const
+    struct SectionEntry { std::unique_ptr<Section> panel; float flex; };
+
+    bool isStandalone() const { return proc.wrapperType == juce::AudioProcessor::wrapperType_Standalone; }
+
+    Section& addSection (juce::String title, juce::Colour tint, float flex)
     {
-        return proc.wrapperType == juce::AudioProcessor::wrapperType_Standalone;
+        auto s = std::make_unique<Section> (std::move (title), tint);
+        addAndMakeVisible (*s);
+        auto& ref = *s;
+        sections.push_back ({ std::move (s), flex });
+        return ref;
+    }
+
+    void addFader (Section& s, const char* pid, juce::String name)
+    {
+        auto* f = new LabelledFader (proc.apvts, pid, std::move (name), proc.getMidiLearn());
+        controls.add (f);
+        s.addAndMakeVisible (f);
+    }
+    void addChoice (Section& s, const char* pid, juce::String name)
+    {
+        auto* c = new SegmentedControl (proc.apvts, pid, std::move (name), proc.getMidiLearn());
+        controls.add (c);
+        s.addAndMakeVisible (c);
+    }
+
+    void buildSections()
+    {
+        namespace ID = ParamID;
+        const auto tOsc = VASynthLookAndFeel::accent();
+        const auto tFilt = juce::Colour (0xff6ea8ff);
+        const auto tEnv = juce::Colour (0xffb07cff);
+        const auto tLfo = juce::Colour (0xfff0a04b);
+        const auto tGlobal = juce::Colour (0xff8a929c);
+
+        { auto& s = addSection ("Osc 1", tOsc, 1.7f);
+          addChoice (s, ID::osc1Wave, "Wave"); addFader (s, ID::osc1Octave, "Oct");
+          addFader (s, ID::osc1Detune, "Detune"); addFader (s, ID::osc1PW, "PW"); }
+
+        { auto& s = addSection ("Osc 2", tOsc, 1.7f);
+          addChoice (s, ID::osc2Wave, "Wave"); addFader (s, ID::osc2Octave, "Oct");
+          addFader (s, ID::osc2Detune, "Detune"); addFader (s, ID::osc2PW, "PW"); }
+
+        { auto& s = addSection ("Mix", tOsc, 0.8f);
+          addFader (s, ID::oscMix, "Osc Mix"); addFader (s, ID::noiseLevel, "Noise"); }
+
+        { auto& s = addSection ("Filter", tFilt, 1.7f);
+          addChoice (s, ID::filterType, "Type"); addFader (s, ID::filterCutoff, "Cutoff");
+          addFader (s, ID::filterReso, "Reso"); addFader (s, ID::filterEnvAmt, "Env");
+          addFader (s, ID::filterKeytrack, "Track"); }
+
+        { auto& s = addSection ("Amp Env", tEnv, 1.4f);
+          addFader (s, ID::ampAttack, "A"); addFader (s, ID::ampDecay, "D");
+          addFader (s, ID::ampSustain, "S"); addFader (s, ID::ampRelease, "R"); }
+
+        { auto& s = addSection ("Filter Env", tEnv, 1.4f);
+          addFader (s, ID::fltAttack, "A"); addFader (s, ID::fltDecay, "D");
+          addFader (s, ID::fltSustain, "S"); addFader (s, ID::fltRelease, "R"); }
+
+        { auto& s = addSection ("LFO", tLfo, 1.6f);
+          addFader (s, ID::lfoRate, "Rate"); addFader (s, ID::lfoDepth, "Depth");
+          addChoice (s, ID::lfoShape, "Shape"); addChoice (s, ID::lfoDest, "Dest"); }
+
+        { auto& s = addSection ("Global", tGlobal, 1.8f);
+          addFader (s, ID::glideTime, "Glide"); addFader (s, ID::masterGain, "Master");
+          addChoice (s, ID::polyMode, "Mode");
+          buildGlobalExtras (s); }
+    }
+
+    // Preset controls (Random / Save / Load) live in the Global section.
+    void buildGlobalExtras (Section& s);
+
+    void toggleFullscreen()
+    {
+        if (auto* w = getTopLevelComponent())
+            if (auto* peer = w->getPeer())
+                peer->setFullScreen (! peer->isFullScreen());
     }
 
     void timerCallback() override
     {
-        // All-notes-off when our window loses keyboard focus, regardless of which
-        // child held it (hasKeyboardFocus(true) includes children).
         const bool focused = hasKeyboardFocus (true);
-        if (hadFocus && ! focused)
-            allNotesOff();
+        if (hadFocus && ! focused) allNotesOff();
         hadFocus = focused;
     }
 
     void emitNote (int note, bool on)
     {
-        if (on) proc.qwertyKeyboardState.noteOn  (1, note, 0.8f);   // fixed velocity 0.8
+        if (on) proc.qwertyKeyboardState.noteOn  (1, note, 0.8f);
         else    proc.qwertyKeyboardState.noteOff (1, note, 0.0f);
     }
-
     void allNotesOff() { qwerty.releaseAll ([this] (int note, bool on) { emitNote (note, on); }); }
 
     VASynthProcessor& proc;
-    juce::GenericAudioProcessorEditor genericEditor;
+    VASynthLookAndFeel lnf;
+    std::vector<SectionEntry> sections;
+    juce::OwnedArray<juce::Component> controls;
     DebugOverlay overlay { proc.health };
+    PresetManager presets;
     QwertyKeyboard qwerty;
     bool hadFocus = false;
+
+    // Preset UI (built in buildGlobalExtras).
+    std::unique_ptr<juce::Component> presetPanel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VASynthEditor)
 };

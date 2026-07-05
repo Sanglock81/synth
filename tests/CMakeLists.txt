@@ -63,6 +63,8 @@ add_executable(plugin_tests
     plugin/test_audio_device.cpp
     plugin/test_qwerty.cpp
     plugin/test_health_logger.cpp
+    plugin/test_editor.cpp
+    plugin/test_presets.cpp
     dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests
 
 target_include_directories(plugin_tests PRIVATE
@@ -80,7 +82,8 @@ target_link_libraries(plugin_tests PRIVATE
 # the test TU includes only the processor header, which needs the module paths
 # above. Mirror the plugin's compile defs so headers agree.
 target_compile_definitions(plugin_tests PRIVATE
-    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+    VASYNTH_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs")
 
 catch_discover_tests(plugin_tests)
 

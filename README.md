@@ -111,6 +111,24 @@ with it. Keys are ignored while a text field is focused; all notes release when
 the window loses focus (Alt-Tab) or closes — no stuck notes. Standalone only; in
 a plugin the host owns the keyboard.
 
+## Custom UI
+
+Hardware-style single-surface panel (`docs/editor.png`), left-to-right in signal
+flow: **Osc 1 · Osc 2 · Mix · Filter · Amp Env · Filter Env · LFO · Global**.
+Vertical faders + touch segmented buttons, each bound to its APVTS parameter via
+attachments (GUI ↔ automation ↔ MIDI-learn all stay in sync), with a live value
+readout. Dark hardware LookAndFeel; FlexBox layout scales with the window.
+
+- **MIDI-learn**: right-click (mouse) or long-press (touch) any control → arms it
+  (amber pulse); the next CC binds it and a `CCnn` badge appears. Same gesture
+  clears a mapping. The 8 default Launchkey knobs show badges on first launch.
+- **Presets** (Global section): **Random** shuffles every parameter (master gain
+  kept audible) for sound exploration; **Save** stores the current settings by
+  name; the **Load** dropdown recalls them (`~/.config/VASynth/presets/`).
+- **Fullscreen**: F11 (standalone). **Debug overlay**: F12.
+- QWERTY note input keeps working while twisting controls (controls refuse
+  keyboard focus). VST3 uses the same editor, freely resizable.
+
 ## Observability (logging, health, debugging)
 
 **Log file.** `~/.config/VASynth/VASynth.log` (JUCE default app-log location).

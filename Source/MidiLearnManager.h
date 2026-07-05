@@ -68,17 +68,50 @@ public:
 
     bool isLearning() const { return learnTarget.load (std::memory_order_acquire) >= 0; }
 
+    // Is learn armed for this specific parameter? (UI "armed" visual state.)
+    bool isLearningParam (const juce::String& parameterID) const
+    {
+        const int idx = indexOf (parameterID);
+        return idx >= 0 && learnTarget.load (std::memory_order_acquire) == idx;
+    }
+
+    // The CC currently bound to a parameter, or -1 if none (UI badge).
+    int getCCForParam (const juce::String& parameterID) const
+    {
+        const int idx = indexOf (parameterID);
+        if (idx < 0) return -1;
+        for (int cc = 0; cc < numCCs; ++cc)
+            if (ccToParam[(std::size_t) cc].load (std::memory_order_acquire) == idx) return cc;
+        return -1;
+    }
+
+    // Clear every CC mapped to a parameter (UI clear-mapping).
+    void clearParam (const juce::String& parameterID)
+    {
+        const int idx = indexOf (parameterID);
+        if (idx < 0) return;
+        for (int cc = 0; cc < numCCs; ++cc)
+            if (ccToParam[(std::size_t) cc].load (std::memory_order_acquire) == idx)
+                ccToParam[(std::size_t) cc].store (-1, std::memory_order_release);
+    }
+
     // ---- audio thread: lock-free, allocation-free ---------------------------
     void handleCC (int /*channel*/, int ccNumber, int ccValue)
     {
         if (ccNumber < 0 || ccNumber >= numCCs)
             return;
 
-        // Bind first if learn is armed (consume the arming).
+        // Bind first if learn is armed (consume the arming). One CC per param:
+        // clear any CCs already pointing at this param, then bind the new one.
+        // (128-entry scan, but only on a user-triggered learn event — still
+        // lock-free and allocation-free.)
         const int target = learnTarget.load (std::memory_order_acquire);
         if (target >= 0)
         {
-            ccToParam[(size_t) ccNumber].store (target, std::memory_order_release);
+            for (int c = 0; c < numCCs; ++c)
+                if (ccToParam[(std::size_t) c].load (std::memory_order_acquire) == target)
+                    ccToParam[(std::size_t) c].store (-1, std::memory_order_release);
+            ccToParam[(std::size_t) ccNumber].store (target, std::memory_order_release);
             learnTarget.store (-1, std::memory_order_release);
         }
 
