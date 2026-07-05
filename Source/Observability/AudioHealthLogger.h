@@ -94,4 +94,6 @@ private:
     // overlay atomics (drain writes, message reads)
     std::atomic<float> aMedian { 0 }, aP99 { 0 }, aMax { 0 }, aBudget { 2.667f };
     std::atomic<int>   aVoiceHW { 0 }, aSteals { 0 }, aOverrunsTotal { 0 };
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioHealthLogger)
 };

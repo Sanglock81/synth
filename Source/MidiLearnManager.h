@@ -144,4 +144,6 @@ private:
     juce::StringArray                           paramIDs;   // index -> id (stable key)
     std::array<std::atomic<int>, numCCs>        ccToParam;  // cc -> param index (-1 none)
     std::atomic<int>                            learnTarget { -1 };  // index to bind
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MidiLearnManager)
 };

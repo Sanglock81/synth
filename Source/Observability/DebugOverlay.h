@@ -51,4 +51,6 @@ private:
     void timerCallback() override { repaint(); }   // only runs while visible
 
     AudioHealthLogger& health;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DebugOverlay)
 };
