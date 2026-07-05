@@ -47,6 +47,14 @@ target_sources(VASynth PRIVATE
     Source/PluginEditor.cpp
     Source/Observability/AudioHealthLogger.cpp)
 
+# Custom standalone app: adds audio-device + MIDI-input logging (and change
+# logging) that only the standalone's device manager can see. Compiled ONLY into
+# the Standalone target; the VST3 uses the host's device handling untouched.
+if (TARGET VASynth_Standalone)
+    target_sources(VASynth_Standalone PRIVATE Source/Standalone/VASynthStandaloneApp.cpp)
+    target_compile_definitions(VASynth_Standalone PRIVATE JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1)
+endif()
+
 # Capture the short git hash at configure time for the startup log banner.
 execute_process(
     COMMAND git rev-parse --short HEAD

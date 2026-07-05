@@ -111,6 +111,41 @@ with it. Keys are ignored while a text field is focused; all notes release when
 the window loses focus (Alt-Tab) or closes — no stuck notes. Standalone only; in
 a plugin the host owns the keyboard.
 
+## Observability (logging, health, debugging)
+
+**Log file.** `~/.config/VASynth/VASynth.log` (JUCE default app-log location).
+Each session appends a startup banner (version + git hash, build type, osc
+quality, max voices, sample rate + buffer) and, from the standalone, the selected
+audio device + type and enabled MIDI inputs (re-logged on device/MIDI changes).
+
+**Audio-health stats.** Every ~10 s the log gets a line like:
+```
+render ms  min=0.05 med=0.37 p99=0.89 max=0.93 (16.7% budget)  voices<=6  steals=0  overruns=0  dropped=0  n=3750
+```
+`p99 % budget` is the headline CPU number; **overruns** (a callback exceeding the
+buffer period) are logged immediately as an xrun early-warning. Logging is
+real-time-safe: the audio thread only pushes POD events into a lock-free ring; a
+background thread formats and writes them (drops + counts if the ring floods,
+never blocks the audio thread).
+
+**Debug overlay.** Press **F12** in the editor for a live overlay: CPU %, voice
+high-water, steals, overruns, and the log-drop counter.
+
+**Sanitizer builds.**
+```
+./run-all-checks.sh --sanitize      # ASan+LSan then UBSan: tests + memory soak
+```
+Or manually: `cmake -B build-asan -DVASYNTH_ASAN=ON -DVASYNTH_BUILD_TESTS=ON`
+(also `-DVASYNTH_UBSAN=ON`). The soak (`tests/soak`) runs a MIDI storm through
+`processBlock` and checks memory stability; under ASan, LeakSanitizer gates leaks.
+
+**Reporting a bug — please send:**
+1. `~/.config/VASynth/VASynth.log` (has the banner, health stats, any OVERRUN /
+   CRASH markers, and the log-drop count).
+2. What you were doing (patch, polyphony, which keyboard/controller).
+3. Audio settings (device, sample rate, buffer) — visible in Options → Audio/MIDI
+   Settings and logged in the banner.
+
 ## Roadmap
 
 **v1 (make it sound good)**

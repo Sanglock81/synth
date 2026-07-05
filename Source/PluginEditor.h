@@ -1,6 +1,7 @@
 #pragma once
 #include "PluginProcessor.h"
 #include "QwertyKeyboard.h"
+#include "Observability/DebugOverlay.h"
 
 // ============================================================================
 // v1 GUI: wraps JUCE's GenericAudioProcessorEditor (a control per APVTS param),
@@ -30,6 +31,7 @@ public:
         : AudioProcessorEditor (p), proc (p), genericEditor (p)
     {
         addAndMakeVisible (genericEditor);
+        addChildComponent (overlay);        // hidden until F12
         setSize (520, 700);
         setResizable (true, true);
 
@@ -46,7 +48,22 @@ public:
         allNotesOff();                      // no stuck notes on close
     }
 
-    void resized() override { genericEditor.setBounds (getLocalBounds()); }
+    void resized() override
+    {
+        genericEditor.setBounds (getLocalBounds());
+        overlay.setBounds (getLocalBounds().removeFromTop (60).removeFromRight (300).reduced (4));
+    }
+
+    // F12 toggles the debug overlay (works standalone and in a plugin).
+    bool keyPressed (const juce::KeyPress& key) override
+    {
+        if (key == juce::KeyPress::F12Key)
+        {
+            overlay.setVisible (! overlay.isVisible());
+            return true;
+        }
+        return false;
+    }
 
     void parentHierarchyChanged() override
     {
@@ -99,6 +116,7 @@ private:
 
     VASynthProcessor& proc;
     juce::GenericAudioProcessorEditor genericEditor;
+    DebugOverlay overlay { proc.health };
     QwertyKeyboard qwerty;
     bool hadFocus = false;
 
