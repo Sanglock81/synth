@@ -105,6 +105,16 @@ ASIO SDK support later.
       under PipeWire at 128 samples / 48 kHz, and document recommended buffer
       settings (128 vs 256) for that machine. DSP headroom is benched
       (`tests/bench/dsp_bench`); this is the end-to-end I/O latency check.
+      **This is also the real worst-case gate for the voice cap** (default 12):
+      dev-box p99 is scheduler-jitter-contaminated, so confirm no xruns on the
+      ThinkPad and adjust `VASYNTH_MAX_VOICES` if needed.
+
+**Considered and deferred**
+- Internal multi-core audio (splitting voices across RT worker threads): NOT
+  done. Single-core Efficient at 12 voices is ~23% of the ThinkPad budget
+  (median), and on a 2-core machine internal threading competes with PipeWire on
+  core 1 and adds RT jitter. The DAW already parallelizes across instances.
+  Revisit only if HQ-live or large unison is needed (v2, needs a lock-free pool).
 
 **v2 (make it deep)**
 - [ ] Mod matrix (any source → any destination, replaces single LFO dest)
