@@ -33,6 +33,7 @@ add_executable(dsp_tests
     dsp/test_smoothing.cpp
     dsp/test_mono_glide.cpp
     dsp/test_osc6a.cpp
+    dsp/test_fx.cpp
     dsp/test_golden.cpp
     dsp/test_rt_safety.cpp
     dsp/test_rtlogring.cpp
