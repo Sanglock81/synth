@@ -26,6 +26,7 @@ struct RtLogEvent
         Overrun,        // f0 = render ms, f1 = budget ms
         VoiceCount,     // i0 = active voices
         Steals,         // i0 = steals since last block
+        Clip,           // i0 = output samples that engaged the safety clipper this block
         Marker          // i0 = an arbitrary marker code (e.g. prepare/reset)
     };
 

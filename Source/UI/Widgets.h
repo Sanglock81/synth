@@ -14,6 +14,27 @@
 // and a small "CCnn" badge appears. The same gesture offers clear-mapping.
 // ============================================================================
 
+// Clean, arm's-length-legible value readout for a float parameter: sensible
+// decimal places for the magnitude, plus the parameter's own unit label (Hz, s,
+// ms, ct) — JUCE's getCurrentValueAsText() shows neither (it dumps full float
+// precision like "299.9999695" and never appends the label). Purely cosmetic;
+// the parameter value/state is untouched.
+inline juce::String formatParamValue (juce::RangedAudioParameter* p)
+{
+    if (auto* fp = dynamic_cast<juce::AudioParameterFloat*> (p))
+    {
+        const float v = fp->get();
+        const float a = std::abs (v);
+        juce::String num = a >= 100.0f ? juce::String (juce::roundToInt (v))
+                         : a >= 10.0f  ? juce::String (v, 1)
+                         : a >= 1.0f   ? juce::String (v, 2)
+                                       : juce::String (v, 3);
+        const juce::String unit = fp->getLabel();
+        return unit.isEmpty() ? num : num + " " + unit;
+    }
+    return p != nullptr ? p->getCurrentValueAsText() : juce::String();
+}
+
 // Shared MIDI-learn interaction for a control bound to one parameter.
 class LearnableComponent : public juce::Component,
                            private juce::Timer
@@ -142,9 +163,11 @@ private:
 class LabelledFader : public LearnableComponent
 {
 public:
+    // emphasis = a prominent fader (e.g. MASTER): larger, higher-contrast label,
+    // an accent frame, and a bright value readout so it stands out in its section.
     LabelledFader (juce::AudioProcessorValueTreeState& apvts, const juce::String& pid,
-                   juce::String displayName, MidiLearnManager& learnMgr)
-        : LearnableComponent (learnMgr, pid), name (std::move (displayName))
+                   juce::String displayName, MidiLearnManager& learnMgr, bool emphasise = false)
+        : LearnableComponent (learnMgr, pid), name (std::move (displayName)), emphasis (emphasise)
     {
         slider.setSliderStyle (juce::Slider::LinearVertical);
         slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
@@ -159,26 +182,45 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        g.setColour (VASynthLookAndFeel::dim());
-        g.setFont (juce::Font (juce::FontOptions (11.5f)));
-        g.drawFittedText (name, getLocalBounds().removeFromTop (16), juce::Justification::centred, 1);
+        if (emphasis)
+        {
+            // Distinct rounded frame so MASTER reads as the section's headline.
+            auto r = getLocalBounds().toFloat().reduced (1.5f);
+            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.10f));
+            g.fillRoundedRectangle (r, 6.0f);
+            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.75f));
+            g.drawRoundedRectangle (r, 6.0f, 1.6f);
+        }
 
-        // live value readout with the parameter's own units/text (auto-fit width)
-        g.setColour (VASynthLookAndFeel::ink());
-        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 11.5f, juce::Font::plain)));
-        const juce::String text = param != nullptr ? param->getCurrentValueAsText() : juce::String();
-        g.drawFittedText (text, getLocalBounds().removeFromBottom (16), juce::Justification::centred, 1);
+        // Name: high-contrast (near-white / amber for master), larger for arm's-
+        // length reading. Bold so it stays legible on a busy dark panel.
+        g.setColour (emphasis ? VASynthLookAndFeel::accentWarm() : VASynthLookAndFeel::ink());
+        g.setFont (juce::Font (juce::FontOptions (emphasis ? 15.0f : 13.0f, juce::Font::bold)));
+        g.drawFittedText (emphasis ? name.toUpperCase() : name,
+                          getLocalBounds().removeFromTop (labelH()), juce::Justification::centred, 1);
+
+        // Live value readout with the parameter's own units/text (auto-fit width),
+        // in the accent colour so the current setting is easy to read at a glance.
+        g.setColour (emphasis ? VASynthLookAndFeel::ink() : VASynthLookAndFeel::accent());
+        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
+                                                  emphasis ? 14.0f : 12.5f, juce::Font::bold)));
+        const juce::String text = formatParamValue (param);
+        g.drawFittedText (text, getLocalBounds().removeFromBottom (labelH()), juce::Justification::centred, 1);
 
         paintLearnDecorations (g);
     }
 
     void resized() override
     {
-        slider.setBounds (getLocalBounds().withTrimmedTop (18).withTrimmedBottom (18));
+        const int pad = emphasis ? 6 : 2;
+        slider.setBounds (getLocalBounds().reduced (pad, 0).withTrimmedTop (labelH() + 2).withTrimmedBottom (labelH() + 2));
     }
 
 private:
+    int labelH() const { return emphasis ? 20 : 18; }
+
     juce::String name;
+    bool emphasis = false;
     juce::Slider slider;
     juce::RangedAudioParameter* param = nullptr;
     std::unique_ptr<juce::SliderParameterAttachment> attachment;
@@ -264,21 +306,21 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        g.setColour (VASynthLookAndFeel::dim());
-        g.setFont (juce::Font (juce::FontOptions (11.0f)));
-        g.drawFittedText (name, getLocalBounds().removeFromTop (14), juce::Justification::centred, 1);
-
         g.setColour (VASynthLookAndFeel::ink());
-        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 10.5f, juce::Font::plain)));
-        const juce::String text = param != nullptr ? param->getCurrentValueAsText() : juce::String();
-        g.drawFittedText (text, getLocalBounds().removeFromBottom (13), juce::Justification::centred, 1);
+        g.setFont (juce::Font (juce::FontOptions (12.5f, juce::Font::bold)));
+        g.drawFittedText (name, getLocalBounds().removeFromTop (16), juce::Justification::centred, 1);
+
+        g.setColour (VASynthLookAndFeel::accent());
+        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold)));
+        const juce::String text = formatParamValue (param);
+        g.drawFittedText (text, getLocalBounds().removeFromBottom (15), juce::Justification::centred, 1);
 
         paintLearnDecorations (g);
     }
 
     void resized() override
     {
-        slider.setBounds (getLocalBounds().withTrimmedTop (15).withTrimmedBottom (14));
+        slider.setBounds (getLocalBounds().withTrimmedTop (17).withTrimmedBottom (16));
     }
 
 private:
@@ -327,9 +369,9 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        g.setColour (VASynthLookAndFeel::dim());
-        g.setFont (juce::Font (juce::FontOptions (11.5f)));
-        g.drawText (name, getLocalBounds().removeFromTop (16), juce::Justification::centred, false);
+        g.setColour (VASynthLookAndFeel::ink());
+        g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
+        g.drawText (name, getLocalBounds().removeFromTop (18), juce::Justification::centred, false);
         paintLearnDecorations (g);
     }
 

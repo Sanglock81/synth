@@ -58,6 +58,33 @@ TEST_CASE ("applyDeviceProfile on a factory device keeps its default map", "[plu
     REQUIRE (p.getMidiLearn().getCCForParam ("filter_cutoff") == 21);   // factory 21 -> cutoff
 }
 
+TEST_CASE ("a no-CC-map profile still passes notes through (Korg B2)", "[plugin][6c][hotplug][bug2]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    p.prepareToPlay (kSR, kBlock);
+
+    // The Korg B2 factory profile is notes + damper only — its CC map is EMPTY.
+    // Applying such a profile must never interfere with note handling (notes flow
+    // through processBlock, not the profile). This locks in that an empty-map
+    // profile does not filter/swallow note-on/off (Bug 2 hypothesis: the profile
+    // blocked notes). The separate root cause — the standalone not enabling a
+    // device present at launch — is verified by hand (see the wrap-up checklist).
+    p.applyDeviceProfile ("Korg B2");         // empty CC map: applies nothing, harmless
+
+    juce::MidiBuffer on; on.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0);
+    blockRms (p, on);
+    double sounding = 0.0;
+    for (int i = 0; i < 4; ++i) sounding = blockRms (p, {});
+    REQUIRE (sounding > 0.02);                                   // key sounds despite empty CC map
+
+    juce::MidiBuffer off; off.addEvent (juce::MidiMessage::noteOff (1, 60), 0);
+    blockRms (p, off);
+    double after = 0.0;
+    for (int i = 0; i < 60; ++i) after = blockRms (p, {});
+    REQUIRE (after < 0.005);                                     // note-off released it
+}
+
 TEST_CASE ("requestAllNotesOff releases a held note (unplug panic)", "[plugin][6c][hotplug][panic]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

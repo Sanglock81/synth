@@ -85,6 +85,10 @@ void AudioHealthLogger::drainNow()
                 windowSteals += e.i0;
                 break;
 
+            case RtLogEvent::Kind::Clip:
+                windowClip += (std::uint64_t) e.i0;
+                break;
+
             case RtLogEvent::Kind::Marker:
                 emit ("marker " + juce::String (e.i0));
                 break;
@@ -112,15 +116,18 @@ void AudioHealthLogger::flushStats()
               + "  voices<=" + juce::String (windowVoiceHighWater)
               + "  steals=" + juce::String (windowSteals)
               + "  overruns=" + juce::String (windowOverruns)
+              + "  clip=" + juce::String ((juce::int64) windowClip)
               + "  dropped=" + juce::String ((juce::int64) ring.droppedCount())
               + "  n=" + juce::String ((juce::int64) n));
     }
 
     aOverrunsTotal.fetch_add (windowOverruns);
+    aClip.store (windowClip);
     renderTimes.clear();
     windowVoiceHighWater = 0;
     windowSteals = 0;
     windowOverruns = 0;
+    windowClip = 0;
 }
 
 AudioHealthLogger::Snapshot AudioHealthLogger::snapshot() const noexcept
@@ -135,5 +142,7 @@ AudioHealthLogger::Snapshot AudioHealthLogger::snapshot() const noexcept
     s.overruns        = aOverrunsTotal.load();
     s.dropped         = ring.droppedCount();
     s.cpuPercent      = s.budgetMs > 0.0f ? double (s.p99Ms) / double (s.budgetMs) * 100.0 : 0.0;
+    s.clipSamples     = aClip.load();
+    s.clipActive      = s.clipSamples > 0;
     return s;
 }

@@ -43,6 +43,34 @@ TEST_CASE ("mapping table: all 24 keys map, both octaves, no duplicates", "[qwer
     REQUIRE (QwertyKeyboard::keyToNoteBase (' ') == -1);
 }
 
+TEST_CASE ("reserved bottom row (Phase 7 chord modifiers) is not consumed", "[qwerty][map][reserved]")
+{
+    // c v b n m , . /  are RESERVED for the Phase 7 chord modifiers. Nothing here
+    // (note mapping OR the z/x octave controls) may claim them — a regression that
+    // stole one of these would break the chord engine before it ships.
+    const std::string reserved = "cvbnm,./";
+    for (char k : reserved)
+    {
+        INFO ("reserved key '" << k << "' must be unmapped");
+        REQUIRE (QwertyKeyboard::keyToNoteBase (k) == -1);      // not a note
+    }
+
+    // And pressing the whole reserved row emits NO note events and does NOT move
+    // the octave (only z/x do that).
+    QwertyKeyboard kb;
+    std::vector<Ev> ev;
+    step (kb, reserved, ev);
+    step (kb, reserved, ev);
+    REQUIRE (ev.empty());
+    REQUIRE (kb.getOctaveShift() == 0);
+
+    // Sanity: the note keys and the two octave keys (z/x) are the ONLY consumed
+    // keys — the reserved row shares no code with them.
+    const std::string consumed = "qwertyuiop[]1234567890-=zx";
+    for (char k : reserved)
+        REQUIRE (consumed.find (k) == std::string::npos);
+}
+
 TEST_CASE ("exactly one note-on/off per press-release, even under repeat storms", "[qwerty][edges]")
 {
     QwertyKeyboard kb;

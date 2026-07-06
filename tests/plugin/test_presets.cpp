@@ -28,15 +28,43 @@ TEST_CASE ("randomize sets every parameter within its range and actually changes
         REQUIRE (v <= 1.0f);
         if (std::abs (v - before[(size_t) i]) > 1e-6f) ++changed;
     }
-    // The vast majority should have moved (a shuffle, not a no-op). A handful of
-    // params legitimately hold: osc_mix (frozen, skipped), osc1_on (forced on),
-    // and low-cardinality choice params that can randomly land on their default.
-    REQUIRE (changed >= params.size() * 3 / 4);
+    // The majority of SOUND-DESIGN params should move (a shuffle, not a no-op).
+    // Held: the performance/global exclusion list, osc1_on (forced on), and
+    // low-cardinality choice params that can randomly land on their default.
+    REQUIRE (changed >= params.size() / 2);
+}
 
-    // Master gain kept audible (0.5..0.8) so a random patch is never gain-silent.
-    const float mg = p.apvts.getParameter ("master_gain")->getValue();
-    REQUIRE (mg >= 0.5f);
-    REQUIRE (mg <= 0.8f);
+TEST_CASE ("randomize never touches the performance/global exclusion list", "[plugin][preset][random][bug5]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    PresetManager pm (p.apvts);
+
+    // Set every excluded param to a distinctive value a player might have dialled
+    // in (and which is NOT its default), then prove randomize leaves them exactly.
+    struct KV { const char* id; float norm; };
+    const std::vector<KV> pinned {
+        { ParamID::masterGain,  0.42f },
+        { ParamID::velToAmp,    0.11f },
+        { ParamID::velToCutoff, 0.66f },
+        { ParamID::polyMode,    1.0f  },   // Mono
+        { ParamID::glideTime,   0.33f },
+        { ParamID::oscMix,      0.9f  },
+    };
+    for (auto& kv : pinned) p.apvts.getParameter (kv.id)->setValueNotifyingHost (kv.norm);
+    std::vector<float> want;
+    for (auto& kv : pinned) want.push_back (p.apvts.getParameter (kv.id)->getValue());
+
+    // Hammer randomize many times — an exclusion leak would show up statistically.
+    for (int i = 0; i < 200; ++i) { juce::Random rng (i * 2654435761u + 1u); pm.randomize (rng); }
+
+    for (size_t i = 0; i < pinned.size(); ++i)
+        REQUIRE (p.apvts.getParameter (pinned[i].id)->getValue() == Catch::Approx (want[i]).margin (1e-6));
+
+    // Sanity: the policy list is exactly these six (a single visible source).
+    REQUIRE (PresetManager::randomizeExclusions().size() == (int) pinned.size());
+    for (auto& kv : pinned)
+        REQUIRE (PresetManager::randomizeExclusions().contains (kv.id));
 }
 
 TEST_CASE ("save then load round-trips the parameter state", "[plugin][preset][saveload]")

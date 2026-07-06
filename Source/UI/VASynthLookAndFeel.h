@@ -146,7 +146,7 @@ public:
         g.drawRoundedRectangle (r, 7.0f, 1.2f);
 
         g.setColour (VASynthLookAndFeel::ink());
-        g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
+        g.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
         g.drawText (title.toUpperCase(), getLocalBounds().removeFromTop (headerHeight).withTrimmedLeft (10),
                     juce::Justification::centredLeft, false);
     }

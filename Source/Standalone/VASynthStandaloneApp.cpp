@@ -14,9 +14,34 @@
 #include <juce_audio_plugin_client/juce_audio_plugin_client.h>
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 #include "../PluginProcessor.h"                          // VASynthProcessor (profile/panic/toast)
+#include "AudioDeviceCuration.h"                          // Bug 1: device-list policy
 
 namespace juce
 {
+
+// All output-device names the ALSA/JACK backends expose right now (message
+// thread; opens nothing — just scans). Used to pick a sane default and to log a
+// curated menu so the user isn't staring at a wall of raw ALSA aliases (Bug 1).
+static StringArray availableOutputDeviceNames()
+{
+    AudioDeviceManager probe;
+    OwnedArray<AudioIODeviceType> types;
+    probe.createAudioDeviceTypes (types);
+    StringArray names;
+    for (auto* t : types)
+    {
+        t->scanForDevices();
+        names.addArray (t->getDeviceNames (false));      // false = outputs
+    }
+    return names;
+}
+
+// The "just works" default output: the PipeWire/default endpoint when present, so
+// the synth follows the OS default sink (route the Scarlett there and it plays).
+static String preferredDefaultOutput()
+{
+    return AudioDeviceCuration::pickPreferredDeviceName (availableOutputDeviceNames());
+}
 
 // Plug-and-play MIDI: auto-connect newly-appeared inputs, apply their device
 // profile, toast on connect/disconnect, and panic (all-notes-off) on unplug so a
@@ -28,8 +53,19 @@ public:
         : dm (dmToUse), proc (procToUse)
     {
         known = MidiInput::getAvailableDevices();
-        // Apply profiles for devices already present at launch (no toast — silent).
-        for (auto& d : known) proc.applyDeviceProfile (d.name);
+        // Devices already present at launch (the normal live case: gear is plugged
+        // in BEFORE the app starts). On desktop JUCE's autoOpenMidiDevices defaults
+        // to false, so nothing else enables these — we must. Enabling ALSO routes
+        // them: the plugin holder registers its player as an all-device MIDI
+        // callback, so an enabled input's notes reach the processor. Applying the
+        // profile alone (the old behaviour) recognised the device but left its
+        // input disabled — keys did nothing (Bug 2). Silent at launch (no toast per
+        // device); the settings dialog still reflects the enabled state.
+        for (auto& d : known)
+        {
+            dm.setMidiInputDeviceEnabled (d.identifier, true);
+            proc.applyDeviceProfile (d.name);
+        }
         connection = MidiDeviceListConnection::make ([this] { refresh(); });
     }
 
@@ -77,12 +113,26 @@ public:
     explicit VASynthDeviceLogger (AudioDeviceManager& dmToWatch) : dm (dmToWatch)
     {
         dm.addChangeListener (this);
+        logAvailableOutputs();      // once at startup: the curated menu of choices
         logState ("audio setup");
     }
     ~VASynthDeviceLogger() override { dm.removeChangeListener (this); }
 
 private:
     void changeListenerCallback (ChangeBroadcaster*) override { logState ("audio setup changed"); }
+
+    // Log the curated output menu (friendly endpoints + card names) plus the raw
+    // count, so the log tells the user which device to pick — and records what the
+    // full ALSA wall looked like — without opening anything.
+    void logAvailableOutputs()
+    {
+        const auto all     = availableOutputDeviceNames();
+        const auto curated = AudioDeviceCuration::curateDeviceList (all);
+        Logger::writeToLog ("audio outputs (curated " + String (curated.size()) + " of "
+                            + String (all.size()) + " raw): [" + curated.joinIntoString (", ") + "]");
+        Logger::writeToLog ("audio output default (just-works): '" + preferredDefaultOutput()
+                            + "'  (Settings dialog shows the full raw list as the advanced view)");
+    }
 
     void logState (const String& reason)
     {
@@ -137,11 +187,20 @@ public:
             return;
         }
 
+        // Bug 1: hand the holder a preferred default OUTPUT device — the
+        // PipeWire/default endpoint — so a first run (no saved audio setup) opens
+        // something that actually makes sound and follows the OS default sink
+        // (select the Scarlett there and it plays). A previously-saved device is
+        // still honoured; this only picks the default when none is stored.
+        const String preferredOut = preferredDefaultOutput();
+        Logger::writeToLog ("startup: preferred default output = '" + preferredOut + "'");
+
         mainWindow.reset (new StandaloneFilterWindow (
             getApplicationName(),
             LookAndFeel::getDefaultLookAndFeel().findColour (ResizableWindow::backgroundColourId),
             appProperties.getUserSettings(),
-            false));   // appProperties owns the settings
+            false,                 // appProperties owns the settings
+            preferredOut));        // preferredDefaultDeviceName (Bug 1: just-works output)
 
         mainWindow->setVisible (true);
 

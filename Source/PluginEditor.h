@@ -81,7 +81,7 @@ public:
 
     void resized() override
     {
-        overlay.setBounds (getWidth() - 320, 8, 312, 58);
+        overlay.setBounds (getWidth() - 320, 8, 312, 78);   // 4 lines incl. SAT
         toast.setBounds ((getWidth() - 460) / 2, 14, 460, 46);   // top-centre
 
         auto area = getLocalBounds().reduced (6);
@@ -138,9 +138,11 @@ private:
         return ref;
     }
 
-    void addFader (Section& s, const char* pid, juce::String name)
+    void addFader (Section& s, const char* pid, juce::String name,
+                   bool emphasise = false, double flex = 1.0)
     {
-        auto* f = new LabelledFader (proc.apvts, pid, std::move (name), proc.getMidiLearn());
+        auto* f = new LabelledFader (proc.apvts, pid, std::move (name), proc.getMidiLearn(), emphasise);
+        f->getProperties().set ("layoutFlex", flex);
         controls.add (f);
         s.addAndMakeVisible (f);
     }
@@ -199,9 +201,12 @@ private:
           addFader (s, ID::lfoRate, "Rate"); addFader (s, ID::lfoDepth, "Depth");
           addChoice (s, ID::lfoShape, "Shape"); addChoice (s, ID::lfoDest, "Dest"); }
 
-        { auto& s = addSection ("Global", tGlobal, 2.2f);
+        { auto& s = addSection ("Global", tGlobal, 2.5f);
           addFader (s, ID::glideTime, "Glide"); addFader (s, ID::velToAmp, "Vel>Amp");
-          addFader (s, ID::masterGain, "Master"); addChoice (s, ID::polyMode, "Mode");
+          // MASTER is the headline output control: emphasised + given ~1.8x the
+          // width of a normal fader so it's the obvious grab in the Global section.
+          addFader (s, ID::masterGain, "Master", /*emphasise*/ true, /*flex*/ 1.8);
+          addChoice (s, ID::polyMode, "Mode");
           buildGlobalExtras (s); }
 
         // Far-right reorderable FX column (its own draggable component, not a Section).

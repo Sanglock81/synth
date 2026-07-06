@@ -57,6 +57,13 @@ public:
         RtLogEvent e; e.kind = RtLogEvent::Kind::Steals; e.i0 = n;
         ring.push (e);
     }
+    // Output samples that engaged the safety clipper this block (0 = clean).
+    void logClip (int n) noexcept
+    {
+        if (n <= 0) return;
+        RtLogEvent e; e.kind = RtLogEvent::Kind::Clip; e.i0 = n;
+        ring.push (e);
+    }
 
     // ---- message thread: direct (non-RT) logging ---------------------------
     void logMessage (const juce::String& text) { emit (text); }
@@ -68,6 +75,8 @@ public:
         int            voiceHighWater = 0, stealsPerPeriod = 0, overruns = 0;
         std::uint64_t  dropped = 0;
         double         cpuPercent = 0;    // p99 / budget * 100
+        std::uint64_t  clipSamples = 0;   // clipper-engaged samples this window
+        bool           clipActive = false; // clipper engaged in the last window
     };
     Snapshot snapshot() const noexcept;
 
@@ -90,10 +99,12 @@ private:
     // drain-thread window accumulators
     std::vector<float> renderTimes;
     int windowVoiceHighWater = 0, windowSteals = 0, windowOverruns = 0;
+    std::uint64_t windowClip = 0;
 
     // overlay atomics (drain writes, message reads)
     std::atomic<float> aMedian { 0 }, aP99 { 0 }, aMax { 0 }, aBudget { 2.667f };
     std::atomic<int>   aVoiceHW { 0 }, aSteals { 0 }, aOverrunsTotal { 0 };
+    std::atomic<std::uint64_t> aClip { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioHealthLogger)
 };

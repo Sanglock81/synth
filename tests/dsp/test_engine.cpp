@@ -3,6 +3,7 @@
 // oldest-note stealing without an audible click.
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include "SynthEngine.h"
 #include "test_util.h"
 #include <vector>
@@ -142,6 +143,29 @@ TEST_CASE ("retriggering a held note does not click", "[engine][retrigger]")
     INFO ("pre=" << pre << " at-retrigger=" << atEv);
     REQUIRE (tu::allFinite (out));
     REQUIRE (atEv <= pre + 0.05f);                     // no phase-reset discontinuity
+}
+
+TEST_CASE ("voice-sum headroom trim scales with the voice cap (1/sqrt(N))", "[engine][bug4][headroom]")
+{
+    // The engine applies a fixed 1/sqrt(maxVoices) trim to the summed output so a
+    // summing polysynth stays well under full-scale (Bug 4: unmanaged voice sums
+    // clipped the DAC). The trim is voice-CAP based and fixed — never a dynamic
+    // per-active-voice scale (which would pump). Same note at cap 4 vs 16 must
+    // therefore differ by exactly sqrt(16)/sqrt(4) = 2x in level.
+    auto renderOneNote = [] (int cap)
+    {
+        SynthEngine e; e.prepare (kSR); e.setMaxVoices (cap);
+        VoiceParams p = sineParams();
+        std::vector<float> out (8192, 0.0f);
+        e.noteOn (60, 1.0f);
+        e.render (out.data(), 8192, p, 2.0f, 0, 0.0f, 0);
+        return tu::peak (out);
+    };
+
+    const float peak16 = renderOneNote (16);   // trim 0.25
+    const float peak4  = renderOneNote (4);     // trim 0.5
+    REQUIRE (peak16 > 0.0f);
+    REQUIRE (peak4 == Catch::Approx (peak16 * 2.0f).epsilon (0.01));   // exactly 2x
 }
 
 TEST_CASE ("17 notes on 16 voices steals oldest without a click", "[engine][steal]")

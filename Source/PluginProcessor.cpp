@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "DSP/SoftClip.h"
 #include <BinaryData.h>
 #include <chrono>
 #include <algorithm>
@@ -342,21 +343,25 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     fxChain.setParams (snapshotFXParams());
     fxChain.process (L, R, numSamples);
 
-    // --- master gain: one per-sample ramp applied to both channels (kills zipper
-    //     on gain steps/automation).
+    // --- master gain (per-sample ramp, kills zipper on gain steps/automation)
+    //     followed by the safety soft-clipper — the LAST thing before output.
+    //     The clipper is transparent (bit-exact) below its threshold, so normal
+    //     playing is untouched; it only tames pathological dense-chord peaks so
+    //     nothing ever hard-clips the DAC. Both are per-sample (the clip is
+    //     nonlinear), and we count clipper engagements for telemetry.
     masterGain.setTargetValue (master);
-    if (masterGain.isSmoothing())
-        for (int i = 0; i < numSamples; ++i)
-        {
-            const float g = masterGain.getNextValue();
-            L[i] *= g; R[i] *= g;
-        }
-    else
+    const bool smoothing = masterGain.isSmoothing();
+    const float gConst = masterGain.getTargetValue();
+    int clipSamples = 0;
+    for (int i = 0; i < numSamples; ++i)
     {
-        const float g = masterGain.getTargetValue();
-        juce::FloatVectorOperations::multiply (L, g, numSamples);
-        juce::FloatVectorOperations::multiply (R, g, numSamples);
+        const float g = smoothing ? masterGain.getNextValue() : gConst;
+        bool engaged = false;
+        L[i] = SoftClip::process (L[i] * g, engaged);
+        R[i] = SoftClip::process (R[i] * g, engaged);
+        if (engaged) ++clipSamples;
     }
+    health.logClip (clipSamples);
 
     // --- write to the output bus. Stereo: L/R; extra channels get L; a mono host
     //     gets the L+R average so nothing wet is lost.

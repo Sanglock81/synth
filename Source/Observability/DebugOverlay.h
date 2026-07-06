@@ -45,6 +45,14 @@ public:
 
         int y = 6;
         for (auto& l : lines) { g.drawText (l, 8, y, getWidth() - 16, 16, juce::Justification::left); y += 17; }
+
+        // Saturation-activity indicator: the safety clipper engaged this window.
+        // Amber when active (with the sample count), dim grey when clean.
+        if (s.clipActive) g.setColour (juce::Colours::orange);
+        else              g.setColour (juce::Colours::grey);
+        g.drawText (s.clipActive ? ("SAT  " + juce::String ((juce::int64) s.clipSamples) + " smpl")
+                                 : juce::String ("SAT  --"),
+                    8, y, getWidth() - 16, 16, juce::Justification::left);
     }
 
 private:

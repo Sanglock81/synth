@@ -36,6 +36,7 @@ add_executable(dsp_tests
     dsp/test_fx.cpp
     dsp/test_fx_golden.cpp
     dsp/test_golden.cpp
+    dsp/test_softclip.cpp
     dsp/test_rt_safety.cpp
     dsp/test_rtlogring.cpp
     dsp/alloc_hook.cpp)
@@ -60,6 +61,8 @@ target_compile_features(dsp_bench PRIVATE cxx_std_17)
 add_executable(plugin_tests
     plugin/test_state.cpp
     plugin/test_midi_learn.cpp
+    plugin/test_output_bounds.cpp
+    plugin/test_device_curation.cpp
     plugin/test_rt_safety.cpp
     plugin/test_smoothing.cpp
     plugin/test_performance_midi.cpp

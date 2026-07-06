@@ -52,6 +52,12 @@ public:
     void setMaxVoices (int n)
     {
         activeVoiceLimit = (std::size_t) std::clamp (n, 1, maxVoices);
+        // Fixed voice-sum headroom trim: 1/sqrt(N), the equal-power sum rule for
+        // quasi-uncorrelated sources. Applied ONCE to the mono sum (never per
+        // active-voice count — dynamic scaling pumps as voices start/stop). This
+        // keeps typical playing well under full-scale so the output stays clean;
+        // pathological dense chords are caught by the processor's safety clipper.
+        voiceTrim = 1.0f / std::sqrt ((float) activeVoiceLimit);
     }
 
     // Oscillator anti-aliasing quality. Re-prepares the voices if already
@@ -209,6 +215,11 @@ public:
 
             done += chunk;
         }
+
+        // Fixed headroom trim on the summed voices (see setMaxVoices). Applied to
+        // this render's disjoint output region exactly once.
+        for (int i = 0; i < numSamples; ++i)
+            out[i] *= voiceTrim;
     }
 
 private:
@@ -261,6 +272,7 @@ private:
     std::array<SynthVoice, maxVoices> voices;
     std::array<bool, maxVoices> sustained {};      // key released but held by pedal
     std::size_t activeVoiceLimit = maxVoices;      // <= maxVoices; see setMaxVoices
+    float voiceTrim = 0.25f;                        // 1/sqrt(maxVoices); headroom trim
     LFO lfo, vibratoLFO;
     std::uint64_t eventCounter = 0;
     std::uint64_t stealCounter = 0;

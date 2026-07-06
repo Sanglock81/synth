@@ -127,17 +127,17 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     // --- Oscillators -------------------------------------------------------
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc1Wave, 1},  "Osc1 Wave", waveNames, 0));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc1Octave, 1},"Osc1 Octave", juce::NormalisableRange<float>(-2.0f, 2.0f, 1.0f), 0.0f));
-    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc1Detune, 1},"Osc1 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc1Detune, 1},"Osc1 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("ct")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc1PW, 1},    "Osc1 PW", juce::NormalisableRange<float>(0.05f, 0.95f), 0.5f));
 
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc2Wave, 1},  "Osc2 Wave", waveNames, 0));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2Octave, 1},"Osc2 Octave", juce::NormalisableRange<float>(-2.0f, 2.0f, 1.0f), 0.0f));
-    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2Detune, 1},"Osc2 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 7.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2Detune, 1},"Osc2 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 7.0f, juce::AudioParameterFloatAttributes().withLabel ("ct")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2PW, 1},    "Osc2 PW", juce::NormalisableRange<float>(0.05f, 0.95f), 0.5f));
 
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc3Wave, 1},  "Osc3 Wave", waveNames, 0));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Octave, 1},"Osc3 Octave", juce::NormalisableRange<float>(-2.0f, 2.0f, 1.0f), 0.0f));
-    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Detune, 1},"Osc3 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Detune, 1},"Osc3 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("ct")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3PW, 1},    "Osc3 PW", juce::NormalisableRange<float>(0.05f, 0.95f), 0.5f));
 
     // --- Mixer -------------------------------------------------------------
@@ -156,30 +156,30 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     // --- Filter ------------------------------------------------------------
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::filterType, 1},   "Filter Type", juce::StringArray{ "LP", "HP", "BP", "Notch" }, 0));
-    params.push_back(std::make_unique<P >(juce::ParameterID{ID::filterCutoff, 1}, "Cutoff", cutoffRange, 2000.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::filterCutoff, 1}, "Cutoff", cutoffRange, 2000.0f, juce::AudioParameterFloatAttributes().withLabel ("Hz")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::filterReso, 1},   "Resonance", juce::NormalisableRange<float>(0.0f, 1.0f), 0.1f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::filterEnvAmt, 1}, "Filter Env Amt", juce::NormalisableRange<float>(-1.0f, 1.0f), 0.3f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::filterKeytrack, 1},"Keytrack", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
 
     // --- Envelopes ----------------------------------------------------------
-    params.push_back(std::make_unique<P>(juce::ParameterID{ID::ampAttack, 1},  "Amp Attack",  timeRange, 0.005f));
-    params.push_back(std::make_unique<P>(juce::ParameterID{ID::ampDecay, 1},   "Amp Decay",   timeRange, 0.1f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::ampAttack, 1},  "Amp Attack",  timeRange, 0.005f, juce::AudioParameterFloatAttributes().withLabel ("s")));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::ampDecay, 1},   "Amp Decay",   timeRange, 0.1f, juce::AudioParameterFloatAttributes().withLabel ("s")));
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::ampSustain, 1}, "Amp Sustain", juce::NormalisableRange<float>(0.0f, 1.0f), 0.8f));
-    params.push_back(std::make_unique<P>(juce::ParameterID{ID::ampRelease, 1}, "Amp Release", timeRange, 0.15f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::ampRelease, 1}, "Amp Release", timeRange, 0.15f, juce::AudioParameterFloatAttributes().withLabel ("s")));
 
-    params.push_back(std::make_unique<P>(juce::ParameterID{ID::fltAttack, 1},  "Flt Attack",  timeRange, 0.005f));
-    params.push_back(std::make_unique<P>(juce::ParameterID{ID::fltDecay, 1},   "Flt Decay",   timeRange, 0.2f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::fltAttack, 1},  "Flt Attack",  timeRange, 0.005f, juce::AudioParameterFloatAttributes().withLabel ("s")));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::fltDecay, 1},   "Flt Decay",   timeRange, 0.2f, juce::AudioParameterFloatAttributes().withLabel ("s")));
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::fltSustain, 1}, "Flt Sustain", juce::NormalisableRange<float>(0.0f, 1.0f), 0.3f));
-    params.push_back(std::make_unique<P>(juce::ParameterID{ID::fltRelease, 1}, "Flt Release", timeRange, 0.2f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::fltRelease, 1}, "Flt Release", timeRange, 0.2f, juce::AudioParameterFloatAttributes().withLabel ("s")));
 
     // --- LFO -----------------------------------------------------------------
-    params.push_back(std::make_unique<P >(juce::ParameterID{ID::lfoRate, 1},  "LFO Rate", juce::NormalisableRange<float>(0.01f, 30.0f, 0.0f, 0.4f), 2.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::lfoRate, 1},  "LFO Rate", juce::NormalisableRange<float>(0.01f, 30.0f, 0.0f, 0.4f), 2.0f, juce::AudioParameterFloatAttributes().withLabel ("Hz")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::lfoDepth, 1}, "LFO Depth", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfoShape, 1}, "LFO Shape", juce::StringArray{ "Triangle", "Sine", "Square", "S&H" }, 0));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfoDest, 1},  "LFO Dest",  juce::StringArray{ "Off", "Pitch", "Cutoff", "PW" }, 0));
 
     // --- Global --------------------------------------------------------------
-    params.push_back(std::make_unique<P >(juce::ParameterID{ID::glideTime, 1}, "Glide", juce::NormalisableRange<float>(0.0f, 2.0f, 0.0f, 0.4f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::glideTime, 1}, "Glide", juce::NormalisableRange<float>(0.0f, 2.0f, 0.0f, 0.4f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("s")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::masterGain, 1},"Master", juce::NormalisableRange<float>(0.0f, 1.0f), 0.7f));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::polyMode, 1},  "Mode", juce::StringArray{ "Poly", "Mono", "Legato" }, 0));
 
@@ -190,7 +190,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::chorusMix, 1},     "Chorus Mix", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
 
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::fxDelayOn, 1},     "Delay On", false));
-    params.push_back(std::make_unique<P >(juce::ParameterID{ID::delayTime, 1},     "Delay Time", juce::NormalisableRange<float>(1.0f, 1500.0f, 0.0f, 0.4f), 300.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::delayTime, 1},     "Delay Time", juce::NormalisableRange<float>(1.0f, 1500.0f, 0.0f, 0.4f), 300.0f, juce::AudioParameterFloatAttributes().withLabel ("ms")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::delayFeedback, 1}, "Delay Feedback", juce::NormalisableRange<float>(0.0f, 0.95f), 0.35f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::delayMix, 1},      "Delay Mix", juce::NormalisableRange<float>(0.0f, 1.0f), 0.35f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::delaySpread, 1},   "Delay Spread", juce::NormalisableRange<float>(0.0f, 1.0f), 1.0f));

@@ -23,7 +23,7 @@ Designed for: Korg B2 (primary keyboard) + Novation Launchkey Mini
                     │   per-source mix + kill  (TPT)  (2× ADSR)  │
                     │   (PolyBLEP)  velocity → amp & cutoff       │
                     │   ▼                                        │
-                    │ mono → stereo → FX chain → master → out    │
+                    │ mono → ×trim → stereo → FX → master → clip → out │
                     │   reorderable: chorus/delay/reverb/width   │
                     └────────────────────────────────────────────┘
 ```
@@ -49,6 +49,18 @@ level fader and a hardware-style **kill switch** (an off oscillator is skipped
 entirely — measurable CPU savings, not just muted). Velocity routes to amplitude
 (`vel_to_amp`) and filter cutoff (`vel_to_cutoff`) for dynamic playing.
 
+**Output gain staging.** A summing polysynth can drive its output far past
+full-scale on dense chords (16 voices at unity ≈ several ×FS), which hard-clips
+the DAC and sounds like crackle. Two stages keep it clean: a **fixed
+`1/√maxVoices` headroom trim** at the voice sum (the equal-power rule for
+quasi-uncorrelated sources — never a dynamic per-voice-count scale, which would
+pump), and a **transparent safety soft-clipper** as the last stage after master
+gain. The clipper is bit-exact below its 0.8 threshold (normal playing is
+untouched) and gently saturates peaks above it, so the output **never exceeds
+±1.0** for any patch or polyphony — a plugin-layer test enforces that invariant.
+`Source/DSP/SoftClip.h`; clipper activity is logged (`clip=`) and shown as the
+`SAT` line in the F12 overlay.
+
 **Presets (6D).** 16 read-only factory patches spanning Bass / Lead / Keys / Pad /
 Pluck / Brass / Strings / Winds / Organ / FX, plus **Init**, in a category-grouped
 Load menu. Factory patches are embedded JSON (override-on-Init); tweak-and-Save
@@ -68,6 +80,18 @@ the far-right FX panel to reorder them; the audio chain crossfades to the new
 order click-free (~30 ms) via a dual-chain equal-power blend. The order is a
 `fx_order` **state-tree property** (a permutation, not an automatable value),
 mirrored to a lock-free atomic for the audio thread and saved with presets.
+
+**Hear that order matters (10-second A/B).** Load **Init**; enable **Delay** and
+**Reverb** only. Set delay feedback high (~0.8), delay mix ~0.5, reverb size large,
+reverb mix ~0.5. Play one short stab and listen through the tail, then drag the two
+blocks to swap them and play the same stab:
+* **Delay → Reverb**: each delay repeat is fed into the reverb, so the echoes melt
+  into one continuous wash.
+* **Reverb → Delay**: the whole reverberated stab is delayed, so you hear distinct,
+  echoing repeats of the reverb tail.
+The difference is obvious by ear — that's the reorder working. (The four-block
+permutation is regression-guarded by the `fx_nondefault` golden, which renders
+delay→width→reverb→chorus.)
 
 ## File map
 
@@ -117,10 +141,18 @@ ASIO SDK support later.
 
 ### First run (standalone, Linux)
 
-1. Launch the standalone. Open **Options → Audio/MIDI Settings**.
-2. Output device: Scarlett 2i2 (via ALSA, JACK, or PipeWire's JACK layer).
+1. Launch the standalone. By default it opens the **PipeWire/default output**,
+   which follows your OS default sink — so it makes sound immediately, and if you
+   set the **Scarlett 2i2** as the system output (or PipeWire sink), it plays
+   there with no fiddling. The chosen device + the full available list are written
+   to the log (`~/.config/VASynth/VASynth.log`).
+2. To pick a specific device, open **Options → Audio/MIDI Settings**. The dialog
+   still lists every raw ALSA endpoint (hw:/plughw:/front:/surround:/dmix…) as the
+   advanced/show-all view; prefer the friendly `pipewire`/`default`/card names.
    Buffer 128–256 @ 48 kHz to start.
-3. Enable **both** MIDI inputs: Korg B2 and Launchkey Mini.
+3. MIDI inputs (Korg B2, Launchkey Mini) **auto-connect** — plug them in before or
+   after launch and they're enabled automatically (a device present at startup is
+   now enabled, not just recognised). You can also toggle them in the dialog.
 4. Play the Korg; twist Launchkey knobs (CC 21–28 pre-mapped: cutoff, reso,
    osc mix, env amt, attack, release, LFO rate, LFO depth).
 
@@ -159,9 +191,12 @@ readout. Dark hardware LookAndFeel; FlexBox layout scales with the window.
 - **MIDI-learn**: right-click (mouse) or long-press (touch) any control → arms it
   (amber pulse); the next CC binds it and a `CCnn` badge appears. Same gesture
   clears a mapping. The 8 default Launchkey knobs show badges on first launch.
-- **Presets** (Global section): **Random** shuffles every parameter (master gain
-  kept audible) for sound exploration; **Save** stores the current settings by
-  name; the **Load** dropdown recalls them (`~/.config/VASynth/presets/`).
+- **Presets** (Global section): **Random** shuffles the **sound-design** parameters
+  only (oscillators, filter, envelopes, LFO, FX amounts) for exploration, and
+  leaves your **performance/global** controls put — master gain, velocity routing,
+  poly mode, glide, and MIDI mappings all keep their values (see the single
+  `randomizeExclusions()` list). **Save** stores the current settings by name; the
+  **Load** dropdown recalls them (`~/.config/VASynth/presets/`).
 - **Fullscreen**: F11 (standalone). **Debug overlay**: F12.
 - QWERTY note input keeps working while twisting controls (controls refuse
   keyboard focus). VST3 uses the same editor, freely resizable.
@@ -175,7 +210,7 @@ audio device + type and enabled MIDI inputs (re-logged on device/MIDI changes).
 
 **Audio-health stats.** Every ~10 s the log gets a line like:
 ```
-render ms  min=0.05 med=0.37 p99=0.89 max=0.93 (16.7% budget)  voices<=6  steals=0  overruns=0  dropped=0  n=3750
+render ms  min=0.05 med=0.37 p99=0.89 max=0.93 (16.7% budget)  voices<=6  steals=0  overruns=0  clip=0  dropped=0  n=3750
 ```
 `p99 % budget` is the headline CPU number; **overruns** (a callback exceeding the
 buffer period) are logged immediately as an xrun early-warning. Logging is
@@ -184,7 +219,9 @@ background thread formats and writes them (drops + counts if the ring floods,
 never blocks the audio thread).
 
 **Debug overlay.** Press **F12** in the editor for a live overlay: CPU %, voice
-high-water, steals, overruns, and the log-drop counter.
+high-water, steals, overruns, the log-drop counter, and a **`SAT`** saturation-
+activity line (amber + sample count when the output safety clipper is engaging,
+dim when the output is clean).
 
 **Sanitizer builds.**
 ```
@@ -229,6 +266,11 @@ Or manually: `cmake -B build-asan -DVASYNTH_ASAN=ON -DVASYNTH_BUILD_TESTS=ON`
   (median), and on a 2-core machine internal threading competes with PipeWire on
   core 1 and adds RT jitter. The DAW already parallelizes across instances.
   Revisit only if HQ-live or large unison is needed (v2, needs a lock-free pool).
+- **Curated audio-device selector UI (backlog).** The just-works PipeWire default
+  and curated device *logging* land now (`AudioDeviceCuration`), but the settings
+  dialog still shows JUCE's raw ALSA list as the advanced view. Replacing it with a
+  selector that shows only the curated list (friendly endpoints + card names, with
+  a show-all toggle) needs a custom `AudioDeviceManager`/plugin-holder — deferred.
 
 **v2 (make it deep)**
 - [ ] Mod matrix (any source → any destination, replaces single LFO dest)
