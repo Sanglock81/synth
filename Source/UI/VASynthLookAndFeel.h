@@ -73,6 +73,41 @@ public:
         g.fillRect (thumb.reduced (5.0f, 0.0f).withHeight (2.0f).withY (thumb.getCentreY() - 1.0f));
     }
 
+    // Dark rotary knob: recessed track arc, accent value arc, raised body with a
+    // pointer. Sized to read on a touchscreen; the whole widget is the finger target.
+    void drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
+                           float sliderPos, float startAngle, float endAngle,
+                           juce::Slider& s) override
+    {
+        auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat().reduced (3.0f);
+        const float radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
+        const float cx = bounds.getCentreX(), cy = bounds.getCentreY();
+        const float angle = startAngle + sliderPos * (endAngle - startAngle);
+        const float lineW = juce::jmax (2.5f, radius * 0.16f);
+        const float arcR = radius - lineW * 0.5f;
+
+        juce::Path track;
+        track.addCentredArc (cx, cy, arcR, arcR, 0.0f, startAngle, endAngle, true);
+        g.setColour (VASynthLookAndFeel::track());
+        g.strokePath (track, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+        juce::Path val;
+        val.addCentredArc (cx, cy, arcR, arcR, 0.0f, startAngle, angle, true);
+        g.setColour (accent().withAlpha (s.isEnabled() ? 0.95f : 0.4f));
+        g.strokePath (val, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+        const float bodyR = radius - lineW * 1.7f;
+        g.setColour (panelLight().brighter (0.05f));
+        g.fillEllipse (cx - bodyR, cy - bodyR, bodyR * 2.0f, bodyR * 2.0f);
+        g.setColour (juce::Colour (0xff3a3f47));
+        g.drawEllipse (cx - bodyR, cy - bodyR, bodyR * 2.0f, bodyR * 2.0f, 1.0f);
+
+        const juce::Point<float> tip (cx + std::cos (angle - juce::MathConstants<float>::halfPi) * bodyR * 0.85f,
+                                      cy + std::sin (angle - juce::MathConstants<float>::halfPi) * bodyR * 0.85f);
+        g.setColour (ink());
+        g.drawLine (juce::Line<float> (juce::Point<float> (cx, cy), tip), juce::jmax (2.0f, radius * 0.10f));
+    }
+
     // Fit button text to the button width (shrink the font rather than truncate),
     // so no label is ever clipped at any size.
     void drawButtonText (juce::Graphics& g, juce::TextButton& b, bool, bool) override

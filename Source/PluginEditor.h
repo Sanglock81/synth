@@ -4,6 +4,7 @@
 #include "Observability/DebugOverlay.h"
 #include "UI/VASynthLookAndFeel.h"
 #include "UI/Widgets.h"
+#include "UI/FXPanel.h"
 #include "PresetManager.h"
 
 // ============================================================================
@@ -23,7 +24,7 @@ class VASynthEditor : public juce::AudioProcessorEditor,
 public:
     // Default window width — sized so 56 px fader thumbs are met at default
     // scale for the full control count (grows as sections are added).
-    static constexpr int kDefaultWidth = 2400;
+    static constexpr int kDefaultWidth = 2760;
 
     explicit VASynthEditor (VASynthProcessor& p)
         : AudioProcessorEditor (p), proc (p), presets (p.apvts)
@@ -85,6 +86,8 @@ public:
         row.flexDirection = juce::FlexBox::Direction::row;
         for (auto& s : sections)
             row.items.add (juce::FlexItem (*s.panel).withFlex (s.flex).withMargin (3.0f));
+        if (fxPanel != nullptr)                       // far-right FX column
+            row.items.add (juce::FlexItem (*fxPanel).withFlex (2.8f).withMargin (3.0f));
         row.performLayout (area);
     }
 
@@ -197,6 +200,10 @@ private:
           addFader (s, ID::glideTime, "Glide"); addFader (s, ID::velToAmp, "Vel>Amp");
           addFader (s, ID::masterGain, "Master"); addChoice (s, ID::polyMode, "Mode");
           buildGlobalExtras (s); }
+
+        // Far-right reorderable FX column (its own draggable component, not a Section).
+        fxPanel = std::make_unique<FXPanel> (proc);
+        addAndMakeVisible (*fxPanel);
     }
 
     // Preset controls (Random / Save / Load) live in the Global section.
@@ -234,6 +241,9 @@ private:
 
     // Preset UI (built in buildGlobalExtras).
     std::unique_ptr<juce::Component> presetPanel;
+
+    // Far-right reorderable FX column.
+    std::unique_ptr<FXPanel> fxPanel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VASynthEditor)
 };

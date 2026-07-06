@@ -18,12 +18,13 @@ Designed for: Korg B2 (primary keyboard) + Novation Launchkey Mini
  GUI / DAW ────────▶│ APVTS ◀─────────────────────────────────┘  │
  automation         │   │ snapshot once per block                │
                     │   ▼                                        │
-                    │ SynthEngine (≤12–16 voices, global LFO)    │
+                    │ SynthEngine (16 voices, global LFO)        │
                     │   voice: OSC1+OSC2+OSC3+noise → SVF → VCA  │
                     │   per-source mix + kill  (TPT)  (2× ADSR)  │
                     │   (PolyBLEP)  velocity → amp & cutoff       │
                     │   ▼                                        │
-                    │ mono → stereo → master gain → out          │
+                    │ mono → stereo → FX chain → master → out    │
+                    │   reorderable: chorus/delay/reverb/width   │
                     └────────────────────────────────────────────┘
 ```
 
@@ -48,6 +49,15 @@ level fader and a hardware-style **kill switch** (an off oscillator is skipped
 entirely — measurable CPU savings, not just muted). Velocity routes to amplitude
 (`vel_to_amp`) and filter cutoff (`vel_to_cutoff`) for dynamic playing.
 
+**FX chain (6B).** A global, **reorderable** stereo chain of four hand-rolled,
+JUCE-free effects (all in `Source/DSP/`, allocation-free after `prepare`): chorus,
+ping-pong delay, Freeverb-style reverb, and mid/side stereo width. Each block has
+a kill toggle (disabled ⇒ skipped, no CPU) and rotary params. Drag the blocks in
+the far-right FX panel to reorder them; the audio chain crossfades to the new
+order click-free (~30 ms) via a dual-chain equal-power blend. The order is a
+`fx_order` **state-tree property** (a permutation, not an automatable value),
+mirrored to a lock-free atomic for the audio thread and saved with presets.
+
 ## File map
 
 | File | What it is |
@@ -59,9 +69,12 @@ entirely — measurable CPU savings, not just muted). Velocity routes to amplitu
 | `Source/DSP/LFO.h` | Global control-rate LFO (tri/sine/square/S&H). |
 | `Source/DSP/SynthVoice.h` | One voice's full signal chain. |
 | `Source/DSP/SynthEngine.h` | Voice pool, oldest-note stealing, LFO routing. |
+| `Source/DSP/Chorus.h` `StereoDelay.h` `Reverb.h` `StereoWidth.h` | The four hand-rolled stereo FX. |
+| `Source/DSP/FXChain.h` | Reorderable FX chain + click-free reorder crossfade. |
 | `Source/MidiLearnManager.h` | (channel, CC) → parameter mapping; Launchkey default map. |
 | `Source/PluginProcessor.*` | JUCE seam: MIDI dispatch, param snapshot, render, state + legacy migration. |
 | `Source/PluginEditor.*` | Hardware-style custom editor: signal-flow panel sections, touch faders. |
+| `Source/UI/FXPanel.h` | Far-right FX column: rotary blocks with finger drag-reorder. |
 | `Source/PresetManager.h` | Preset save/load (per-user dir) + musical randomize; migrates legacy patches. |
 
 ## Build

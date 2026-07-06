@@ -187,6 +187,55 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// Rotary knob + name + live value, bound to a float parameter. MIDI-learnable and
+// focus-refusing like the faders; used in the FX panel where knobs read better
+// than a wall of faders.
+class RotaryKnob : public LearnableComponent
+{
+public:
+    RotaryKnob (juce::AudioProcessorValueTreeState& apvts, const juce::String& pid,
+                juce::String displayName, MidiLearnManager& learnMgr)
+        : LearnableComponent (learnMgr, pid), name (std::move (displayName))
+    {
+        slider.setSliderStyle (juce::Slider::RotaryVerticalDrag);
+        slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        slider.setWantsKeyboardFocus (false);
+        addAndMakeVisible (slider);
+        attachment = std::make_unique<juce::SliderParameterAttachment> (*apvts.getParameter (pid), slider);
+
+        param = apvts.getParameter (pid);
+        listenForLearnGestures (slider);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.setColour (VASynthLookAndFeel::dim());
+        g.setFont (juce::Font (juce::FontOptions (11.0f)));
+        g.drawFittedText (name, getLocalBounds().removeFromTop (14), juce::Justification::centred, 1);
+
+        g.setColour (VASynthLookAndFeel::ink());
+        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 10.5f, juce::Font::plain)));
+        const juce::String text = param != nullptr ? param->getCurrentValueAsText() : juce::String();
+        g.drawFittedText (text, getLocalBounds().removeFromBottom (13), juce::Justification::centred, 1);
+
+        paintLearnDecorations (g);
+    }
+
+    void resized() override
+    {
+        slider.setBounds (getLocalBounds().withTrimmedTop (15).withTrimmedBottom (14));
+    }
+
+private:
+    juce::String name;
+    juce::Slider slider;
+    juce::RangedAudioParameter* param = nullptr;
+    std::unique_ptr<juce::SliderParameterAttachment> attachment;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RotaryKnob)
+};
+
+// ---------------------------------------------------------------------------
 // Touch-friendly segmented button row for a choice parameter (one tap, visible
 // state) — preferred over a dropdown where the option count allows.
 class SegmentedControl : public LearnableComponent

@@ -31,7 +31,7 @@ TEST_CASE ("no editor descendant wants keyboard focus (QWERTY never starved)", "
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
     std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
-    ed->setSize (2400, 660);
+    ed->setSize (2760, 660);
     // Only the editor root is the QWERTY receiver; no child (faders, buttons,
     // combos, preset panel) may claim keyboard focus. A persistent text field
     // here would type keys instead of playing notes at startup.
@@ -44,8 +44,8 @@ TEST_CASE ("editor opens, lays out, and closes without crashing", "[plugin][edit
     VASynthProcessor p;
     std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
     REQUIRE (ed != nullptr);
-    ed->setSize (2400, 660);
-    REQUIRE (ed->getWidth() == 2400);
+    ed->setSize (2760, 660);
+    REQUIRE (ed->getWidth() == 2760);
     // open/close storm (also exercised by pluginval; leak-checked under ASan)
     ed.reset();
     for (int i = 0; i < 5; ++i) { std::unique_ptr<juce::AudioProcessorEditor> e (p.createEditor()); e->setSize (1000, 560); }
@@ -57,7 +57,7 @@ TEST_CASE ("state round-trips with the editor open (attachments stay in sync)", 
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor src;
     std::unique_ptr<juce::AudioProcessorEditor> ed (src.createEditor());
-    ed->setSize (2400, 660);
+    ed->setSize (2760, 660);
 
     // Set some parameters (as a fader/segmented would, via the attachment path).
     src.apvts.getParameter ("filter_cutoff")->setValueNotifyingHost (0.33f);
@@ -69,7 +69,7 @@ TEST_CASE ("state round-trips with the editor open (attachments stay in sync)", 
 
     VASynthProcessor dst;
     std::unique_ptr<juce::AudioProcessorEditor> ed2 (dst.createEditor());     // editor open during restore
-    ed2->setSize (2400, 660);
+    ed2->setSize (2760, 660);
     dst.setStateInformation (blob.getData(), (int) blob.getSize());
 
     REQUIRE (dst.apvts.getParameter ("filter_cutoff")->getValue() == Catch::Approx (0.33f).margin (1e-4));
@@ -105,11 +105,11 @@ TEST_CASE ("render a layout screenshot to docs/editor.png", "[plugin][editor][sc
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
     std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
-    ed->setSize (2400, 660);
+    ed->setSize (2760, 660);
 
     auto img = ed->createComponentSnapshot (ed->getLocalBounds(), false, 1.0f);
     REQUIRE (img.isValid());
-    REQUIRE (img.getWidth() == 2400);
+    REQUIRE (img.getWidth() == 2760);
 
     juce::File out (juce::String (VASYNTH_DOCS_DIR) + "/editor.png");
     out.getParentDirectory().createDirectory();
