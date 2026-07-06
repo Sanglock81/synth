@@ -2,6 +2,9 @@
 #include "PluginEditor.h"
 #include <BinaryData.h>
 #include <chrono>
+#include <algorithm>
+#include <vector>
+#include <utility>
 
 #ifndef VASYNTH_VERSION
  #define VASYNTH_VERSION "?"
@@ -32,6 +35,42 @@ VASynthProcessor::VASynthProcessor()
     profileLib.addFactory (juce::String::fromUTF8 (BinaryData::launchkey_mini_json, BinaryData::launchkey_mini_jsonSize));
     profileLib.addFactory (juce::String::fromUTF8 (BinaryData::korg_b2_json,        BinaryData::korg_b2_jsonSize));
     profileLib.loadUserDir (userMidiProfileDir());
+
+    // Factory presets: every embedded JSON that parses as a preset (a device
+    // profile lacks a "params" object, so it's skipped). Sort by original filename
+    // so the numeric "01_.." prefixes give a stable menu order.
+    {
+        std::vector<std::pair<juce::String, juce::String>> byFile;   // (filename, json)
+        for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
+        {
+            int size = 0;
+            if (const char* data = BinaryData::getNamedResource (BinaryData::namedResourceList[i], size))
+            {
+                bool ok = false;
+                FactoryPreset::fromJson (juce::String::fromUTF8 (data, size), ok);
+                if (ok) byFile.emplace_back (BinaryData::originalFilenames[i], juce::String::fromUTF8 (data, size));
+            }
+        }
+        std::sort (byFile.begin(), byFile.end(),
+                   [] (const auto& a, const auto& b) { return a.first < b.first; });
+        for (auto& kv : byFile) factoryPresets.add (kv.second);
+    }
+}
+
+void VASynthProcessor::loadFactoryPreset (const juce::String& name)
+{
+    const auto* p = factoryPresets.byName (name);
+    if (p == nullptr) return;
+    p->applyParams (apvts);
+    if (p->fxOrder.size() == 4) { int o[4]; for (int i = 0; i < 4; ++i) o[i] = p->fxOrder[i]; setFxOrder (o); }
+    else { const int def[4] { 0, 1, 2, 3 }; setFxOrder (def); }
+}
+
+void VASynthProcessor::loadInitPreset()
+{
+    for (auto* rp : getParameters()) rp->setValueNotifyingHost (rp->getDefaultValue());
+    const int def[4] { 0, 1, 2, 3 };
+    setFxOrder (def);
 }
 
 juce::File VASynthProcessor::userMidiProfileDir()

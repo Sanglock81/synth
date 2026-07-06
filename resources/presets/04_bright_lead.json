@@ -1,0 +1,7 @@
+{ "name":"Bright Lead", "category":"Lead",
+  "params": { "osc1_wave":0, "osc2_wave":0, "osc2_detune":8,
+    "filter_cutoff":4000, "filter_reso":0.2, "filter_env_amt":0.4, "filter_keytrack":0.5,
+    "amp_attack":0.005, "amp_decay":0.2, "amp_sustain":0.8, "amp_release":0.2,
+    "glide_time":0.05, "poly_mode":1,
+    "fx_delay_on":1, "delay_mix":0.3, "delay_time":320, "delay_feedback":0.35,
+    "master_gain":0.7 }, "fxOrder":[0,1,2,3] }

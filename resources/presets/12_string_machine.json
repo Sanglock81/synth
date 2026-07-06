@@ -1,0 +1,7 @@
+{ "name":"String Machine", "category":"Strings",
+  "params": { "osc1_wave":0, "osc2_wave":0, "osc2_detune":12,
+    "osc3_on":1, "osc3_wave":0, "osc3_octave":1, "osc3_level":0.4,
+    "filter_cutoff":2200, "filter_reso":0.1, "filter_env_amt":0.3,
+    "amp_attack":0.4, "amp_decay":0.4, "amp_sustain":0.9, "amp_release":0.8,
+    "fx_chorus_on":1, "chorus_rate":0.8, "chorus_depth":0.7, "chorus_mix":0.5,
+    "fx_reverb_on":1, "reverb_mix":0.3, "fx_width_on":1, "stereo_width":1.6, "master_gain":0.55 } }

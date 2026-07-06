@@ -47,11 +47,15 @@ target_sources(VASynth PRIVATE
     Source/PluginEditor.cpp
     Source/Observability/AudioHealthLogger.cpp)
 
-# Embedded resources: factory MIDI device profiles (JSON). Linked PUBLIC so the
-# plugin, the standalone, and the plugin_tests target all resolve BinaryData::*.
+# Embedded resources: factory MIDI device profiles + factory presets (JSON).
+# Linked PUBLIC so the plugin, the standalone, and plugin_tests all resolve
+# BinaryData::*. GLOB the presets so adding a JSON needs no CMake edit (configure
+# re-runs on change via CONFIGURE_DEPENDS).
+file(GLOB VASYNTH_PRESET_JSON CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/resources/presets/*.json")
 juce_add_binary_data(VASynthData SOURCES
     resources/midi-profiles/launchkey_mini.json
-    resources/midi-profiles/korg_b2.json)
+    resources/midi-profiles/korg_b2.json
+    ${VASYNTH_PRESET_JSON})
 target_link_libraries(VASynth PUBLIC VASynthData)
 
 # Custom standalone app: adds audio-device + MIDI-input logging (and change

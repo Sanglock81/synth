@@ -49,6 +49,11 @@ level fader and a hardware-style **kill switch** (an off oscillator is skipped
 entirely — measurable CPU savings, not just muted). Velocity routes to amplitude
 (`vel_to_amp`) and filter cutoff (`vel_to_cutoff`) for dynamic playing.
 
+**Presets (6D).** 16 read-only factory patches spanning Bass / Lead / Keys / Pad /
+Pluck / Brass / Strings / Winds / Organ / FX, plus **Init**, in a category-grouped
+Load menu. Factory patches are embedded JSON (override-on-Init); tweak-and-Save
+makes a user copy. Details in [docs/presets.md](docs/presets.md).
+
 **Plug-and-play MIDI (6C).** In the standalone, plugging a controller in mid-session
 auto-connects it, applies its **device profile** (default CC map), and toasts;
 unplugging releases held notes. Profiles are JSON (factory profiles embedded for
@@ -82,7 +87,8 @@ mirrored to a lock-free atomic for the audio thread and saved with presets.
 | `Source/PluginProcessor.*` | JUCE seam: MIDI dispatch, param snapshot, render, state + legacy migration. |
 | `Source/PluginEditor.*` | Hardware-style custom editor: signal-flow panel sections, touch faders. |
 | `Source/UI/FXPanel.h` | Far-right FX column: rotary blocks with finger drag-reorder. |
-| `Source/PresetManager.h` | Preset save/load (per-user dir) + musical randomize; migrates legacy patches. |
+| `Source/PresetManager.h` | User preset save/load (per-user dir) + musical randomize; migrates legacy patches. |
+| `Source/FactoryPresets.h` | Read-only factory presets (JSON in `resources/presets/`, embedded). |
 
 ## Build
 

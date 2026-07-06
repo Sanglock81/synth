@@ -1,0 +1,6 @@
+{ "name":"Square Lead", "category":"Lead",
+  "params": { "osc1_wave":1, "osc1_pw":0.5, "osc2_wave":1, "osc2_detune":6, "osc2_pw":0.4,
+    "filter_cutoff":3000, "filter_reso":0.25, "filter_env_amt":0.3,
+    "lfo_dest":3, "lfo_rate":4.0, "lfo_depth":0.3,
+    "glide_time":0.03, "poly_mode":1,
+    "fx_chorus_on":1, "chorus_mix":0.4, "master_gain":0.7 } }

@@ -1,0 +1,8 @@
+{ "name":"Warm Pad", "category":"Pad",
+  "params": { "osc1_wave":0, "osc2_wave":0, "osc2_detune":10,
+    "osc3_on":1, "osc3_wave":0, "osc3_octave":1, "osc3_level":0.4, "osc3_detune":-6,
+    "filter_cutoff":1400, "filter_reso":0.15, "filter_env_amt":0.4,
+    "amp_attack":0.8, "amp_decay":0.5, "amp_sustain":0.8, "amp_release":1.2,
+    "flt_attack":0.6, "flt_sustain":0.5,
+    "fx_chorus_on":1, "chorus_mix":0.4, "fx_reverb_on":1, "reverb_mix":0.4, "reverb_size":0.8,
+    "fx_width_on":1, "stereo_width":1.5, "master_gain":0.6 }, "fxOrder":[0,1,2,3] }

@@ -31,7 +31,11 @@ void VASynthEditor::buildGlobalExtras (Section& s)
             load.onChange = [this]
             {
                 const auto n = load.getText();
-                if (n.isNotEmpty()) presets.load (n);
+                if (n.isEmpty()) return;
+                if (n == "Init")                                          proc.loadInitPreset();
+                else if (proc.factoryPresetLibrary().byName (n) != nullptr) proc.loadFactoryPreset (n);
+                else                                                      presets.load (n);
+                load.setSelectedId (0, juce::dontSendNotification);       // back to "Load" so re-selecting works
             };
             addAndMakeVisible (load);
             refreshList();
@@ -57,7 +61,24 @@ void VASynthEditor::buildGlobalExtras (Section& s)
         {
             load.clear (juce::dontSendNotification);
             int id = 1;
-            for (auto& n : presets.getPresetNames()) load.addItem (n, id++);
+            load.addItem ("Init", id++);
+
+            // Factory presets grouped under category headings.
+            const auto& lib = proc.factoryPresetLibrary();
+            for (auto& cat : lib.categories())
+            {
+                load.addSectionHeading (cat);
+                for (auto& fp : lib.all())
+                    if (fp.category == cat) load.addItem (fp.name, id++);
+            }
+
+            // User presets last, under their own heading.
+            auto userNames = presets.getPresetNames();
+            if (! userNames.isEmpty())
+            {
+                load.addSectionHeading ("User");
+                for (auto& n : userNames) load.addItem (n, id++);
+            }
         }
 
         void resized() override

@@ -3,6 +3,7 @@
 #include "Parameters.h"
 #include "MidiLearnManager.h"
 #include "MidiProfile.h"
+#include "FactoryPresets.h"
 #include "DSP/SynthEngine.h"
 #include "DSP/FXChain.h"
 #include "Observability/AudioHealthLogger.h"
@@ -110,6 +111,16 @@ public:
     // Directory for user MIDI-profile overrides (*.json). Public for the docs/UI.
     static juce::File userMidiProfileDir();
 
+    // -- factory presets (read-only, embedded) --------------------------------
+    const FactoryPresetLibrary& factoryPresetLibrary() const { return factoryPresets; }
+
+    // Load a factory preset by name: reset to Init, apply its overrides, and set
+    // its FX order (default if unspecified). No-op if the name is unknown.
+    void loadFactoryPreset (const juce::String& name);
+
+    // Reset every parameter to its default and the FX order to 0,1,2,3 ("Init").
+    void loadInitPreset();
+
     // Test seam: build the plugin's binary state format from an XML tree (so the
     // osc_mix->levels migration can be tested with a synthetic pre-level state).
     static void xmlToBinaryForTest (const juce::XmlElement& xml, juce::MemoryBlock& out)
@@ -145,8 +156,9 @@ private:
 
     SynthEngine        engine;
     FXChain            fxChain;
-    MidiLearnManager   midiLearn { apvts };
-    MidiProfileLibrary profileLib;
+    MidiLearnManager    midiLearn { apvts };
+    MidiProfileLibrary  profileLib;
+    FactoryPresetLibrary factoryPresets;
     juce::AudioBuffer<float> monoScratch;
     juce::AudioBuffer<float> stereoScratch;
     std::atomic<std::uint32_t> fxOrderPacked { kDefaultOrderPacked };

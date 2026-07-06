@@ -1,0 +1,7 @@
+{ "name":"Noise Riser", "category":"FX",
+  "params": { "osc1_wave":0, "osc1_level":0.3, "osc2_on":0, "osc2_level":0.0, "noise_level":0.8,
+    "filter_cutoff":800, "filter_reso":0.4,
+    "lfo_dest":2, "lfo_rate":0.15, "lfo_depth":0.9, "lfo_shape":0,
+    "amp_attack":0.5, "amp_decay":0.5, "amp_sustain":1.0, "amp_release":1.0,
+    "fx_reverb_on":1, "reverb_mix":0.5, "reverb_size":0.9, "fx_delay_on":1, "delay_mix":0.3,
+    "master_gain":0.6 } }

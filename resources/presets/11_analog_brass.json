@@ -1,0 +1,7 @@
+{ "name":"Analog Brass", "category":"Brass",
+  "params": { "osc1_wave":0, "osc2_wave":0, "osc2_detune":8,
+    "osc3_on":1, "osc3_wave":0, "osc3_level":0.5, "osc3_detune":-8,
+    "filter_cutoff":1800, "filter_reso":0.2, "filter_env_amt":0.5, "filter_keytrack":0.3,
+    "amp_attack":0.06, "amp_decay":0.2, "amp_sustain":0.8, "amp_release":0.2,
+    "flt_attack":0.08, "flt_decay":0.3, "flt_sustain":0.5, "flt_release":0.2,
+    "vel_to_cutoff":0.3, "fx_chorus_on":1, "chorus_mix":0.3, "master_gain":0.6 } }

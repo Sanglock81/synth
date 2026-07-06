@@ -1,0 +1,5 @@
+{ "name":"Deep Sub", "category":"Bass",
+  "params": { "osc1_wave":3, "osc1_octave":-1, "osc2_wave":0, "osc2_level":0.4, "osc2_detune":4, "osc3_on":0, "osc3_level":0,
+    "filter_cutoff":350, "filter_reso":0.15, "filter_env_amt":0.3,
+    "amp_attack":0.004, "amp_decay":0.3, "amp_sustain":0.7, "amp_release":0.15,
+    "poly_mode":1, "master_gain":0.75 } }
