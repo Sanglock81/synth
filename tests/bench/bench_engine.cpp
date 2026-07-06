@@ -11,6 +11,7 @@
 // The synth must render one block in well under that, with headroom.
 // ============================================================================
 #include "SynthEngine.h"
+#include "FXChain.h"
 #include <chrono>
 #include <cstdio>
 #include <vector>
@@ -63,6 +64,54 @@ namespace
         return { times[blocks / 2], times[(int) (blocks * 0.99)], times.back() };
     }
 
+    // Full per-block path: engine render (mono) + duplicate to stereo + FX chain,
+    // exactly as the processor runs it. `fxMask` bit 0..3 = chorus/delay/reverb/width.
+    Stat measureFull (int voices, int blocks, int oscsOn, int fxMask)
+    {
+        SynthEngine engine;
+        engine.setOscQuality (PolyBlepOscillator::Quality::Efficient);
+        engine.setMaxVoices (voices);
+        engine.prepare (kSR);
+
+        VoiceParams p;
+        p.osc1Wave = p.osc2Wave = p.osc3Wave = 0;
+        p.osc1Level = 0.8f;
+        p.osc2Level = oscsOn >= 2 ? 0.8f : 0.0f;
+        p.osc3Level = oscsOn >= 3 ? 0.8f : 0.0f;
+        p.cutoffHz = 2000.0f; p.resonance = 0.4f; p.filterEnvAmt = 0.5f;
+        for (int i = 0; i < voices; ++i) engine.noteOn (36 + i, 0.7f);
+
+        FXChain fx; fx.prepare (kSR, kBlock);
+        FXParams fp;
+        fp.enabled[FXChain::Chorus_] = (fxMask & 1) != 0;
+        fp.enabled[FXChain::Delay_]  = (fxMask & 2) != 0;
+        fp.enabled[FXChain::Reverb_] = (fxMask & 4) != 0;
+        fp.enabled[FXChain::Width_]  = (fxMask & 8) != 0;
+        fp.chorusMix = 0.5f; fp.delayMix = 0.4f; fp.reverbMix = 0.4f; fp.width = 1.5f;
+        fx.setParams (fp);
+
+        std::vector<float> mono (kBlock, 0.0f), L (kBlock, 0.0f), R (kBlock, 0.0f);
+        auto oneBlock = [&]
+        {
+            engine.render (mono.data(), kBlock, p, 3.0f, 0, 0.3f, 2);
+            std::copy (mono.begin(), mono.end(), L.begin());
+            std::copy (mono.begin(), mono.end(), R.begin());
+            fx.process (L.data(), R.data(), kBlock);
+        };
+        for (int i = 0; i < 200; ++i) oneBlock();     // warm + settle any crossfade
+
+        std::vector<double> times (blocks);
+        for (int b = 0; b < blocks; ++b)
+        {
+            const auto t0 = clk::now();
+            oneBlock();
+            const auto t1 = clk::now();
+            times[b] = std::chrono::duration<double, std::milli> (t1 - t0).count();
+        }
+        std::sort (times.begin(), times.end());
+        return { times[blocks / 2], times[(int) (blocks * 0.99)], times.back() };
+    }
+
     void row (const std::string& label, Stat s)
     {
         const double tpP99 = s.p99Ms * kThinkpadDerate;      // robust worst-case, derated
@@ -102,6 +151,18 @@ int main()
     row ("1 osc on", measure (PolyBlepOscillator::Quality::Efficient, 12, 4000, 1));
     row ("2 osc on", measure (PolyBlepOscillator::Quality::Efficient, 12, 4000, 2));
     row ("3 osc on", measure (PolyBlepOscillator::Quality::Efficient, 12, 4000, 3));
+
+    // 6B gate: full path (3-osc/12-voice Efficient engine + FX), FX cost sweep.
+    std::printf ("\n6B full path (12 voices, 3 osc, Efficient + FX):\n");
+    row ("engine only",         measureFull (12, 4000, 3, 0));
+    row ("+ chorus",            measureFull (12, 4000, 3, 1));
+    row ("+ delay",             measureFull (12, 4000, 3, 2));
+    row ("+ reverb",            measureFull (12, 4000, 3, 4));
+    row ("+ width",             measureFull (12, 4000, 3, 8));
+    row ("+ ALL FX",            measureFull (12, 4000, 3, 15));
+    // A realistic heavy patch: fewer voices but lush FX (pad territory).
+    std::printf ("\n6B realistic pad (6 voices, 3 osc, chorus+reverb):\n");
+    row ("6 voice + cho+rev",   measureFull (6, 4000, 3, 1 | 4));
 
     std::printf ("\nBudget = 2.667 ms/block. Target: worst-case ThinkPad < 30%% "
                  "leaves headroom for GUI, other tracks, and OS jitter.\n");

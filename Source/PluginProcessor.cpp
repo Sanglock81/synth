@@ -54,9 +54,11 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     engine.setOscQuality (VASYNTH_OSC_QUALITY);
     engine.setMaxVoices (VASYNTH_MAX_VOICES);
     engine.prepare (sampleRate);
-    // Allocate the mono mixdown buffer ONCE, at the host's max block size.
-    // processBlock never resizes it (JUCE guarantees numSamples <= this).
+    // Allocate the mono mixdown + stereo FX buffers ONCE, at the host's max block
+    // size. processBlock never resizes them (JUCE guarantees numSamples <= this).
     monoScratch.setSize (1, juce::jmax (1, samplesPerBlock), false, false, true);
+    stereoScratch.setSize (2, juce::jmax (1, samplesPerBlock), false, false, true);
+    fxChain.prepare (sampleRate, juce::jmax (1, samplesPerBlock));
 
     masterGain.reset (sampleRate, 0.02);                       // ~20 ms ramp
     masterGain.setCurrentAndTargetValue (
@@ -131,6 +133,50 @@ VoiceParams VASynthProcessor::snapshotParams() const
     p.glideTime = rp (apvts, ID::glideTime);
 
     return p;
+}
+
+FXParams VASynthProcessor::snapshotFXParams() const
+{
+    namespace ID = ParamID;
+    FXParams p;
+
+    p.chorusRate  = rp (apvts, ID::chorusRate);
+    p.chorusDepth = rp (apvts, ID::chorusDepth);
+    p.chorusMix   = rp (apvts, ID::chorusMix);
+
+    p.delayTimeMs   = rp (apvts, ID::delayTime);
+    p.delayFeedback = rp (apvts, ID::delayFeedback);
+    p.delayMix      = rp (apvts, ID::delayMix);
+    p.delaySpread   = rp (apvts, ID::delaySpread);
+
+    p.reverbSize  = rp (apvts, ID::reverbSize);
+    p.reverbDamp  = rp (apvts, ID::reverbDamp);
+    p.reverbWidth = rp (apvts, ID::reverbWidth);
+    p.reverbMix   = rp (apvts, ID::reverbMix);
+
+    p.width = rp (apvts, ID::stereoWidth);
+
+    p.enabled[FXChain::Chorus_] = rp (apvts, ID::fxChorusOn) > 0.5f;
+    p.enabled[FXChain::Delay_]  = rp (apvts, ID::fxDelayOn)  > 0.5f;
+    p.enabled[FXChain::Reverb_] = rp (apvts, ID::fxReverbOn) > 0.5f;
+    p.enabled[FXChain::Width_]  = rp (apvts, ID::fxWidthOn)  > 0.5f;
+
+    getFxOrder (p.order);
+    return p;
+}
+
+// Parse the persisted "a,b,c,d" fx_order property into the atomic mirror. Called
+// after replaceState so a loaded session/preset restores its chain order. A
+// missing or malformed property leaves the default 0,1,2,3.
+void VASynthProcessor::applyFxOrderProperty()
+{
+    const auto str = apvts.state.getProperty (ParamID::fxOrder).toString();
+    if (str.isEmpty()) return;
+    auto tokens = juce::StringArray::fromTokens (str, ",", "");
+    if (tokens.size() != 4) return;
+    int order[4];
+    for (int i = 0; i < 4; ++i) order[i] = tokens[i].getIntValue();
+    setFxOrder (order);        // validates the permutation; ignores if malformed
 }
 
 void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
@@ -211,18 +257,47 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         engine.render (mono + renderedUpTo, buffer.getNumSamples() - renderedUpTo,
                        params, lfoRate, lfoShape, lfoDepth, lfoDest);
 
-    // --- master gain: bake the per-sample ramp into the mono buffer, then copy
-    //     to every output channel. The ramp (SmoothedValue) kills zipper on gain
-    //     steps/automation without a per-channel double-ramp.
+    // --- stereo FX chain: the engine sums to mono, so duplicate to L/R and run
+    //     the reorderable chain (chorus/delay/reverb/width) in place. The chain
+    //     is allocation-free; disabled blocks cost nothing.
+    float* L = stereoScratch.getWritePointer (0);
+    float* R = stereoScratch.getWritePointer (1);
+    juce::FloatVectorOperations::copy (L, mono, numSamples);
+    juce::FloatVectorOperations::copy (R, mono, numSamples);
+
+    fxChain.setParams (snapshotFXParams());
+    fxChain.process (L, R, numSamples);
+
+    // --- master gain: one per-sample ramp applied to both channels (kills zipper
+    //     on gain steps/automation).
     masterGain.setTargetValue (master);
     if (masterGain.isSmoothing())
         for (int i = 0; i < numSamples; ++i)
-            mono[i] *= masterGain.getNextValue();
+        {
+            const float g = masterGain.getNextValue();
+            L[i] *= g; R[i] *= g;
+        }
     else
-        juce::FloatVectorOperations::multiply (mono, masterGain.getTargetValue(), numSamples);
+    {
+        const float g = masterGain.getTargetValue();
+        juce::FloatVectorOperations::multiply (L, g, numSamples);
+        juce::FloatVectorOperations::multiply (R, g, numSamples);
+    }
 
-    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-        buffer.addFrom (ch, 0, mono, numSamples, 1.0f);
+    // --- write to the output bus. Stereo: L/R; extra channels get L; a mono host
+    //     gets the L+R average so nothing wet is lost.
+    const int nCh = buffer.getNumChannels();
+    if (nCh >= 2)
+    {
+        buffer.copyFrom (0, 0, L, numSamples);
+        buffer.copyFrom (1, 0, R, numSamples);
+        for (int ch = 2; ch < nCh; ++ch) buffer.copyFrom (ch, 0, L, numSamples);
+    }
+    else if (nCh == 1)
+    {
+        float* o = buffer.getWritePointer (0);
+        for (int i = 0; i < numSamples; ++i) o[i] = 0.5f * (L[i] + R[i]);
+    }
 
     // --- audio-health telemetry (RT-safe: pushes POD events only) -----------
     const auto tEnd = std::chrono::steady_clock::now();
@@ -261,6 +336,9 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
         // Old sessions (osc_mix, no osc1_level) derive the per-source levels from
         // the legacy crossfade so they sound the same.
         if (needsMigration) applyLegacyOscLevelMigration (apvts);
+
+        // Restore the FX chain order (state-tree property, not an APVTS param).
+        applyFxOrderProperty();
     }
 }
 

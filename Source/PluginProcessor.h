@@ -3,7 +3,9 @@
 #include "Parameters.h"
 #include "MidiLearnManager.h"
 #include "DSP/SynthEngine.h"
+#include "DSP/FXChain.h"
 #include "Observability/AudioHealthLogger.h"
+#include <atomic>
 
 // ============================================================================
 // The AudioProcessor is the seam between JUCE-land and our engine:
@@ -61,6 +63,32 @@ public:
     // Exposed for the (v2) right-click MIDI-learn GUI and for tests.
     MidiLearnManager& getMidiLearn() { return midiLearn; }
 
+    // -- FX chain order (state-tree property, not an automatable param) --------
+    // The editor's drag-reorder calls setFxOrder; it publishes an atomic mirror
+    // for the audio thread AND writes the `fx_order` state property so the order
+    // saves/loads with presets. `order` must be a permutation of {0,1,2,3}
+    // (0=chorus, 1=delay, 2=reverb, 3=width); invalid input is ignored.
+    void setFxOrder (const int order[4])
+    {
+        std::uint32_t packed = 0;
+        bool seen[4] { false, false, false, false };
+        for (int i = 0; i < 4; ++i)
+        {
+            const int v = order[i];
+            if (v < 0 || v > 3 || seen[v]) return;             // not a permutation -> ignore
+            seen[v] = true;
+            packed |= (std::uint32_t) v << (i * 8);
+        }
+        fxOrderPacked.store (packed, std::memory_order_relaxed);
+        apvts.state.setProperty (ParamID::fxOrder, orderToString (order), nullptr);
+    }
+
+    void getFxOrder (int out[4]) const
+    {
+        const std::uint32_t packed = fxOrderPacked.load (std::memory_order_relaxed);
+        for (int i = 0; i < 4; ++i) out[i] = (int) ((packed >> (i * 8)) & 0xFFu);
+    }
+
     // Test seam: build the plugin's binary state format from an XML tree (so the
     // osc_mix->levels migration can be tested with a synthetic pre-level state).
     static void xmlToBinaryForTest (const juce::XmlElement& xml, juce::MemoryBlock& out)
@@ -80,10 +108,26 @@ public:
 
 private:
     VoiceParams snapshotParams() const;
+    FXParams    snapshotFXParams() const;
+
+    // Parse an "a,b,c,d" fx_order property into the atomic mirror (used on load).
+    void applyFxOrderProperty();
+
+    static juce::String orderToString (const int order[4])
+    {
+        return juce::String (order[0]) + "," + juce::String (order[1]) + ","
+             + juce::String (order[2]) + "," + juce::String (order[3]);
+    }
+
+    // Default order 0,1,2,3 packed one index per byte (byte i = slot i's effect).
+    static constexpr std::uint32_t kDefaultOrderPacked = 0x03020100u;
 
     SynthEngine      engine;
+    FXChain          fxChain;
     MidiLearnManager midiLearn { apvts };
     juce::AudioBuffer<float> monoScratch;
+    juce::AudioBuffer<float> stereoScratch;
+    std::atomic<std::uint32_t> fxOrderPacked { kDefaultOrderPacked };
 
     // Telemetry bookkeeping (audio thread).
     double        budgetMs   = 2.667;

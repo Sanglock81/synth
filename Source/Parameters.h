@@ -79,6 +79,30 @@ namespace ParamID
     inline constexpr auto glideTime   = "glide_time";
     inline constexpr auto masterGain  = "master_gain";
     inline constexpr auto polyMode    = "poly_mode";     // poly / mono / legato
+
+    // FX (6B). Global reorderable stereo chain: chorus / delay / reverb / width.
+    // Each block has a bool enable + rotary params. The chain ORDER is not an
+    // automatable parameter (a permutation, not a value) — it lives as the
+    // `fx_order` STATE-TREE property (see PluginProcessor::setFxOrder), so it
+    // saves/loads with presets but never appears as a host-automatable knob.
+    inline constexpr auto fxChorusOn    = "fx_chorus_on";
+    inline constexpr auto chorusRate    = "chorus_rate";
+    inline constexpr auto chorusDepth   = "chorus_depth";
+    inline constexpr auto chorusMix     = "chorus_mix";
+    inline constexpr auto fxDelayOn     = "fx_delay_on";
+    inline constexpr auto delayTime     = "delay_time";      // ms
+    inline constexpr auto delayFeedback = "delay_feedback";
+    inline constexpr auto delayMix      = "delay_mix";
+    inline constexpr auto delaySpread   = "delay_spread";    // ping-pong amount
+    inline constexpr auto fxReverbOn    = "fx_reverb_on";
+    inline constexpr auto reverbSize    = "reverb_size";
+    inline constexpr auto reverbDamp    = "reverb_damp";
+    inline constexpr auto reverbWidth   = "reverb_width";
+    inline constexpr auto reverbMix     = "reverb_mix";
+    inline constexpr auto fxWidthOn     = "fx_width_on";
+    inline constexpr auto stereoWidth   = "stereo_width";    // 0=mono, 1=normal, 2=wide
+
+    inline constexpr auto fxOrder       = "fx_order";        // state-tree property: "a,b,c,d"
 }
 
 // Builds the full parameter layout. Called once in the processor constructor.
@@ -158,6 +182,27 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::glideTime, 1}, "Glide", juce::NormalisableRange<float>(0.0f, 2.0f, 0.0f, 0.4f), 0.0f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::masterGain, 1},"Master", juce::NormalisableRange<float>(0.0f, 1.0f), 0.7f));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::polyMode, 1},  "Mode", juce::StringArray{ "Poly", "Mono", "Legato" }, 0));
+
+    // --- FX (6B): global reorderable stereo chain --------------------------
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::fxChorusOn, 1},   "Chorus On", false));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::chorusRate, 1},    "Chorus Rate", juce::NormalisableRange<float>(0.05f, 8.0f, 0.0f, 0.4f), 0.8f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::chorusDepth, 1},   "Chorus Depth", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::chorusMix, 1},     "Chorus Mix", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
+
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::fxDelayOn, 1},     "Delay On", false));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::delayTime, 1},     "Delay Time", juce::NormalisableRange<float>(1.0f, 1500.0f, 0.0f, 0.4f), 300.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::delayFeedback, 1}, "Delay Feedback", juce::NormalisableRange<float>(0.0f, 0.95f), 0.35f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::delayMix, 1},      "Delay Mix", juce::NormalisableRange<float>(0.0f, 1.0f), 0.35f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::delaySpread, 1},   "Delay Spread", juce::NormalisableRange<float>(0.0f, 1.0f), 1.0f));
+
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::fxReverbOn, 1},    "Reverb On", false));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::reverbSize, 1},    "Reverb Size", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::reverbDamp, 1},    "Reverb Damp", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::reverbWidth, 1},   "Reverb Width", juce::NormalisableRange<float>(0.0f, 1.0f), 1.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::reverbMix, 1},     "Reverb Mix", juce::NormalisableRange<float>(0.0f, 1.0f), 0.3f));
+
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::fxWidthOn, 1},     "Width On", false));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::stereoWidth, 1},   "Stereo Width", juce::NormalisableRange<float>(0.0f, 2.0f), 1.4f));
 
     return { params.begin(), params.end() };
 }
