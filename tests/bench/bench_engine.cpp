@@ -140,7 +140,7 @@ int main()
     std::printf ("16 voices (full pool):\n");
     for (auto m : modes) row (m.name, measure (m.q, 16, 4000));
 
-    std::printf ("\n12 voices (live ThinkPad profile cap):\n");
+    std::printf ("\n12 voices (comparison; live cap is now 16 for split voicing):\n");
     for (auto m : modes) row (m.name, measure (m.q, 12, 4000));
 
     std::printf ("\n1 voice:\n");
@@ -160,6 +160,10 @@ int main()
     row ("+ reverb",            measureFull (12, 4000, 3, 4));
     row ("+ width",             measureFull (12, 4000, 3, 8));
     row ("+ ALL FX",            measureFull (12, 4000, 3, 15));
+
+    std::printf ("\n6B full path (16 voices, 3 osc, Efficient + FX):\n");
+    row ("16v engine only",     measureFull (16, 4000, 3, 0));
+    row ("16v + ALL FX",        measureFull (16, 4000, 3, 15));
     // A realistic heavy patch: fewer voices but lush FX (pad territory).
     std::printf ("\n6B realistic pad (6 voices, 3 osc, chorus+reverb):\n");
     row ("6 voice + cho+rev",   measureFull (6, 4000, 3, 1 | 4));

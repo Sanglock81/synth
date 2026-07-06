@@ -42,11 +42,14 @@ VASynthProcessor::VASynthProcessor()
  #define VASYNTH_OSC_QUALITY PolyBlepOscillator::Quality::Efficient
 #endif
 
-// Max simultaneous voices. Default 12 keeps the Efficient oscillator's worst-case
-// (16 saw voices was ~41% of the ThinkPad budget, over the ~30% gate) within
-// budget on the 2-core live ThinkPad. Studio/HQ builds can raise it (<= 16).
+// Max simultaneous voices. 16 (the full pool) — chosen so a future keyboard
+// SPLIT can layer two independently-voiced 8-voice sounds. This exceeds the ~30%
+// ThinkPad comfort target in the pathological worst case (16 held x 3 saws + all
+// FX ~= 41% derated median, p99 ~65%), but stays well under the 100% real-time
+// limit (no dropouts); realistic split playing sits far lower. Reviewed and
+// accepted for the split-voicing roadmap. Drop back to 12 to reclaim headroom.
 #ifndef VASYNTH_MAX_VOICES
- #define VASYNTH_MAX_VOICES 12
+ #define VASYNTH_MAX_VOICES 16
 #endif
 
 void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
