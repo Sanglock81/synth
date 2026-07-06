@@ -33,6 +33,8 @@ public:
 
         buildSections();
         addChildComponent (overlay);
+        addChildComponent (toast);
+        lastToastSeq = proc.toastSequence();       // don't replay a pre-existing toast on open
 
         setResizable (true, true);
         setResizeLimits (900, 480, 3000, 1600);
@@ -80,6 +82,7 @@ public:
     void resized() override
     {
         overlay.setBounds (getWidth() - 320, 8, 312, 58);
+        toast.setBounds ((getWidth() - 460) / 2, 14, 460, 46);   // top-centre
 
         auto area = getLocalBounds().reduced (6);
         juce::FlexBox row;
@@ -221,6 +224,10 @@ private:
         const bool focused = hasKeyboardFocus (true);
         if (hadFocus && ! focused) allNotesOff();
         hadFocus = focused;
+
+        // Surface any pending toast (MIDI hot-plug connect/disconnect).
+        const int seq = proc.toastSequence();
+        if (seq != lastToastSeq) { lastToastSeq = seq; toast.show (proc.toastMessage()); }
     }
 
     void emitNote (int note, bool on)
@@ -237,6 +244,8 @@ private:
     DebugOverlay overlay { proc.health };
     PresetManager presets;
     QwertyKeyboard qwerty;
+    Toast toast;
+    int  lastToastSeq = 0;
     bool hadFocus = false;
 
     // Preset UI (built in buildGlobalExtras).

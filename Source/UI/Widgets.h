@@ -187,6 +187,61 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// Transient toast notification (e.g. "Launchkey Mini connected"). Holds for ~2 s
+// then fades. Intercepts no input and refuses focus, so it never disturbs the
+// controls beneath it or the QWERTY note input.
+class Toast : public juce::Component,
+              private juce::Timer
+{
+public:
+    Toast()
+    {
+        setInterceptsMouseClicks (false, false);
+        setWantsKeyboardFocus (false);
+        setVisible (false);
+    }
+
+    void show (const juce::String& message)
+    {
+        text = message;
+        ticks = 0;
+        alpha = 1.0f;
+        setVisible (true);
+        toFront (false);
+        startTimerHz (30);
+        repaint();
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        auto r = getLocalBounds().toFloat();
+        g.setColour (VASynthLookAndFeel::panelLight().withAlpha (alpha * 0.96f));
+        g.fillRoundedRectangle (r, 8.0f);
+        g.setColour (VASynthLookAndFeel::accent().withAlpha (alpha));
+        g.drawRoundedRectangle (r.reduced (0.75f), 8.0f, 1.4f);
+        g.setColour (VASynthLookAndFeel::ink().withAlpha (alpha));
+        g.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
+        g.drawFittedText (text, getLocalBounds().reduced (14, 0), juce::Justification::centred, 1);
+    }
+
+private:
+    void timerCallback() override
+    {
+        ++ticks;
+        if (ticks > 60)                                   // ~2 s hold, then ~0.5 s fade
+            alpha = juce::jmax (0.0f, 1.0f - (float) (ticks - 60) / 15.0f);
+        if (alpha <= 0.0f) { setVisible (false); stopTimer(); }
+        repaint();
+    }
+
+    juce::String text;
+    float alpha = 1.0f;
+    int   ticks = 0;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Toast)
+};
+
+// ---------------------------------------------------------------------------
 // Rotary knob + name + live value, bound to a float parameter. MIDI-learnable and
 // focus-refusing like the faders; used in the FX panel where knobs read better
 // than a wall of faders.

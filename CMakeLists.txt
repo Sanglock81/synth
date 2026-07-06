@@ -47,6 +47,13 @@ target_sources(VASynth PRIVATE
     Source/PluginEditor.cpp
     Source/Observability/AudioHealthLogger.cpp)
 
+# Embedded resources: factory MIDI device profiles (JSON). Linked PUBLIC so the
+# plugin, the standalone, and the plugin_tests target all resolve BinaryData::*.
+juce_add_binary_data(VASynthData SOURCES
+    resources/midi-profiles/launchkey_mini.json
+    resources/midi-profiles/korg_b2.json)
+target_link_libraries(VASynth PUBLIC VASynthData)
+
 # Custom standalone app: adds audio-device + MIDI-input logging (and change
 # logging) that only the standalone's device manager can see. Compiled ONLY into
 # the Standalone target; the VST3 uses the host's device handling untouched.

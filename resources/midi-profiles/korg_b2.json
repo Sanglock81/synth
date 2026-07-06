@@ -1,0 +1,7 @@
+{
+  "name": "Korg B2 / B2SP",
+  "match": ["Korg B2", "B2", "KORG B2", "USB-MIDI"],
+  "pitchBendRange": 2,
+  "notes": "The B2 is a weighted keybed with a damper pedal and no assignable knobs. Notes, velocity, and sustain (CC64) are handled natively by the synth; there is nothing to map by default. Present so the device is recognised (name toast) and so a user override can add mappings.",
+  "mappings": []
+}

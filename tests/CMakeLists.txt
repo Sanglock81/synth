@@ -70,6 +70,8 @@ add_executable(plugin_tests
     plugin/test_presets.cpp
     plugin/test_migration.cpp
     plugin/test_fx_plugin.cpp
+    plugin/test_midi_profile.cpp
+    plugin/test_midi_hotplug.cpp
     dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests
 
 target_include_directories(plugin_tests PRIVATE

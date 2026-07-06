@@ -33,6 +33,10 @@ class MidiLearnManager
 public:
     static constexpr int numCCs = 128;
 
+    // Where a CC->param mapping came from. Higher wins: a device profile never
+    // overwrites a mapping the user learned, and a user profile overrides factory.
+    enum class Source { None = 0, Factory = 1, User = 2, Learned = 3 };
+
     explicit MidiLearnManager (juce::AudioProcessorValueTreeState& state)
         : apvts (state)
     {
@@ -45,18 +49,20 @@ public:
                 paramIDs.add (withId->paramID);
             }
 
-        for (auto& a : ccToParam)
-            a.store (-1, std::memory_order_relaxed);
+        for (auto& a : ccToParam) a.store (-1, std::memory_order_relaxed);
+        for (auto& a : ccSource)  a.store ((int) Source::None, std::memory_order_relaxed);
 
-        // Starter map for Launchkey Mini (learn to override).
+        // Built-in factory map (Launchkey Mini pots 21-28). This is the baseline
+        // for plugin/DAW use where there's no device hot-plug; the standalone app
+        // layers the matched device profile on top. Learn / user profiles override.
         setDefault (21, "filter_cutoff");
         setDefault (22, "filter_reso");
-        setDefault (23, "osc_mix");
-        setDefault (24, "filter_env_amt");
-        setDefault (25, "amp_attack");
-        setDefault (26, "amp_release");
-        setDefault (27, "lfo_rate");
-        setDefault (28, "lfo_depth");
+        setDefault (23, "filter_env_amt");
+        setDefault (24, "amp_release");
+        setDefault (25, "lfo_rate");
+        setDefault (26, "lfo_depth");
+        setDefault (27, "reverb_mix");
+        setDefault (28, "delay_mix");
     }
 
     // ---- message thread -----------------------------------------------------
@@ -92,7 +98,32 @@ public:
         if (idx < 0) return;
         for (int cc = 0; cc < numCCs; ++cc)
             if (ccToParam[(std::size_t) cc].load (std::memory_order_acquire) == idx)
+            {
                 ccToParam[(std::size_t) cc].store (-1, std::memory_order_release);
+                ccSource[(std::size_t) cc].store ((int) Source::None, std::memory_order_release);
+            }
+    }
+
+    // ---- device profiles (message thread) -----------------------------------
+    // Apply one profile mapping, respecting precedence: it only takes effect if
+    // the CC's current mapping is the same source or lower (learned > user >
+    // factory). Returns true if it was applied. Used by the profile applier.
+    bool applyProfileMapping (int cc, const juce::String& parameterID, Source src)
+    {
+        if (cc < 0 || cc >= numCCs) return false;
+        const int idx = indexOf (parameterID);
+        if (idx < 0) return false;
+        if (ccSource[(std::size_t) cc].load (std::memory_order_acquire) > (int) src)
+            return false;                                   // a higher-precedence mapping holds
+        ccToParam[(std::size_t) cc].store (idx, std::memory_order_release);
+        ccSource[(std::size_t) cc].store ((int) src, std::memory_order_release);
+        return true;
+    }
+
+    Source getSource (int cc) const
+    {
+        if (cc < 0 || cc >= numCCs) return Source::None;
+        return (Source) ccSource[(std::size_t) cc].load (std::memory_order_acquire);
     }
 
     // ---- audio thread: lock-free, allocation-free ---------------------------
@@ -110,8 +141,12 @@ public:
         {
             for (int c = 0; c < numCCs; ++c)
                 if (ccToParam[(std::size_t) c].load (std::memory_order_acquire) == target)
+                {
                     ccToParam[(std::size_t) c].store (-1, std::memory_order_release);
+                    ccSource[(std::size_t) c].store ((int) Source::None, std::memory_order_release);
+                }
             ccToParam[(std::size_t) ccNumber].store (target, std::memory_order_release);
+            ccSource[(std::size_t) ccNumber].store ((int) Source::Learned, std::memory_order_release);
             learnTarget.store (-1, std::memory_order_release);
         }
 
@@ -135,6 +170,7 @@ public:
                 juce::ValueTree m ("MAP");
                 m.setProperty ("cc", cc, nullptr);
                 m.setProperty ("param", paramIDs[idx], nullptr);
+                m.setProperty ("src", ccSource[(size_t) cc].load (std::memory_order_acquire), nullptr);
                 ml.addChild (m, -1, nullptr);
             }
         }
@@ -148,15 +184,21 @@ public:
         if (! ml.isValid())
             return;
 
-        for (auto& a : ccToParam)
-            a.store (-1, std::memory_order_release);
+        for (auto& a : ccToParam) a.store (-1, std::memory_order_release);
+        for (auto& a : ccSource)  a.store ((int) Source::None, std::memory_order_release);
 
         for (auto m : ml)
         {
             const int cc  = (int) m.getProperty ("cc", -1);
             const int idx = indexOf (m.getProperty ("param", juce::String()).toString());
+            // Back-compat: states saved before source tags treated every mapping
+            // as user intent, so default a missing "src" to Learned.
+            const int src = (int) m.getProperty ("src", (int) Source::Learned);
             if (cc >= 0 && cc < numCCs && idx >= 0)
+            {
                 ccToParam[(size_t) cc].store (idx, std::memory_order_release);
+                ccSource[(size_t) cc].store (src, std::memory_order_release);
+            }
         }
     }
 
@@ -168,7 +210,11 @@ private:
     void setDefault (int cc, const char* id)
     {
         const int i = indexOf (id);
-        if (i >= 0) ccToParam[(size_t) cc].store (i, std::memory_order_relaxed);
+        if (i >= 0)
+        {
+            ccToParam[(size_t) cc].store (i, std::memory_order_relaxed);
+            ccSource[(size_t) cc].store ((int) Source::Factory, std::memory_order_relaxed);
+        }
     }
 
     juce::AudioProcessorValueTreeState& apvts;
@@ -176,6 +222,7 @@ private:
     std::vector<juce::AudioProcessorParameter*> paramPtrs;  // index -> param
     juce::StringArray                           paramIDs;   // index -> id (stable key)
     std::array<std::atomic<int>, numCCs>        ccToParam;  // cc -> param index (-1 none)
+    std::array<std::atomic<int>, numCCs>        ccSource;   // cc -> Source (precedence)
     std::atomic<int>                            learnTarget { -1 };  // index to bind
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MidiLearnManager)

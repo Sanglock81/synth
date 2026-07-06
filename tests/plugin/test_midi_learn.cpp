@@ -76,3 +76,36 @@ TEST_CASE ("learned mappings survive a state round-trip", "[plugin][midilearn][p
     sendCC (dst, 50, 100);
     REQUIRE (paramValue (dst, "osc_mix") == Catch::Approx (100.0f / 127.0f).margin (1e-3));
 }
+
+TEST_CASE ("profile mapping precedence: learned > user > factory", "[plugin][6c][midilearn][precedence]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    auto& learn = p.getMidiLearn();
+    using S = MidiLearnManager::Source;
+
+    // CC 21 starts as a factory default (filter_cutoff).
+    REQUIRE (learn.getCCForParam ("filter_cutoff") == 21);
+    REQUIRE (learn.getSource (21) == S::Factory);
+
+    // A user profile overrides factory on the same CC.
+    REQUIRE (learn.applyProfileMapping (21, "reverb_mix", S::User));
+    REQUIRE (learn.getCCForParam ("reverb_mix") == 21);
+    REQUIRE (learn.getSource (21) == S::User);
+
+    // Factory can no longer overwrite the user mapping.
+    REQUIRE_FALSE (learn.applyProfileMapping (21, "filter_cutoff", S::Factory));
+    REQUIRE (learn.getCCForParam ("reverb_mix") == 21);
+
+    // The user explicitly learns CC 21 -> a new param: learned wins over user.
+    p.prepareToPlay (48000.0, 64);
+    learn.armLearn ("delay_mix");
+    sendCC (p, 21, 64);
+    REQUIRE (learn.getCCForParam ("delay_mix") == 21);
+    REQUIRE (learn.getSource (21) == S::Learned);
+
+    // Neither a user nor a factory profile can dislodge a learned mapping.
+    REQUIRE_FALSE (learn.applyProfileMapping (21, "reverb_mix", S::User));
+    REQUIRE_FALSE (learn.applyProfileMapping (21, "filter_cutoff", S::Factory));
+    REQUIRE (learn.getCCForParam ("delay_mix") == 21);
+}

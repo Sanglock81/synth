@@ -2,6 +2,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Parameters.h"
 #include "MidiLearnManager.h"
+#include "MidiProfile.h"
 #include "DSP/SynthEngine.h"
 #include "DSP/FXChain.h"
 #include "Observability/AudioHealthLogger.h"
@@ -89,6 +90,26 @@ public:
         for (int i = 0; i < 4; ++i) out[i] = (int) ((packed >> (i * 8)) & 0xFFu);
     }
 
+    // -- plug-and-play MIDI (the standalone hot-plug watcher drives these) ------
+    // Apply the matched device profile's default CC map — factory first, then any
+    // user override (user beats factory; a control the user has *learned* is never
+    // touched, learned > user > factory). Also adopts the profile's pitch-bend
+    // range. No-op if no profile matches the device name.
+    void applyDeviceProfile (const juce::String& deviceName);
+
+    // Panic: release all voices on the next block (RT-safe via an atomic flag),
+    // so unplugging a controller can't leave a note hanging.
+    void requestAllNotesOff() { panicRequested.store (true, std::memory_order_release); }
+
+    // Transient UI notification. The editor polls the sequence number on its timer
+    // and shows the latest message as a toast. Message-thread only.
+    void postToast (juce::String message) { toastText = std::move (message); toastSeq.fetch_add (1, std::memory_order_release); }
+    int  toastSequence() const { return toastSeq.load (std::memory_order_acquire); }
+    juce::String toastMessage() const { return toastText; }
+
+    // Directory for user MIDI-profile overrides (*.json). Public for the docs/UI.
+    static juce::File userMidiProfileDir();
+
     // Test seam: build the plugin's binary state format from an XML tree (so the
     // osc_mix->levels migration can be tested with a synthetic pre-level state).
     static void xmlToBinaryForTest (const juce::XmlElement& xml, juce::MemoryBlock& out)
@@ -122,12 +143,19 @@ private:
     // Default order 0,1,2,3 packed one index per byte (byte i = slot i's effect).
     static constexpr std::uint32_t kDefaultOrderPacked = 0x03020100u;
 
-    SynthEngine      engine;
-    FXChain          fxChain;
-    MidiLearnManager midiLearn { apvts };
+    SynthEngine        engine;
+    FXChain            fxChain;
+    MidiLearnManager   midiLearn { apvts };
+    MidiProfileLibrary profileLib;
     juce::AudioBuffer<float> monoScratch;
     juce::AudioBuffer<float> stereoScratch;
     std::atomic<std::uint32_t> fxOrderPacked { kDefaultOrderPacked };
+    std::atomic<bool>  panicRequested { false };
+    std::atomic<float> pitchBendRangeSemis { 2.0f };
+
+    // Toast (message-thread only): last message + a monotonically-increasing seq.
+    juce::String       toastText;
+    std::atomic<int>   toastSeq { 0 };
 
     // Telemetry bookkeeping (audio thread).
     double        budgetMs   = 2.667;

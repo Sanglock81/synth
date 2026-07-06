@@ -1,10 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <BinaryData.h>
 #include <chrono>
-
-// Default pitch-bend range in semitones (+/-). The Launchkey touch strip is the
-// only bend source in the rig; the Korg B2 sends none (stays centred).
-static constexpr float kPitchBendRange = 2.0f;
 
 #ifndef VASYNTH_VERSION
  #define VASYNTH_VERSION "?"
@@ -30,6 +27,37 @@ VASynthProcessor::VASynthProcessor()
       apvts (*this, nullptr, "PARAMS", createParameterLayout())
 {
     juce::SystemStats::setApplicationCrashHandler (vaSynthCrashHandler);
+
+    // Factory MIDI device profiles (embedded), plus any user overrides on disk.
+    profileLib.addFactory (juce::String::fromUTF8 (BinaryData::launchkey_mini_json, BinaryData::launchkey_mini_jsonSize));
+    profileLib.addFactory (juce::String::fromUTF8 (BinaryData::korg_b2_json,        BinaryData::korg_b2_jsonSize));
+    profileLib.loadUserDir (userMidiProfileDir());
+}
+
+juce::File VASynthProcessor::userMidiProfileDir()
+{
+    auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                   .getChildFile ("VASynth").getChildFile ("midi-profiles");
+    dir.createDirectory();
+    return dir;
+}
+
+// Apply the matched profile's default CC map. Factory first, then user, so user
+// overrides factory per-CC; MidiLearnManager's precedence keeps learned mappings
+// untouched (learned > user > factory).
+void VASynthProcessor::applyDeviceProfile (const juce::String& deviceName)
+{
+    using Src = MidiLearnManager::Source;
+    if (auto* fac = profileLib.factoryFor (deviceName))
+    {
+        for (auto& m : fac->mappings) midiLearn.applyProfileMapping (m.first, m.second, Src::Factory);
+        pitchBendRangeSemis.store ((float) fac->pitchBendRange, std::memory_order_release);
+    }
+    if (auto* usr = profileLib.userFor (deviceName))
+    {
+        for (auto& m : usr->mappings) midiLearn.applyProfileMapping (m.first, m.second, Src::User);
+        pitchBendRangeSemis.store ((float) usr->pitchBendRange, std::memory_order_release);
+    }
 }
 
 // Oscillator anti-aliasing quality. Compile-time default is Efficient (glitch-
@@ -200,6 +228,10 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // when no keys are held), so they share the exact hardware-MIDI path below.
     qwertyKeyboardState.processNextMidiBuffer (midi, 0, numSamples, true);
 
+    // Panic (RT-safe): a hot-unplug asked us to release everything.
+    if (panicRequested.exchange (false, std::memory_order_acq_rel))
+        engine.allNotesOff();
+
     const auto params = snapshotParams();
 
     namespace ID = ParamID;
@@ -236,9 +268,9 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             engine.allNotesOff();
         else if (msg.isPitchWheel())
         {
-            // 14-bit, centre 8192 -> +/- kPitchBendRange semitones (Launchkey strip).
+            // 14-bit, centre 8192 -> +/- the active device's bend range in semis.
             const float norm = (msg.getPitchWheelValue() - 8192) / 8192.0f;
-            engine.setPitchBend (norm * kPitchBendRange);
+            engine.setPitchBend (norm * pitchBendRangeSemis.load (std::memory_order_acquire));
         }
         else if (msg.isController())
         {

@@ -49,6 +49,12 @@ level fader and a hardware-style **kill switch** (an off oscillator is skipped
 entirely — measurable CPU savings, not just muted). Velocity routes to amplitude
 (`vel_to_amp`) and filter cutoff (`vel_to_cutoff`) for dynamic playing.
 
+**Plug-and-play MIDI (6C).** In the standalone, plugging a controller in mid-session
+auto-connects it, applies its **device profile** (default CC map), and toasts;
+unplugging releases held notes. Profiles are JSON (factory profiles embedded for
+the Launchkey Mini and Korg B2; user overrides in the config dir), with precedence
+**learned > user > factory**. Full details in [docs/midi.md](docs/midi.md).
+
 **FX chain (6B).** A global, **reorderable** stereo chain of four hand-rolled,
 JUCE-free effects (all in `Source/DSP/`, allocation-free after `prepare`): chorus,
 ping-pong delay, Freeverb-style reverb, and mid/side stereo width. Each block has
@@ -71,7 +77,8 @@ mirrored to a lock-free atomic for the audio thread and saved with presets.
 | `Source/DSP/SynthEngine.h` | Voice pool, oldest-note stealing, LFO routing. |
 | `Source/DSP/Chorus.h` `StereoDelay.h` `Reverb.h` `StereoWidth.h` | The four hand-rolled stereo FX. |
 | `Source/DSP/FXChain.h` | Reorderable FX chain + click-free reorder crossfade. |
-| `Source/MidiLearnManager.h` | (channel, CC) → parameter mapping; Launchkey default map. |
+| `Source/MidiLearnManager.h` | (channel, CC) → parameter mapping, with learned/user/factory precedence. |
+| `Source/MidiProfile.h` | JSON device-profile parsing + factory/user library (see `resources/midi-profiles/`). |
 | `Source/PluginProcessor.*` | JUCE seam: MIDI dispatch, param snapshot, render, state + legacy migration. |
 | `Source/PluginEditor.*` | Hardware-style custom editor: signal-flow panel sections, touch faders. |
 | `Source/UI/FXPanel.h` | Far-right FX column: rotary blocks with finger drag-reorder. |
