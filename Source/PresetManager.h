@@ -30,7 +30,9 @@ public:
     {
         auto safe = juce::File::createLegalFileName (name).trim();
         if (safe.isEmpty()) return false;
-        if (auto xml = apvts.copyState().createXml())
+        auto state = apvts.copyState();
+        PresetPolicy::stripFromState (state);         // don't bake the player's master into the file
+        if (auto xml = state.createXml())
             return xml->writeTo (presetDir().getChildFile (safe + ".vasynth"));
         return false;
     }
@@ -45,8 +47,10 @@ public:
             // levels — detect before replaceState back-fills them, then migrate so
             // their existing patches still sound right.
             const bool needsMigration = stateNeedsLevelMigration (tree);
+            const auto keep = PresetPolicy::capture (apvts);   // master is the player's, not the preset's
             apvts.replaceState (tree);
             if (needsMigration) applyLegacyOscLevelMigration (apvts);
+            PresetPolicy::restore (apvts, keep);
             return true;
         }
         return false;

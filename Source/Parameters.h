@@ -1,5 +1,7 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <vector>
+#include <utility>
 
 // ============================================================================
 // Single source of truth for every synth parameter.
@@ -230,4 +232,52 @@ inline void applyLegacyOscLevelMigration (juce::AudioProcessorValueTreeState& ap
     apvts.getParameter (ID::osc1Level)->setValueNotifyingHost (1.0f - mix);
     apvts.getParameter (ID::osc2Level)->setValueNotifyingHost (mix);
     apvts.getParameter (ID::osc3Level)->setValueNotifyingHost (0.0f);
+}
+
+// ============================================================================
+// Preset exclusion policy: parameters that are GLOBAL PERFORMANCE controls the
+// player owns — they must PERSIST across every preset operation (Init, factory,
+// and user load) and are NOT written into a saved preset. Recalling a patch must
+// never move them.
+//
+//   * master_gain — the output level. Like its Randomize exclusion
+//     ([[randomizeExclusions]]), the player sets it once and it stays put; a
+//     preset is a SOUND, not a level.
+//
+// This is a SEPARATE, narrower list than randomizeExclusions() (which also pins
+// velocity routing, poly mode, glide, etc. — those ARE legitimate patch character
+// and are recalled by presets). Kept as one visible list so the rule is auditable.
+// ============================================================================
+namespace PresetPolicy
+{
+    inline juce::StringArray excludedParams() { return { ParamID::masterGain }; }
+
+    // Snapshot the excluded params' current normalized values (call BEFORE a load).
+    inline std::vector<std::pair<juce::String, float>>
+        capture (juce::AudioProcessorValueTreeState& apvts)
+    {
+        std::vector<std::pair<juce::String, float>> saved;
+        for (auto& id : excludedParams())
+            if (auto* p = apvts.getParameter (id)) saved.emplace_back (id, p->getValue());
+        return saved;
+    }
+
+    // Write the snapshotted values back (call AFTER a load) so the preset never
+    // changed the player's performance controls.
+    inline void restore (juce::AudioProcessorValueTreeState& apvts,
+                         const std::vector<std::pair<juce::String, float>>& saved)
+    {
+        for (auto& kv : saved)
+            if (auto* p = apvts.getParameter (kv.first)) p->setValueNotifyingHost (kv.second);
+    }
+
+    // Remove the excluded params from a state tree before saving a user preset, so
+    // the file carries no level (and can't impose one on another rig).
+    inline void stripFromState (juce::ValueTree& state)
+    {
+        const auto excluded = excludedParams();
+        for (int i = state.getNumChildren(); --i >= 0;)
+            if (excluded.contains (state.getChild (i).getProperty ("id").toString()))
+                state.removeChild (i, nullptr);
+    }
 }

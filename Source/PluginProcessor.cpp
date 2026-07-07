@@ -68,14 +68,20 @@ void VASynthProcessor::loadFactoryPreset (const juce::String& name)
 {
     const auto* p = factoryPresets.byName (name);
     if (p == nullptr) return;
+    const auto keep = PresetPolicy::capture (apvts);   // preset is a sound, not a level
     p->applyParams (apvts);
+    PresetPolicy::restore (apvts, keep);
     if (p->fxOrder.size() == 4) { int o[4]; for (int i = 0; i < 4; ++i) o[i] = p->fxOrder[i]; setFxOrder (o); }
     else { const int def[4] { 0, 1, 2, 3 }; setFxOrder (def); }
 }
 
 void VASynthProcessor::loadInitPreset()
 {
+    // Init resets the SOUND to defaults but keeps the player's global performance
+    // controls (master level) put — same policy as factory/user load.
+    const auto keep = PresetPolicy::capture (apvts);
     for (auto* rp : getParameters()) rp->setValueNotifyingHost (rp->getDefaultValue());
+    PresetPolicy::restore (apvts, keep);
     const int def[4] { 0, 1, 2, 3 };
     setFxOrder (def);
 }

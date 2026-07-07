@@ -67,6 +67,40 @@ TEST_CASE ("randomize never touches the performance/global exclusion list", "[pl
         REQUIRE (PresetManager::randomizeExclusions().contains (kv.id));
 }
 
+TEST_CASE ("master_gain is a performance control excluded from preset load/save", "[plugin][preset][master]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    PresetManager pm (p.apvts);
+
+    auto* mg = p.apvts.getParameter ("master_gain");
+    auto setMaster = [&] (float v) { mg->setValueNotifyingHost (v); };
+
+    setMaster (0.42f);                                   // player dials in a level
+    p.loadFactoryPreset ("Fat Saw Bass");
+    REQUIRE (mg->getValue() == Catch::Approx (0.42f).margin (1e-4));   // factory load keeps it
+    p.loadInitPreset();
+    REQUIRE (mg->getValue() == Catch::Approx (0.42f).margin (1e-4));   // Init keeps it
+
+    // Save at one master, then load at a different one: the CURRENT master persists.
+    setMaster (0.90f);
+    const auto name = "ut-master-" + juce::String (juce::Random::getSystemRandom().nextInt (1'000'000));
+    REQUIRE (pm.save (name));
+    setMaster (0.30f);
+    REQUIRE (pm.load (name));
+    REQUIRE (mg->getValue() == Catch::Approx (0.30f).margin (1e-4));   // not the saved 0.90
+
+    // The saved file carries no master_gain node at all.
+    auto xml = juce::XmlDocument::parse (pm.presetDir().getChildFile (name + ".vasynth"));
+    REQUIRE (xml != nullptr);
+    bool hasMaster = false;
+    for (auto* c : xml->getChildIterator())
+        if (c->getStringAttribute ("id") == "master_gain") hasMaster = true;
+    REQUIRE_FALSE (hasMaster);
+
+    pm.presetDir().getChildFile (name + ".vasynth").deleteFile();
+}
+
 TEST_CASE ("save then load round-trips the parameter state", "[plugin][preset][saveload]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
