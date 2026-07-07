@@ -36,6 +36,7 @@ void VASynthEditor::buildGlobalExtras (Section& s)
                 else if (proc.factoryPresetLibrary().byName (n) != nullptr) proc.loadFactoryPreset (n);
                 else                                                      presets.load (n);
                 load.setSelectedId (0, juce::dontSendNotification);       // back to "Load" so re-selecting works
+                if (restoreFocus) restoreFocus();                        // Bug B: QWERTY resumes after Load
             };
             addAndMakeVisible (load);
             refreshList();

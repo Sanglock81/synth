@@ -47,6 +47,13 @@ TEST_CASE ("kill switch: off == level 0, and skips oscillator work (cheaper)", "
     // 'Off' is folded to level 0 by the processor, so at the engine level off IS
     // level 0 -> bit-identical (covered by the level test). Here we prove the
     // voice actually SKIPS work for silent sources: 1 osc on renders faster than 3.
+#if defined(__SANITIZE_ADDRESS__)
+    // Under AddressSanitizer wall-clock timing is unrepresentative (instrumentation
+    // slowdown + noise), the same reason the alloc counters are disabled there. The
+    // functional "off == level 0 / silence" behaviour is covered by the silence and
+    // level tests; only the CPU comparison is skipped here.
+    SUCCEED ("kill-switch CPU comparison skipped under ASan (timing not representative)");
+#else
     auto timeCfg = [] (int oscsOn)
     {
         SynthEngine e; e.prepare (kSR);
@@ -58,13 +65,23 @@ TEST_CASE ("kill switch: off == level 0, and skips oscillator work (cheaper)", "
         for (int i = 0; i < 12; ++i) e.noteOn (40 + i, 0.8f);
         std::vector<float> out (256, 0.0f);
         for (int i = 0; i < 50; ++i) e.render (out.data(), 256, p, 2.0f, 0, 0.0f, 0);   // warm
-        const auto t0 = std::chrono::steady_clock::now();
-        for (int i = 0; i < 2000; ++i) e.render (out.data(), 256, p, 2.0f, 0, 0.0f, 0);
-        return std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count();
+        // MIN over several trials: wall-clock is contention-sensitive (this test can
+        // run under `ctest -jN` alongside other CPU-heavy tests), and the minimum
+        // reflects the least-starved run ~ the true cost. A single trial can be
+        // starved to a meaningless value.
+        double best = 1.0e300;
+        for (int trial = 0; trial < 5; ++trial)
+        {
+            const auto t0 = std::chrono::steady_clock::now();
+            for (int i = 0; i < 2000; ++i) e.render (out.data(), 256, p, 2.0f, 0, 0.0f, 0);
+            best = std::min (best, std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count());
+        }
+        return best;
     };
     const double t1 = timeCfg (1), t3 = timeCfg (3);
-    INFO ("1-osc=" << t1 << "s  3-osc=" << t3 << "s");
+    INFO ("1-osc=" << t1 << "s  3-osc=" << t3 << "s (min of 5 trials each)");
     REQUIRE (t1 < t3 * 0.8);        // skipping 2 of 3 oscillators is clearly cheaper
+#endif
 }
 
 TEST_CASE ("velocity -> amp: scale = (1-v2a) + v2a*velocity", "[6a][velocity][amp]")

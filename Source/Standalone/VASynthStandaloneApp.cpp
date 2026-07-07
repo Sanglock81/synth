@@ -44,31 +44,32 @@ static String preferredDefaultOutput()
     return AudioDeviceCuration::pickPreferredDeviceName (availableOutputDeviceNames());
 }
 
-// Plug-and-play MIDI: auto-connect newly-appeared inputs, apply their device
-// profile, toast on connect/disconnect, and panic (all-notes-off) on unplug so a
-// note can't hang. Uses JUCE 8's MidiDeviceListConnection for change callbacks.
-class VASynthMidiHotplug
+// Plug-and-play MIDI: auto-connect inputs, apply their device profile, toast on
+// connect/disconnect, and panic (all-notes-off) on unplug so a note can't hang.
+// Uses JUCE 8's MidiDeviceListConnection for device-list changes AND listens to
+// the AudioDeviceManager for setup changes.
+//
+// Bug B (input reliability): every present controller must stay a playing surface
+// across the app's lifecycle. Enabling an input at startup fixed the "present at
+// launch" case (Bug 2), but the Audio/MIDI settings dialog (and audio-device
+// changes) can silently DISABLE an input afterwards — the notes then stop with no
+// obvious cause. So we re-assert enablement on every device-manager change, not
+// just on hot-plug. (Enabling also routes: the holder registers its player as an
+// all-device MIDI callback, so an enabled input reaches the processor.)
+class VASynthMidiHotplug : private ChangeListener
 {
 public:
     VASynthMidiHotplug (AudioDeviceManager& dmToUse, ::VASynthProcessor& procToUse)
         : dm (dmToUse), proc (procToUse)
     {
         known = MidiInput::getAvailableDevices();
-        // Devices already present at launch (the normal live case: gear is plugged
-        // in BEFORE the app starts). On desktop JUCE's autoOpenMidiDevices defaults
-        // to false, so nothing else enables these — we must. Enabling ALSO routes
-        // them: the plugin holder registers its player as an all-device MIDI
-        // callback, so an enabled input's notes reach the processor. Applying the
-        // profile alone (the old behaviour) recognised the device but left its
-        // input disabled — keys did nothing (Bug 2). Silent at launch (no toast per
-        // device); the settings dialog still reflects the enabled state.
-        for (auto& d : known)
-        {
-            dm.setMidiInputDeviceEnabled (d.identifier, true);
-            proc.applyDeviceProfile (d.name);
-        }
+        for (auto& d : known) proc.applyDeviceProfile (d.name);   // profile all present
+        ensureAllInputsEnabled();                                 // input contract: all play
+        dm.addChangeListener (this);
         connection = MidiDeviceListConnection::make ([this] { refresh(); });
     }
+
+    ~VASynthMidiHotplug() override { dm.removeChangeListener (this); }
 
 private:
     static bool containsId (const Array<MidiDeviceInfo>& list, const String& id)
@@ -77,6 +78,34 @@ private:
         return false;
     }
 
+    // Enable every present MIDI input that isn't already enabled (and profile the
+    // ones we newly enable). Idempotent: acts only on disabled devices, so the
+    // ChangeListener re-entrancy settles in one extra (no-op) pass.
+    void ensureAllInputsEnabled()
+    {
+        const auto present = MidiInput::getAvailableDevices();
+        StringArray presentIds, enabledIds;
+        for (auto& d : present)
+        {
+            presentIds.add (d.identifier);
+            if (dm.isMidiInputDeviceEnabled (d.identifier)) enabledIds.add (d.identifier);
+        }
+        for (auto& id : AudioDeviceCuration::inputsNeedingEnable (presentIds, enabledIds))
+        {
+            dm.setMidiInputDeviceEnabled (id, true);
+            for (auto& d : present)
+                if (d.identifier == id)
+                {
+                    proc.applyDeviceProfile (d.name);
+                    Logger::writeToLog ("MIDI input (re)enabled to keep it playing: '" + d.name + "'");
+                }
+        }
+    }
+
+    // AudioDeviceManager setup changed (device switch, or a settings-dialog MIDI
+    // toggle) — re-assert that every present controller is enabled.
+    void changeListenerCallback (ChangeBroadcaster*) override { ensureAllInputsEnabled(); }
+
     void refresh()
     {
         auto avail = MidiInput::getAvailableDevices();
@@ -84,7 +113,6 @@ private:
         for (auto& d : avail)                              // newly connected
             if (! containsId (known, d.identifier))
             {
-                dm.setMidiInputDeviceEnabled (d.identifier, true);
                 proc.applyDeviceProfile (d.name);
                 proc.postToast (d.name + " connected");
                 Logger::writeToLog ("MIDI hot-plug: connected '" + d.name + "'");
@@ -99,6 +127,7 @@ private:
             }
 
         known = avail;
+        ensureAllInputsEnabled();                          // enable any newcomers
     }
 
     AudioDeviceManager&      dm;

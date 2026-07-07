@@ -56,12 +56,42 @@ Decisions made:
   Audio / CoreAudio). Real Windows compile/test issues (if any) are for CI to
   surface on the first run — fix them there.
 
-Gate: **first CI run green on both OSes.** ← in progress / to confirm after push.
+Gate: **first CI run green on both OSes.** ← DEFERRED by the user ("hold on
+pushing to GitHub … I want the system further along and 7 finished"). The 8A
+commit is on local `master` (`29ab1ab`) and locally green (clean-build
+run-all-checks 118/118 + pluginval strictness 8). `origin` is configured
+(https://github.com/Sanglock81/synth.git). To resume the push later:
+`gh auth refresh -h github.com -s workflow` (the token lacks the `workflow` scope
+needed for `.github/workflows/*`), then `git push -u origin master`, then watch CI.
+Windows compile/test breakage, if any, will surface only on that first CI run.
 
 Open follow-ups (backlog, not 8A):
 - Curated audio-device *selector UI* (README roadmap) — the just-works default +
   logging landed in the bug queue; the raw JUCE settings dialog is still the
   advanced view.
+
+## Phase 7 (revised) — in progress (runs before 8B–8F)
+
+Plan: `~/.claude/plans/ancient-sparking-crescent.md`. Cadence (user-chosen): gate +
+commit + PAUSE for review after EACH sub-phase. Bug B → 7A → 7B → 7C → wrap-up.
+
+### Bug B (step zero) — DONE, gated, committed
+"Play (input) not restored after startup / settings open-close / preset switch /
+focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any input).
+- QWERTY: the 30 Hz editor watchdog now RECLAIMS keyboard focus (free predicate
+  `qwertyShouldReclaimFocus`, `PluginEditor.h`) whenever a transient thief (Load combo /
+  settings dialog / Alt-Tab) took it — guarded against modal dialogs + text fields.
+  Load combo `onChange` also restores focus.
+- MIDI: `VASynthMidiHotplug` is now a `ChangeListener` on the AudioDeviceManager and
+  re-asserts every present input on any setup change (`ensureAllInputsEnabled` via pure
+  `AudioDeviceCuration::inputsNeedingEnable`). Consequence (documented): the input
+  contract wins — a settings-dialog MIDI disable is overridden; every present controller
+  plays.
+- Tests: `tests/plugin/test_input_reliability.cpp` (focus-decision table, MIDI re-enable
+  set logic, preset-switch keeps play path). Real focus/device behaviour → hands-on.
+- Gate: release 121/121 + pluginval s8 green; sanitizers green. Committed locally.
+
+### 7A / 7B / 7C — not started (next, in order, each gated + paused)
 
 ## 8B–8F — not started (blocked on Phase 7)
 

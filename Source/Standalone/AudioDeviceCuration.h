@@ -84,6 +84,20 @@ namespace AudioDeviceCuration
     // escape hatch). Never returns empty when the input was non-empty — if every
     // entry looked like an alias, the raw list is returned so the user is never
     // left with nothing to pick.
+    // Bug B (input reliability): the present MIDI-input identifiers that are not
+    // yet enabled. Every connected controller must be a playing surface (the input
+    // contract), so these get auto-enabled — including after an Audio/MIDI settings
+    // change that silently dropped one. Pure, so the set logic is unit-tested.
+    inline juce::StringArray inputsNeedingEnable (const juce::StringArray& presentIds,
+                                                  const juce::StringArray& enabledIds)
+    {
+        juce::StringArray out;
+        for (const auto& id : presentIds)
+            if (! enabledIds.contains (id))
+                out.add (id);
+        return out;
+    }
+
     inline juce::StringArray curateDeviceList (const juce::StringArray& available, bool showAll = false)
     {
         if (showAll || available.isEmpty()) return available;

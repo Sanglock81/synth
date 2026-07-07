@@ -18,6 +18,22 @@
 // based and scales with the window — no hardcoded pixel positions.
 // ============================================================================
 
+// Bug B: should the standalone editor RECLAIM keyboard focus for QWERTY play?
+// QWERTY input dies when a transient thief takes focus and never returns it — the
+// Load combo, the Audio/MIDI settings dialog, or the window being re-activated
+// after Alt-Tab. The 30 Hz watchdog reclaims focus whenever this predicate is true:
+//   standalone + on screen + our window active + we DON'T already hold focus —
+//   and NO modal dialog or text field is up (else we'd steal Save/INPUTS typing).
+// Pure + free-standing so every case is unit-tested without a live window.
+inline bool qwertyShouldReclaimFocus (bool standalone, bool showing, bool windowActive,
+                                      bool weHaveFocus, bool modalOpen, bool textFieldFocused)
+{
+    if (! standalone || ! showing || weHaveFocus) return false;
+    if (! windowActive)                            return false;   // don't fight other apps
+    if (modalOpen || textFieldFocused)             return false;   // don't steal typing
+    return true;
+}
+
 class VASynthEditor : public juce::AudioProcessorEditor,
                       private juce::Timer
 {
@@ -129,6 +145,18 @@ private:
         });
     }
 
+    bool topLevelWindowActive() const
+    {
+        if (auto* tlw = dynamic_cast<juce::TopLevelWindow*> (getTopLevelComponent()))
+            return tlw->isActiveWindow();
+        return isShowing();
+    }
+    static bool aTextFieldHasFocus()
+    {
+        auto* f = juce::Component::getCurrentlyFocusedComponent();
+        return dynamic_cast<juce::TextEditor*> (f) != nullptr;
+    }
+
     Section& addSection (juce::String title, juce::Colour tint, float flex)
     {
         auto s = std::make_unique<Section> (std::move (title), tint);
@@ -228,7 +256,16 @@ private:
     {
         const bool focused = hasKeyboardFocus (true);
         if (hadFocus && ! focused) allNotesOff();
-        hadFocus = focused;
+
+        // Bug B: reclaim keyboard focus for QWERTY play after a transient thief
+        // (Load combo / settings dialog close / window re-activation) let it go.
+        if (qwertyShouldReclaimFocus (isStandalone(), isShowing(), topLevelWindowActive(),
+                                      focused,
+                                      juce::Component::getCurrentlyModalComponent() != nullptr,
+                                      aTextFieldHasFocus()))
+            grabKeyboardFocus();
+
+        hadFocus = hasKeyboardFocus (true);
 
         // Surface any pending toast (MIDI hot-plug connect/disconnect).
         const int seq = proc.toastSequence();
