@@ -1,4 +1,4 @@
-# VA Synth — Phase 0 Gap Analysis
+# synth — Phase 0 Gap Analysis
 
 _Date: 2026-07-04. Scope: every file in `Source/` and `tests/`, plus `CMakeLists.txt`
 and `README.md`'s v1 roadmap. This is a review-only pass; no code was changed._

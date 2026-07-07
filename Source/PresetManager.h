@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Parameters.h"
+#include "AppInfo.h"
 
 // ============================================================================
 // Preset save / load + randomize for sound exploration. Presets are the APVTS
@@ -14,13 +15,7 @@ class PresetManager
 public:
     explicit PresetManager (juce::AudioProcessorValueTreeState& state) : apvts (state) {}
 
-    juce::File presetDir() const
-    {
-        auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                       .getChildFile ("VASynth").getChildFile ("presets");
-        dir.createDirectory();
-        return dir;
-    }
+    juce::File presetDir() const { return AppInfo::presetDir(); }
 
     juce::StringArray getPresetNames() const
     {

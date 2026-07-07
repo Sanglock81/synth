@@ -122,7 +122,7 @@ if (PLUGINVAL_EXECUTABLE)
     add_test(NAME pluginval_vst3
              COMMAND ${PLUGINVAL_EXECUTABLE}
                      --strictness-level 8
-                     --validate "${CMAKE_BINARY_DIR}/VASynth_artefacts/$<CONFIG>/VST3/VA Synth.vst3")
+                     --validate "${CMAKE_BINARY_DIR}/VASynth_artefacts/$<CONFIG>/VST3/synth.vst3")
     set_tests_properties(pluginval_vst3 PROPERTIES TIMEOUT 300)
     message(STATUS "pluginval found: ${PLUGINVAL_EXECUTABLE} (CTest 'pluginval_vst3' enabled)")
 else()

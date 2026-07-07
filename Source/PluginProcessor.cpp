@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "AppInfo.h"
 #include "DSP/SoftClip.h"
 #include <BinaryData.h>
 #include <chrono>
@@ -31,6 +32,11 @@ VASynthProcessor::VASynthProcessor()
       apvts (*this, nullptr, "PARAMS", createParameterLayout())
 {
     juce::SystemStats::setApplicationCrashHandler (vaSynthCrashHandler);
+
+    // One-time migration of an existing rig's config (presets + MIDI profiles)
+    // from the pre-rename "VASynth" location to "synth". No-op once migrated or on
+    // a fresh machine. Runs before we read the profile/preset dirs below.
+    AppInfo::migrateLegacyConfig();
 
     // Factory MIDI device profiles (embedded), plus any user overrides on disk.
     profileLib.addFactory (juce::String::fromUTF8 (BinaryData::launchkey_mini_json, BinaryData::launchkey_mini_jsonSize));
@@ -76,10 +82,7 @@ void VASynthProcessor::loadInitPreset()
 
 juce::File VASynthProcessor::userMidiProfileDir()
 {
-    auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                   .getChildFile ("VASynth").getChildFile ("midi-profiles");
-    dir.createDirectory();
-    return dir;
+    return AppInfo::midiProfileDir();
 }
 
 // Apply the matched profile's default CC map. Factory first, then user, so user

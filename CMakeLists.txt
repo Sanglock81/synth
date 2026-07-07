@@ -29,6 +29,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+# Install the built VST3 into the user plugin dir after each build (handy for
+# local dev). OFF in CI, where the system VST3 dir may be unwritable.
+option(VASYNTH_COPY_PLUGIN "Copy the VST3 to the user plugin dir after build" ON)
+
 # One target definition produces BOTH the VST3 and the standalone app.
 juce_add_plugin(VASynth
     COMPANY_NAME            "HomeStudio"          # rename freely
@@ -38,9 +42,9 @@ juce_add_plugin(VASynth
     NEEDS_MIDI_INPUT         TRUE
     NEEDS_MIDI_OUTPUT        FALSE
     IS_MIDI_EFFECT           FALSE
-    COPY_PLUGIN_AFTER_BUILD  TRUE                  # installs VST3 to user plugin dir
+    COPY_PLUGIN_AFTER_BUILD  ${VASYNTH_COPY_PLUGIN} # installs VST3 to user plugin dir (off in CI)
     FORMATS                  VST3 Standalone
-    PRODUCT_NAME             "VA Synth")
+    PRODUCT_NAME             "synth")               # user-facing name (VST3 file, window title)
 
 target_sources(VASynth PRIVATE
     Source/PluginProcessor.cpp

@@ -1,6 +1,6 @@
 # Presets
 
-VA Synth ships with 16 read-only **factory presets** plus **Init**, and you can
+synth ships with 16 read-only **factory presets** plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
@@ -40,7 +40,7 @@ factory patch is untouched.
 QWERTY note input is never starved). Your presets are stored as XML here:
 
 ```
-~/.local/share/VASynth/presets/*.vasynth      # Linux
+~/.config/synth/presets/*.vasynth      # Linux
 ```
 
 Drop files in or remove them freely; they appear under **User** in the Load menu.

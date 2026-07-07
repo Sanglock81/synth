@@ -45,7 +45,7 @@ public:
     bool hasEditor() const override { return true; }
 
     // -- boilerplate -------------------------------------------------------------
-    const juce::String getName() const override { return "VA Synth"; }
+    const juce::String getName() const override { return "synth"; }
     bool acceptsMidi() const override  { return true; }
     bool producesMidi() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }

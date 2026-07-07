@@ -1,6 +1,6 @@
 # MIDI: plug-and-play, device profiles, and MIDI-learn
 
-VA Synth is built to "just work" when you plug a controller in. In the standalone
+synth is built to "just work" when you plug a controller in. In the standalone
 app, MIDI is **plug-and-play**: connect a keyboard mid-session and it auto-enables,
 its default control map loads, and a toast confirms it; unplug it and any held note
 is released so nothing hangs.
@@ -45,7 +45,7 @@ Profiles are small JSON files:
 Novation Launchkey Mini and Korg B2. **User** overrides are JSON files you drop in:
 
 ```
-~/.local/share/VASynth/midi-profiles/*.json      # Linux
+~/.local/share/synth/midi-profiles/*.json      # Linux
 ```
 
 ## Precedence: learned > user > factory

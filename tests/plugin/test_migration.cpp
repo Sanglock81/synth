@@ -53,3 +53,41 @@ TEST_CASE ("modern state with levels round-trips unchanged (no spurious migratio
     REQUIRE (dst.apvts.getParameter ("osc1_level")->getValue() == Catch::Approx (0.42f).margin (1e-4));
     REQUIRE (dst.apvts.getParameter ("osc3_level")->getValue() == Catch::Approx (0.9f).margin (1e-4));
 }
+
+// ---------------------------------------------------------------------------
+// 8A rename migration: an existing rig's config (presets + MIDI profiles) under
+// the pre-rename "VASynth" dir is carried over to the new "synth" dir once, and
+// re-running is a no-op (never overwrites/duplicates).
+#include "AppInfo.h"
+
+TEST_CASE ("config migration copies legacy presets/profiles once (idempotent)", "[plugin][8a][migration]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    auto tmp = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                   .getChildFile ("synth-migrate-test-" + juce::String (juce::Random::getSystemRandom().nextInt (1'000'000)));
+    auto legacy = tmp.getChildFile ("VASynth");
+    auto dest   = tmp.getChildFile ("synth");
+
+    // Seed a legacy rig: one user preset + one user MIDI profile.
+    legacy.getChildFile ("presets").createDirectory();
+    legacy.getChildFile ("midi-profiles").createDirectory();
+    legacy.getChildFile ("presets/My Patch.vasynth").replaceWithText ("<preset/>");
+    legacy.getChildFile ("midi-profiles/my_ctrl.json").replaceWithText ("{}");
+
+    const int copied = AppInfo::migrateConfigTree (legacy, dest);
+    REQUIRE (copied == 2);
+    REQUIRE (dest.getChildFile ("presets/My Patch.vasynth").existsAsFile());
+    REQUIRE (dest.getChildFile ("midi-profiles/my_ctrl.json").existsAsFile());
+
+    // Idempotent: a second run copies nothing and does not clobber the dest.
+    dest.getChildFile ("presets/My Patch.vasynth").replaceWithText ("<edited-after-migration/>");
+    const int again = AppInfo::migrateConfigTree (legacy, dest);
+    REQUIRE (again == 0);
+    REQUIRE (dest.getChildFile ("presets/My Patch.vasynth").loadFileAsString() == "<edited-after-migration/>");
+
+    // No legacy dir -> no-op (fresh machine / CI).
+    REQUIRE (AppInfo::migrateConfigTree (tmp.getChildFile ("nonexistent"), dest) == 0);
+
+    tmp.deleteRecursively();
+}

@@ -28,9 +28,16 @@ TEST_CASE ("ALSA/JACK device types are available (type selection possible)", "[p
     INFO ("device types: " << names.joinIntoString (", "));
 
     REQUIRE (! types.isEmpty());
-    // JUCE_ALSA=1 and JUCE_JACK=1 in CMake -> both compiled. ALSA is always
-    // present on Linux; JACK appears when the dev headers are installed.
+    // At least one native backend must be present for device selection. The name
+    // is platform-specific: ALSA/JACK on Linux, Windows Audio/DirectSound on
+    // Windows, CoreAudio on macOS.
+   #if JUCE_LINUX || JUCE_BSD
     REQUIRE (names.contains ("ALSA"));
+   #elif JUCE_WINDOWS
+    REQUIRE ((names.contains ("Windows Audio") || names.contains ("DirectSound")));
+   #elif JUCE_MAC
+    REQUIRE (names.contains ("CoreAudio"));
+   #endif
 }
 
 TEST_CASE ("device manager falls back to default when the saved device is absent",

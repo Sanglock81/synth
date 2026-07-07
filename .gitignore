@@ -1,18 +1,35 @@
 # Build output
 /build/
+# out-of-source builds (build-asan, build-ubsan, etc.)
+/build-*/
 *.o
 *.a
 *.so
-# JUCE fetch cache if placed locally
+*.obj
+*.lib
+*.exe
+*.pdb
+
+# CMake FetchContent checkouts
 /JUCE/
-# Editor/OS cruft
-.DS_Store
-*.swp
-# Session artifacts
+# CI-cached JUCE/Catch2 (FETCHCONTENT_BASE_DIR)
+/.deps/
+
+# Fetched tooling (pluginval prebuilt) — run-all-checks.sh / CI re-fetch it
+/tools/
+
+# Local app data that must never be committed
+*.settings
+*.log
+
+# Stale import/session artifacts
 /vasynth-skeleton.zip
 /VASynth-README.md
 
-# pluginval (fetched by run-all-checks.sh)
-/tools/
-/build-asan/
-/build-ubsan/
+# Editor / OS cruft
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/

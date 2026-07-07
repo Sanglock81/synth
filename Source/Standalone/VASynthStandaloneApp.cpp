@@ -14,6 +14,7 @@
 #include <juce_audio_plugin_client/juce_audio_plugin_client.h>
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 #include "../PluginProcessor.h"                          // VASynthProcessor (profile/panic/toast)
+#include "../AppInfo.h"                                   // rename + config migration
 #include "AudioDeviceCuration.h"                          // Bug 1: device-list policy
 
 namespace juce
@@ -171,6 +172,9 @@ public:
        #else
         options.folderName          = "";
        #endif
+        // One-time: carry the pre-rename "VA Synth.settings" (audio/MIDI device
+        // choice) over to "synth.settings" so an existing rig keeps its setup.
+        AppInfo::migrateLegacySettings (options.getDefaultFile().getParentDirectory());
         appProperties.setStorageParameters (options);
     }
 

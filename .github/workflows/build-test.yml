@@ -1,0 +1,85 @@
+name: build-test
+
+# Correctness gate on every push / PR: build both artefacts (VST3 + Standalone)
+# in Release on Linux and Windows, run the full test suite, and (Linux) validate
+# the VST3 with pluginval at strictness 8. Built artefacts are uploaded for the
+# default branch so Windows builds can be downloaded without a Windows dev setup.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build git unzip xvfb \
+            libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev \
+            libcurl4-openssl-dev libwebkit2gtk-4.1-dev
+
+      # Cache the FetchContent checkouts (JUCE + Catch2) — the slow git clones.
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt') }}
+          restore-keys: deps-${{ runner.os }}-
+
+      # LTO is OFF in CI for build speed/reliability; still a full Release build.
+      - name: Configure
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          -DVASYNTH_BUILD_TESTS=ON -DVASYNTH_ENABLE_LTO=OFF -DVASYNTH_COPY_PLUGIN=OFF
+          -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/.deps
+
+      - name: Build (Standalone + VST3 + tests)
+        run: cmake --build build --config Release -j 4
+
+      - name: Test (Linux, headless under Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ctest --test-dir build -C Release --output-on-failure -j 4
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        run: ctest --test-dir build -C Release --output-on-failure -j 4
+
+      - name: pluginval (Linux, strictness 8)
+        if: runner.os == 'Linux'
+        run: |
+          curl -sSL -o pluginval.zip \
+            https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Linux.zip
+          unzip -o pluginval.zip
+          chmod +x pluginval
+          xvfb-run -a ./pluginval --strictness-level 8 \
+            --validate "build/VASynth_artefacts/Release/VST3/synth.vst3"
+
+      # Downloadable builds for the default branch (e.g. the Surface Pro Windows
+      # build) — no Windows dev setup needed.
+      - name: Upload built artifacts
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@v4
+        with:
+          name: synth-${{ runner.os }}
+          if-no-files-found: error
+          path: |
+            build/VASynth_artefacts/Release/VST3/
+            build/VASynth_artefacts/Release/Standalone/

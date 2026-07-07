@@ -20,6 +20,10 @@ fail() { printf '\n\033[1;31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 SANITIZE=0
 for arg in "$@"; do case "$arg" in --sanitize) SANITIZE=1 ;; esac; done
 
+# Optional: honour FETCHCONTENT_BASE_DIR (set by CI to a cached JUCE/Catch2 dir).
+# Empty/unset -> no extra flag, so local behaviour is unchanged.
+FCBASE="${FETCHCONTENT_BASE_DIR:+-DFETCHCONTENT_BASE_DIR=$FETCHCONTENT_BASE_DIR}"
+
 # Ensure a display for GUI/editor tests (pluginval, ScopedJuceInitialiser).
 if [[ -z "${DISPLAY:-}" ]] && command -v xvfb-run >/dev/null 2>&1; then
     step "No DISPLAY; re-executing under xvfb-run"
@@ -39,7 +43,7 @@ if [[ $SANITIZE -eq 1 ]]; then
         DIR="build-$(echo "$SAN" | tr '[:upper:]' '[:lower:]')"
         step "[$SAN] configure"
         cmake -B "$DIR" -DCMAKE_BUILD_TYPE=Debug -DVASYNTH_BUILD_TESTS=ON \
-              -DVASYNTH_ENABLE_LTO=OFF -DVASYNTH_$SAN=ON >/dev/null \
+              -DVASYNTH_ENABLE_LTO=OFF -DVASYNTH_$SAN=ON $FCBASE >/dev/null \
               || fail "$SAN configure"
         step "[$SAN] build tests + soak (-j$JOBS)"
         cmake --build "$DIR" --target dsp_tests plugin_tests soak -j"$JOBS" \
@@ -72,13 +76,13 @@ fi
 "$PLUGINVAL" --version >/dev/null 2>&1 || fail "pluginval not runnable"
 
 step "Configuring (Release, tests ON)"
-cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DVASYNTH_BUILD_TESTS=ON || fail "configure failed"
+cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DVASYNTH_BUILD_TESTS=ON $FCBASE || fail "configure failed"
 
 step "Building Standalone + VST3 + tests (-j$JOBS)"
 cmake --build "$BUILD_DIR" -j"$JOBS" || fail "build failed"
 
-[[ -x "$BUILD_DIR/VASynth_artefacts/Release/Standalone/VA Synth" ]] || fail "Standalone artefact missing"
-[[ -e "$BUILD_DIR/VASynth_artefacts/Release/VST3/VA Synth.vst3" ]]   || fail "VST3 artefact missing"
+[[ -x "$BUILD_DIR/VASynth_artefacts/Release/Standalone/synth" ]] || fail "Standalone artefact missing"
+[[ -e "$BUILD_DIR/VASynth_artefacts/Release/VST3/synth.vst3" ]]   || fail "VST3 artefact missing"
 
 step "Running CTest"
 ( cd "$BUILD_DIR" && ctest --output-on-failure -j"$JOBS" ) || fail "ctest reported failures"

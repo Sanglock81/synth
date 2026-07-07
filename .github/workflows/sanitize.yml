@@ -1,0 +1,48 @@
+name: sanitize
+
+# ASan+LSan then UBSan over the unit + plugin tests and the memory soak. This is
+# slower than the correctness gate, so it runs nightly and on demand rather than
+# on every push. Linux only (the sanitizers are GCC/Clang; the release matrix
+# covers Windows correctness).
+
+on:
+  schedule:
+    - cron: '0 6 * * *'      # nightly ~06:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: sanitize-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sanitize:
+    name: asan+ubsan+soak
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build git unzip xvfb \
+            libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev \
+            libcurl4-openssl-dev libwebkit2gtk-4.1-dev
+
+      # run-all-checks.sh --sanitize re-execs itself under xvfb-run (present via
+      # the xvfb package) for the editor tests, builds build-asan / build-ubsan,
+      # runs ctest (excl. pluginval) and the soak. It honours FETCHCONTENT_BASE_DIR
+      # so the JUCE/Catch2 checkouts are cached between runs.
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: deps-sanitize-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt') }}
+          restore-keys: deps-sanitize-
+
+      - name: Run sanitizer suite
+        env:
+          FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.deps
+        run: ./run-all-checks.sh --sanitize

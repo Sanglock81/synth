@@ -1,10 +1,38 @@
-# VA Synth
+# synth
 
-A hand-rolled virtual analog polysynth. C++17 / JUCE 8. Builds as a **VST3
-plugin and a standalone app from the same code**, on Linux and Windows.
+[![build-test](https://github.com/Sanglock81/synth/actions/workflows/build-test.yml/badge.svg)](https://github.com/Sanglock81/synth/actions/workflows/build-test.yml)
+[![sanitize](https://github.com/Sanglock81/synth/actions/workflows/sanitize.yml/badge.svg)](https://github.com/Sanglock81/synth/actions/workflows/sanitize.yml)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-Designed for: Korg B2 (primary keyboard) + Novation Launchkey Mini
-(secondary keys + mappable CC controller) → Focusrite Scarlett 2i2 out.
+A hand-rolled **virtual analog polysynth**. C++17 / JUCE 8, built as a **VST3
+plugin and a standalone app from the same code**, on **Linux and Windows**.
+
+Designed for live play: Korg B2 (primary keyboard) + Novation Launchkey Mini
+(secondary keys + mappable CC controller) → Focusrite Scarlett 2i2 out — but it's
+a general-purpose synth that runs in any VST3 host or standalone.
+
+![editor](docs/editor.png)
+
+## Features
+
+- **3 anti-aliased oscillators** (PolyBLEP saw/square-PWM/tri/sine), 4× oversampled
+  with a selectable Efficient/HQ quality-vs-CPU tradeoff, per-osc level + kill switch.
+- **TPT state-variable filter** (LP/HP/BP/Notch), resonant and stable, with velocity
+  and keytrack routing.
+- **Two exponential ADSR envelopes** (amp + filter), click-free retrigger and steal.
+- **Global LFO** (tri/sine/square/S&H) → pitch / cutoff / PW, plus pitch-bend,
+  mod-wheel vibrato, and sustain-pedal handling.
+- **Reorderable stereo FX**: chorus, ping-pong delay, Freeverb-style reverb, mid/side
+  width — drag to reorder, click-free crossfade.
+- **Bulletproof output stage**: voice-sum headroom trim + transparent safety
+  soft-clip, so the output never clips the DAC on dense chords.
+- **Plug-and-play MIDI**: hot-plug auto-connect + JSON device profiles (Launchkey,
+  Korg B2), MIDI-learn on every control (learned > user > factory precedence).
+- **16 factory presets** + user save/load + sound-design Randomize.
+- **Standalone extras**: QWERTY computer-keyboard note input, curated audio-device
+  default (PipeWire), F11 fullscreen, F12 live health overlay.
+- **Observability**: RT-safe ring logger, per-block CPU/xrun/saturation telemetry,
+  ASan/UBSan + soak, golden-render regression tests.
 
 ## Architecture
 
@@ -129,7 +157,7 @@ cmake --build build -j$(nproc)
 ```
 
 Outputs:
-* Standalone: `build/VASynth_artefacts/Release/Standalone/VA Synth`
+* Standalone: `build/VASynth_artefacts/Release/Standalone/synth`
 * VST3: `build/VASynth_artefacts/Release/VST3/` (auto-copied to `~/.vst3`)
 
 ### Windows
@@ -145,7 +173,7 @@ ASIO SDK support later.
    which follows your OS default sink — so it makes sound immediately, and if you
    set the **Scarlett 2i2** as the system output (or PipeWire sink), it plays
    there with no fiddling. The chosen device + the full available list are written
-   to the log (`~/.config/VASynth/VASynth.log`).
+   to the log (`~/.config/synth/synth.log`).
 2. To pick a specific device, open **Options → Audio/MIDI Settings**. The dialog
    still lists every raw ALSA endpoint (hw:/plughw:/front:/surround:/dmix…) as the
    advanced/show-all view; prefer the friendly `pipewire`/`default`/card names.
@@ -196,14 +224,14 @@ readout. Dark hardware LookAndFeel; FlexBox layout scales with the window.
   leaves your **performance/global** controls put — master gain, velocity routing,
   poly mode, glide, and MIDI mappings all keep their values (see the single
   `randomizeExclusions()` list). **Save** stores the current settings by name; the
-  **Load** dropdown recalls them (`~/.config/VASynth/presets/`).
+  **Load** dropdown recalls them (`~/.config/synth/presets/`).
 - **Fullscreen**: F11 (standalone). **Debug overlay**: F12.
 - QWERTY note input keeps working while twisting controls (controls refuse
   keyboard focus). VST3 uses the same editor, freely resizable.
 
 ## Observability (logging, health, debugging)
 
-**Log file.** `~/.config/VASynth/VASynth.log` (JUCE default app-log location).
+**Log file.** `~/.config/synth/synth.log` (JUCE default app-log location).
 Each session appends a startup banner (version + git hash, build type, osc
 quality, max voices, sample rate + buffer) and, from the standalone, the selected
 audio device + type and enabled MIDI inputs (re-logged on device/MIDI changes).
@@ -232,7 +260,7 @@ Or manually: `cmake -B build-asan -DVASYNTH_ASAN=ON -DVASYNTH_BUILD_TESTS=ON`
 `processBlock` and checks memory stability; under ASan, LeakSanitizer gates leaks.
 
 **Reporting a bug — please send:**
-1. `~/.config/VASynth/VASynth.log` (has the banner, health stats, any OVERRUN /
+1. `~/.config/synth/synth.log` (has the banner, health stats, any OVERRUN /
    CRASH markers, and the log-drop count).
 2. What you were doing (patch, polyphony, which keyboard/controller).
 3. Audio settings (device, sample rate, buffer) — visible in Options → Audio/MIDI
@@ -284,3 +312,19 @@ Or manually: `cmake -B build-asan -DVASYNTH_ASAN=ON -DVASYNTH_BUILD_TESTS=ON`
 - amsynth — closest architectural sibling, small and readable (GPL)
 - Surge XT — filter algorithms (`sst-filters` is a reusable library), MSEG
 - JUCE examples — `AudioPluginDemo` for processor patterns
+
+## License
+
+**synth is licensed under the GNU Affero General Public License v3.0** (see
+[LICENSE](LICENSE)). This is a deliberate, required choice: the project builds on
+**JUCE 8** under its free/personal terms, which permit closed-source distribution
+only with a paid JUCE licence — otherwise the resulting software **must be released
+under the AGPLv3**. As a free, open-source project we use AGPLv3 to match. In
+practice: you may use, study, modify, and redistribute synth freely under the
+AGPLv3, including the requirement to offer corresponding source for network-served
+or distributed versions.
+
+If you fork or redistribute, keep the AGPLv3 notice and provide source. If you want
+to ship a closed-source product built on this code, you would need a commercial
+JUCE licence and would still be bound by this project's AGPLv3 terms for the parts
+derived from it.

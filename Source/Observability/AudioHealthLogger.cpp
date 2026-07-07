@@ -1,15 +1,17 @@
 #include "AudioHealthLogger.h"
+#include "../AppInfo.h"
 #include <algorithm>
 
 AudioHealthLogger::AudioHealthLogger (Sink sinkToUse, bool startBackgroundThread)
-    : juce::Thread ("VASynth-health"), sink (std::move (sinkToUse))
+    : juce::Thread ("synth-health"), sink (std::move (sinkToUse))
 {
     if (sink == nullptr)
     {
-        // Platform default app log location (Linux: ~/.config per JUCE convention).
-        fileLogger.reset (juce::FileLogger::createDefaultAppLogger (
-            "VASynth", "VASynth.log",
-            "VA Synth log - session start " + juce::Time::getCurrentTime().toString (true, true)));
+        // App config location (Linux: ~/.config/synth). Migration of a legacy rig's
+        // config runs in the processor ctor; the log itself is transient per-session.
+        fileLogger.reset (new juce::FileLogger (
+            AppInfo::logFile(),
+            "synth log - session start " + juce::Time::getCurrentTime().toString (true, true)));
         // Route JUCE's global logger (incl. the crash handler's writeToLog) here.
         juce::Logger::setCurrentLogger (fileLogger.get());
     }
