@@ -1,6 +1,26 @@
-{ "name":"Full Organ", "category":"Organ",
-  "params": { "osc1_wave":3, "osc2_wave":3, "osc2_octave":1, "osc2_level":0.7,
-    "osc3_on":1, "osc3_wave":3, "osc3_octave":-1, "osc3_level":0.5,
-    "filter_cutoff":8000, "filter_reso":0.05, "filter_env_amt":0.0,
-    "amp_attack":0.002, "amp_decay":0.002, "amp_sustain":1.0, "amp_release":0.05,
-    "vel_to_amp":0.2, "fx_chorus_on":1, "chorus_mix":0.25, "master_gain":0.6 } }
+{
+  "name": "Full Organ",
+  "category": "Organ",
+  "params": {
+    "osc1_wave": 3,
+    "osc2_wave": 3,
+    "osc2_octave": 1,
+    "osc2_level": 0.3891,
+    "osc3_on": 1,
+    "osc3_wave": 3,
+    "osc3_octave": -1,
+    "osc3_level": 0.278,
+    "filter_cutoff": 8000,
+    "filter_reso": 0.05,
+    "filter_env_amt": 0.0,
+    "amp_attack": 0.002,
+    "amp_decay": 0.002,
+    "amp_sustain": 1.0,
+    "amp_release": 0.05,
+    "vel_to_amp": 0.2,
+    "fx_chorus_on": 1,
+    "chorus_mix": 0.25,
+    "master_gain": 0.6,
+    "osc1_level": 0.4447
+  }
+}

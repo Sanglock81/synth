@@ -47,6 +47,24 @@ Drop files in or remove them freely; they appear under **User** in the Load menu
 A user preset captures the full parameter state, the FX chain order, and your
 learned MIDI mappings, so it recalls exactly.
 
+## Master gain is yours, not the preset's
+
+**Loading any preset — Init, factory, or user — never changes the MASTER level.**
+Master gain is a global *performance* control: you set your output level for the
+room/rig once, and switching patches leaves it exactly where it is (the same reason
+Randomize never touches it). Saved user presets don't store a master value at all.
+The single exclusion list lives in `PresetPolicy::excludedParams()` (`Parameters.h`).
+
+## Loudness
+
+Factory patches are **level-matched**: played as a single sustained note they sit
+within a few dB of each other (~−33 dBFS RMS), so switching patches doesn't jump the
+volume. Matching is done by trimming a patch's internal oscillator levels (never the
+master). **Percussive/evolving patches are deliberately not RMS-matched** — a Pluck,
+Bell, or a slow FX Riser has most of its energy in a short transient or a late swell,
+so integrated RMS understates them; they are matched by feel/peak instead. Drum
+presets (7A) are likewise matched by transient, not sustain.
+
 ## Under the hood
 
 Factory presets are JSON in `resources/presets/`, embedded via BinaryData. Each

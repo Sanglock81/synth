@@ -1,7 +1,28 @@
-{ "name":"Reese Bass", "category":"Bass",
-  "params": { "osc1_wave":0, "osc1_detune":-14, "osc2_wave":0, "osc2_detune":14,
-    "osc3_on":1, "osc3_wave":0, "osc3_level":0.6, "osc3_detune":0,
-    "filter_cutoff":500, "filter_reso":0.35, "filter_env_amt":0.4,
-    "lfo_dest":2, "lfo_rate":0.3, "lfo_depth":0.2,
-    "amp_attack":0.004, "amp_decay":0.3, "amp_sustain":0.8, "amp_release":0.15,
-    "poly_mode":1, "master_gain":0.6 } }
+{
+  "name": "Reese Bass",
+  "category": "Bass",
+  "params": {
+    "osc1_wave": 0,
+    "osc1_detune": -14,
+    "osc2_wave": 0,
+    "osc2_detune": 14,
+    "osc3_on": 1,
+    "osc3_wave": 0,
+    "osc3_level": 0.4448,
+    "osc3_detune": 0,
+    "filter_cutoff": 500,
+    "filter_reso": 0.35,
+    "filter_env_amt": 0.4,
+    "lfo_dest": 2,
+    "lfo_rate": 0.3,
+    "lfo_depth": 0.2,
+    "amp_attack": 0.004,
+    "amp_decay": 0.3,
+    "amp_sustain": 0.8,
+    "amp_release": 0.15,
+    "poly_mode": 1,
+    "master_gain": 0.6,
+    "osc1_level": 0.593,
+    "osc2_level": 0.593
+  }
+}
