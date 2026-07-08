@@ -32,6 +32,7 @@ public:
     {
         stage = Stage::Idle;
         level = 0.0;
+        choking = false;
     }
 
     void setParameters (double attackS, double decayS, double sustainLvl, double releaseS)
@@ -46,6 +47,7 @@ public:
     {
         // Retrigger from current level, not zero -> no click on fast retrigs.
         stage = Stage::Attack;
+        choking = false;                 // a retrigger cancels any in-progress choke
     }
 
     void noteOff()
@@ -59,8 +61,9 @@ public:
     // well under the 10 ms budget even from a full-level note.
     void quickRelease()
     {
-        releaseCoef = coefForTime (0.004);
-        stage = Stage::Release;
+        chokeCoef = coefForTime (0.004);
+        choking   = true;                // survives the per-render setParameters()
+        stage     = Stage::Release;
     }
 
     bool isActive() const { return stage != Stage::Idle; }
@@ -88,8 +91,8 @@ public:
                 break;
 
             case Stage::Release:
-                level += releaseCoef * (0.0 - level);
-                if (level <= 1.0e-5) { level = 0.0; stage = Stage::Idle; }
+                level += (choking ? chokeCoef : releaseCoef) * (0.0 - level);
+                if (level <= 1.0e-5) { level = 0.0; stage = Stage::Idle; choking = false; }
                 break;
 
             case Stage::Idle:
@@ -119,5 +122,7 @@ private:
     double sampleRate = 44100.0;
     double level = 0.0, sustain = 0.8;
     double attackCoef = 0.0, decayCoef = 0.0, releaseCoef = 0.0;
+    double chokeCoef = 0.0;                 // fast release for steal/choke, immune to setParameters
+    bool   choking = false;
     Stage  stage = Stage::Idle;
 };

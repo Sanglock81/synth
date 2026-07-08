@@ -1,5 +1,6 @@
 #pragma once
 #include "SynthVoice.h"
+#include "Kit.h"
 #include "LFO.h"
 #include <array>
 #include <atomic>
@@ -91,19 +92,19 @@ public:
     // pool is SHARED across parts with global oldest-note stealing (per-part
     // reservation is future work). Voice identity is (note, part) so two parts can
     // hold the same note number without over-releasing.
-    void noteOn (int note, float velocity, int part = 0)
+    void noteOn (int note, float velocity, int part = 0, int soundSlot = 0)
     {
-        if (polyMode != 0) { monoNoteOn (note, velocity, part); return; }
+        if (polyMode != 0) { monoNoteOn (note, velocity, part, soundSlot); return; }
 
         // Reuse a voice already playing this (note, part) — retrigger.
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
             if (voices[i].isActive() && voices[i].getNote() == note && voices[i].getPart() == part)
-                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part); return; }
+                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot); return; }
 
         // Otherwise find a free voice...
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
             if (! voices[i].isActive())
-                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part); return; }
+                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot); return; }
 
         // ...or steal the oldest (global across parts). The voice keeps its
         // oscillator phase and filter state (SynthVoice::noteOn only clears them for
@@ -116,7 +117,7 @@ public:
 
         sustained[oldest] = false;
         ++stealCounter;
-        voices[oldest].noteOn (note, velocity, ++eventCounter, part);
+        voices[oldest].noteOn (note, velocity, ++eventCounter, part, soundSlot);
     }
 
     // ---- observability accessors (const; for the processor's telemetry) ----
@@ -145,6 +146,7 @@ public:
         for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i) { voices[i].noteOff(); sustained[i] = false; }
         sustainPedal = false;
         numHeld = 0;
+        for (auto& e : kitLedger) { e.part = -1; e.trigger = -1; e.num = 0; }
     }
 
     // ---- performance controllers (from any device) -------------------------
@@ -171,13 +173,65 @@ public:
         if (part >= 1 && part < maxParts) lockedSlots[(std::size_t) part].publish (vp);
     }
 
-    // The single per-voice params-selection SEAM. In 7C every note in a part uses
-    // that part's params — the `note` argument is UNUSED here. A future "Kit part"
-    // type will specialize this per note (each pad → its own baked params + sounding
-    // pitch) WITHOUT touching the render loop below; that is the point of the seam.
-    const VoiceParams& paramsFor (int part, int /*note*/) const
+    // ---- kit parts ---------------------------------------------------------
+    // Publish a KIT for a part (message thread; double-buffered like a locked part).
+    // isKit=false collapses it back to a plain locked/live part.
+    void setPartKit (int part, const KitData& k)
+    {
+        if (part >= 1 && part < maxParts) kitSlots[(std::size_t) part].publish (k);
+    }
+    void clearPartKit (int part)
+    {
+        if (part >= 1 && part < maxParts) { KitData off; kitSlots[(std::size_t) part].publish (off); }
+    }
+    bool partIsKit (int part) const
+    {
+        return part >= 0 && part < maxParts && kitSlots[(std::size_t) part].current().isKit;
+    }
+
+    // Trigger a kit pad: expand to its sounding notes (each rendered with the pad's
+    // baked params via soundSlot), applying choke. Unmapped trigger = silence. Called
+    // on the audio thread (drain / host loop), like chord expansion.
+    void kitNoteOn (int part, int trigger, float velocity)
+    {
+        if (part < 1 || part >= maxParts) return;
+        const KitData& k = kitSlots[(std::size_t) part].current();
+        const int pad = k.padForTrigger (trigger);
+        if (pad < 0) return;                                    // no pad here -> silence
+
+        const int group = k.pads[(std::size_t) pad].chokeGroup;
+        if (group != 0)                                         // cross-pad choke: quick-release the group
+            for (auto& v : voices)
+                if (v.isActive() && v.getPart() == part && v.getSoundSlot() != pad
+                    && k.pads[(std::size_t) v.getSoundSlot()].chokeGroup == group)
+                    v.steal();
+
+        auto* e = kitLedgerFor (part, trigger, true);
+        if (e != nullptr) { e->num = 0; e->slot = pad; }
+        const auto& pd = k.pads[(std::size_t) pad];
+        for (int i = 0; i < pd.numSound && i < kMaxPadSoundNotes; ++i)
+        {
+            noteOn (pd.soundNote[(std::size_t) i], velocity, part, pad);   // self-choke = retrigger same voice
+            if (e != nullptr && e->num < kMaxPadSoundNotes) e->notes[(std::size_t) e->num++] = pd.soundNote[(std::size_t) i];
+        }
+    }
+    void kitNoteOff (int part, int trigger)
+    {
+        auto* e = kitLedgerFor (part, trigger, false);
+        if (e == nullptr) return;
+        for (int i = 0; i < e->num; ++i) noteOff (e->notes[(std::size_t) i], part);
+        e->part = -1; e->trigger = -1; e->num = 0;             // free the slot
+    }
+
+    // The single per-voice params-selection SEAM. `slot` = the voice's sound slot
+    // (Kit pad index; 0 for non-kit voices). A locked/live part ignores it; a Kit part
+    // returns that pad's baked params. Uses the per-block-snapshotted read index so a
+    // mid-block publish can't tear params across chunks.
+    const VoiceParams& paramsFor (int part, int slot) const
     {
         const int p = (part >= 0 && part < maxParts) ? part : 0;
+        const auto& kb = kitSlots[(std::size_t) p].buf[(std::size_t) kitReadIdx[(std::size_t) p]];
+        if (kb.isKit) return kb.params[(std::size_t) ((slot >= 0 && slot < kMaxKitPads) ? slot : 0)];
         return partParams[(std::size_t) p];
     }
 
@@ -191,7 +245,11 @@ public:
         lfo.setRate (lfoRate);
         lfo.setShape (static_cast<LFO::Shape> (lfoShape));
 
-        // Snapshot the locked parts' baked params for this render (lock-free).
+        // Snapshot the locked parts' baked params + each part's kit read-index for this
+        // render (lock-free). The index is sampled once so a mid-block kit publish can't
+        // tear a voice's params across chunks.
+        for (int pt = 0; pt < maxParts; ++pt)
+            kitReadIdx[(std::size_t) pt] = kitSlots[(std::size_t) pt].idx.load (std::memory_order_acquire);
         for (int pt = 1; pt < maxParts; ++pt)
             partParams[(std::size_t) pt] = lockedSlots[(std::size_t) pt].current();
 
@@ -240,7 +298,7 @@ public:
             for (auto& v : voices)
             {
                 if (! v.isActive()) continue;
-                VoiceParams p = paramsFor (v.getPart(), v.getNote());
+                VoiceParams p = paramsFor (v.getPart(), v.getSoundSlot());
                 p.pitchModSemis += modPitch;                // base pitchModSemis is 0
                 p.cutoffModOct   = modCutoffOct;
                 p.pwMod          = modPw;
@@ -259,7 +317,7 @@ private:
     // ---- mono / legato (last-note priority, voice 0) -----------------------
     // Mono/legato is single-timbre in v1 (voice 0). `part` is carried through so a
     // routed surface in mono still selects its params; multitimbral play uses poly.
-    void monoNoteOn (int note, float velocity, int part = 0)
+    void monoNoteOn (int note, float velocity, int part = 0, int soundSlot = 0)
     {
         const bool hadNote = numHeld > 0;
         pushHeld (note);
@@ -270,7 +328,7 @@ private:
         if (polyMode == 2 && hadNote && voices[0].isActive())
             voices[0].changeNote (note, ++eventCounter);
         else
-            voices[0].noteOn (note, velocity, ++eventCounter, part);
+            voices[0].noteOn (note, velocity, ++eventCounter, part, soundSlot);
     }
 
     void monoNoteOff (int note)
@@ -326,6 +384,37 @@ private:
     };
     std::array<VoiceParams, maxParts> partParams {};
     std::array<LockedSlot,  maxParts> lockedSlots {};
+
+    // Kit parts: per-part double-buffered KitData (pads + baked params). Published on
+    // the message thread; the audio thread reads buf[kitReadIdx[part]] (sampled once
+    // per render). isKit=false (the default) means the part is a plain locked/live part.
+    struct KitSlot
+    {
+        KitData buf[2];
+        std::atomic<int> idx { 0 };
+        const KitData& current() const { return buf[(std::size_t) idx.load (std::memory_order_acquire)]; }
+        void publish (const KitData& k)               // message thread
+        {
+            const int w = 1 - idx.load (std::memory_order_relaxed);
+            buf[(std::size_t) w] = k;
+            idx.store (w, std::memory_order_release);
+        }
+    };
+    std::array<KitSlot, maxParts> kitSlots;
+    std::array<int, maxParts> kitReadIdx {};          // per-block snapshot of each slot's read buffer
+
+    // Kit note-off ledger (audio-thread POD): a trigger note -> the sounding notes it
+    // fired, so a note-off releases exactly those (chord pads, decoupled pitch).
+    struct KitLedgerEntry { int part = -1, trigger = -1, slot = 0, num = 0; int notes[kMaxPadSoundNotes] {}; };
+    std::array<KitLedgerEntry, maxVoices * maxParts> kitLedger {};
+    KitLedgerEntry* kitLedgerFor (int part, int trigger, bool createIfMissing)
+    {
+        for (auto& e : kitLedger) if (e.part == part && e.trigger == trigger) return &e;
+        if (! createIfMissing) return nullptr;
+        for (auto& e : kitLedger) if (e.part < 0) { e.part = part; e.trigger = trigger; return &e; }
+        return nullptr;
+    }
+
     LFO lfo, vibratoLFO;
     std::uint64_t eventCounter = 0;
     std::uint64_t stealCounter = 0;

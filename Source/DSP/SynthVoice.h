@@ -59,6 +59,10 @@ struct VoiceParams
 
     // performance
     float  glideTime     = 0.0f;               // portamento seconds (0 = off)
+
+    // per-voice output trim (Kit parts fold each pad's level here; 1.0 = unity, so a
+    // non-kit voice is bit-identical). Applied at the VCA in render().
+    float  gain          = 1.0f;
 };
 
 class SynthVoice
@@ -83,7 +87,7 @@ public:
         fltEnv.prepare (newSampleRate);
     }
 
-    void noteOn (int note, float vel, std::uint64_t stamp, int partIndex = 0)
+    void noteOn (int note, float vel, std::uint64_t stamp, int partIndex = 0, int slot = 0)
     {
         // Only clear DSP state for a genuinely fresh voice. On a retrigger or a
         // steal (voice already sounding) we keep oscillator phase and filter
@@ -96,6 +100,7 @@ public:
         velocity  = vel;
         timestamp = stamp;
         part      = partIndex;      // which part's params this voice renders with (7C)
+        soundSlot = slot;           // which pad within a Kit part (0 for non-kit)
 
         if (wasIdle)
         {
@@ -129,6 +134,7 @@ public:
     bool isActive() const  { return active; }
     int  getNote() const   { return midiNote; }
     int  getPart() const   { return part; }
+    int  getSoundSlot() const { return soundSlot; }
     std::uint64_t getTimestamp() const { return timestamp; }
 
     // Render `numSamples` and ADD into the (mono) output buffer.
@@ -195,7 +201,7 @@ public:
             if (useNoise) s += noise() * p.noiseLevel;
 
             s = filter.process (s);
-            out[i] += s * ampLevel * ampScale;
+            out[i] += s * ampLevel * ampScale * p.gain;   // p.gain == 1.0 for non-kit voices
         }
     }
 
@@ -240,6 +246,7 @@ private:
     float velocity  = 0.0f;
     bool  active    = false;
     int   part      = 0;           // part index (7C): selects which params to render with
+    int   soundSlot = 0;           // Kit pad index within the part (0 for non-kit voices)
     std::uint64_t timestamp = 0;   // for oldest-note stealing
     std::uint32_t nz = 0x12345678;
 };
