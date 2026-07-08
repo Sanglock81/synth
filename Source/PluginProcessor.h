@@ -132,6 +132,8 @@ public:
     bool surfaceHasSplit (const juce::String& surface) const;      // more than one zone
     void resetSurfaceZones (const juce::String& surface);          // back to a single full-range LIVE zone
     void resetAllRouting();                                        // every surface -> default
+    void addSurfaceSplit (const juce::String& surface, int seamNote);      // new boundary at seamNote (new zone = LIVE)
+    void removeSurfaceSplit (const juce::String& surface, int zoneIndex);  // merge that zone into a neighbour
 
     // Route a whole message from a NAMED surface through its zones: notes resolve to a
     // part + transpose (note-off replays the note-on's zone via a ledger); CC/bend/etc
@@ -154,6 +156,7 @@ public:
     // polls the count and blinks on a change. Off-audio-thread only.
     void         bumpSurfaceActivity (const juce::String& surface);
     std::uint32_t surfaceActivity (const juce::String& surface) const;
+    int          lastNoteForSurface (const juce::String& surface) const;   // -1 if none yet (split-by-play)
 
     // Per-part note-activity counter (audio thread bumps; UI polls) — drives the
     // PARTS strip's per-part flicker so multitimbrality is visible at a glance.
@@ -290,6 +293,7 @@ private:
     std::array<juce::String, SynthEngine::maxParts> partPresetName {};
     juce::CriticalSection routingLock;
     std::vector<std::pair<juce::String, std::uint32_t>> surfaceHits; // surface -> activity count
+    std::vector<std::pair<juce::String, int>> surfaceNotes;         // surface -> last note (split-by-play)
 
     // Key-range zones (Part B): surface name -> ordered zone list tiling [0,127]. Plus a
     // note-off ledger (surface,note) -> the part+sounding-note its note-on resolved to, so

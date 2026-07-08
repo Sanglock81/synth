@@ -294,6 +294,39 @@ TEST_CASE ("zones: setSurfaceZones normalises to a contiguous tiling of [0,127]"
         REQUIRE (z[i].loNote == z[i - 1].hiNote + 1);      // contiguous, no gaps/overlap
 }
 
+TEST_CASE ("zones: add/remove split adjust the tiling and stay gapless", "[plugin][partsB][zones][split]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+
+    p.addSurfaceSplit ("K", 60);                          // one seam -> two zones
+    auto z = p.getSurfaceZones ("K");
+    REQUIRE (z.size() == 2);
+    REQUIRE (z[0].loNote == 0);  REQUIRE (z[0].hiNote == 59);
+    REQUIRE (z[1].loNote == 60); REQUIRE (z[1].hiNote == 127);
+
+    p.addSurfaceSplit ("K", 96);                          // split the upper zone again
+    REQUIRE (p.getSurfaceZones ("K").size() == 3);
+
+    p.removeSurfaceSplit ("K", 1);                        // merge the middle away
+    z = p.getSurfaceZones ("K");
+    REQUIRE (z.size() == 2);
+    REQUIRE (z.front().loNote == 0);
+    REQUIRE (z.back().hiNote == 127);
+    for (std::size_t i = 1; i < z.size(); ++i) REQUIRE (z[i].loNote == z[i - 1].hiNote + 1);
+}
+
+TEST_CASE ("zones: split-by-play exposes the last note per surface", "[plugin][partsB][zones][byplay]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    REQUIRE (p.lastNoteForSurface ("K") == -1);
+    p.routeSurfaceMessage ("K", juce::MidiMessage::noteOn (1, 53, 0.7f));
+    REQUIRE (p.lastNoteForSurface ("K") == 53);           // the dialog arms, reads this, seams here
+    p.addSurfaceSplit ("K", p.lastNoteForSurface ("K"));
+    REQUIRE (p.surfaceHasSplit ("K"));
+}
+
 TEST_CASE ("zones: reset returns a surface (and all routing) to default", "[plugin][partsB][zones][reset]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
@@ -407,15 +440,12 @@ TEST_CASE ("render the INPUTS dialog to docs/inputs-dialog.png", "[plugin][7c][p
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
 
-    // Discover a real surface (a present controller if any, else a stand-in), route it
-    // to Part 1 with a bass preset, THEN build the display dialog so its combos reflect
-    // the configured state in the shot.
-    juce::String dev; { InputsDialog probe (p); dev = probe.numRows() > 1 ? probe.rowName (1) : juce::String ("Korg B2"); }
-    p.setSurfaceRouting (dev, 1);
+    // Configure a headline split: QWERTY bottom octave -> Part 1 (bass), rest -> LIVE.
     p.setPartPreset (1, "Fat Saw Bass");
+    p.setSurfaceZones ("QWERTY", { { 0, 47, 1, +0 }, { 48, 127, 0, 0 } });
 
     auto dlg = std::make_unique<InputsDialog> (p);
-    dlg->setSize (560, 70 + dlg->numRows() * 34);
+    dlg->expandSurface ("QWERTY");                          // show the zone editor open
     dlg->setBounds (dlg->getBounds());
 
     auto img = dlg->createComponentSnapshot (dlg->getLocalBounds(), false, 1.0f);

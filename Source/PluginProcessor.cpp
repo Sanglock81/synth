@@ -354,6 +354,35 @@ void VASynthProcessor::resetAllRouting()
     noteLedger.clear();
 }
 
+void VASynthProcessor::addSurfaceSplit (const juce::String& surface, int seamNote)
+{
+    seamNote = juce::jlimit (1, 127, seamNote);          // note 0 can't start a new zone
+    auto z = getSurfaceZones (surface);
+    if (z.empty()) z = { Zone{} };
+    for (std::size_t i = 0; i < z.size(); ++i)
+        if (seamNote > z[i].loNote && seamNote <= z[i].hiNote)
+        {
+            Zone right = z[i];
+            right.loNote = seamNote; right.part = 0; right.transpose = 0;   // new zone starts on LIVE
+            z[i].hiNote = seamNote - 1;
+            z.insert (z.begin() + (long) i + 1, right);
+            break;
+        }
+    setSurfaceZones (surface, std::move (z));
+}
+
+void VASynthProcessor::removeSurfaceSplit (const juce::String& surface, int zoneIndex)
+{
+    auto z = getSurfaceZones (surface);
+    if ((int) z.size() <= 1 || zoneIndex < 0 || zoneIndex >= (int) z.size()) return;
+    // Drop the boundary: the removed zone's range folds into the previous one (or the
+    // next, if it was the first zone). setSurfaceZones re-closes the tiling.
+    if (zoneIndex == 0) z[1].loNote = z[0].loNote;
+    else                z[(std::size_t) zoneIndex - 1].hiNote = z[(std::size_t) zoneIndex].hiNote;
+    z.erase (z.begin() + zoneIndex);
+    setSurfaceZones (surface, std::move (z));
+}
+
 VASynthProcessor::Zone VASynthProcessor::resolveZone (const juce::String& surface, int note) const
 {
     const juce::ScopedLock sl (zoneLock);
@@ -384,6 +413,12 @@ void VASynthProcessor::routeSurfaceMessage (const juce::String& surface, const j
     if (m.isNoteOn())
     {
         const int note = m.getNoteNumber();
+        {
+            const juce::ScopedLock sl (routingLock);     // last note per surface (split-by-play)
+            bool set = false;
+            for (auto& e : surfaceNotes) if (e.first == surface) { e.second = note; set = true; break; }
+            if (! set) surfaceNotes.emplace_back (surface, note);
+        }
         const Zone z = resolveZone (surface, note);
         const int sounding = juce::jlimit (0, 127, note + z.transpose);
         {
@@ -520,6 +555,13 @@ std::uint32_t VASynthProcessor::surfaceActivity (const juce::String& surface) co
     const juce::ScopedLock sl (routingLock);
     for (auto& e : surfaceHits) if (e.first == surface) return e.second;
     return 0;
+}
+
+int VASynthProcessor::lastNoteForSurface (const juce::String& surface) const
+{
+    const juce::ScopedLock sl (routingLock);
+    for (auto& e : surfaceNotes) if (e.first == surface) return e.second;
+    return -1;
 }
 
 void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chordOn)
