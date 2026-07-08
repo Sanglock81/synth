@@ -7,6 +7,7 @@
 #include "UI/FXPanel.h"
 #include "UI/ChordPanel.h"
 #include "UI/InputsDialog.h"
+#include "UI/PartsStrip.h"
 #include "PresetManager.h"
 
 // ============================================================================
@@ -103,6 +104,11 @@ public:
         toast.setBounds ((getWidth() - 460) / 2, 14, 460, 46);   // top-centre
 
         auto area = getLocalBounds().reduced (6);
+        if (partsStrip != nullptr)                    // always-visible PARTS strip + INPUTS
+        {
+            partsStrip->setBounds (area.removeFromTop (30));
+            area.removeFromTop (4);
+        }
         juce::FlexBox row;
         row.flexDirection = juce::FlexBox::Direction::row;
         for (auto& s : sections)
@@ -254,6 +260,10 @@ private:
         // Far-right reorderable FX column (its own draggable component, not a Section).
         fxPanel = std::make_unique<FXPanel> (proc);
         addAndMakeVisible (*fxPanel);
+
+        // Always-visible PARTS strip + INPUTS button (discoverability for routing).
+        partsStrip = std::make_unique<PartsStrip> (proc, [this] { restoreQwertyFocus(); });
+        addAndMakeVisible (*partsStrip);
     }
 
     // Preset controls (Random / Save / Load) live in the Global section.
@@ -327,7 +337,8 @@ private:
     // Preset UI (built in buildGlobalExtras).
     std::unique_ptr<juce::Component> presetPanel;
 
-    // CHORD column + far-right reorderable FX column.
+    // Top PARTS strip, CHORD column, far-right reorderable FX column.
+    std::unique_ptr<PartsStrip> partsStrip;
     std::unique_ptr<ChordPanel> chordPanel;
     std::unique_ptr<FXPanel> fxPanel;
 

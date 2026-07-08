@@ -8,6 +8,7 @@
 #include <catch2/catch_approx.hpp>
 #include "PluginProcessor.h"
 #include "PresetManager.h"
+#include "UI/InputsDialog.h"
 #include "test_util.h"
 #include "alloc_hook.h"
 #include <vector>
@@ -155,6 +156,57 @@ TEST_CASE ("reassigning a part mid-note stays finite and bounded (atomic publish
     auto out = capture (p, 8);
     REQUIRE (tu::allFinite (out));
     REQUIRE (tu::peak (out) <= 1.0f);
+}
+
+TEST_CASE ("INPUTS dialog action path routes a surface to a part and it plays", "[plugin][7c][parts][dialog]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+
+    InputsDialog dlg (p);
+    REQUIRE (dlg.numRows() >= 1);
+    REQUIRE (dlg.rowName (0) == "QWERTY");             // QWERTY listed first
+
+    // Drive the dialog's OWN action handler: assign a surface to Part 1 + a preset.
+    dlg.applyRouting ("MockController", 1, "Kick 808");
+    REQUIRE (p.getSurfaceRouting ("MockController") == 1);
+    REQUIRE (p.getPartPreset (1) == "Kick 808");
+
+    // A note from that surface (routed via its assignment) renders with Part 1.
+    p.routeMidi (juce::MidiMessage::noteOn (1, 36, 1.0f), p.getSurfaceRouting ("MockController"));
+    auto out = capture (p, 12);
+    REQUIRE (tu::allFinite (out));
+    REQUIRE (bandEnergy (out, 20.0, 100.0) > 0.0);     // the kick sounds (Part 1 params applied)
+    REQUIRE (p.partActivity (1) > 0);                  // PARTS strip would flicker P1
+}
+
+#ifndef VASYNTH_DOCS_DIR
+ #define VASYNTH_DOCS_DIR "."
+#endif
+TEST_CASE ("render the INPUTS dialog to docs/inputs-dialog.png", "[plugin][7c][parts][screenshot]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+
+    // Discover a real surface (a present controller if any, else a stand-in), route it
+    // to Part 1 with a bass preset, THEN build the display dialog so its combos reflect
+    // the configured state in the shot.
+    juce::String dev; { InputsDialog probe (p); dev = probe.numRows() > 1 ? probe.rowName (1) : juce::String ("Korg B2"); }
+    p.setSurfaceRouting (dev, 1);
+    p.setPartPreset (1, "Fat Saw Bass");
+
+    auto dlg = std::make_unique<InputsDialog> (p);
+    dlg->setSize (560, 70 + dlg->numRows() * 34);
+    dlg->setBounds (dlg->getBounds());
+
+    auto img = dlg->createComponentSnapshot (dlg->getLocalBounds(), false, 1.0f);
+    REQUIRE (img.isValid());
+    juce::File out (juce::String (VASYNTH_DOCS_DIR) + "/inputs-dialog.png");
+    out.deleteFile();
+    juce::FileOutputStream os (out);
+    REQUIRE (os.openedOk());
+    juce::PNGImageFormat png;
+    REQUIRE (png.writeImageToStream (img, os));
 }
 
 TEST_CASE ("routed-note path does not allocate on the audio thread", "[plugin][7c][parts][rt]")

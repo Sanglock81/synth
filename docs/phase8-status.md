@@ -160,6 +160,30 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   case (shared FX/LFO; O(1) paramsFor). Bench blocked at powersave governor (invalid
   per [[vasynth-bench-governor]]); escalated to the user — on-ThinkPad remains the gate.
 
+### Routing discoverability (Part A of the routing follow-up) — DONE, gated
+- **Reported root cause of "can't see it":** NOT a stale binary (verified: shipped
+  binary contained the routing strings + current mtime). It was **hidden-in-plain-sight**
+  — the only entry point was a small "Inputs" text button stacked with Random/Save/Load
+  in the Global corner. Compounded by one **broken sub-path**: the dialog offered QWERTY
+  routing but QWERTY was hardwired to LIVE (reroute lands in Part B via zones).
+- **Build provenance:** startup banner now prints git hash + `__DATE__ __TIME__` +
+  build type + parts count, so "old binary" is a one-line check against
+  `git rev-parse --short HEAD`. (`CMakeLists.txt` VASYNTH_GIT_HASH/BUILD_TYPE.)
+- **Visibility fix (minimal, not the deferred GUI overhaul):** always-visible **PARTS
+  strip** across the editor top (`Source/UI/PartsStrip.h`) — cells P0 LIVE / P1-P3
+  (`--` unused, preset name if locked) with per-part note-activity flicker
+  (`partHits` atomic array + `partActivity()`), and a prominent teal **INPUTS** button
+  at the right. The small Global-corner Inputs button was removed.
+- **Function audit:** integration test drives the dialog's OWN action handler
+  (`InputsDialog::applyRouting`, shared by both combos' onChange) — assign a surface to
+  Part 1 + preset → a note from that surface renders with Part 1 params + the strip
+  flickers (`test_parts.cpp [dialog]`). Standalone real-device listing verified: the
+  dialog renders a named row per present MIDI input (a real Launchkey Mini MK3 appears)
+  → `docs/inputs-dialog.png` (screenshot test).
+- **Docs:** README gained a numbered click-path (PARTS strip → INPUTS → route → preset →
+  activity dot → play) + the build-provenance check. `docs/editor.png` shows the strip;
+  `docs/inputs-dialog.png` shows a configured dialog.
+
 ## 8B–8F — not started (blocked on Phase 7)
 
 (To be filled in as each sub-phase runs.)

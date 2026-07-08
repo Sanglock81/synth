@@ -15,7 +15,7 @@ void VASynthEditor::buildGlobalExtras (Section& s)
             // Give the panel enough width that button labels never truncate.
             getProperties().set ("layoutFlex", 3.4);
 
-            for (auto* b : { &random, &save, &inputs })
+            for (auto* b : { &random, &save })
             {
                 b->setWantsKeyboardFocus (false);
                 addAndMakeVisible (b);
@@ -25,9 +25,7 @@ void VASynthEditor::buildGlobalExtras (Section& s)
 
             save.setButtonText ("Save");
             save.onClick = [this] { showSaveDialog(); };
-
-            inputs.setButtonText ("Inputs");     // 7C: surface -> part routing dialog
-            inputs.onClick = [this] { InputsDialog::show (proc, getTopLevelComponent(), [this] { if (restoreFocus) restoreFocus(); }); };
+            // Routing lives on the always-visible PARTS strip's INPUTS button now.
 
             load.setTextWhenNothingSelected ("Load");
             load.setWantsKeyboardFocus (false);
@@ -88,18 +86,17 @@ void VASynthEditor::buildGlobalExtras (Section& s)
         void resized() override
         {
             auto r = getLocalBounds().reduced (0, 2);
-            const int gap = 5;
-            const int h = juce::jmax (26, (r.getHeight() - 3 * gap) / 4);
+            const int gap = 6;
+            const int h = juce::jmax (30, (r.getHeight() - 2 * gap) / 3);
             random.setBounds (r.removeFromTop (h)); r.removeFromTop (gap);
             save.setBounds   (r.removeFromTop (h)); r.removeFromTop (gap);
-            inputs.setBounds (r.removeFromTop (h)); r.removeFromTop (gap);
             load.setBounds   (r.removeFromTop (h));
         }
 
         VASynthProcessor& proc;
         PresetManager& presets;
         std::function<void()> restoreFocus;
-        juce::TextButton random, save, inputs;
+        juce::TextButton random, save;
         juce::ComboBox load;
     };
 

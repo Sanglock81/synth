@@ -29,7 +29,7 @@ public:
         g.fillAll (VASynthLookAndFeel::panel());
         g.setColour (VASynthLookAndFeel::ink());
         g.setFont (juce::Font (juce::FontOptions (16.0f, juce::Font::bold)));
-        g.drawText ("INPUTS  —  route each surface to a part", getLocalBounds().removeFromTop (34).reduced (14, 0),
+        g.drawText ("INPUTS  -  route each surface to a part", getLocalBounds().removeFromTop (34).reduced (14, 0),
                     juce::Justification::centredLeft, false);
 
         // activity dots
@@ -120,18 +120,28 @@ private:
         auto* route = r.route.get();
         auto* preset = r.preset.get();
         const juce::String name = r.name;
-        route->onChange = [this, route, name]
-        {
-            const int part = route->getSelectedId() - 1;
-            proc.setSurfaceRouting (name, part);
-        };
-        preset->onChange = [this, route, preset]
-        {
-            const int part = route->getSelectedId() - 1;
-            if (part >= 1) proc.setPartPreset (part, preset->getText());
-        };
+        auto apply = [this, route, preset, name] { applyRouting (name, route->getSelectedId() - 1, preset->getText()); };
+        route->onChange = apply;
+        preset->onChange = apply;
         updatePresetEnabled (r);
     }
+
+public:
+    // The action a surface row performs (route -> part, and bake the preset for a
+    // locked part). Public so the full dialog path is integration-testable without
+    // driving the GUI, and shared by both combos' onChange.
+    void applyRouting (const juce::String& surface, int part, const juce::String& preset)
+    {
+        proc.setSurfaceRouting (surface, part);
+        if (part >= 1 && preset.isNotEmpty() && preset != "(part preset)")
+            proc.setPartPreset (part, preset);
+    }
+
+    // Surface rows the dialog presents (QWERTY first, then each MIDI input).
+    int          numRows() const { return (int) rows.size(); }
+    juce::String rowName (int i) const { return (i >= 0 && i < (int) rows.size()) ? rows[(std::size_t) i].name : juce::String(); }
+
+private:
 
     void updatePresetEnabled (Row& r)
     {

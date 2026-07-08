@@ -124,6 +124,13 @@ public:
     void         bumpSurfaceActivity (const juce::String& surface);
     std::uint32_t surfaceActivity (const juce::String& surface) const;
 
+    // Per-part note-activity counter (audio thread bumps; UI polls) — drives the
+    // PARTS strip's per-part flicker so multitimbrality is visible at a glance.
+    std::uint32_t partActivity (int part) const
+    {
+        return (part >= 0 && part < SynthEngine::maxParts) ? partHits[(std::size_t) part].load (std::memory_order_relaxed) : 0;
+    }
+
     // Route a note from a surface to its part. RT-safe multi-producer push (message
     // thread QWERTY + MIDI-thread per-device callbacks); drained in processBlock.
     void routeNoteOn  (int note, float velocity, int part) { pushRouted (0x90, note, (int) (velocity * 127.0f + 0.5f), part); }
@@ -267,6 +274,7 @@ private:
     juce::AbstractFifo routedFifo { kRoutedCapacity };
     std::array<RoutedEvent, kRoutedCapacity> routedBuf {};
     juce::SpinLock routedPushLock;
+    std::array<std::atomic<std::uint32_t>, SynthEngine::maxParts> partHits {};   // per-part note flicker
 
     // Toast (message-thread only): last message + a monotonically-increasing seq.
     juce::String       toastText;

@@ -127,6 +127,35 @@ only voice-level character (osc/mix/filter/env/vel/env→pitch). On-screen edits
 and the chord engine affect the LIVE part only. Routing + locked-preset refs persist with
 the session; a missing preset on load falls back to Init with a logged warning.
 
+**Where the routing controls live (click-path).** Multitimbral setup is two visible
+surfaces — a **PARTS strip** across the top of the editor and the **INPUTS** dialog it
+opens:
+
+1. Launch the standalone (see *Build & run* for the exact binary path) and look at the
+   **top strip**: `PARTS  P0 LIVE | P1 -- | P2 -- | P3 --   [ INPUTS ]`. Each cell is a
+   part; `--` means unassigned, a preset name means locked. Cells flicker when their part
+   receives a note — a live proof-of-routing readout.
+2. Click the teal **INPUTS** button at the strip's right end. The modal
+   [INPUTS dialog](docs/inputs-dialog.png) lists every playing surface — **QWERTY** first,
+   then each connected MIDI controller **by name** (each gets its own row).
+3. On a surface's row, set the **route** dropdown (Live / Part 1 / Part 2 / Part 3). Pick a
+   part and its **preset** dropdown enables — choose one and it's baked into that part.
+4. The **activity dot** on the left of each row blinks on incoming events, so a silent
+   controller (dead cable, wrong USB port) is diagnosable without leaving the dialog.
+5. Close the dialog (Esc). Play that controller — its notes now sound the assigned part;
+   the PARTS strip cell for that part flickers. QWERTY keeps playing the LIVE patch unless
+   you routed it elsewhere.
+
+*Headline demo:* route a bass controller to **Part 1 / Fat Saw Bass**, leave QWERTY on
+**LIVE** with a pad — two surfaces, two timbres, one instrument.
+
+**Confirming you're on the current build.** If a control seems missing, first rule out a
+stale binary: the startup log banner prints the git hash and build time, e.g.
+`synth 0.x (git 1a2b3c4, built Jul  7 2026 23:14:12, Release) ... parts=4`. Compare the
+hash against `git rev-parse --short HEAD`; if they differ you're running an old binary —
+rebuild (*Build & run*). This banner was added precisely so "I don't see it" can be
+separated from "it isn't there."
+
 **FX chain (6B).** A global, **reorderable** stereo chain of four hand-rolled,
 JUCE-free effects (all in `Source/DSP/`, allocation-free after `prepare`): chorus,
 ping-pong delay, Freeverb-style reverb, and mid/side stereo width. Each block has

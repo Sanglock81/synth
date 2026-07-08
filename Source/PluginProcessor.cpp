@@ -151,10 +151,14 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     const char* quality =
         (VASYNTH_OSC_QUALITY == PolyBlepOscillator::Quality::HQ)   ? "HQ"
       : (VASYNTH_OSC_QUALITY == PolyBlepOscillator::Quality::None) ? "None" : "Efficient";
-    health.logMessage (juce::String ("VA Synth ") + VASYNTH_VERSION + " (" + VASYNTH_GIT_HASH
-                       + ", " + VASYNTH_BUILD_TYPE + ")  wrapper=" + juce::String ((int) wrapperType)
+    // Build provenance so a stale binary is obvious: git hash (configure time) +
+    // this TU's compile timestamp (updates on every rebuild) + build type.
+    health.logMessage (juce::String ("synth ") + VASYNTH_VERSION + " (git " + VASYNTH_GIT_HASH
+                       + ", built " __DATE__ " " __TIME__ ", " + VASYNTH_BUILD_TYPE + ")"
+                       + "  wrapper=" + juce::String ((int) wrapperType)
                        + "  osc-quality=" + quality
-                       + "  maxVoices=" + juce::String (VASYNTH_MAX_VOICES));
+                       + "  maxVoices=" + juce::String (VASYNTH_MAX_VOICES)
+                       + "  parts=" + juce::String (SynthEngine::maxParts));
     health.prepare (sampleRate, samplesPerBlock);
 }
 
@@ -323,6 +327,9 @@ std::uint32_t VASynthProcessor::surfaceActivity (const juce::String& surface) co
 
 void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chordOn)
 {
+    if (part >= 0 && part < SynthEngine::maxParts)
+        partHits[(std::size_t) part].fetch_add (1, std::memory_order_relaxed);   // PARTS strip flicker
+
     if (part == 0 && chordOn)
     {
         const int mod = modifierLearn.handleNoteOn (note);   // learned pad consumed
