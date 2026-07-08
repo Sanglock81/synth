@@ -65,6 +65,10 @@ public:
 
     bool isActive() const { return stage != Stage::Idle; }
 
+    // Current level WITHOUT advancing — for control-rate modulation targets (e.g.
+    // filter-envelope -> pitch) sampled once per render chunk.
+    float getLevel() const { return static_cast<float> (level); }
+
     float nextSample()
     {
         switch (stage)

@@ -1,0 +1,5 @@
+{ "name":"Hat Open", "category":"Drums",
+  "params": { "osc1_on":0, "osc1_level":0, "osc2_on":0, "osc2_level":0, "osc3_on":0, "osc3_level":0, "noise_level":0.85,
+    "filter_type":1, "filter_cutoff":8500, "filter_reso":0.2, "filter_env_amt":0.0, "fltenv_to_pitch":0,
+    "flt_attack":0.001, "flt_decay":0.4, "flt_sustain":0.0, "flt_release":0.15,
+    "amp_attack":0.001, "amp_decay":0.4, "amp_sustain":0.0, "amp_release":0.12, "vel_to_amp":0.4 } }

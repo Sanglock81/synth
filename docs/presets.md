@@ -29,6 +29,25 @@ pick the same one again.
 | Winds   | Soft Flute |
 | Organ   | Full Organ |
 | FX      | Noise Riser, Dark Drone |
+| Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom |
+
+### Drum recipes (7A)
+
+The drums use the **Mod Env → Pitch** route (a filter/mod-envelope that also drives
+pitch): an instant-attack env sweeps the pitch down over the hit, then the amp
+decays percussively (sustain 0). Play them low (a kick sits about an octave below
+the note). Recipes:
+
+| Drum | Sound |
+|---|---|
+| Kick 808 | sine, +22 st pitch drop over ~55 ms, long 0.38 s boom, dry |
+| Kick Punchy | tighter: +18 st over ~28 ms, short 0.16 s body |
+| Snare | sine tone + noise through a bandpass, +7 st drop, ~150 ms, a touch of reverb |
+| Hat Closed | noise only (oscs off), highpass ~8.5 kHz, ~45 ms |
+| Hat Open | same, ~400 ms |
+| Tom | sine, +7 st / ~80 ms drop, ~260 ms decay |
+
+Full simultaneous **kits** arrive with 7C parts (pads on a locked drum part).
 
 Factory presets are **read-only** — embedded in the binary, never overwritten.
 Tweak one and hit **Save** to keep your version as a user preset (a copy); the

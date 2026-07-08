@@ -91,7 +91,28 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   set logic, preset-switch keeps play path). Real focus/device behaviour → hands-on.
 - Gate: release 121/121 + pluginval s8 green; sanitizers green. Committed locally.
 
-### 7A / 7B / 7C — not started (next, in order, each gated + paused)
+### Pre-7A polish (user-requested) — DONE, committed
+- master_gain excluded from all preset ops (Init/factory/user load + save) — it's a
+  performance control the player owns (`PresetPolicy` in Parameters.h). `08e24ca`.
+- Factory loudness pass: hot sustained patches (Dark Drone, Full Organ, Square Lead,
+  Reese Bass) trimmed via osc levels to ~-33 dBFS RMS; sustained set now within ~4 dB.
+  Percussive/evolving patches (Pluck, Bell, Riser, E-Piano) deliberately left (RMS is
+  the wrong metric). `9e23da4`. NOTE: user may still want Dark Drone restored to
+  "biggest" and/or E-Piano nudged up — open for their ear.
+
+### 7A — env→pitch + drums — DONE (gate in progress), then PAUSE
+- New `fltenv_to_pitch` param (±48 st, default 0): the filter/mod env drives pitch
+  (summed with LFO pitch mod in SynthVoice; control-rate via `ADSREnvelope::getLevel`).
+  Default 0 → engine golden bit-identical. Filter-Env UI bank relabeled **MOD ENV** +
+  a Pitch fader (screenshot regenerated).
+- 6 drum presets (new **Drums** category): Kick 808 / Kick Punchy / Snare / Hat Closed
+  / Hat Open / Tom, all using the pitch-env drop. Recipes in presets.md + README.
+- Tests: `[envpitch]` (held +12 = 880 Hz octave, decays to note; default 0 inert),
+  `[drums]` (kick low+descending+percussive, hat highpassed+short), factory count → 22.
+- Gate: release 125/125 + pluginval s8, sanitizer ASan+LSan+UBSan + soak — all green.
+  Committed locally; PAUSED for user review before 7B.
+
+### 7B / 7C — not started (next, in order, each gated + paused)
 
 ## 8B–8F — not started (blocked on Phase 7)
 

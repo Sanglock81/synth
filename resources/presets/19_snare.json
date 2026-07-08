@@ -1,0 +1,6 @@
+{ "name":"Snare", "category":"Drums",
+  "params": { "osc1_wave":3, "osc1_level":0.5, "osc2_on":0, "osc2_level":0, "osc3_on":0, "osc3_level":0, "noise_level":0.6,
+    "filter_type":2, "filter_cutoff":1900, "filter_reso":0.3, "filter_env_amt":0.0,
+    "fltenv_to_pitch":7, "flt_attack":0.001, "flt_decay":0.12, "flt_sustain":0.0, "flt_release":0.08,
+    "amp_attack":0.001, "amp_decay":0.15, "amp_sustain":0.0, "amp_release":0.08, "vel_to_amp":0.5,
+    "fx_reverb_on":1, "reverb_size":0.4, "reverb_damp":0.5, "reverb_mix":0.18 } }

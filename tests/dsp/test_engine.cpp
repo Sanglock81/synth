@@ -145,6 +145,47 @@ TEST_CASE ("retriggering a held note does not click", "[engine][retrigger]")
     REQUIRE (atEv <= pre + 0.05f);                     // no phase-reset discontinuity
 }
 
+TEST_CASE ("mod env -> pitch: +12 st is an octave, decaying to note pitch", "[engine][7a][envpitch]")
+{
+    auto renderNote = [] (float envToPitch, float fltS, float fltD)
+    {
+        SynthEngine e; e.prepare (kSR);
+        VoiceParams p = sineParams();              // sine osc1, cutoff wide, filterEnvAmt 0
+        p.fltEnvToPitch = envToPitch;
+        p.fltA = 0.001f; p.fltD = fltD; p.fltS = fltS;                 // instant up
+        p.ampA = 0.001f; p.ampD = 0.5f; p.ampS = 0.9f; p.ampR = 0.1f;  // audible throughout
+        e.noteOn (69, 1.0f);                       // A4 = 440 Hz
+        std::vector<float> out (int (kSR * 1.5), 0.0f);
+        e.render (out.data(), (int) out.size(), p, 2.0f, 0, 0.0f, 0);
+        return out;
+    };
+
+    // (1) Env HELD at peak (sustain 1.0): +12 st is exactly one octave -> 880 Hz.
+    {
+        auto out = renderNote (12.0f, 1.0f, 0.001f);
+        const double hz = tu::zeroCrossHz (out, int (kSR * 0.05), int (kSR * 0.25), kSR);
+        INFO ("held +12 -> " << hz << " Hz");
+        REQUIRE (hz == Catch::Approx (880.0).margin (20.0));          // an octave up
+    }
+
+    // (2) Env DECAYS to 0: pitch starts high and settles at the note (440 Hz).
+    {
+        auto out = renderNote (12.0f, 0.0f, 0.12f);
+        const double early = tu::zeroCrossHz (out, int (kSR * 0.005), int (kSR * 0.02), kSR);
+        const double late  = tu::zeroCrossHz (out, int (kSR * 0.8),   int (kSR * 0.6),  kSR);
+        INFO ("decaying early=" << early << " late=" << late);
+        REQUIRE (early > 600.0);                                      // clearly pitched up at onset
+        REQUIRE (late  == Catch::Approx (440.0).margin (10.0));       // lands at note pitch
+    }
+
+    // (3) Default 0 is inert (golden-safe): stays at 440 the whole time.
+    {
+        auto out = renderNote (0.0f, 0.0f, 0.12f);
+        REQUIRE (tu::zeroCrossHz (out, int (kSR * 0.02), int (kSR * 0.4), kSR)
+                 == Catch::Approx (440.0).margin (6.0));
+    }
+}
+
 TEST_CASE ("voice-sum headroom trim scales with the voice cap (1/sqrt(N))", "[engine][bug4][headroom]")
 {
     // The engine applies a fixed 1/sqrt(maxVoices) trim to the summed output so a

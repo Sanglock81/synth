@@ -209,6 +209,7 @@ VoiceParams VASynthProcessor::snapshotParams() const
     p.fltD = rp (apvts, ID::fltDecay);
     p.fltS = rp (apvts, ID::fltSustain);
     p.fltR = rp (apvts, ID::fltRelease);
+    p.fltEnvToPitch = rp (apvts, ID::fltEnvToPitch);
 
     p.glideTime = rp (apvts, ID::glideTime);
 

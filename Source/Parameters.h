@@ -70,6 +70,7 @@ namespace ParamID
     inline constexpr auto fltDecay    = "flt_decay";
     inline constexpr auto fltSustain  = "flt_sustain";
     inline constexpr auto fltRelease  = "flt_release";
+    inline constexpr auto fltEnvToPitch = "fltenv_to_pitch";  // mod env -> pitch, semitones
 
     // LFO 1 (global). v1: routed to a single selectable destination.
     inline constexpr auto lfoRate     = "lfo_rate";
@@ -173,6 +174,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::fltDecay, 1},   "Flt Decay",   timeRange, 0.2f, juce::AudioParameterFloatAttributes().withLabel ("s")));
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::fltSustain, 1}, "Flt Sustain", juce::NormalisableRange<float>(0.0f, 1.0f), 0.3f));
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::fltRelease, 1}, "Flt Release", timeRange, 0.2f, juce::AudioParameterFloatAttributes().withLabel ("s")));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::fltEnvToPitch, 1}, "Mod Env->Pitch", juce::NormalisableRange<float>(-48.0f, 48.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("st")));
 
     // --- LFO -----------------------------------------------------------------
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::lfoRate, 1},  "LFO Rate", juce::NormalisableRange<float>(0.01f, 30.0f, 0.0f, 0.4f), 2.0f, juce::AudioParameterFloatAttributes().withLabel ("Hz")));

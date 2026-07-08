@@ -31,13 +31,13 @@ namespace
     }
 }
 
-TEST_CASE ("factory library has 16 presets spanning the categories", "[plugin][6d][presets]")
+TEST_CASE ("factory library has the expected presets spanning the categories", "[plugin][6d][presets]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
     const auto& lib = p.factoryPresetLibrary();
 
-    REQUIRE (lib.size() == 16);
+    REQUIRE (lib.size() == 22);        // 16 tonal + 6 drums (7A)
     for (auto& fp : lib.all())
     {
         REQUIRE (fp.name.isNotEmpty());
@@ -45,7 +45,7 @@ TEST_CASE ("factory library has 16 presets spanning the categories", "[plugin][6
     }
 
     auto cats = lib.categories();
-    for (auto* expected : { "Bass", "Lead", "Keys", "Pad", "Pluck", "Brass", "Strings", "Winds", "Organ", "FX" })
+    for (auto* expected : { "Bass", "Lead", "Keys", "Pad", "Pluck", "Brass", "Strings", "Winds", "Organ", "FX", "Drums" })
         REQUIRE (cats.contains (expected));
 }
 

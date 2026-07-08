@@ -64,6 +64,7 @@ add_executable(plugin_tests
     plugin/test_output_bounds.cpp
     plugin/test_device_curation.cpp
     plugin/test_input_reliability.cpp
+    plugin/test_drums.cpp
     plugin/test_rt_safety.cpp
     plugin/test_smoothing.cpp
     plugin/test_performance_midi.cpp

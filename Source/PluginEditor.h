@@ -221,9 +221,10 @@ private:
           addFader (s, ID::ampAttack, "A"); addFader (s, ID::ampDecay, "D");
           addFader (s, ID::ampSustain, "S"); addFader (s, ID::ampRelease, "R"); }
 
-        { auto& s = addSection ("Filter Env", tEnv, 1.4f);
+        { auto& s = addSection ("Mod Env", tEnv, 1.7f);   // filter env, now also -> pitch
           addFader (s, ID::fltAttack, "A"); addFader (s, ID::fltDecay, "D");
-          addFader (s, ID::fltSustain, "S"); addFader (s, ID::fltRelease, "R"); }
+          addFader (s, ID::fltSustain, "S"); addFader (s, ID::fltRelease, "R");
+          addFader (s, ID::fltEnvToPitch, "Pitch"); }
 
         { auto& s = addSection ("LFO", tLfo, 1.6f);
           addFader (s, ID::lfoRate, "Rate"); addFader (s, ID::lfoDepth, "Depth");

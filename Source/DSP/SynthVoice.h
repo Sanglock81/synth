@@ -50,6 +50,7 @@ struct VoiceParams
     // envelopes
     float  ampA = 0.005f, ampD = 0.1f, ampS = 0.8f, ampR = 0.15f;
     float  fltA = 0.005f, fltD = 0.2f, fltS = 0.3f, fltR = 0.2f;
+    float  fltEnvToPitch = 0.0f;               // filter/mod env -> pitch, semitones (-48..+48)
 
     // modulation (already computed by engine from LFO + destination routing)
     float  pitchModSemis = 0.0f;               // LFO -> pitch
@@ -142,7 +143,12 @@ public:
             glideNote += (1.0f - std::exp (-(float) numSamples / (p.glideTime * (float) sampleRate)))
                          * ((float) midiNote - glideNote);
 
-        applyParams (p);
+        // Filter/mod envelope -> pitch (control-rate: the env level at this chunk's
+        // start scales the semitone offset, summed into the same pitch-mod domain as
+        // the LFO). Sampled here so we don't advance the env twice; 16-sample chunks
+        // give ~0.33 ms granularity — smooth for a kick's pitch drop. Default 0 -> 0.
+        const float envPitchSemis = p.fltEnvToPitch * fltEnv.getLevel();
+        applyParams (p, envPitchSemis);
 
         const float trackOct = p.keytrack * (midiNote - 60) / 12.0f;
         const float velOct   = p.velToCutoff * velocity * 3.0f;              // vel -> cutoff
@@ -195,10 +201,10 @@ private:
     // Filter-coefficient update interval (power of two for the bit mask).
     static constexpr int kCutoffInterval = 16;
 
-    void applyParams (const VoiceParams& p)
+    void applyParams (const VoiceParams& p, float extraPitchSemis = 0.0f)
     {
-        // Pitch from the (glide-slewed) note plus pitch modulation.
-        const double f0 = 440.0 * std::exp2 ((glideNote - 69.0f + p.pitchModSemis) / 12.0);
+        // Pitch from the (glide-slewed) note plus pitch modulation (LFO + env->pitch).
+        const double f0 = 440.0 * std::exp2 ((glideNote - 69.0f + p.pitchModSemis + extraPitchSemis) / 12.0);
 
         osc1.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc1Wave));
         osc2.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc2Wave));

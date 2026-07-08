@@ -19,7 +19,9 @@ a general-purpose synth that runs in any VST3 host or standalone.
   with a selectable Efficient/HQ quality-vs-CPU tradeoff, per-osc level + kill switch.
 - **TPT state-variable filter** (LP/HP/BP/Notch), resonant and stable, with velocity
   and keytrack routing.
-- **Two exponential ADSR envelopes** (amp + filter), click-free retrigger and steal.
+- **Two exponential ADSR envelopes** (amp + **mod env**), click-free retrigger and
+  steal. The mod env drives the filter *and* **pitch** (`fltenv_to_pitch`, ±48 st) —
+  the basis of the **drum** presets (808/punchy kicks, snare, hats, tom).
 - **Global LFO** (tri/sine/square/S&H) → pitch / cutoff / PW, plus pitch-bend,
   mod-wheel vibrato, and sustain-pedal handling.
 - **Reorderable stereo FX**: chorus, ping-pong delay, Freeverb-style reverb, mid/side
