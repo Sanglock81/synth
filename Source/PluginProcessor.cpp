@@ -555,6 +555,8 @@ void VASynthProcessor::routeSurfaceMessage (const juce::String& surface, const j
     if (m.isNoteOn())
     {
         const int note = m.getNoteNumber();
+        lastAnyNoteVal.store (note, std::memory_order_relaxed);          // learn-by-play (any surface)
+        lastAnyNoteSeq.fetch_add (1, std::memory_order_relaxed);
         {
             const juce::ScopedLock sl (routingLock);     // last note per surface (split-by-play)
             bool set = false;
@@ -744,7 +746,10 @@ void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chord
         for (int i = 0; i < nt; ++i) engine.noteOn (trig[i], vel, 0);
     }
     else if (engine.partIsKit (part))
+    {
+        partLastTrig[(std::size_t) part].store (note, std::memory_order_relaxed);   // pad flicker
         engine.kitNoteOn (part, note, vel);           // trigger -> pad (sounding notes + choke)
+    }
     else
         engine.noteOn (note, vel, part);              // locked parts: chord is live-only
 }

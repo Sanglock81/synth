@@ -2,6 +2,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "VASynthLookAndFeel.h"
 #include "InputsDialog.h"
+#include "KitEditor.h"
 #include "../PluginProcessor.h"
 #include "../DSP/SynthEngine.h"
 
@@ -36,6 +37,20 @@ public:
         inputs.setBounds (r.removeFromRight (120).reduced (2, 1));
         labelArea = r.removeFromLeft (52);
         cellArea  = r;
+    }
+
+    // Click a locked part cell (P1-P3) to open its Kit editor. P0 is LIVE (edited on
+    // the panel), so it's not a kit target.
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        const int n = SynthEngine::maxParts;
+        const int cw = cellArea.getWidth() / n;
+        for (int i = 1; i < n; ++i)
+        {
+            auto cell = juce::Rectangle<int> (cellArea.getX() + i * cw, cellArea.getY(), cw, cellArea.getHeight());
+            if (cell.contains (e.getPosition()))
+            { KitEditor::show (proc, getTopLevelComponent(), i, [this] { if (restore) restore(); }); return; }
+        }
     }
 
     void paint (juce::Graphics& g) override

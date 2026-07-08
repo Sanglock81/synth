@@ -191,6 +191,14 @@ public:
     std::uint32_t surfaceActivity (const juce::String& surface) const;
     int          lastNoteForSurface (const juce::String& surface) const;   // -1 if none yet (split-by-play)
 
+    // Last note played on ANY surface + a change sequence — the kit editor's
+    // learn-by-play polls these to capture a trigger / sounding note.
+    int           lastAnyNote() const { return lastAnyNoteVal.load (std::memory_order_relaxed); }
+    std::uint32_t noteSeq()    const { return lastAnyNoteSeq.load (std::memory_order_relaxed); }
+    // The trigger note a kit part last fired (pad flicker in the editor).
+    int           partLastTrigger (int part) const
+    { return (part >= 0 && part < SynthEngine::maxParts) ? partLastTrig[(std::size_t) part].load (std::memory_order_relaxed) : -1; }
+
     // Per-part note-activity counter (audio thread bumps; UI polls) — drives the
     // PARTS strip's per-part flicker so multitimbrality is visible at a glance.
     std::uint32_t partActivity (int part) const
@@ -351,6 +359,9 @@ private:
     std::array<RoutedEvent, kRoutedCapacity> routedBuf {};
     juce::SpinLock routedPushLock;
     std::array<std::atomic<std::uint32_t>, SynthEngine::maxParts> partHits {};   // per-part note flicker
+    std::array<std::atomic<int>, SynthEngine::maxParts> partLastTrig {};         // kit editor pad flicker
+    std::atomic<int>           lastAnyNoteVal { -1 };                            // learn-by-play (any surface)
+    std::atomic<std::uint32_t> lastAnyNoteSeq { 0 };
 
     // Toast (message-thread only): last message + a monotonically-increasing seq.
     juce::String       toastText;

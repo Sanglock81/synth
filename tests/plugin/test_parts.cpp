@@ -10,6 +10,7 @@
 #include "PresetManager.h"
 #include "AppInfo.h"
 #include "UI/InputsDialog.h"
+#include "UI/KitEditor.h"
 #include "test_util.h"
 #include "alloc_hook.h"
 #include <vector>
@@ -553,9 +554,49 @@ TEST_CASE ("MULTI save/load round-trips through a file", "[plugin][partsB][multi
     file.deleteFile();                                       // clean up the test artefact
 }
 
+namespace
+{
+    bool anyFocusable (juce::Component& c)
+    {
+        if (c.getWantsKeyboardFocus()) return true;
+        for (auto* ch : c.getChildren()) if (anyFocusable (*ch)) return true;
+        return false;
+    }
+}
+
+TEST_CASE ("kit editor refuses keyboard focus (QWERTY plays for learn-by-play)", "[plugin][kitpart][focus]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    p.setPartKit (1, p.loadKit ("808 Basics"));
+    KitEditor ed (p, 1);
+    ed.setSize (660, 560);
+    REQUIRE_FALSE (anyFocusable (ed));                    // nothing steals focus while open
+}
+
 #ifndef VASYNTH_DOCS_DIR
  #define VASYNTH_DOCS_DIR "."
 #endif
+TEST_CASE ("render the KIT EDITOR to docs/kit-editor.png", "[plugin][kitpart][screenshot]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    p.setPartKit (1, p.loadKit ("808 Basics"));
+
+    auto ed = std::make_unique<KitEditor> (p, 1);
+    ed->setSize (660, 560);
+    ed->setBounds (ed->getBounds());
+
+    auto img = ed->createComponentSnapshot (ed->getLocalBounds(), false, 1.0f);
+    REQUIRE (img.isValid());
+    juce::File out (juce::String (VASYNTH_DOCS_DIR) + "/kit-editor.png");
+    out.deleteFile();
+    juce::FileOutputStream os (out);
+    REQUIRE (os.openedOk());
+    juce::PNGImageFormat png;
+    REQUIRE (png.writeImageToStream (img, os));
+}
+
 TEST_CASE ("render the INPUTS dialog to docs/inputs-dialog.png", "[plugin][7c][parts][screenshot]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
