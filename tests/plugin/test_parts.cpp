@@ -113,26 +113,30 @@ TEST_CASE ("live edits do not touch a locked part", "[plugin][7c][parts][isolati
     REQUIRE (after == Catch::Approx (before).epsilon (0.05));
 }
 
-TEST_CASE ("routing + locked-part presets persist across a state round-trip", "[plugin][7c][parts][state]")
+TEST_CASE ("ordinary state persists SOUND but RESETS routing/parts (lifecycle rule 2)", "[plugin][partsB][lifecycle]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor src; src.prepareToPlay (48000.0, 256);
+
+    // SOUND state (a live param) + ROUTING state (parts + surface assignments).
+    setP (src, ParamID::filterCutoff, 0.33f);
+    const float wantCutoff = src.apvts.getRawParameterValue (ParamID::filterCutoff)->load();
     src.setPartPreset (1, "Kick 808");
-    src.setPartPreset (2, "Warm Pad");
     src.setSurfaceRouting ("Korg B2", 1);
     src.setSurfaceRouting ("Launchkey Mini", 2);
     juce::MemoryBlock blob; src.getStateInformation (blob);
 
+    // Reopening the app == an ordinary state round-trip into a fresh processor.
     VASynthProcessor dst; dst.prepareToPlay (48000.0, 256);
     dst.setStateInformation (blob.getData(), (int) blob.getSize());
-    REQUIRE (dst.getPartPreset (1) == "Kick 808");
-    REQUIRE (dst.getPartPreset (2) == "Warm Pad");
-    REQUIRE (dst.getSurfaceRouting ("Korg B2") == 1);
-    REQUIRE (dst.getSurfaceRouting ("Launchkey Mini") == 2);
 
-    // The restored locked part actually plays (baked on load).
-    dst.routeNoteOn (36, 1.0f, 1);
-    REQUIRE (tu::rms (capture (dst, 10)) > 0.005);
+    // SOUND persists.
+    REQUIRE (dst.apvts.getRawParameterValue (ParamID::filterCutoff)->load() == Catch::Approx (wantCutoff));
+
+    // ROUTING resets: every surface back to LIVE (part 0), no locked parts.
+    REQUIRE (dst.getSurfaceRouting ("Korg B2") == 0);
+    REQUIRE (dst.getSurfaceRouting ("Launchkey Mini") == 0);
+    REQUIRE (dst.getPartPreset (1).isEmpty());       // Part 1 unassigned again
 }
 
 TEST_CASE ("missing locked-part preset falls back to Init without crashing", "[plugin][7c][parts][fallback]")

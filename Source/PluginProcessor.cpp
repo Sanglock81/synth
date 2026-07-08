@@ -608,28 +608,10 @@ void VASynthProcessor::getStateInformation (juce::MemoryBlock& destData)
     midiLearn.saveToTree (state);                 // append MIDILEARN child
     modifierLearn.saveToTree (state);             // append MODIFIERLEARN child (7B)
 
-    // Parts (7C): locked-part preset names + the surface routing table.
-    state.removeChild (state.getChildWithName ("PARTS"), nullptr);
-    juce::ValueTree parts ("PARTS");
-    for (int p = 1; p < SynthEngine::maxParts; ++p)
-        if (partPresetName[(std::size_t) p].isNotEmpty())
-        {
-            juce::ValueTree e ("PART");
-            e.setProperty ("index", p, nullptr);
-            e.setProperty ("preset", partPresetName[(std::size_t) p], nullptr);
-            parts.addChild (e, -1, nullptr);
-        }
-    {
-        const juce::ScopedLock sl (routingLock);
-        for (auto& r : routingTable)
-        {
-            juce::ValueTree e ("ROUTE");
-            e.setProperty ("surface", r.first, nullptr);
-            e.setProperty ("part", r.second, nullptr);
-            parts.addChild (e, -1, nullptr);
-        }
-    }
-    state.addChild (parts, -1, nullptr);
+    // Routing lifecycle rule 2: ordinary state persists SOUND only. The multitimbral
+    // LAYOUT (locked parts, surface routing, key-range zones) does NOT ride along here —
+    // every surface resets to the LIVE patch on relaunch. The layout is recalled ONLY by
+    // an explicit MULTI load (see saveMultiState / loadMultiState).
 
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -655,15 +637,10 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
         // Restore the FX chain order (state-tree property, not an APVTS param).
         applyFxOrderProperty();
 
-        // Parts (7C): re-bake locked-part presets (missing -> Init) + routing table.
-        if (auto parts = tree.getChildWithName ("PARTS"); parts.isValid())
-            for (auto e : parts)
-            {
-                if (e.hasType ("PART"))
-                    setPartPreset ((int) e.getProperty ("index", -1), e.getProperty ("preset", juce::String()).toString());
-                else if (e.hasType ("ROUTE"))
-                    setSurfaceRouting (e.getProperty ("surface", juce::String()).toString(), (int) e.getProperty ("part", 0));
-            }
+        // Routing lifecycle rule 2: do NOT restore the multitimbral layout from ordinary
+        // state — routing/zones reset to default on load. (Only an explicit MULTI load
+        // recalls a layout; see loadMultiState.) A stray PARTS child from a pre-rule-2
+        // session is intentionally ignored.
     }
 }
 
