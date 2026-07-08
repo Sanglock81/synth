@@ -15,8 +15,10 @@
 # CI-cached JUCE/Catch2 (FETCHCONTENT_BASE_DIR)
 /.deps/
 
-# Fetched tooling (pluginval prebuilt) — run-all-checks.sh / CI re-fetch it
-/tools/
+# Fetched tooling (pluginval prebuilt) — run-all-checks.sh / CI re-fetch it.
+# Ignore everything under tools/ EXCEPT the committed ThinkPad validation package.
+/tools/*
+!/tools/thinkpad-validate/
 
 # Local app data that must never be committed
 *.settings
