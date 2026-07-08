@@ -360,6 +360,98 @@ TEST_CASE ("zones: QWERTY is a splittable surface like any other (rule 5)", "[pl
     REQUIRE (p.partActivity (0) > 0);
 }
 
+TEST_CASE ("kit part: a routed trigger fires its pad through the dispatch path", "[plugin][kitpart]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+
+    VASynthProcessor::KitDefinition kit; kit.name = "Test Kit";
+    kit.pads[0] = { 36, "Kick 808", { 36, 0, 0, 0 }, 1, 1.0f, 0 };
+    kit.pads[1] = { 42, "Hat Closed", { 42, 0, 0, 0 }, 1, 1.0f, 1 };
+    p.setPartKit (1, kit);
+    REQUIRE (p.isPartKit (1));
+    REQUIRE (p.getPartPreset (1) == "Test Kit");          // PARTS strip shows the kit name
+
+    p.routeMidi (juce::MidiMessage::noteOn (1, 36, 1.0f), 1);   // trigger the kick pad
+    auto out = capture (p, 12);
+    REQUIRE (tu::allFinite (out));
+    REQUIRE (p.partActivity (1) > 0);
+    REQUIRE (bandEnergy (out, 20.0, 110.0) > 0.0);        // the kick sub
+
+    // Assigning a plain preset turns the kit off.
+    p.setPartPreset (1, "Warm Pad");
+    REQUIRE_FALSE (p.isPartKit (1));
+    REQUIRE (p.getPartKit (1).pads[0].triggerNote == -1); // definition forgotten
+}
+
+TEST_CASE ("kit part: a pad with a missing source bakes Init and still plays", "[plugin][kitpart][fallback]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    VASynthProcessor::KitDefinition kit; kit.name = "K";
+    kit.pads[0] = { 36, "No Such Preset", { 60, 0, 0, 0 }, 1, 1.0f, 0 };
+    p.setPartKit (1, kit);
+    p.routeMidi (juce::MidiMessage::noteOn (1, 36, 1.0f), 1);
+    REQUIRE (tu::rms (capture (p, 12)) > 0.001);          // Init baseline sounds, no crash
+}
+
+TEST_CASE ("kit: factory kits load and play their pads", "[plugin][kitpart][factory]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    REQUIRE (p.getKitNames().contains ("808 Basics"));
+    REQUIRE (p.getKitNames().contains ("Stab Board"));
+
+    p.setPartKit (1, p.loadKit ("808 Basics"));
+    REQUIRE (p.isPartKit (1));
+    p.routeMidi (juce::MidiMessage::noteOn (1, 36, 1.0f), 1);   // kick trigger
+    REQUIRE (bandEnergy (capture (p, 12), 20.0, 110.0) > 0.0);
+
+    // Stab Board: a chord-pad trigger fires a 3-note stab.
+    p.setPartKit (2, p.loadKit ("Stab Board"));
+    p.routeMidi (juce::MidiMessage::noteOn (1, 40, 1.0f), 2);   // first stab pad
+    capture (p, 6);
+    REQUIRE (p.partActivity (2) > 0);
+}
+
+TEST_CASE ("kit: kit-preset save/load round-trips", "[plugin][kitpart][preset]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    const juce::String nm = "__test_kit__";
+    auto file = AppInfo::kitDir().getChildFile (nm + ".kit");
+    file.deleteFile();
+
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    VASynthProcessor::KitDefinition def; def.name = nm;
+    def.pads[0] = { 36, "Kick 808", { 36, 0, 0, 0 }, 1, 0.8f, 0 };
+    def.pads[1] = { 60, "Synth Pluck", { 60, 63, 67, 0 }, 3, 1.0f, 0 };
+    REQUIRE (p.saveKit (nm, def));
+    REQUIRE (p.getKitNames().contains (nm));
+
+    auto back = p.loadKit (nm);
+    REQUIRE (back.pads[0].source == "Kick 808");
+    REQUIRE (back.pads[0].level == Catch::Approx (0.8f));
+    REQUIRE (back.pads[1].numSound == 3);
+    REQUIRE (back.pads[1].soundNote[1] == 63);
+    file.deleteFile();
+}
+
+TEST_CASE ("kit: a kit part round-trips through MULTI", "[plugin][kitpart][multi]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor src; src.prepareToPlay (48000.0, 256);
+    src.setPartKit (1, src.loadKit ("808 Basics"));
+    src.setSurfaceZones ("B2", { { 0, 47, 1, 0 }, { 48, 127, 0, 0 } });   // bottom octave -> the kit
+    auto multi = src.captureMultiState();
+
+    VASynthProcessor dst; dst.prepareToPlay (48000.0, 256);
+    dst.applyMultiState (multi);
+    REQUIRE (dst.isPartKit (1));
+    REQUIRE (dst.getPartKit (1).name == "808 Basics");
+    REQUIRE (dst.getPartKit (1).pads[3].chokeGroup == 1);         // hats choke survived
+    REQUIRE (dst.surfaceHasSplit ("B2"));
+}
+
 TEST_CASE ("MULTI captures + reapplies the layout (parts + surface zones)", "[plugin][partsB][multi]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

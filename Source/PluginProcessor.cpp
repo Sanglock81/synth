@@ -268,12 +268,14 @@ namespace
     }
 }
 
-bool VASynthProcessor::setPartPreset (int part, const juce::String& name)
+// Bake a source preset (factory / user / Init) into VoiceParams via the scratch APVTS,
+// reusing the exact kill-fold so a baked part is bit-identical to loading it live.
+// `ok` is false if a named preset was missing (Init baked instead). Shared by locked
+// parts and kit pads.
+VoiceParams VASynthProcessor::bakePresetParams (const juce::String& name, bool& ok)
 {
-    if (part < 1 || part >= SynthEngine::maxParts) return false;
-
     BakeProcessor scratch;
-    bool ok = true;
+    ok = true;
     if (name.isEmpty() || name == "Init")
         bakeInitBaseline (scratch);
     else if (const auto* fp = factoryPresets.byName (name))
@@ -287,14 +289,154 @@ bool VASynthProcessor::setPartPreset (int part, const juce::String& name)
     }
     else
     {
-        ok = false;                                 // missing user preset -> Init fallback
+        ok = false;                                 // missing preset -> Init fallback
         bakeInitBaseline (scratch);
-        juce::Logger::writeToLog ("part " + juce::String (part) + " preset '" + name + "' missing -> Init");
+        juce::Logger::writeToLog ("preset '" + name + "' missing -> Init");
     }
+    return buildVoiceParams (scratch.apvts);
+}
 
-    engine.setLockedPartParams (part, buildVoiceParams (scratch.apvts));
+bool VASynthProcessor::setPartPreset (int part, const juce::String& name)
+{
+    if (part < 1 || part >= SynthEngine::maxParts) return false;
+
+    bool ok = true;
+    engine.setLockedPartParams (part, bakePresetParams (name, ok));
+    engine.clearPartKit (part);                     // a plain preset turns any kit off
+    partKits[(std::size_t) part] = KitDefinition{}; // forget the kit definition
     partPresetName[(std::size_t) part] = ok ? name : juce::String ("Init");
     return ok;
+}
+
+void VASynthProcessor::setPartKit (int part, const KitDefinition& def)
+{
+    if (part < 1 || part >= SynthEngine::maxParts) return;
+
+    KitData kd; kd.isKit = true;
+    for (int i = 0; i < kMaxKitPads; ++i)
+    {
+        const auto& pd = def.pads[(std::size_t) i];
+        auto& out = kd.pads[(std::size_t) i];
+        if (pd.triggerNote < 0) { out.triggerNote = -1; continue; }   // empty pad
+
+        bool ok = true;
+        auto vp = bakePresetParams (pd.source, ok);
+        vp.gain *= juce::jlimit (0.0f, 4.0f, pd.level);               // fold pad level into the voice
+        kd.params[(std::size_t) i] = vp;
+        out.triggerNote = pd.triggerNote;
+        out.numSound    = juce::jlimit (1, kMaxPadSoundNotes, pd.numSound);
+        for (int s = 0; s < kMaxPadSoundNotes; ++s) out.soundNote[(std::size_t) s] = pd.soundNote[(std::size_t) s];
+        out.chokeGroup  = juce::jlimit (0, 8, pd.chokeGroup);
+    }
+    engine.setPartKit (part, kd);
+    partKits[(std::size_t) part] = def;
+    partPresetName[(std::size_t) part] = def.name.isNotEmpty() ? def.name : juce::String ("Kit");
+}
+
+// ---- kit serialisation (shared by *.kit files and MULTI) --------------------
+
+juce::ValueTree VASynthProcessor::kitToTree (const KitDefinition& def)
+{
+    juce::ValueTree t ("KIT");
+    t.setProperty ("name", def.name, nullptr);
+    for (int i = 0; i < kMaxKitPads; ++i)
+    {
+        const auto& pd = def.pads[(std::size_t) i];
+        if (pd.triggerNote < 0) continue;                    // skip empty pads
+        juce::ValueTree p ("PAD");
+        p.setProperty ("trigger", pd.triggerNote, nullptr);
+        p.setProperty ("source",  pd.source, nullptr);
+        p.setProperty ("num",     pd.numSound, nullptr);
+        p.setProperty ("level",   pd.level, nullptr);
+        p.setProperty ("choke",   pd.chokeGroup, nullptr);
+        for (int s = 0; s < 4; ++s) p.setProperty ("n" + juce::String (s), pd.soundNote[(std::size_t) s], nullptr);
+        t.addChild (p, -1, nullptr);
+    }
+    return t;
+}
+
+VASynthProcessor::KitDefinition VASynthProcessor::kitFromTree (const juce::ValueTree& t)
+{
+    KitDefinition def;
+    if (! t.hasType ("KIT")) return def;
+    def.name = t.getProperty ("name", juce::String()).toString();
+    int idx = 0;
+    for (auto p : t)
+    {
+        if (! p.hasType ("PAD") || idx >= kMaxKitPads) continue;
+        auto& pd = def.pads[(std::size_t) idx++];
+        pd.triggerNote = (int) p.getProperty ("trigger", -1);
+        pd.source      = p.getProperty ("source", juce::String()).toString();
+        pd.numSound    = (int) p.getProperty ("num", 1);
+        pd.level       = (float) p.getProperty ("level", 1.0);
+        pd.chokeGroup  = (int) p.getProperty ("choke", 0);
+        for (int s = 0; s < 4; ++s) pd.soundNote[(std::size_t) s] = (int) p.getProperty ("n" + juce::String (s), 60);
+    }
+    return def;
+}
+
+// ---- factory kits -----------------------------------------------------------
+
+juce::StringArray VASynthProcessor::factoryKitNames() { return { "808 Basics", "Stab Board" }; }
+
+VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String& name)
+{
+    KitDefinition def; def.name = name;
+    auto drum = [] (int trig, const char* src, int choke)
+    { return KitPadDef { trig, src, { trig, 0, 0, 0 }, 1, 1.0f, choke }; };
+
+    if (name == "808 Basics")
+    {
+        def.pads[0] = drum (36, "Kick 808",   0);
+        def.pads[1] = drum (37, "Kick Punchy", 0);
+        def.pads[2] = drum (38, "Snare",      0);
+        def.pads[3] = drum (39, "Hat Closed", 1);            // hats mutually choke
+        def.pads[4] = drum (40, "Hat Open",   1);
+        def.pads[5] = drum (41, "Tom",        0);
+    }
+    else if (name == "Stab Board")
+    {
+        def.pads[0] = drum (36, "Kick 808",   0);
+        def.pads[1] = drum (37, "Snare",      0);
+        def.pads[2] = drum (38, "Hat Closed", 1);
+        def.pads[3] = drum (39, "Hat Open",   1);
+        // four tuned minor-triad stabs (root, +3, +7) on a plucky preset
+        const int roots[4] = { 48, 50, 52, 53 };             // C D E F minor
+        for (int i = 0; i < 4; ++i)
+        {
+            const int r = roots[i];
+            def.pads[(std::size_t) (4 + i)] = KitPadDef { 40 + i, "Synth Pluck",
+                                                          { r, r + 3, r + 7, 0 }, 3, 1.0f, 0 };
+        }
+    }
+    return def;
+}
+
+// ---- kit presets (factory + user *.kit files) -------------------------------
+
+juce::StringArray VASynthProcessor::getKitNames() const
+{
+    juce::StringArray names = factoryKitNames();
+    for (auto& f : AppInfo::kitDir().findChildFiles (juce::File::findFiles, false, "*.kit"))
+        names.add (f.getFileNameWithoutExtension());
+    return names;
+}
+
+VASynthProcessor::KitDefinition VASynthProcessor::loadKit (const juce::String& name) const
+{
+    if (factoryKitNames().contains (name)) return factoryKit (name);
+    auto file = AppInfo::kitDir().getChildFile (juce::File::createLegalFileName (name) + ".kit");
+    if (auto xml = juce::XmlDocument::parse (file)) return kitFromTree (juce::ValueTree::fromXml (*xml));
+    return {};
+}
+
+bool VASynthProcessor::saveKit (const juce::String& name, const KitDefinition& def)
+{
+    if (name.trim().isEmpty()) return false;
+    KitDefinition d = def; d.name = name;
+    auto file = AppInfo::kitDir().getChildFile (juce::File::createLegalFileName (name) + ".kit");
+    if (auto xml = kitToTree (d).createXml()) return xml->writeTo (file);
+    return false;
 }
 
 // Normalise a caller-supplied zone list into an ordered, contiguous, non-overlapping
@@ -451,13 +593,21 @@ juce::ValueTree VASynthProcessor::captureMultiState() const
 {
     juce::ValueTree multi ("MULTI");
     for (int p = 1; p < SynthEngine::maxParts; ++p)
-        if (partPresetName[(std::size_t) p].isNotEmpty())
+    {
+        if (isPartKit (p))                               // a kit part serialises its whole definition
+        {
+            auto kt = kitToTree (partKits[(std::size_t) p]);
+            kt.setProperty ("index", p, nullptr);
+            multi.addChild (kt, -1, nullptr);
+        }
+        else if (partPresetName[(std::size_t) p].isNotEmpty())
         {
             juce::ValueTree e ("PART");
             e.setProperty ("index", p, nullptr);
             e.setProperty ("preset", partPresetName[(std::size_t) p], nullptr);
             multi.addChild (e, -1, nullptr);
         }
+    }
     const juce::ScopedLock sl (zoneLock);
     for (auto& sz : surfaceZones)
     {
@@ -480,10 +630,15 @@ void VASynthProcessor::applyMultiState (const juce::ValueTree& multi)
     if (! multi.hasType ("MULTI")) return;
 
     // Start from a clean layout, then apply. Parts not named in the MULTI go back to
-    // unassigned; every surface's zones are replaced by the saved ones.
+    // unassigned (locked + kit cleared); every surface's zones are replaced.
     resetAllRouting();
     std::array<bool, SynthEngine::maxParts> partOk {};
-    for (int p = 1; p < SynthEngine::maxParts; ++p) partPresetName[(std::size_t) p].clear();
+    for (int p = 1; p < SynthEngine::maxParts; ++p)
+    {
+        engine.clearPartKit (p);
+        partKits[(std::size_t) p] = KitDefinition{};
+        partPresetName[(std::size_t) p].clear();
+    }
 
     for (auto e : multi)
     {
@@ -492,6 +647,11 @@ void VASynthProcessor::applyMultiState (const juce::ValueTree& multi)
             const int p = (int) e.getProperty ("index", -1);
             if (p >= 1 && p < SynthEngine::maxParts)
                 partOk[(std::size_t) p] = setPartPreset (p, e.getProperty ("preset", juce::String()).toString());
+        }
+        else if (e.hasType ("KIT"))
+        {
+            const int p = (int) e.getProperty ("index", -1);
+            if (p >= 1 && p < SynthEngine::maxParts) { setPartKit (p, kitFromTree (e)); partOk[(std::size_t) p] = true; }
         }
         else if (e.hasType ("SURFACE"))
         {
@@ -583,6 +743,8 @@ void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chord
         for (int i = 0; i < nr; ++i) engine.noteOff (rel[i], 0);
         for (int i = 0; i < nt; ++i) engine.noteOn (trig[i], vel, 0);
     }
+    else if (engine.partIsKit (part))
+        engine.kitNoteOn (part, note, vel);           // trigger -> pad (sounding notes + choke)
     else
         engine.noteOn (note, vel, part);              // locked parts: chord is live-only
 }
@@ -602,6 +764,8 @@ void VASynthProcessor::dispatchNoteOff (int note, int part, bool chordOn)
         chordEngine.noteOff (note, rel, nr);
         for (int i = 0; i < nr; ++i) engine.noteOff (rel[i], 0);
     }
+    else if (engine.partIsKit (part))
+        engine.kitNoteOff (part, note);
     else
         engine.noteOff (note, part);
 }

@@ -113,6 +113,39 @@ public:
         return (part >= 1 && part < SynthEngine::maxParts) ? partPresetName[(std::size_t) part] : juce::String();
     }
 
+    // -- kit parts (Sub-phase 1) ----------------------------------------------
+    // A KIT part is a per-note pad map. Each pad names a SOURCE preset (baked per pad),
+    // a trigger note, its sounding note(s) (2..4 = a chord pad), a level and a choke
+    // group. The definition is the editable/serialisable source of truth on the message
+    // thread; setPartKit bakes each pad and publishes to the engine.
+    struct KitPadDef
+    {
+        int          triggerNote = -1;                       // -1 = empty pad
+        juce::String source;                                 // source preset name
+        int          soundNote[4] = { 60, 0, 0, 0 };
+        int          numSound = 1;
+        float        level = 1.0f;
+        int          chokeGroup = 0;
+    };
+    struct KitDefinition
+    {
+        juce::String name;
+        std::array<KitPadDef, kMaxKitPads> pads {};
+    };
+    void          setPartKit (int part, const KitDefinition& def);
+    bool          isPartKit (int part) const { return part >= 1 && part < SynthEngine::maxParts && engine.partIsKit (part); }
+    KitDefinition getPartKit (int part) const { return (part >= 1 && part < SynthEngine::maxParts) ? partKits[(std::size_t) part] : KitDefinition{}; }
+
+    // Kit presets: factory kits (embedded) + user kits (*.kit XML under kitDir). Save
+    // serialises the whole definition; load prefers a factory kit, then a user file.
+    juce::StringArray getKitNames() const;                                 // factory first, then user
+    KitDefinition     loadKit (const juce::String& name) const;            // empty definition if not found
+    bool              saveKit (const juce::String& name, const KitDefinition& def);
+    static juce::ValueTree   kitToTree   (const KitDefinition& def);        // shared format (kit files + MULTI)
+    static KitDefinition     kitFromTree (const juce::ValueTree& t);
+    static juce::StringArray factoryKitNames();
+    static KitDefinition     factoryKit  (const juce::String& name);
+
     // -- key-range zones (Part B) ---------------------------------------------
     // A surface's keyboard is split into an ordered, contiguous, non-overlapping list
     // of zones tiling [0,127]. Each zone routes its note range to a part and transposes
@@ -225,6 +258,7 @@ public:
 private:
     VoiceParams snapshotParams() const;
     FXParams    snapshotFXParams() const;
+    VoiceParams bakePresetParams (const juce::String& name, bool& ok);   // shared by locked parts + kit pads
 
     // Feed the combined (QWERTY | MIDI) held-modifier mask into the chord engine's
     // latest-wins forcer stack as edges (audio thread).
@@ -291,6 +325,7 @@ private:
     // table (surface name -> part). Routing/preset changes happen on the message
     // thread; the baked params reach the audio thread via the engine's double buffer.
     std::array<juce::String, SynthEngine::maxParts> partPresetName {};
+    std::array<KitDefinition, SynthEngine::maxParts> partKits {};   // per-part kit definition (message thread)
     juce::CriticalSection routingLock;
     std::vector<std::pair<juce::String, std::uint32_t>> surfaceHits; // surface -> activity count
     std::vector<std::pair<juce::String, int>> surfaceNotes;         // surface -> last note (split-by-play)
