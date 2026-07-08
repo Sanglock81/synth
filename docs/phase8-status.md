@@ -112,7 +112,31 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
 - Gate: release 125/125 + pluginval s8, sanitizer ASan+LSan+UBSan + soak — all green.
   Committed locally; PAUSED for user review before 7B.
 
-### 7B / 7C — not started (next, in order, each gated + paused)
+### 7B — diatonic chord engine — DONE, gated (release 144/144 + sanitizers green), then PAUSE
+- `Source/DSP/ChordEngine.h` (JUCE-free, POD): diatonic triads (Major/Natural Minor,
+  any root), forcers MAJ/MIN/SUS4/SUS2/DIM/DOM7 (latest-held wins via a stack), 7TH
+  (diatonic seventh, or follows the forcer), out-of-scale + chord-OFF passthrough,
+  and a note-indexed LEDGER (note-off replays the note-on tones; re-press releases
+  only the changed tones — no stuck notes).
+- `Source/ModifierLearnManager.h` (parallel to MidiLearnManager): learn a modifier
+  from a CC (>=64) or a consumed note; persisted as a MODIFIERLEARN state child.
+- Params: chord_enabled/chord_root/chord_scale (added to randomize exclusions).
+- Processor integration (dispatch loop): note-on expands to the chord, note-off
+  replays the ledger; modifier CC/note intercepted before MIDI-learn; chord FORCES
+  poly; sustain holds chord tones (expansion precedes sustain); QWERTY modifiers via
+  an atomic mask diffed on the audio thread into the forcer stack. Modifier handling
+  gated on chord-ON. Chord OFF = passthrough (golden-safe; all existing tests green).
+- UI: compact CHORD section (enable/root/scale + 7 modifier indicators with
+  learn badges + QWERTY hint), between GLOBAL and FX. User signed off (tightened
+  grid). Screenshot regenerated.
+- QWERTY reserved row: C=MAJ V=MIN B=7TH N=DOM7 M=SUS4 ,=SUS2 .=DIM (/ spare).
+- Tests: dsp/test_chord (grammar tables C maj / A min / E maj / F min, forcers,
+  latest-wins, ledger, passthrough); plugin/test_chord_plugin (expansion,
+  forces-poly, modifier mask, learn from CC + consumed note, persistence, sustain,
+  RT-alloc). NOTE (voice cap): a 4-key held chord = up to 16 voices -> the pool
+  saturates and oldest-steal is exercised hard; report at 7C bench, cap unchanged.
+
+### 7C — not started (next, gated + paused)
 
 ## 8B–8F — not started (blocked on Phase 7)
 

@@ -216,6 +216,15 @@ VoiceParams VASynthProcessor::snapshotParams() const
     return p;
 }
 
+void VASynthProcessor::applyChordModifiers (std::uint32_t combined)
+{
+    const std::uint32_t changed = combined ^ lastFedModMask;
+    for (int i = 0; i < ChordEngine::kNumModifiers; ++i)
+        if ((changed >> i) & 1u)
+            chordEngine.setModifierHeld (i, (combined >> i) & 1u);
+    lastFedModMask = combined;
+}
+
 FXParams VASynthProcessor::snapshotFXParams() const
 {
     namespace ID = ParamID;
@@ -280,7 +289,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     // Panic (RT-safe): a hot-unplug asked us to release everything.
     if (panicRequested.exchange (false, std::memory_order_acq_rel))
-        engine.allNotesOff();
+        { engine.allNotesOff(); chordEngine.reset(); midiModMask = 0; lastFedModMask = 0; }
 
     const auto params = snapshotParams();
 
@@ -291,7 +300,15 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const int   lfoDest  = (int) rp (apvts, ID::lfoDest);
     const float master   = rp (apvts, ID::masterGain);
 
-    engine.setPolyMode ((int) rp (apvts, ID::polyMode));   // poly / mono / legato
+    // --- chord engine (7B): one played note -> a diatonic chord -------------
+    const bool chordOn = rp (apvts, ID::chordEnabled) > 0.5f;
+    chordEngine.setEnabled (chordOn);
+    chordEngine.setRoot  ((int) rp (apvts, ID::chordRoot));
+    chordEngine.setScale ((int) rp (apvts, ID::chordScale));
+    // Chord mode FORCES poly — a chord in mono/legato would sound only one note.
+    engine.setPolyMode (chordOn ? 0 : (int) rp (apvts, ID::polyMode));
+    // Feed QWERTY modifier edges (message thread) into the latest-wins forcer stack.
+    applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
 
     // --- sample-accurate MIDI dispatch --------------------------------------
     // Render up to each event, dispatch it, continue. This keeps note timing
@@ -311,11 +328,42 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         }
 
         if (msg.isNoteOn())
-            engine.noteOn (msg.getNoteNumber(), msg.getFloatVelocity());
+        {
+            const int   note = msg.getNoteNumber();
+            const float vel  = msg.getFloatVelocity();
+            // A learned modifier NOTE (pad) is consumed, not played (chord mode only).
+            const int mod = chordOn ? modifierLearn.handleNoteOn (note) : -1;
+            if (mod >= 0)
+            {
+                midiModMask |= (1u << mod);
+                applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
+            }
+            else                                            // expand to the chord (passthrough if off)
+            {
+                int trig[ChordEngine::kMaxTones], rel[ChordEngine::kMaxTones]; int nt = 0, nr = 0;
+                chordEngine.noteOn (note, trig, nt, rel, nr);
+                for (int i = 0; i < nr; ++i) engine.noteOff (rel[i]);
+                for (int i = 0; i < nt; ++i) engine.noteOn (trig[i], vel);
+            }
+        }
         else if (msg.isNoteOff())
-            engine.noteOff (msg.getNoteNumber());
+        {
+            const int note = msg.getNoteNumber();
+            const int mod = chordOn ? modifierLearn.handleNoteOff (note) : -1;
+            if (mod >= 0)
+            {
+                midiModMask &= ~(1u << mod);
+                applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
+            }
+            else
+            {
+                int rel[ChordEngine::kMaxTones]; int nr = 0;
+                chordEngine.noteOff (note, rel, nr);
+                for (int i = 0; i < nr; ++i) engine.noteOff (rel[i]);
+            }
+        }
         else if (msg.isAllNotesOff() || msg.isAllSoundOff())
-            engine.allNotesOff();
+            { engine.allNotesOff(); chordEngine.reset(); midiModMask = 0; }
         else if (msg.isPitchWheel())
         {
             // 14-bit, centre 8192 -> +/- the active device's bend range in semis.
@@ -331,9 +379,20 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                 engine.setSustainPedal (val >= 64);
             else
             {
-                if (cc == 1)                                // mod wheel -> vibrato depth
-                    engine.setModWheel (val / 127.0f);
-                midiLearn.handleCC (msg.getChannel(), cc, val);
+                // A learned modifier CC (footswitch >=64) is consumed before MIDI-learn.
+                bool held = false;
+                const int mod = chordOn ? modifierLearn.handleCC (cc, val, held) : -1;
+                if (mod >= 0)
+                {
+                    if (held) midiModMask |= (1u << mod); else midiModMask &= ~(1u << mod);
+                    applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
+                }
+                else
+                {
+                    if (cc == 1)                            // mod wheel -> vibrato depth
+                        engine.setModWheel (val / 127.0f);
+                    midiLearn.handleCC (msg.getChannel(), cc, val);
+                }
             }
         }
     }
@@ -341,6 +400,10 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (renderedUpTo < buffer.getNumSamples())
         engine.render (mono + renderedUpTo, buffer.getNumSamples() - renderedUpTo,
                        params, lfoRate, lfoShape, lfoDepth, lfoDest);
+
+    // Publish the held-modifier mask (QWERTY | MIDI) for the CHORD UI indicators.
+    activeModMask.store (qwertyModMask.load (std::memory_order_acquire) | midiModMask,
+                         std::memory_order_release);
 
     // --- stereo FX chain: the engine sums to mono, so duplicate to L/R and run
     //     the reorderable chain (chorus/delay/reverb/width) in place. The chain
@@ -406,6 +469,7 @@ void VASynthProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     midiLearn.saveToTree (state);                 // append MIDILEARN child
+    modifierLearn.saveToTree (state);             // append MODIFIERLEARN child (7B)
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -420,7 +484,8 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
         const bool needsMigration = stateNeedsLevelMigration (tree);
 
         midiLearn.loadFromTree (tree);            // read MIDILEARN child (if any)
-        apvts.replaceState (tree);                // APVTS ignores the extra child
+        modifierLearn.loadFromTree (tree);        // read MODIFIERLEARN child (7B)
+        apvts.replaceState (tree);                // APVTS ignores the extra children
 
         // Old sessions (osc_mix, no osc1_level) derive the per-source levels from
         // the legacy crossfade so they sound the same.

@@ -49,6 +49,9 @@ TEST_CASE ("randomize never touches the performance/global exclusion list", "[pl
         { ParamID::velToCutoff, 0.66f },
         { ParamID::polyMode,    1.0f  },   // Mono
         { ParamID::glideTime,   0.33f },
+        { ParamID::chordEnabled,1.0f  },
+        { ParamID::chordRoot,   0.5f  },
+        { ParamID::chordScale,  1.0f  },
         { ParamID::oscMix,      0.9f  },
     };
     for (auto& kv : pinned) p.apvts.getParameter (kv.id)->setValueNotifyingHost (kv.norm);

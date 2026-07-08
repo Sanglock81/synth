@@ -5,6 +5,7 @@
 #include "UI/VASynthLookAndFeel.h"
 #include "UI/Widgets.h"
 #include "UI/FXPanel.h"
+#include "UI/ChordPanel.h"
 #include "PresetManager.h"
 
 // ============================================================================
@@ -105,6 +106,8 @@ public:
         row.flexDirection = juce::FlexBox::Direction::row;
         for (auto& s : sections)
             row.items.add (juce::FlexItem (*s.panel).withFlex (s.flex).withMargin (3.0f));
+        if (chordPanel != nullptr)                    // CHORD column (before FX)
+            row.items.add (juce::FlexItem (*chordPanel).withFlex (2.3f).withMargin (3.0f));
         if (fxPanel != nullptr)                       // far-right FX column
             row.items.add (juce::FlexItem (*fxPanel).withFlex (2.8f).withMargin (3.0f));
         row.performLayout (area);
@@ -125,7 +128,12 @@ public:
             if (dynamic_cast<juce::TextEditor*> (f) != nullptr) { allNotesOff(); return false; }
         qwerty.update ([] (int kc) { return juce::KeyPress::isKeyCurrentlyDown (kc); },
                        [this] (int note, bool on) { emitNote (note, on); });
-        return qwerty.anyHeld();
+
+        // Chord modifiers on the reserved bottom row (7B): C=MAJ V=MIN B=7TH N=DOM7
+        // M=SUS4 ,=SUS2 .=DIM /=spare. Published as a bitmask the processor diffs.
+        const std::uint32_t mask = readChordModifierKeys();
+        proc.setQwertyChordModifiers (mask);
+        return qwerty.anyHeld() || mask != 0;
     }
 
 private:
@@ -238,6 +246,10 @@ private:
           addChoice (s, ID::polyMode, "Mode");
           buildGlobalExtras (s); }
 
+        // CHORD column (7B): enable/root/scale + momentary modifier indicators.
+        chordPanel = std::make_unique<ChordPanel> (proc);
+        addAndMakeVisible (*chordPanel);
+
         // Far-right reorderable FX column (its own draggable component, not a Section).
         fxPanel = std::make_unique<FXPanel> (proc);
         addAndMakeVisible (*fxPanel);
@@ -278,7 +290,27 @@ private:
         if (on) proc.qwertyKeyboardState.noteOn  (1, note, 0.8f);
         else    proc.qwertyKeyboardState.noteOff (1, note, 0.0f);
     }
-    void allNotesOff() { qwerty.releaseAll ([this] (int note, bool on) { emitNote (note, on); }); }
+    void allNotesOff()
+    {
+        qwerty.releaseAll ([this] (int note, bool on) { emitNote (note, on); });
+        proc.setQwertyChordModifiers (0);          // drop held modifiers on focus loss
+    }
+
+    // The reserved bottom row -> a modifier bitmask (bit = ChordEngine::ModifierId).
+    static std::uint32_t readChordModifierKeys()
+    {
+        struct M { int key; int mod; };
+        static constexpr M kMods[] {
+            { 'c', ChordEngine::ModMaj  }, { 'v', ChordEngine::ModMin  },
+            { 'b', ChordEngine::Mod7th  }, { 'n', ChordEngine::ModDom7 },
+            { 'm', ChordEngine::ModSus4 }, { ',', ChordEngine::ModSus2 },
+            { '.', ChordEngine::ModDim  }                              // '/' is spare
+        };
+        std::uint32_t mask = 0;
+        for (auto& m : kMods)
+            if (juce::KeyPress::isKeyCurrentlyDown (m.key)) mask |= (1u << m.mod);
+        return mask;
+    }
 
     VASynthProcessor& proc;
     VASynthLookAndFeel lnf;
@@ -294,7 +326,8 @@ private:
     // Preset UI (built in buildGlobalExtras).
     std::unique_ptr<juce::Component> presetPanel;
 
-    // Far-right reorderable FX column.
+    // CHORD column + far-right reorderable FX column.
+    std::unique_ptr<ChordPanel> chordPanel;
     std::unique_ptr<FXPanel> fxPanel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VASynthEditor)

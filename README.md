@@ -28,6 +28,11 @@ a general-purpose synth that runs in any VST3 host or standalone.
   width — drag to reorder, click-free crossfade.
 - **Bulletproof output stage**: voice-sum headroom trim + transparent safety
   soft-clip, so the output never clips the DAC on dense chords.
+- **Diatonic chord engine**: one finger → an in-key chord (Major / Natural Minor,
+  any root). Momentary, combinable, **MIDI-learnable** modifiers force the quality —
+  MAJ/MIN/SUS4/SUS2/DIM/DOM7 and a diatonic 7TH — from the QWERTY bottom row, a
+  footswitch (CC≥64), or a pad (a consumed note). A per-note ledger releases exactly
+  the tones a chord triggered no matter how the modifiers churn while it's held.
 - **Plug-and-play MIDI**: hot-plug auto-connect + JSON device profiles (Launchkey,
   Korg B2), MIDI-learn on every control (learned > user > factory precedence).
 - **16 factory presets** + user save/load + sound-design Randomize.

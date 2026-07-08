@@ -70,6 +70,9 @@ public:
             ID::velToCutoff,    // velocity -> cutoff routing
             ID::polyMode,       // poly / mono / legato performance mode
             ID::glideTime,      // portamento feel
+            ID::chordEnabled,   // chord engine config (performance, not sound design)
+            ID::chordRoot,
+            ID::chordScale,
             ID::oscMix          // frozen legacy crossfade (engine ignores it)
         };
         // Not APVTS parameters, so getParameters() below never reaches them — but

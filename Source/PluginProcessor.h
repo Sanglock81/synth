@@ -2,9 +2,11 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Parameters.h"
 #include "MidiLearnManager.h"
+#include "ModifierLearnManager.h"
 #include "MidiProfile.h"
 #include "FactoryPresets.h"
 #include "DSP/SynthEngine.h"
+#include "DSP/ChordEngine.h"
 #include "DSP/FXChain.h"
 #include "Observability/AudioHealthLogger.h"
 #include <atomic>
@@ -64,6 +66,15 @@ public:
 
     // Exposed for the (v2) right-click MIDI-learn GUI and for tests.
     MidiLearnManager& getMidiLearn() { return midiLearn; }
+
+    // -- chord engine (7B) -----------------------------------------------------
+    // The editor publishes which QWERTY chord-modifier keys are down as a bitmask
+    // (bit i = ChordEngine::ModifierId i). RT-safe: the audio thread diffs it each
+    // block and feeds the edges into the chord engine's latest-wins forcer stack.
+    void setQwertyChordModifiers (std::uint32_t mask) { qwertyModMask.store (mask, std::memory_order_release); }
+    ModifierLearnManager& getModifierLearn() { return modifierLearn; }
+    // For the CHORD UI indicators: is this modifier currently active (any source)?
+    bool isModifierActive (int modId) const { return (activeModMask.load (std::memory_order_acquire) >> modId) & 1u; }
 
     // -- FX chain order (state-tree property, not an automatable param) --------
     // The editor's drag-reorder calls setFxOrder; it publishes an atomic mirror
@@ -142,6 +153,10 @@ private:
     VoiceParams snapshotParams() const;
     FXParams    snapshotFXParams() const;
 
+    // Feed the combined (QWERTY | MIDI) held-modifier mask into the chord engine's
+    // latest-wins forcer stack as edges (audio thread).
+    void applyChordModifiers (std::uint32_t combinedMask);
+
     // Parse an "a,b,c,d" fx_order property into the atomic mirror (used on load).
     void applyFxOrderProperty();
 
@@ -155,8 +170,10 @@ private:
     static constexpr std::uint32_t kDefaultOrderPacked = 0x03020100u;
 
     SynthEngine        engine;
+    ChordEngine        chordEngine;
     FXChain            fxChain;
     MidiLearnManager    midiLearn { apvts };
+    ModifierLearnManager modifierLearn;
     MidiProfileLibrary  profileLib;
     FactoryPresetLibrary factoryPresets;
     juce::AudioBuffer<float> monoScratch;
@@ -164,6 +181,14 @@ private:
     std::atomic<std::uint32_t> fxOrderPacked { kDefaultOrderPacked };
     std::atomic<bool>  panicRequested { false };
     std::atomic<float> pitchBendRangeSemis { 2.0f };
+
+    // Chord-modifier state: QWERTY mask published by the editor (message thread),
+    // diffed on the audio thread; activeModMask mirrors the resolved held modifiers
+    // back for the UI indicators.
+    std::atomic<std::uint32_t> qwertyModMask { 0 };   // message thread -> audio
+    std::atomic<std::uint32_t> activeModMask { 0 };   // audio -> UI (held modifiers)
+    std::uint32_t midiModMask   = 0;   // audio-thread: modifiers held via CC/note
+    std::uint32_t lastFedModMask = 0;  // audio-thread: mask currently in the chord engine
 
     // Toast (message-thread only): last message + a monotonically-increasing seq.
     juce::String       toastText;

@@ -83,6 +83,12 @@ namespace ParamID
     inline constexpr auto masterGain  = "master_gain";
     inline constexpr auto polyMode    = "poly_mode";     // poly / mono / legato
 
+    // Chord engine (7B). Diatonic one-finger chords; momentary modifiers are NOT
+    // params (they're momentary QWERTY/CC/note sources — see ModifierLearnManager).
+    inline constexpr auto chordEnabled = "chord_enabled";
+    inline constexpr auto chordRoot    = "chord_root";   // C..B (0..11)
+    inline constexpr auto chordScale   = "chord_scale";  // Major / Natural Minor
+
     // FX (6B). Global reorderable stereo chain: chorus / delay / reverb / width.
     // Each block has a bool enable + rotary params. The chain ORDER is not an
     // automatable parameter (a permutation, not a value) — it lives as the
@@ -186,6 +192,13 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::glideTime, 1}, "Glide", juce::NormalisableRange<float>(0.0f, 2.0f, 0.0f, 0.4f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("s")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::masterGain, 1},"Master", juce::NormalisableRange<float>(0.0f, 1.0f), 0.7f));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::polyMode, 1},  "Mode", juce::StringArray{ "Poly", "Mono", "Legato" }, 0));
+
+    // --- Chord engine (7B) ---------------------------------------------------
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::chordEnabled, 1}, "Chord", false));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::chordRoot, 1}, "Chord Root",
+        juce::StringArray{ "C","C#","D","D#","E","F","F#","G","G#","A","A#","B" }, 0));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::chordScale, 1}, "Chord Scale",
+        juce::StringArray{ "Major", "Minor" }, 0));
 
     // --- FX (6B): global reorderable stereo chain --------------------------
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::fxChorusOn, 1},   "Chorus On", false));
