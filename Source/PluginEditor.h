@@ -298,8 +298,11 @@ private:
 
     void emitNote (int note, bool on)
     {
-        if (on) proc.qwertyKeyboardState.noteOn  (1, note, 0.8f);
-        else    proc.qwertyKeyboardState.noteOff (1, note, 0.0f);
+        // QWERTY is a routed surface like any MIDI controller (Part B): its notes flow
+        // through the "QWERTY" zone map, so it can be split and transposed too. Default
+        // (no config) = the whole keyboard on the LIVE part.
+        proc.routeSurfaceMessage ("QWERTY", on ? juce::MidiMessage::noteOn  (1, note, 0.8f)
+                                                : juce::MidiMessage::noteOff (1, note));
     }
     void allNotesOff()
     {

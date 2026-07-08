@@ -310,6 +310,23 @@ TEST_CASE ("zones: reset returns a surface (and all routing) to default", "[plug
     REQUIRE (p.getSurfaceRouting ("J") == 0);
 }
 
+TEST_CASE ("zones: QWERTY is a splittable surface like any other (rule 5)", "[plugin][partsB][zones][qwerty]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    makeLiveSine (p);
+    p.setPartPreset (1, "Kick 808");
+
+    // Bottom octave of the computer keyboard -> Part 1 (drums); rest -> LIVE.
+    p.setSurfaceZones ("QWERTY", { { 0, 47, 1, 0 }, { 48, 127, 0, 0 } });
+
+    p.routeSurfaceMessage ("QWERTY", juce::MidiMessage::noteOn (1, 36, 1.0f));   // low -> kick
+    p.routeSurfaceMessage ("QWERTY", juce::MidiMessage::noteOn (1, 60, 0.8f));   // mid -> live
+    capture (p, 8);
+    REQUIRE (p.partActivity (1) > 0);
+    REQUIRE (p.partActivity (0) > 0);
+}
+
 TEST_CASE ("MULTI captures + reapplies the layout (parts + surface zones)", "[plugin][partsB][multi]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

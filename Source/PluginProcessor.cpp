@@ -675,9 +675,9 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     auto* mono = monoScratch.getWritePointer (0);
     juce::FloatVectorOperations::clear (mono, numSamples);
 
-    // Merge QWERTY computer-keyboard notes into the MIDI stream (empty and free
-    // when no keys are held), so they share the exact hardware-MIDI path below.
-    qwertyKeyboardState.processNextMidiBuffer (midi, 0, numSamples, true);
+    // QWERTY notes no longer merge here — they flow through the "QWERTY" surface zones
+    // via routeSurfaceMessage() (resolved off the audio thread) and arrive on the routed
+    // FIFO, drained below with every other surface. `midi` carries host/DAW events only.
 
     // Panic (RT-safe): a hot-unplug asked us to release everything.
     if (panicRequested.exchange (false, std::memory_order_acq_rel))

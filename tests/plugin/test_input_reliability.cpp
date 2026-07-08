@@ -118,9 +118,9 @@ TEST_CASE ("Bug B: switching presets leaves the play path intact", "[plugin][bug
         if (juce::String (preset) == "Init") p.loadInitPreset();
         else                                 p.loadFactoryPreset (preset);
 
-        p.qwertyKeyboardState.noteOn (1, 60, 0.8f);
+        p.routeSurfaceMessage ("QWERTY", juce::MidiMessage::noteOn (1, 60, 0.8f));
         REQUIRE (rmsOverBlocks (16) > 0.005);           // it still plays after the switch
-        p.qwertyKeyboardState.noteOff (1, 60, 0.0f);
+        p.routeSurfaceMessage ("QWERTY", juce::MidiMessage::noteOff (1, 60));
         rmsOverBlocks (48);                              // let it release before the next round
     }
 }

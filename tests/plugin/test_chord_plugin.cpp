@@ -26,7 +26,7 @@ namespace
     // RMS while a QWERTY note is held, then release + settle.
     double playRms (VASynthProcessor& p, int note, int blocks = 24)
     {
-        p.qwertyKeyboardState.noteOn (1, note, 0.8f);
+        p.routeSurfaceMessage ("QWERTY", juce::MidiMessage::noteOn (1, note, 0.8f));
         juce::AudioBuffer<float> buf (2, 256);
         double acc = 0.0; long n = 0;
         for (int b = 0; b < blocks; ++b)
@@ -35,7 +35,7 @@ namespace
             const float* L = buf.getReadPointer (0);
             for (int i = 0; i < 256; ++i) { acc += double (L[i]) * L[i]; ++n; }
         }
-        p.qwertyKeyboardState.noteOff (1, note, 0.0f);
+        p.routeSurfaceMessage ("QWERTY", juce::MidiMessage::noteOff (1, note));
         pump (p, {}, 90);                                  // settle to silence
         return std::sqrt (acc / (double) n);
     }

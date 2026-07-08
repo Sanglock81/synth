@@ -262,8 +262,8 @@ public:
             // 7C per-input routing: replace the holder player's all-device MIDI merge
             // (which would send every device's notes to the live part) with our
             // routing callback, so each surface reaches its assigned part and there
-            // is exactly ONE path for hardware MIDI (no double-trigger). QWERTY still
-            // flows via the processor's qwertyKeyboardState merge (the LIVE part).
+            // is exactly ONE path for hardware MIDI (no double-trigger). QWERTY flows
+            // through its own "QWERTY" surface zones (routeSurfaceMessage) the same way.
             dm.removeMidiInputDeviceCallback ({}, &mainWindow->pluginHolder->player);
             dm.addMidiInputDeviceCallback    ({}, midiHotplug.get());
         }

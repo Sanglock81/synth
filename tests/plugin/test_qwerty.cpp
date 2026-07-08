@@ -160,11 +160,11 @@ TEST_CASE ("qwerty notes flow through processBlock to audio (merge path)", "[qwe
         return std::sqrt (acc / n);
     };
 
-    // Feed a note the way the editor does: straight into the processor's state.
-    p.qwertyKeyboardState.noteOn (1, 60, 0.8f);
+    // Feed a note the way the editor does: through the QWERTY surface zones.
+    p.routeSurfaceMessage ("QWERTY", juce::MidiMessage::noteOn (1, 60, 0.8f));
     REQUIRE (rmsOfBlocks (20) > 0.01);          // it sounds
 
-    p.qwertyKeyboardState.noteOff (1, 60, 0.0f);
+    p.routeSurfaceMessage ("QWERTY", juce::MidiMessage::noteOff (1, 60));
     rmsOfBlocks (60);                            // let the release finish
     REQUIRE (rmsOfBlocks (20) < 1.0e-3);         // then silent
 }
