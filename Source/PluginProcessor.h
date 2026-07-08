@@ -113,10 +113,30 @@ public:
         return (part >= 1 && part < SynthEngine::maxParts) ? partPresetName[(std::size_t) part] : juce::String();
     }
 
+    // -- key-range zones (Part B) ---------------------------------------------
+    // A surface's keyboard is split into an ordered, contiguous, non-overlapping list
+    // of zones tiling [0,127]. Each zone routes its note range to a part and transposes
+    // the sounding note by `transpose` semitones (the trigger note is unchanged; the
+    // result is clamped to MIDI). Default (no config) = one full-range LIVE zone. POD.
+    struct Zone { int loNote = 0, hiNote = 127, part = 0, transpose = 0; };
+
     // A playing surface (QWERTY or a MIDI input by name) -> a part index (0 = LIVE).
-    // Persists with the session; unknown surface -> LIVE by default.
+    // Convenience over zones: assigns the WHOLE surface to one part (collapses any
+    // split). Zones/routing RESET to default on relaunch (only MULTI load recalls them).
     void setSurfaceRouting (const juce::String& surface, int part);
-    int  getSurfaceRouting (const juce::String& surface) const;
+    int  getSurfaceRouting (const juce::String& surface) const;   // single-zone part; covering-60 part if split
+
+    // Full zone list for a surface (empty vector => the implicit default LIVE zone).
+    std::vector<Zone> getSurfaceZones (const juce::String& surface) const;
+    void setSurfaceZones (const juce::String& surface, std::vector<Zone> zones);   // validated/normalised
+    bool surfaceHasSplit (const juce::String& surface) const;      // more than one zone
+    void resetSurfaceZones (const juce::String& surface);          // back to a single full-range LIVE zone
+    void resetAllRouting();                                        // every surface -> default
+
+    // Route a whole message from a NAMED surface through its zones: notes resolve to a
+    // part + transpose (note-off replays the note-on's zone via a ledger); CC/bend/etc
+    // pass through globally. Runs off the audio thread (MIDI-callback / message thread).
+    void routeSurfaceMessage (const juce::String& surface, const juce::MidiMessage& m);
 
     // Per-surface activity counter for the INPUTS dialog's "incoming events" dot.
     // Bumped by the surface's producer (per-input MIDI callback / QWERTY); the dialog
@@ -264,8 +284,20 @@ private:
     // thread; the baked params reach the audio thread via the engine's double buffer.
     std::array<juce::String, SynthEngine::maxParts> partPresetName {};
     juce::CriticalSection routingLock;
-    std::vector<std::pair<juce::String, int>> routingTable;          // surface -> part
     std::vector<std::pair<juce::String, std::uint32_t>> surfaceHits; // surface -> activity count
+
+    // Key-range zones (Part B): surface name -> ordered zone list tiling [0,127]. Plus a
+    // note-off ledger (surface,note) -> the part+sounding-note its note-on resolved to, so
+    // a note-off releases exactly what its note-on triggered even if the zones changed
+    // mid-hold (ledger philosophy). Both are touched only off the audio thread (MIDI
+    // callback / message thread) under zoneLock — the audio thread sees only resolved
+    // events via the FIFO, so it never takes this lock.
+    struct LedgerEntry { juce::String surface; int note, part, sounding; };
+    mutable juce::CriticalSection zoneLock;
+    std::vector<std::pair<juce::String, std::vector<Zone>>> surfaceZones;
+    std::vector<LedgerEntry> noteLedger;
+
+    Zone resolveZone (const juce::String& surface, int note) const; // zoneLock held by caller-safe wrapper
 
     // Routed-MIDI FIFO: surfaces (QWERTY / per-device MIDI) push part-tagged note
     // events; processBlock drains them. Multi-producer push serialised by a SpinLock

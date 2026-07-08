@@ -296,19 +296,117 @@ void VASynthProcessor::setPartPreset (int part, const juce::String& name)
     partPresetName[(std::size_t) part] = ok ? name : juce::String ("Init");
 }
 
+// Normalise a caller-supplied zone list into an ordered, contiguous, non-overlapping
+// tiling of [0,127]: sort by lo, clamp, drop empties, snap each zone's start to the
+// previous zone's end + 1, and stretch the ends of the first/last to cover the range.
+// A malformed/empty list collapses to a single full-range LIVE zone.
+static std::vector<VASynthProcessor::Zone> normaliseZones (std::vector<VASynthProcessor::Zone> z)
+{
+    using Zone = VASynthProcessor::Zone;
+    for (auto& e : z) { e.loNote = juce::jlimit (0, 127, e.loNote); e.hiNote = juce::jlimit (0, 127, e.hiNote);
+                        e.part = juce::jlimit (0, SynthEngine::maxParts - 1, e.part);
+                        e.transpose = juce::jlimit (-60, 60, e.transpose); }
+    z.erase (std::remove_if (z.begin(), z.end(), [] (const Zone& e) { return e.hiNote < e.loNote; }), z.end());
+    if (z.empty()) return { Zone{} };
+    std::sort (z.begin(), z.end(), [] (const Zone& a, const Zone& b) { return a.loNote < b.loNote; });
+    z.front().loNote = 0;
+    for (std::size_t i = 1; i < z.size(); ++i) z[i].loNote = juce::jlimit (0, 127, z[i - 1].hiNote + 1);
+    // Drop any zone the previous one now swallowed, then re-close gaps.
+    z.erase (std::remove_if (z.begin(), z.end(), [] (const Zone& e) { return e.hiNote < e.loNote; }), z.end());
+    for (std::size_t i = 0; i + 1 < z.size(); ++i) z[i].hiNote = juce::jlimit (z[i].loNote, 127, z[i].hiNote);
+    z.back().hiNote = 127;
+    return z;
+}
+
+void VASynthProcessor::setSurfaceZones (const juce::String& surface, std::vector<Zone> zones)
+{
+    auto norm = normaliseZones (std::move (zones));
+    const juce::ScopedLock sl (zoneLock);
+    for (auto& e : surfaceZones) if (e.first == surface) { e.second = std::move (norm); return; }
+    surfaceZones.emplace_back (surface, std::move (norm));
+}
+
+std::vector<VASynthProcessor::Zone> VASynthProcessor::getSurfaceZones (const juce::String& surface) const
+{
+    const juce::ScopedLock sl (zoneLock);
+    for (auto& e : surfaceZones) if (e.first == surface) return e.second;
+    return {};                                       // implicit default (single LIVE zone)
+}
+
+bool VASynthProcessor::surfaceHasSplit (const juce::String& surface) const
+{
+    const juce::ScopedLock sl (zoneLock);
+    for (auto& e : surfaceZones) if (e.first == surface) return e.second.size() > 1;
+    return false;
+}
+
+void VASynthProcessor::resetSurfaceZones (const juce::String& surface)
+{
+    const juce::ScopedLock sl (zoneLock);
+    for (auto& e : surfaceZones) if (e.first == surface) { e.second = { Zone{} }; return; }
+}
+
+void VASynthProcessor::resetAllRouting()
+{
+    const juce::ScopedLock sl (zoneLock);
+    surfaceZones.clear();
+    noteLedger.clear();
+}
+
+VASynthProcessor::Zone VASynthProcessor::resolveZone (const juce::String& surface, int note) const
+{
+    const juce::ScopedLock sl (zoneLock);
+    for (auto& e : surfaceZones)
+        if (e.first == surface)
+        {
+            for (auto& z : e.second) if (note >= z.loNote && note <= z.hiNote) return z;
+            break;
+        }
+    return Zone{};                                   // default: full-range LIVE, no transpose
+}
+
 void VASynthProcessor::setSurfaceRouting (const juce::String& surface, int part)
 {
     if (part < 0 || part >= SynthEngine::maxParts) return;
-    const juce::ScopedLock sl (routingLock);
-    for (auto& e : routingTable) if (e.first == surface) { e.second = part; return; }
-    routingTable.emplace_back (surface, part);
+    setSurfaceZones (surface, { Zone{ 0, 127, part, 0 } });   // whole surface -> one part
 }
 
 int VASynthProcessor::getSurfaceRouting (const juce::String& surface) const
 {
-    const juce::ScopedLock sl (routingLock);
-    for (auto& e : routingTable) if (e.first == surface) return e.second;
-    return 0;                                        // default: LIVE
+    return resolveZone (surface, 60).part;           // single-zone part, or the zone at middle C
+}
+
+void VASynthProcessor::routeSurfaceMessage (const juce::String& surface, const juce::MidiMessage& m)
+{
+    bumpSurfaceActivity (surface);
+
+    if (m.isNoteOn())
+    {
+        const int note = m.getNoteNumber();
+        const Zone z = resolveZone (surface, note);
+        const int sounding = juce::jlimit (0, 127, note + z.transpose);
+        {
+            const juce::ScopedLock sl (zoneLock);    // record what this note-on triggered
+            noteLedger.push_back ({ surface, note, z.part, sounding });
+        }
+        routeNoteOn (sounding, m.getFloatVelocity(), z.part);
+    }
+    else if (m.isNoteOff())
+    {
+        const int note = m.getNoteNumber();
+        int part = 0, sounding = note;
+        bool found = false;
+        {
+            const juce::ScopedLock sl (zoneLock);    // release exactly what the note-on triggered
+            for (auto it = noteLedger.rbegin(); it != noteLedger.rend(); ++it)
+                if (it->surface == surface && it->note == note)
+                { part = it->part; sounding = it->sounding; noteLedger.erase (std::next (it).base()); found = true; break; }
+        }
+        if (! found) { const Zone z = resolveZone (surface, note); part = z.part; sounding = juce::jlimit (0, 127, note + z.transpose); }
+        routeNoteOff (sounding, part);
+    }
+    else
+        routeMidi (m, 0);                            // CC / pitch-bend / etc: global / live part
 }
 
 void VASynthProcessor::bumpSurfaceActivity (const juce::String& surface)

@@ -184,6 +184,131 @@ TEST_CASE ("INPUTS dialog action path routes a surface to a part and it plays", 
     REQUIRE (p.partActivity (1) > 0);                  // PARTS strip would flicker P1
 }
 
+namespace
+{
+    // Give part 0 a pure sine that decays fast and dry, so a routed/transposed note has
+    // a measurable pitch AND a hung voice (missed note-off) is unambiguous vs silence.
+    void makeLiveSine (VASynthProcessor& p)
+    {
+        setP (p, ParamID::osc1Wave, 1.0f);                 // Sine
+        setP (p, ParamID::osc2On, 0.0f); setP (p, ParamID::osc3On, 0.0f);
+        setP (p, ParamID::lfoDepth, 0.0f);
+        setP (p, ParamID::ampRelease, 0.0f);               // near-instant release
+        setP (p, ParamID::fxChorusOn, 0.0f); setP (p, ParamID::fxDelayOn, 0.0f);
+        setP (p, ParamID::fxReverbOn, 0.0f); setP (p, ParamID::fxWidthOn, 0.0f);
+    }
+    double noteHz (int n) { return 440.0 * std::pow (2.0, (n - 69) / 12.0); }
+}
+
+TEST_CASE ("zones: unconfigured surface plays LIVE full-range", "[plugin][partsB][zones]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    REQUIRE (p.getSurfaceZones ("QWERTY").empty());        // implicit default
+    REQUIRE (p.getSurfaceRouting ("QWERTY") == 0);
+    REQUIRE_FALSE (p.surfaceHasSplit ("QWERTY"));
+
+    p.setPartPreset (1, "Kick 808");
+    p.routeSurfaceMessage ("Anything", juce::MidiMessage::noteOn (1, 60, 0.8f));
+    capture (p, 2);                                        // drain the routed FIFO on the audio thread
+    REQUIRE (p.partActivity (0) > 0);                      // landed on LIVE, not the kick part
+    REQUIRE (p.partActivity (1) == 0);
+}
+
+TEST_CASE ("zones: a key-range split routes each range to its part", "[plugin][partsB][zones][split]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    makeLiveSine (p);
+    p.setPartPreset (1, "Kick 808");
+
+    // Bottom octave -> Part 1 (drums); the rest -> LIVE.
+    p.setSurfaceZones ("Korg B2", { { 0, 47, 1, 0 }, { 48, 127, 0, 0 } });
+    REQUIRE (p.surfaceHasSplit ("Korg B2"));
+
+    p.routeSurfaceMessage ("Korg B2", juce::MidiMessage::noteOn (1, 36, 1.0f));   // low -> kick
+    p.routeSurfaceMessage ("Korg B2", juce::MidiMessage::noteOn (1, 72, 0.8f));   // high -> live sine
+    auto out = capture (p, 12);
+    REQUIRE (tu::allFinite (out));
+    REQUIRE (p.partActivity (1) > 0);                      // kick part hit
+    REQUIRE (p.partActivity (0) > 0);                      // live part hit
+    REQUIRE (bandEnergy (out, 20.0, 100.0) > 0.0);         // the kick's sub
+}
+
+TEST_CASE ("zones: transpose shifts the sounding note (trigger unchanged)", "[plugin][partsB][zones][transpose]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    makeLiveSine (p);
+    p.setSurfaceZones ("K", { { 0, 127, 0, +12 } });       // whole surface up an octave
+
+    p.routeSurfaceMessage ("K", juce::MidiMessage::noteOn (1, 48, 0.9f));   // trigger 48 -> sounds 60
+    auto out = capture (p, 16);
+    const double at60 = bandEnergy (out, noteHz (60) - 12, noteHz (60) + 12);
+    const double at48 = bandEnergy (out, noteHz (48) - 8,  noteHz (48) + 8);
+    INFO ("energy@60=" << at60 << " energy@48=" << at48);
+    REQUIRE (at60 > at48 * 8.0);                           // sounds an octave up
+}
+
+TEST_CASE ("zones: transpose clamps at the MIDI extremes", "[plugin][partsB][zones][transpose]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    makeLiveSine (p);
+    p.setSurfaceZones ("K", { { 0, 127, 0, +48 } });
+    p.routeSurfaceMessage ("K", juce::MidiMessage::noteOn (1, 120, 0.9f));  // 120+48 -> clamp 127
+    p.routeSurfaceMessage ("K", juce::MidiMessage::noteOff (1, 120));       // must release the clamped note
+    auto tail = capture (p, 200);
+    REQUIRE (tu::rms (tail) < 1e-3);                       // no hung voice -> note-off matched the clamp
+}
+
+TEST_CASE ("zones: note-off releases the note-on's zone even after a re-split (ledger)", "[plugin][partsB][zones][ledger]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    makeLiveSine (p);
+
+    p.setSurfaceZones ("K", { { 0, 127, 0, +7 } });        // note-on transposes +7
+    p.routeSurfaceMessage ("K", juce::MidiMessage::noteOn (1, 50, 0.9f));   // sounds 57
+    REQUIRE (tu::rms (capture (p, 8)) > 0.001);
+
+    p.setSurfaceZones ("K", { { 0, 127, 0, 0 } });         // zones change WHILE held
+    p.routeSurfaceMessage ("K", juce::MidiMessage::noteOff (1, 50));        // must release 57, not 50
+    auto tail = capture (p, 220);
+    REQUIRE (tu::rms (tail) < 1e-3);                       // released cleanly (ledger snapshot honoured)
+}
+
+TEST_CASE ("zones: setSurfaceZones normalises to a contiguous tiling of [0,127]", "[plugin][partsB][zones][normalise]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+
+    // Gappy + out-of-order + overlapping input.
+    p.setSurfaceZones ("K", { { 60, 80, 2, 0 }, { 0, 40, 1, 0 } });
+    auto z = p.getSurfaceZones ("K");
+    REQUIRE (z.size() >= 2);
+    REQUIRE (z.front().loNote == 0);                       // covers the bottom
+    REQUIRE (z.back().hiNote == 127);                      // covers the top
+    for (std::size_t i = 1; i < z.size(); ++i)
+        REQUIRE (z[i].loNote == z[i - 1].hiNote + 1);      // contiguous, no gaps/overlap
+}
+
+TEST_CASE ("zones: reset returns a surface (and all routing) to default", "[plugin][partsB][zones][reset]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    p.setSurfaceZones ("K", { { 0, 59, 1, 0 }, { 60, 127, 0, 0 } });
+    p.setSurfaceRouting ("J", 2);
+
+    p.resetSurfaceZones ("K");
+    REQUIRE_FALSE (p.surfaceHasSplit ("K"));
+    REQUIRE (p.getSurfaceRouting ("K") == 0);
+
+    p.resetAllRouting();
+    REQUIRE (p.getSurfaceZones ("J").empty());
+    REQUIRE (p.getSurfaceRouting ("J") == 0);
+}
+
 #ifndef VASYNTH_DOCS_DIR
  #define VASYNTH_DOCS_DIR "."
 #endif
