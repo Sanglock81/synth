@@ -124,8 +124,28 @@ per-input MIDI capture replaces JUCE's device merge so each controller reaches i
 (no double-trigger). **v1 simplifications (deliberate):** the FX chain, global LFO,
 poly-mode and master are **shared** and follow the LIVE part; a locked part contributes
 only voice-level character (osc/mix/filter/env/vel/env→pitch). On-screen edits, Randomize
-and the chord engine affect the LIVE part only. Routing + locked-preset refs persist with
-the session; a missing preset on load falls back to Init with a logged warning.
+and the chord engine affect the LIVE part only.
+
+**Key-range zones + routing lifecycle (Part B).** A surface isn't limited to one part —
+each is an ordered, gapless list of **zones** tiling the keyboard `{loNote, hiNote, part,
+transpose}` (default = one full-range LIVE zone). A note resolves to its zone's part and
+is transposed by `transpose` semitones (the trigger is unchanged, clamped to MIDI); a
+note-off releases exactly what its note-on triggered via a **ledger snapshot**, so
+re-splitting mid-hold never strands a voice. Zone lookup sits at the routing seam — the
+chord engine only sees notes that land on the LIVE part. QWERTY is a surface like any
+other, so it's splittable too. The **routing lifecycle** is deliberately conservative:
+
+- **Startup = clean.** On every launch each surface plays the LIVE patch, full range —
+  routing/zones do **not** auto-restore. Only **sound** state (patch params, presets,
+  MIDI-learn, FX order) persists.
+- **Recall is explicit.** Save a **MULTI** (parts + splits + transposes + routing) and
+  load it deliberately; that's the only thing that reapplies a layout. A zone whose
+  part's preset is missing falls back to LIVE, logged.
+- **Session-stable.** A configured surface keeps its assignment across an unplug/replug;
+  the session ends when the app closes → back to the clean startup.
+
+*Headline split:* bottom octave of a controller → **Part 1 / Kick 808** (a drum zone),
+the rest → **LIVE** pad — one keyboard, two instruments by key range.
 
 **Where the routing controls live (click-path).** Multitimbral setup is two visible
 surfaces — a **PARTS strip** across the top of the editor and the **INPUTS** dialog it
@@ -140,14 +160,17 @@ opens:
    then each connected MIDI controller **by name** (each gets its own row).
 3. On a surface's row, set the **route** dropdown (Live / Part 1 / Part 2 / Part 3). Pick a
    part and its **preset** dropdown enables — choose one and it's baked into that part.
-4. The **activity dot** on the left of each row blinks on incoming events, so a silent
+4. To split by **key range**, press **SPLIT** on that row. A segmented bar appears; **+ Split**
+   divides a zone, or **Split by play** arms the row so the next key you press sets the seam.
+   Each zone has its own part, preset and transpose; **Reset surface** returns it to one
+   full-range LIVE zone.
+5. The **activity dot** on the left of each row blinks on incoming events, so a silent
    controller (dead cable, wrong USB port) is diagnosable without leaving the dialog.
-5. Close the dialog (Esc). Play that controller — its notes now sound the assigned part;
-   the PARTS strip cell for that part flickers. QWERTY keeps playing the LIVE patch unless
-   you routed it elsewhere.
-
-*Headline demo:* route a bass controller to **Part 1 / Fat Saw Bass**, leave QWERTY on
-**LIVE** with a pad — two surfaces, two timbres, one instrument.
+6. To keep a layout, **Save MULTI** (the bottom bar notes it includes parts + splits +
+   routing); **Load MULTI** reapplies it. **Reset all routing** clears everything back to
+   default. Nothing here auto-saves — a relaunch always starts clean.
+7. Close the dialog (Esc). Play that surface — its notes sound the assigned part/zone; the
+   PARTS strip cell flickers. QWERTY plays the LIVE patch unless you routed or split it.
 
 **Confirming you're on the current build.** If a control seems missing, first rule out a
 stale binary: the startup log banner prints the git hash and build time, e.g.

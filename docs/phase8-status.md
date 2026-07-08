@@ -184,6 +184,37 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   activity dot → play) + the build-provenance check. `docs/editor.png` shows the strip;
   `docs/inputs-dialog.png` shows a configured dialog.
 
+### Key-range zones + routing lifecycle (Part B) — DONE, gated
+- **Lifecycle rule 2 (the reported bug):** routing/zones now RESET to default on
+  relaunch — ordinary plugin state persists SOUND only (removed the 7C PARTS child
+  from get/setStateInformation). The standalone persists via savePluginState()/reload,
+  which use exactly those calls, so app-close/reopen now resets. See
+  [[vasynth-routing-lifecycle]] (the user reversed my earlier misread — they want RESET).
+- **Zones engine:** per-surface ordered, gapless zone list `{lo,hi,part,transpose}` tiling
+  [0,127] (default = one full-range LIVE zone). `routeSurfaceMessage(surface,msg)` resolves
+  a note's zone -> part + transpose (clamped), records a note-off **ledger** so a note-off
+  releases exactly what its note-on triggered even after a re-split. All resolution is off
+  the audio thread (FIFO delivers resolved events -> no new audio-thread lock).
+  setSurfaceZones normalises any input to a contiguous tiling. addSurfaceSplit /
+  removeSurfaceSplit / resetSurfaceZones / resetAllRouting.
+- **QWERTY** is now a routed surface too (routeSurfaceMessage("QWERTY",...)); removed the
+  qwertyKeyboardState merge. Splittable/transposable like any controller. Bug B focus logic
+  untouched; QWERTY-feeding tests migrated.
+- **MULTI save/load:** named XML layout (AppInfo::multiDir()) of parts + surface zones,
+  applied only on explicit load; a zone on a missing-preset part falls back to LIVE
+  (setPartPreset returns ok). captureMultiState/applyMultiState shared format.
+- **Zone UI:** INPUTS dialog rebuilt — per-surface SPLIT expander with a part-coloured
+  segmented bar, per-zone part/preset/transpose/remove, + Split, Split by play (arm ->
+  next note seams via lastNoteForSurface), Reset surface; bottom bar Reset all routing +
+  Save/Load MULTI (labelled "includes the whole layout"). Viewport-scrolled; all controls
+  refuse focus (focus test green). docs/inputs-dialog.png shows a QWERTY bottom-octave
+  bass split open.
+- Tests [partsB]: reset-on-round-trip, default=LIVE, key-range split, transpose+clamp,
+  note-off ledger across a re-split, normalisation, add/remove split, split-by-play last
+  note, QWERTY split, MULTI round-trip + missing-preset fallback + clears-unnamed. Full
+  plugin suite green (98 cases). README routing section rewritten around the lifecycle
+  contract + zones + MULTI.
+
 ## 8B–8F — not started (blocked on Phase 7)
 
 (To be filled in as each sub-phase runs.)
