@@ -107,7 +107,7 @@ public:
     // to the audio thread. name "" or "Init" -> Init baseline; a missing user preset
     // -> Init with a logged warning (never a crash). Part 0 is always LIVE (edited
     // by the panel) and cannot be assigned.
-    void setPartPreset (int part, const juce::String& presetName);
+    bool setPartPreset (int part, const juce::String& presetName);   // false if the named preset was missing (baked Init)
     juce::String getPartPreset (int part) const
     {
         return (part >= 1 && part < SynthEngine::maxParts) ? partPresetName[(std::size_t) part] : juce::String();
@@ -137,6 +137,17 @@ public:
     // part + transpose (note-off replays the note-on's zone via a ledger); CC/bend/etc
     // pass through globally. Runs off the audio thread (MIDI-callback / message thread).
     void routeSurfaceMessage (const juce::String& surface, const juce::MidiMessage& m);
+
+    // -- MULTI layouts (Part B) -----------------------------------------------
+    // A MULTI is a NAMED snapshot of the multitimbral LAYOUT — each locked part's preset
+    // plus every surface's zones (ranges/parts/transposes). Since ordinary routing RESETS
+    // on relaunch, a MULTI is the only way to recall a layout, and it applies ONLY on an
+    // explicit load. Stored as XML under AppInfo::multiDir(). Message thread only.
+    juce::ValueTree captureMultiState() const;                 // shared serialise format
+    void applyMultiState (const juce::ValueTree& multi);       // a zone on a missing-preset part repoints to LIVE (logged)
+    bool saveMulti (const juce::String& name);
+    bool loadMulti (const juce::String& name);
+    juce::StringArray getMultiNames() const;
 
     // Per-surface activity counter for the INPUTS dialog's "incoming events" dot.
     // Bumped by the surface's producer (per-input MIDI callback / QWERTY); the dialog

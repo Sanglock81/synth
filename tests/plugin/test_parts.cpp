@@ -8,6 +8,7 @@
 #include <catch2/catch_approx.hpp>
 #include "PluginProcessor.h"
 #include "PresetManager.h"
+#include "AppInfo.h"
 #include "UI/InputsDialog.h"
 #include "test_util.h"
 #include "alloc_hook.h"
@@ -307,6 +308,78 @@ TEST_CASE ("zones: reset returns a surface (and all routing) to default", "[plug
     p.resetAllRouting();
     REQUIRE (p.getSurfaceZones ("J").empty());
     REQUIRE (p.getSurfaceRouting ("J") == 0);
+}
+
+TEST_CASE ("MULTI captures + reapplies the layout (parts + surface zones)", "[plugin][partsB][multi]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor src; src.prepareToPlay (48000.0, 256);
+    src.setPartPreset (1, "Kick 808");
+    src.setSurfaceZones ("Korg B2", { { 0, 47, 1, 0 }, { 48, 127, 0, +12 } });
+    src.setSurfaceRouting ("Launchkey", 0);
+    auto multi = src.captureMultiState();
+
+    // A fresh instance recalls it ONLY via applyMultiState.
+    VASynthProcessor dst; dst.prepareToPlay (48000.0, 256);
+    REQUIRE_FALSE (dst.surfaceHasSplit ("Korg B2"));         // nothing yet
+    dst.applyMultiState (multi);
+
+    REQUIRE (dst.getPartPreset (1) == "Kick 808");
+    REQUIRE (dst.surfaceHasSplit ("Korg B2"));
+    auto z = dst.getSurfaceZones ("Korg B2");
+    REQUIRE (z.size() == 2);
+    REQUIRE (z[0].part == 1);
+    REQUIRE (z[1].transpose == 12);
+}
+
+TEST_CASE ("MULTI apply repoints a zone off a missing preset to LIVE", "[plugin][partsB][multi][fallback]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+
+    juce::ValueTree multi ("MULTI");
+    juce::ValueTree part ("PART"); part.setProperty ("index", 1, nullptr);
+    part.setProperty ("preset", "No Such Preset", nullptr); multi.addChild (part, -1, nullptr);
+    juce::ValueTree surf ("SURFACE"); surf.setProperty ("name", "K", nullptr);
+    juce::ValueTree zone ("ZONE"); zone.setProperty ("lo", 0, nullptr); zone.setProperty ("hi", 127, nullptr);
+    zone.setProperty ("part", 1, nullptr); zone.setProperty ("transpose", 0, nullptr);
+    surf.addChild (zone, -1, nullptr); multi.addChild (surf, -1, nullptr);
+
+    p.applyMultiState (multi);
+    REQUIRE (p.getSurfaceRouting ("K") == 0);               // zone fell back to LIVE
+}
+
+TEST_CASE ("MULTI apply clears parts/surfaces not named in the layout", "[plugin][partsB][multi]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    p.setPartPreset (2, "Warm Pad");
+    p.setSurfaceRouting ("Old", 2);
+
+    p.applyMultiState (juce::ValueTree ("MULTI"));           // empty layout
+    REQUIRE (p.getPartPreset (2).isEmpty());
+    REQUIRE (p.getSurfaceRouting ("Old") == 0);
+}
+
+TEST_CASE ("MULTI save/load round-trips through a file", "[plugin][partsB][multi][file]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    const juce::String nm = "__test_multi__";
+    auto file = AppInfo::multiDir().getChildFile (nm + ".multi");
+    file.deleteFile();
+
+    VASynthProcessor src; src.prepareToPlay (48000.0, 256);
+    src.setPartPreset (1, "Fat Saw Bass");
+    src.setSurfaceZones ("B2", { { 0, 59, 1, 0 }, { 60, 127, 0, 0 } });
+    REQUIRE (src.saveMulti (nm));
+    REQUIRE (src.getMultiNames().contains (nm));
+
+    VASynthProcessor dst; dst.prepareToPlay (48000.0, 256);
+    REQUIRE (dst.loadMulti (nm));
+    REQUIRE (dst.getPartPreset (1) == "Fat Saw Bass");
+    REQUIRE (dst.surfaceHasSplit ("B2"));
+
+    file.deleteFile();                                       // clean up the test artefact
 }
 
 #ifndef VASYNTH_DOCS_DIR

@@ -268,9 +268,9 @@ namespace
     }
 }
 
-void VASynthProcessor::setPartPreset (int part, const juce::String& name)
+bool VASynthProcessor::setPartPreset (int part, const juce::String& name)
 {
-    if (part < 1 || part >= SynthEngine::maxParts) return;
+    if (part < 1 || part >= SynthEngine::maxParts) return false;
 
     BakeProcessor scratch;
     bool ok = true;
@@ -294,6 +294,7 @@ void VASynthProcessor::setPartPreset (int part, const juce::String& name)
 
     engine.setLockedPartParams (part, buildVoiceParams (scratch.apvts));
     partPresetName[(std::size_t) part] = ok ? name : juce::String ("Init");
+    return ok;
 }
 
 // Normalise a caller-supplied zone list into an ordered, contiguous, non-overlapping
@@ -407,6 +408,104 @@ void VASynthProcessor::routeSurfaceMessage (const juce::String& surface, const j
     }
     else
         routeMidi (m, 0);                            // CC / pitch-bend / etc: global / live part
+}
+
+// ---- MULTI layouts: a named snapshot of parts + surface zones ---------------
+
+juce::ValueTree VASynthProcessor::captureMultiState() const
+{
+    juce::ValueTree multi ("MULTI");
+    for (int p = 1; p < SynthEngine::maxParts; ++p)
+        if (partPresetName[(std::size_t) p].isNotEmpty())
+        {
+            juce::ValueTree e ("PART");
+            e.setProperty ("index", p, nullptr);
+            e.setProperty ("preset", partPresetName[(std::size_t) p], nullptr);
+            multi.addChild (e, -1, nullptr);
+        }
+    const juce::ScopedLock sl (zoneLock);
+    for (auto& sz : surfaceZones)
+    {
+        juce::ValueTree s ("SURFACE");
+        s.setProperty ("name", sz.first, nullptr);
+        for (auto& z : sz.second)
+        {
+            juce::ValueTree zt ("ZONE");
+            zt.setProperty ("lo", z.loNote, nullptr);   zt.setProperty ("hi", z.hiNote, nullptr);
+            zt.setProperty ("part", z.part, nullptr);   zt.setProperty ("transpose", z.transpose, nullptr);
+            s.addChild (zt, -1, nullptr);
+        }
+        multi.addChild (s, -1, nullptr);
+    }
+    return multi;
+}
+
+void VASynthProcessor::applyMultiState (const juce::ValueTree& multi)
+{
+    if (! multi.hasType ("MULTI")) return;
+
+    // Start from a clean layout, then apply. Parts not named in the MULTI go back to
+    // unassigned; every surface's zones are replaced by the saved ones.
+    resetAllRouting();
+    std::array<bool, SynthEngine::maxParts> partOk {};
+    for (int p = 1; p < SynthEngine::maxParts; ++p) partPresetName[(std::size_t) p].clear();
+
+    for (auto e : multi)
+    {
+        if (e.hasType ("PART"))
+        {
+            const int p = (int) e.getProperty ("index", -1);
+            if (p >= 1 && p < SynthEngine::maxParts)
+                partOk[(std::size_t) p] = setPartPreset (p, e.getProperty ("preset", juce::String()).toString());
+        }
+        else if (e.hasType ("SURFACE"))
+        {
+            std::vector<Zone> zones;
+            for (auto zt : e)
+                if (zt.hasType ("ZONE"))
+                    zones.push_back ({ (int) zt.getProperty ("lo", 0),   (int) zt.getProperty ("hi", 127),
+                                       (int) zt.getProperty ("part", 0), (int) zt.getProperty ("transpose", 0) });
+
+            // A zone pointing at a part whose named preset was missing falls back to LIVE.
+            for (auto& z : zones)
+                if (z.part >= 1 && z.part < SynthEngine::maxParts && ! partOk[(std::size_t) z.part])
+                {
+                    juce::Logger::writeToLog ("MULTI: surface '" + e.getProperty ("name", juce::String()).toString()
+                                              + "' zone on part " + juce::String (z.part) + " has no preset -> LIVE");
+                    z.part = 0;
+                }
+            setSurfaceZones (e.getProperty ("name", juce::String()).toString(), std::move (zones));
+        }
+    }
+}
+
+bool VASynthProcessor::saveMulti (const juce::String& name)
+{
+    if (name.trim().isEmpty()) return false;
+    auto file = AppInfo::multiDir().getChildFile (juce::File::createLegalFileName (name) + ".multi");
+    if (auto xml = captureMultiState().createXml())
+        return xml->writeTo (file);
+    return false;
+}
+
+bool VASynthProcessor::loadMulti (const juce::String& name)
+{
+    auto file = AppInfo::multiDir().getChildFile (juce::File::createLegalFileName (name) + ".multi");
+    if (auto xml = juce::XmlDocument::parse (file))
+    {
+        applyMultiState (juce::ValueTree::fromXml (*xml));
+        return true;
+    }
+    return false;
+}
+
+juce::StringArray VASynthProcessor::getMultiNames() const
+{
+    juce::StringArray names;
+    for (auto& f : AppInfo::multiDir().findChildFiles (juce::File::findFiles, false, "*.multi"))
+        names.add (f.getFileNameWithoutExtension());
+    names.sortNatural();
+    return names;
 }
 
 void VASynthProcessor::bumpSurfaceActivity (const juce::String& surface)
