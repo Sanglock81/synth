@@ -147,6 +147,19 @@ other, so it's splittable too. The **routing lifecycle** is deliberately conserv
 *Headline split:* bottom octave of a controller → **Part 1 / Kick 808** (a drum zone),
 the rest → **LIVE** pad — one keyboard, two instruments by key range.
 
+**Kit parts (Sub-phase 1).** A part can be a **Kit** — a 4×4 map of up to 16 pads, each
+a trigger note → a baked source preset with its own **sounding note(s)** (1 = a hit,
+2–4 = a tuned **chord pad**, pitch decoupled from the trigger), **level**, and **choke
+group**. Choke is click-free (a closed hat silences an open hat in the same group);
+re-hitting a pad retriggers it; an unmapped trigger is silent; note-off releases exactly
+what the hit fired via a ledger. Per-pad params come through the same `paramsFor(part,
+note)` seam the locked parts use. Click a locked part cell (P1–P3) on the PARTS strip to
+open the **Kit Editor** (learn-by-play triggers/sounding notes, per-pad source/level/choke,
+audition). Factory kits **808 Basics** and **Stab Board**; kits save/load and ride in a
+MULTI. This turns a controller's bottom-octave drum zone into a real kit and its pads into
+a trigger board. (v1: all pads of a Kit part share the part's one FX chain — per-part FX
+comes next.) Full recipe + choke semantics in [docs/presets.md](docs/presets.md).
+
 **Where the routing controls live (click-path).** Multitimbral setup is two visible
 surfaces — a **PARTS strip** across the top of the editor and the **INPUTS** dialog it
 opens:

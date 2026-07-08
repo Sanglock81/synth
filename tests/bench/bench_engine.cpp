@@ -112,6 +112,47 @@ namespace
         return { times[blocks / 2], times[(int) (blocks * 0.99)], times.back() };
     }
 
+    // Kit worst case (Sub-phase 1): a live chord on part 0 + a Kit part filling the pool
+    // with sustained pads, so every voice renders and 12 of them go through the Kit
+    // paramsFor branch. Full stereo + FX path, like the processor.
+    Stat measureKit (int blocks, int fxMask)
+    {
+        SynthEngine engine;
+        engine.setOscQuality (PolyBlepOscillator::Quality::Efficient);
+        engine.setMaxVoices (16);
+        engine.prepare (kSR);
+
+        VoiceParams live;
+        live.osc1Wave = live.osc2Wave = 0; live.osc1Level = 0.8f; live.osc2Level = 0.8f;
+        live.cutoffHz = 2000.0f; live.resonance = 0.4f; live.filterEnvAmt = 0.5f;
+        for (int i = 0; i < 4; ++i) engine.noteOn (60 + i, 0.7f, 0);          // live chord (part 0)
+
+        KitData kit; kit.isKit = true;
+        for (int i = 0; i < 12; ++i) { kit.pads[(std::size_t) i] = { 40 + i, { 40 + i, 0, 0, 0 }, 1, 0 };
+                                       kit.params[(std::size_t) i] = live; }
+        engine.setPartKit (1, kit);
+        for (int i = 0; i < 12; ++i) engine.kitNoteOn (1, 40 + i, 0.7f);      // 12 sustained pads -> 16 voices
+
+        FXChain fx; fx.prepare (kSR, kBlock);
+        FXParams fp;
+        fp.enabled[FXChain::Chorus_] = (fxMask & 1) != 0; fp.enabled[FXChain::Delay_] = (fxMask & 2) != 0;
+        fp.enabled[FXChain::Reverb_] = (fxMask & 4) != 0; fp.enabled[FXChain::Width_] = (fxMask & 8) != 0;
+        fp.chorusMix = 0.5f; fp.delayMix = 0.4f; fp.reverbMix = 0.4f; fp.width = 1.5f;
+        fx.setParams (fp);
+
+        std::vector<float> mono (kBlock, 0.0f), L (kBlock, 0.0f), R (kBlock, 0.0f);
+        auto oneBlock = [&] { engine.render (mono.data(), kBlock, live, 3.0f, 0, 0.3f, 2);
+                              std::copy (mono.begin(), mono.end(), L.begin()); std::copy (mono.begin(), mono.end(), R.begin());
+                              fx.process (L.data(), R.data(), kBlock); };
+        for (int i = 0; i < 200; ++i) oneBlock();
+        std::vector<double> times (blocks);
+        for (int b = 0; b < blocks; ++b)
+        { const auto t0 = clk::now(); oneBlock(); const auto t1 = clk::now();
+          times[(std::size_t) b] = std::chrono::duration<double, std::milli> (t1 - t0).count(); }
+        std::sort (times.begin(), times.end());
+        return { times[(std::size_t) (blocks / 2)], times[(std::size_t) (int) (blocks * 0.99)], times.back() };
+    }
+
     void row (const std::string& label, Stat s)
     {
         const double tpP99 = s.p99Ms * kThinkpadDerate;      // robust worst-case, derated
@@ -167,6 +208,12 @@ int main()
     // A realistic heavy patch: fewer voices but lush FX (pad territory).
     std::printf ("\n6B realistic pad (6 voices, 3 osc, chorus+reverb):\n");
     row ("6 voice + cho+rev",   measureFull (6, 4000, 3, 1 | 4));
+
+    // Sub-phase 1 gate: kit worst case (live chord + 12 sustained pads = 16 voices,
+    // 12 through the Kit paramsFor branch), engine-only and + ALL FX.
+    std::printf ("\nSub-phase 1 kit (4 live + 12 kit pads = 16 voices, Efficient):\n");
+    row ("kit engine only",     measureKit (4000, 0));
+    row ("kit + ALL FX",        measureKit (4000, 15));
 
     std::printf ("\nBudget = 2.667 ms/block. Target: worst-case ThinkPad < 30%% "
                  "leaves headroom for GUI, other tracks, and OS jitter.\n");

@@ -215,6 +215,36 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   plugin suite green (98 cases). README routing section rewritten around the lifecycle
   contract + zones + MULTI.
 
+### Sub-phase 1 — KIT PARTS — DONE, gated
+- **Engine:** a part can be a KIT (Kit.h POD: 16 pads {trigger, soundNote[1..4], numSound,
+  chokeGroup} + baked VoiceParams per pad). Specialises the paramsFor(part, slot) seam —
+  voices carry a soundSlot (pad index); non-kit slot 0. Double-buffered publish like a
+  locked part; per-block snapshotted read index (no tearing). kitNoteOn expands trigger ->
+  sounding notes (decoupled pitch; 2..4 = chord pad) with a note-off ledger; choke groups
+  quick-release the group (self-choke = retrigger); unmapped trigger = silence. Pad level
+  folds into VoiceParams.gain (default 1.0 -> goldens bit-identical). ADSR quickRelease now
+  carries a choke flag so a choke stays fast despite the per-render setParameters (fixes a
+  long-tailed sound not being cut fast).
+- **Processor:** KitDefinition (source presets per pad) -> bake via shared bakePresetParams
+  -> setPartKit publishes. Dispatch routes a kit part's notes to kitNoteOn/Off. Kit presets
+  (kitToTree/kitFromTree; user *.kit under kitDir; factory "808 Basics" + "Stab Board").
+  MULTI serialises a kit part as a KIT child. Missing source -> Init, logged.
+- **UI:** Kit Editor modal (open by clicking a locked part cell on the PARTS strip): 4x4
+  pad grid with live flicker, per-pad trigger/source/sounding(learn-by-play)/level/choke,
+  audition, load/save. Refuses focus (QWERTY drives learn-by-play). docs/kit-editor.png.
+- **Tests:** dsp/test_kit (per-pad params, unmapped=silence, pitch decoupling, chord pad
+  on/off, choke in/cross/same-pad, gain math, choke torture click-free, clearPartKit);
+  plugin [kitpart] (dispatch, missing-source fallback, RT-alloc + glitch-free publish,
+  factory kits, kit-preset + kit-in-MULTI round-trips, focus, screenshot). Goldens
+  bit-identical (kit off / gain 1.0).
+- **Docs:** README kit paragraph + docs/presets.md Kits section (model, choke, factory
+  kits, seam note).
+- **Bench/CPU:** kit adds no new per-block audio cost. dsp_bench "kit (4 live + 12 pads =
+  16 voices) + ALL FX" p99 0.358 ms vs plain 16-voice 0.345 ms — statistically identical.
+  Governor = **powersave** (memory: ~2x inflated, invalid gate); ThinkPad-derate shows
+  ~47% budget at powersave, so ~23% at the performance governor. Same already-accepted
+  16-voice worst case as 6B/7C — kit introduces no new cost. Real gate stays on-ThinkPad.
+
 ## 8B–8F — not started (blocked on Phase 7)
 
 (To be filled in as each sub-phase runs.)

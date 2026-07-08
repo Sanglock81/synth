@@ -84,9 +84,46 @@ Bell, or a slow FX Riser has most of its energy in a short transient or a late s
 so integrated RMS understates them; they are matched by feel/peak instead. Drum
 presets (7A) are likewise matched by transient, not sustain.
 
+## Kits
+
+A **Kit** is a special kind of part: a per-note map of up to **16 pads**, laid out as
+a 4×4 grid (Launchkey style). Each pad has:
+
+- a **trigger note** (which key/pad fires it),
+- a **source preset** (baked per pad — any factory/user patch becomes that pad's sound),
+- **sounding note(s)** — 1 note for a normal hit, or **2–4 for a chord pad** (a tuned
+  stab from a single hit); the sounding pitch is *decoupled* from the trigger, so a pad
+  can sound any pitch(es) regardless of which key triggered it,
+- a **level**, and a **choke group** (0 = none).
+
+**Choke semantics.** Hitting a pad in a nonzero choke group instantly (click-free, ~4 ms)
+cuts any still-ringing pads in the *same* group — the classic closed-hat-silences-open-hat
+behaviour. Re-hitting the *same* pad retriggers it (a monophonic pad). A trigger with no
+pad mapped is silent. Note-off releases exactly the sounding notes that trigger fired
+(chord pads included), even if you edited the kit while the pad was held.
+
+**Editing.** Click a locked part cell (P1–P3) on the PARTS strip to open the **Kit
+Editor**. Per pad: set the trigger and sounding notes by **learn-by-play** (arm, then
+press keys), pick the source preset, set level and choke group, and **Audition**. Kits
+save/load as their own presets (a **Kits** category) and are included in a **MULTI**.
+
+**Factory kits.** *808 Basics* — six drums on triggers 36–41 (Kick 808, Kick Punchy,
+Snare, Hat Closed, Hat Open, Tom), with the two hats in choke group 1. *Stab Board* —
+four drums plus four tuned **minor-triad** chord pads (a plucky Synth Pluck at C/D/E/F).
+
+**Kit seam note.** In this version every pad of a Kit part shares the part's one FX/LFO
+chain (per-part FX arrives with the full-multitimbral work); a "drums" split zone plays
+its Kit chromatically across the zone via the pads' trigger notes.
+
 ## Under the hood
 
 Factory presets are JSON in `resources/presets/`, embedded via BinaryData. Each
 lists parameter overrides in real units (Hz, seconds, cents, choice index) applied
 on top of an Init baseline, plus an optional FX `fxOrder`. Adding a JSON there and
 rebuilding is all it takes to ship another patch — the build globs the folder.
+
+Kits are XML under the app's `kits/` folder (factory kits are built in). A kit lists its
+pads (trigger, source preset, sounding notes, level, choke); each pad's source is baked
+to `VoiceParams` on assignment, exactly like a locked part, so a pad sounds identical to
+loading that patch live. The per-note `paramsFor(part, note)` engine seam selects the
+right pad's params per voice.
