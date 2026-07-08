@@ -395,6 +395,35 @@ TEST_CASE ("kit part: a pad with a missing source bakes Init and still plays", "
     REQUIRE (tu::rms (capture (p, 12)) > 0.001);          // Init baseline sounds, no crash
 }
 
+TEST_CASE ("kit: trigger path is allocation-free; publish mid-note is glitch-free", "[plugin][kitpart][rt]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 512);
+    p.setPartKit (1, p.loadKit ("808 Basics"));
+
+    juce::AudioBuffer<float> buf (2, 512);
+    for (int i = 0; i < 20; ++i) { buf.clear(); juce::MidiBuffer m; p.processBlock (buf, m); }   // warm up
+
+    {
+        alloc_hook::AllocGuard g;
+        for (int b = 0; b < 200; ++b)
+        {
+            if (b % 4 == 0) p.routeMidi (juce::MidiMessage::noteOn  (1, 36 + (b % 6), 1.0f), 1);
+            if (b % 4 == 2) p.routeMidi (juce::MidiMessage::noteOff (1, 36 + (b % 6)),       1);
+            buf.clear(); juce::MidiBuffer m; p.processBlock (buf, m);
+        }
+        REQUIRE (g.count() == 0);
+    }
+
+    // Re-publish a different kit WHILE pads are sounding -> finite and bounded.
+    p.routeMidi (juce::MidiMessage::noteOn (1, 36, 1.0f), 1);
+    capture (p, 4);
+    p.setPartKit (1, p.loadKit ("Stab Board"));
+    auto out = capture (p, 8);
+    REQUIRE (tu::allFinite (out));
+    REQUIRE (tu::peak (out) <= 1.0f);
+}
+
 TEST_CASE ("kit: factory kits load and play their pads", "[plugin][kitpart][factory]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

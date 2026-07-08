@@ -165,6 +165,32 @@ TEST_CASE ("kit: pad level scales output (gain math)", "[kit][level]")
     REQUIRE (half == Catch::Approx (full * 0.5).epsilon (0.05));   // linear pad level
 }
 
+TEST_CASE ("kit: choke torture stays finite, bounded and click-free", "[kit][choke][torture]")
+{
+    SynthEngine e; e.prepare (kSR); e.setMaxVoices (16);
+    KitData kit; kit.isKit = true;
+    // Sine pads (smooth) so a hard-edge choke click would stand out from the waveform.
+    kit.pads[0] = { 46, { 46, 0, 0, 0 }, 1, 1 }; kit.params[0] = voice (3, 1.0f);   // open hat, sustains
+    kit.pads[1] = { 42, { 42, 0, 0, 0 }, 1, 1 }; kit.params[1] = voice (3, 1.0f);   // closed hat, same group
+    e.setPartKit (1, kit);
+
+    std::vector<float> out;
+    for (int hit = 0; hit < 64; ++hit)
+    {
+        e.kitNoteOn (1, (hit & 1) ? 42 : 46, 1.0f);      // alternate -> each chokes the other
+        std::vector<float> chunk (120, 0.0f);
+        e.render (chunk.data(), 120, VoiceParams{}, 2.0f, 0, 0.0f, 0);
+        out.insert (out.end(), chunk.begin(), chunk.end());
+    }
+
+    REQUIRE (tu::allFinite (out));
+    REQUIRE (tu::peak (out) <= 1.0f);
+    float maxJump = 0.0f;                                 // click detector: bounded sample-to-sample delta
+    for (std::size_t i = 1; i < out.size(); ++i) maxJump = std::max (maxJump, std::abs (out[i] - out[i - 1]));
+    INFO ("maxJump=" << maxJump);
+    REQUIRE (maxJump < 0.05f);                            // no hard-edge click from the choke (smooth sines)
+}
+
 TEST_CASE ("kit: clearPartKit returns the part to a plain locked part", "[kit][params]")
 {
     SynthEngine e; e.prepare (kSR); e.setMaxVoices (16);
