@@ -186,6 +186,25 @@ TEST_CASE ("mod env -> pitch: +12 st is an octave, decaying to note pitch", "[en
     }
 }
 
+TEST_CASE ("locked part renders with its baked params, not the live part", "[engine][7c][parts]")
+{
+    VoiceParams live = sineParams();                 // part 0: sine at the note
+    VoiceParams locked = sineParams(); locked.osc1Octave = 1.0f;   // part 1: an octave up
+
+    auto pitchOf = [&] (int part)
+    {
+        SynthEngine e; e.prepare (kSR);
+        e.setLockedPartParams (1, locked);           // publish the locked-part params
+        e.noteOn (60, 1.0f, part);                    // play note 60 on `part`
+        std::vector<float> out (int (kSR * 0.3), 0.0f);
+        e.render (out.data(), (int) out.size(), live, 2.0f, 0, 0.0f, 0);
+        return tu::zeroCrossHz (out, int (kSR * 0.05), int (kSR * 0.2), kSR);
+    };
+
+    REQUIRE (pitchOf (1) == Catch::Approx (523.25).margin (9.0));   // locked param: C5 (note+1 oct)
+    REQUIRE (pitchOf (0) == Catch::Approx (261.63).margin (5.0));   // live param: C4
+}
+
 TEST_CASE ("voice-sum headroom trim scales with the voice cap (1/sqrt(N))", "[engine][bug4][headroom]")
 {
     // The engine applies a fixed 1/sqrt(maxVoices) trim to the summed output so a

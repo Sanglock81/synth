@@ -136,7 +136,29 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   RT-alloc). NOTE (voice cap): a 4-key held chord = up to 16 voices -> the pool
   saturates and oldest-steal is exercised hard; report at 7C bench, cap unchanged.
 
-### 7C — not started (next, gated + paused)
+### 7C — multi-surface routing + parts — DONE, gated (release 152/152 + sanitizers green), then PAUSE
+- Engine: up to 4 parts. SynthVoice carries a `part` index; `SynthEngine::render`
+  selects per-voice params via the `paramsFor(part, note)` SEAM (note unused in v1 —
+  the forward-compat seam a future Kit part specializes per-note, per the user's
+  amendment). Part 0 = smoothed LIVE; parts 1-3 = baked, published lock-free via a
+  double buffer (`setLockedPartParams`). One shared 16-voice pool, global steal.
+  Golden bit-identical (single-part default path unchanged).
+- Bake: `snapshotParams` refactored to a static `buildVoiceParams(const APVTS&)`;
+  `setPartPreset` bakes a factory/user/Init preset via a throwaway BakeProcessor
+  (scratch APVTS) — reuses the kill-fold so a locked part is bit-identical to loading
+  live. Missing preset -> Init + logged warning.
+- Routing: surface->part table + locked-part preset names persist as a PARTS state
+  child. Routed-MIDI FIFO (raw <=3-byte msg + part), multi-producer push under a
+  SpinLock, lock-free audio-thread drain; note/CC/pitch-bend handling shared with the
+  host `midi` path (`handleControlMessage`). Standalone: per-input capture replaces
+  the holder player's all-device merge (no double-trigger); QWERTY stays LIVE (reroute
+  deferred). INPUTS modal dialog (routing + preset picker + activity dots) + button.
+- Tests: dsp `[7c][parts]` (locked part renders with its own params); plugin
+  `[7c]` (bake equivalence, 3-source contract, voice-level isolation, persistence
+  round-trip, missing-preset fallback, glitch-free reassignment, routed-path RT-alloc).
+- CPU: 7C adds NO new cost — 4-part worst case = the existing 16-voice + shared-FX
+  case (shared FX/LFO; O(1) paramsFor). Bench blocked at powersave governor (invalid
+  per [[vasynth-bench-governor]]); escalated to the user — on-ThinkPad remains the gate.
 
 ## 8B–8F — not started (blocked on Phase 7)
 

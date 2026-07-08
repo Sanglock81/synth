@@ -165,7 +165,11 @@ static float rp (const juce::AudioProcessorValueTreeState& s, const char* id)
     return s.getRawParameterValue (id)->load();
 }
 
-VoiceParams VASynthProcessor::snapshotParams() const
+// Build a VoiceParams from ANY APVTS carrying our layout. Used both for the LIVE
+// snapshot (this->apvts, audio thread) and to BAKE a preset into a locked part (a
+// scratch APVTS, message thread) — reusing the exact kill-switch fold so a locked
+// part sounds bit-identical to loading that preset live (7C).
+static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& apvts)
 {
     namespace ID = ParamID;
     VoiceParams p;
@@ -216,6 +220,8 @@ VoiceParams VASynthProcessor::snapshotParams() const
     return p;
 }
 
+VoiceParams VASynthProcessor::snapshotParams() const { return buildVoiceParams (apvts); }
+
 void VASynthProcessor::applyChordModifiers (std::uint32_t combined)
 {
     const std::uint32_t changed = combined ^ lastFedModMask;
@@ -223,6 +229,188 @@ void VASynthProcessor::applyChordModifiers (std::uint32_t combined)
         if ((changed >> i) & 1u)
             chordEngine.setModifierHeld (i, (combined >> i) & 1u);
     lastFedModMask = combined;
+}
+
+// ---- parts (7C) -----------------------------------------------------------
+// A throwaway AudioProcessor that exists ONLY to host an APVTS with our layout, so
+// a preset can be applied on the message thread and baked into a VoiceParams for a
+// locked part — without disturbing the live processor's state or engine.
+namespace
+{
+    struct BakeProcessor : juce::AudioProcessor
+    {
+        juce::AudioProcessorValueTreeState apvts { *this, nullptr, "PARAMS", createParameterLayout() };
+        const juce::String getName() const override { return "bake"; }
+        void prepareToPlay (double, int) override {}
+        void releaseResources() override {}
+        void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override {}
+        double getTailLengthSeconds() const override { return 0.0; }
+        bool acceptsMidi() const override { return false; }
+        bool producesMidi() const override { return false; }
+        juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+        bool hasEditor() const override { return false; }
+        int getNumPrograms() override { return 1; }
+        int getCurrentProgram() override { return 0; }
+        void setCurrentProgram (int) override {}
+        const juce::String getProgramName (int) override { return {}; }
+        void changeProgramName (int, const juce::String&) override {}
+        void getStateInformation (juce::MemoryBlock&) override {}
+        void setStateInformation (const void*, int) override {}
+    };
+
+    void bakeInitBaseline (BakeProcessor& b)
+    {
+        for (auto* rp : b.getParameters()) rp->setValueNotifyingHost (rp->getDefaultValue());
+    }
+}
+
+void VASynthProcessor::setPartPreset (int part, const juce::String& name)
+{
+    if (part < 1 || part >= SynthEngine::maxParts) return;
+
+    BakeProcessor scratch;
+    bool ok = true;
+    if (name.isEmpty() || name == "Init")
+        bakeInitBaseline (scratch);
+    else if (const auto* fp = factoryPresets.byName (name))
+        fp->applyParams (scratch.apvts);
+    else if (auto xml = juce::XmlDocument::parse (AppInfo::presetDir().getChildFile (name + ".vasynth")))
+    {
+        auto tree = juce::ValueTree::fromXml (*xml);
+        const bool needsMigration = stateNeedsLevelMigration (tree);
+        scratch.apvts.replaceState (tree);
+        if (needsMigration) applyLegacyOscLevelMigration (scratch.apvts);
+    }
+    else
+    {
+        ok = false;                                 // missing user preset -> Init fallback
+        bakeInitBaseline (scratch);
+        juce::Logger::writeToLog ("part " + juce::String (part) + " preset '" + name + "' missing -> Init");
+    }
+
+    engine.setLockedPartParams (part, buildVoiceParams (scratch.apvts));
+    partPresetName[(std::size_t) part] = ok ? name : juce::String ("Init");
+}
+
+void VASynthProcessor::setSurfaceRouting (const juce::String& surface, int part)
+{
+    if (part < 0 || part >= SynthEngine::maxParts) return;
+    const juce::ScopedLock sl (routingLock);
+    for (auto& e : routingTable) if (e.first == surface) { e.second = part; return; }
+    routingTable.emplace_back (surface, part);
+}
+
+int VASynthProcessor::getSurfaceRouting (const juce::String& surface) const
+{
+    const juce::ScopedLock sl (routingLock);
+    for (auto& e : routingTable) if (e.first == surface) return e.second;
+    return 0;                                        // default: LIVE
+}
+
+void VASynthProcessor::bumpSurfaceActivity (const juce::String& surface)
+{
+    const juce::ScopedLock sl (routingLock);
+    for (auto& e : surfaceHits) if (e.first == surface) { ++e.second; return; }
+    surfaceHits.emplace_back (surface, 1u);
+}
+
+std::uint32_t VASynthProcessor::surfaceActivity (const juce::String& surface) const
+{
+    const juce::ScopedLock sl (routingLock);
+    for (auto& e : surfaceHits) if (e.first == surface) return e.second;
+    return 0;
+}
+
+void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chordOn)
+{
+    if (part == 0 && chordOn)
+    {
+        const int mod = modifierLearn.handleNoteOn (note);   // learned pad consumed
+        if (mod >= 0)
+        {
+            midiModMask |= (1u << mod);
+            applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
+            return;
+        }
+        int trig[ChordEngine::kMaxTones], rel[ChordEngine::kMaxTones]; int nt = 0, nr = 0;
+        chordEngine.noteOn (note, trig, nt, rel, nr);
+        for (int i = 0; i < nr; ++i) engine.noteOff (rel[i], 0);
+        for (int i = 0; i < nt; ++i) engine.noteOn (trig[i], vel, 0);
+    }
+    else
+        engine.noteOn (note, vel, part);              // locked parts: chord is live-only
+}
+
+void VASynthProcessor::dispatchNoteOff (int note, int part, bool chordOn)
+{
+    if (part == 0 && chordOn)
+    {
+        const int mod = modifierLearn.handleNoteOff (note);
+        if (mod >= 0)
+        {
+            midiModMask &= ~(1u << mod);
+            applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
+            return;
+        }
+        int rel[ChordEngine::kMaxTones]; int nr = 0;
+        chordEngine.noteOff (note, rel, nr);
+        for (int i = 0; i < nr; ++i) engine.noteOff (rel[i], 0);
+    }
+    else
+        engine.noteOff (note, part);
+}
+
+// CC / pitch-bend / all-notes-off — shared by the host `midi` buffer and the routed
+// FIFO. These act globally / on the live part (v1: control is not per-part).
+void VASynthProcessor::handleControlMessage (const juce::MidiMessage& msg)
+{
+    if (msg.isAllNotesOff() || msg.isAllSoundOff())
+    {
+        engine.allNotesOff(); chordEngine.reset(); midiModMask = 0; lastFedModMask = 0;
+        return;
+    }
+    if (msg.isPitchWheel())
+    {
+        const float norm = (msg.getPitchWheelValue() - 8192) / 8192.0f;
+        engine.setPitchBend (norm * pitchBendRangeSemis.load (std::memory_order_acquire));
+        return;
+    }
+    if (msg.isController())
+    {
+        const int cc = msg.getControllerNumber(), val = msg.getControllerValue();
+        if (cc == 64) { engine.setSustainPedal (val >= 64); return; }   // damper
+
+        // A learned modifier CC (footswitch >=64) is consumed before MIDI-learn.
+        bool held = false;
+        const int mod = chordEngine.isEnabled() ? modifierLearn.handleCC (cc, val, held) : -1;
+        if (mod >= 0)
+        {
+            if (held) midiModMask |= (1u << mod); else midiModMask &= ~(1u << mod);
+            applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
+        }
+        else
+        {
+            if (cc == 1) engine.setModWheel (val / 127.0f);            // mod wheel -> vibrato
+            midiLearn.handleCC (msg.getChannel(), cc, val);
+        }
+    }
+}
+
+void VASynthProcessor::drainRoutedMidi (bool chordOn)
+{
+    int start1, size1, start2, size2;
+    routedFifo.prepareToRead (routedFifo.getNumReady(), start1, size1, start2, size2);
+    auto handle = [&] (int idx)
+    {
+        const auto& e = routedBuf[(std::size_t) idx];
+        const juce::MidiMessage m (e.status, e.d1, e.d2);
+        if (m.isNoteOn())       dispatchNoteOn  (e.d1, e.d2 / 127.0f, e.part, chordOn);
+        else if (m.isNoteOff()) dispatchNoteOff (e.d1, e.part, chordOn);
+        else                    handleControlMessage (m);
+    };
+    for (int i = 0; i < size1; ++i) handle (start1 + i);
+    for (int i = 0; i < size2; ++i) handle (start2 + i);
+    routedFifo.finishedRead (size1 + size2);
 }
 
 FXParams VASynthProcessor::snapshotFXParams() const
@@ -310,6 +498,10 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // Feed QWERTY modifier edges (message thread) into the latest-wins forcer stack.
     applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
 
+    // Routed surfaces (per-input MIDI / QWERTY-to-part) — drained at block start, so
+    // they sound from sample 0 (block-granular; sample-accurate routing is future).
+    drainRoutedMidi (chordOn);
+
     // --- sample-accurate MIDI dispatch --------------------------------------
     // Render up to each event, dispatch it, continue. This keeps note timing
     // tight even inside large buffers — important for anything sequenced.
@@ -327,74 +519,12 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             renderedUpTo = pos;
         }
 
-        if (msg.isNoteOn())
-        {
-            const int   note = msg.getNoteNumber();
-            const float vel  = msg.getFloatVelocity();
-            // A learned modifier NOTE (pad) is consumed, not played (chord mode only).
-            const int mod = chordOn ? modifierLearn.handleNoteOn (note) : -1;
-            if (mod >= 0)
-            {
-                midiModMask |= (1u << mod);
-                applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
-            }
-            else                                            // expand to the chord (passthrough if off)
-            {
-                int trig[ChordEngine::kMaxTones], rel[ChordEngine::kMaxTones]; int nt = 0, nr = 0;
-                chordEngine.noteOn (note, trig, nt, rel, nr);
-                for (int i = 0; i < nr; ++i) engine.noteOff (rel[i]);
-                for (int i = 0; i < nt; ++i) engine.noteOn (trig[i], vel);
-            }
-        }
+        if (msg.isNoteOn())                                 // host / QWERTY -> LIVE part 0
+            dispatchNoteOn (msg.getNoteNumber(), msg.getFloatVelocity(), 0, chordOn);
         else if (msg.isNoteOff())
-        {
-            const int note = msg.getNoteNumber();
-            const int mod = chordOn ? modifierLearn.handleNoteOff (note) : -1;
-            if (mod >= 0)
-            {
-                midiModMask &= ~(1u << mod);
-                applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
-            }
-            else
-            {
-                int rel[ChordEngine::kMaxTones]; int nr = 0;
-                chordEngine.noteOff (note, rel, nr);
-                for (int i = 0; i < nr; ++i) engine.noteOff (rel[i]);
-            }
-        }
-        else if (msg.isAllNotesOff() || msg.isAllSoundOff())
-            { engine.allNotesOff(); chordEngine.reset(); midiModMask = 0; }
-        else if (msg.isPitchWheel())
-        {
-            // 14-bit, centre 8192 -> +/- the active device's bend range in semis.
-            const float norm = (msg.getPitchWheelValue() - 8192) / 8192.0f;
-            engine.setPitchBend (norm * pitchBendRangeSemis.load (std::memory_order_acquire));
-        }
-        else if (msg.isController())
-        {
-            const int cc  = msg.getControllerNumber();
-            const int val = msg.getControllerValue();
-
-            if (cc == 64)                                   // sustain pedal (Korg B2 damper)
-                engine.setSustainPedal (val >= 64);
-            else
-            {
-                // A learned modifier CC (footswitch >=64) is consumed before MIDI-learn.
-                bool held = false;
-                const int mod = chordOn ? modifierLearn.handleCC (cc, val, held) : -1;
-                if (mod >= 0)
-                {
-                    if (held) midiModMask |= (1u << mod); else midiModMask &= ~(1u << mod);
-                    applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
-                }
-                else
-                {
-                    if (cc == 1)                            // mod wheel -> vibrato depth
-                        engine.setModWheel (val / 127.0f);
-                    midiLearn.handleCC (msg.getChannel(), cc, val);
-                }
-            }
-        }
+            dispatchNoteOff (msg.getNoteNumber(), 0, chordOn);
+        else
+            handleControlMessage (msg);                     // CC / pitch-bend / all-off
     }
 
     if (renderedUpTo < buffer.getNumSamples())
@@ -470,6 +600,30 @@ void VASynthProcessor::getStateInformation (juce::MemoryBlock& destData)
     auto state = apvts.copyState();
     midiLearn.saveToTree (state);                 // append MIDILEARN child
     modifierLearn.saveToTree (state);             // append MODIFIERLEARN child (7B)
+
+    // Parts (7C): locked-part preset names + the surface routing table.
+    state.removeChild (state.getChildWithName ("PARTS"), nullptr);
+    juce::ValueTree parts ("PARTS");
+    for (int p = 1; p < SynthEngine::maxParts; ++p)
+        if (partPresetName[(std::size_t) p].isNotEmpty())
+        {
+            juce::ValueTree e ("PART");
+            e.setProperty ("index", p, nullptr);
+            e.setProperty ("preset", partPresetName[(std::size_t) p], nullptr);
+            parts.addChild (e, -1, nullptr);
+        }
+    {
+        const juce::ScopedLock sl (routingLock);
+        for (auto& r : routingTable)
+        {
+            juce::ValueTree e ("ROUTE");
+            e.setProperty ("surface", r.first, nullptr);
+            e.setProperty ("part", r.second, nullptr);
+            parts.addChild (e, -1, nullptr);
+        }
+    }
+    state.addChild (parts, -1, nullptr);
+
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -493,6 +647,16 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
 
         // Restore the FX chain order (state-tree property, not an APVTS param).
         applyFxOrderProperty();
+
+        // Parts (7C): re-bake locked-part presets (missing -> Init) + routing table.
+        if (auto parts = tree.getChildWithName ("PARTS"); parts.isValid())
+            for (auto e : parts)
+            {
+                if (e.hasType ("PART"))
+                    setPartPreset ((int) e.getProperty ("index", -1), e.getProperty ("preset", juce::String()).toString());
+                else if (e.hasType ("ROUTE"))
+                    setSurfaceRouting (e.getProperty ("surface", juce::String()).toString(), (int) e.getProperty ("part", 0));
+            }
     }
 }
 

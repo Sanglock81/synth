@@ -102,6 +102,44 @@ public:
         for (int i = 0; i < 4; ++i) out[i] = (int) ((packed >> (i * 8)) & 0xFFu);
     }
 
+    // -- parts / multitimbral (7C) --------------------------------------------
+    // Bake a preset into a LOCKED part (1..3) on the message thread and publish it
+    // to the audio thread. name "" or "Init" -> Init baseline; a missing user preset
+    // -> Init with a logged warning (never a crash). Part 0 is always LIVE (edited
+    // by the panel) and cannot be assigned.
+    void setPartPreset (int part, const juce::String& presetName);
+    juce::String getPartPreset (int part) const
+    {
+        return (part >= 1 && part < SynthEngine::maxParts) ? partPresetName[(std::size_t) part] : juce::String();
+    }
+
+    // A playing surface (QWERTY or a MIDI input by name) -> a part index (0 = LIVE).
+    // Persists with the session; unknown surface -> LIVE by default.
+    void setSurfaceRouting (const juce::String& surface, int part);
+    int  getSurfaceRouting (const juce::String& surface) const;
+
+    // Per-surface activity counter for the INPUTS dialog's "incoming events" dot.
+    // Bumped by the surface's producer (per-input MIDI callback / QWERTY); the dialog
+    // polls the count and blinks on a change. Off-audio-thread only.
+    void         bumpSurfaceActivity (const juce::String& surface);
+    std::uint32_t surfaceActivity (const juce::String& surface) const;
+
+    // Route a note from a surface to its part. RT-safe multi-producer push (message
+    // thread QWERTY + MIDI-thread per-device callbacks); drained in processBlock.
+    void routeNoteOn  (int note, float velocity, int part) { pushRouted (0x90, note, (int) (velocity * 127.0f + 0.5f), part); }
+    void routeNoteOff (int note, int part)                 { pushRouted (0x80, note, 0, part); }
+
+    // Route a whole MIDI message (<=3 bytes: note/CC/pitch-bend) from a surface. The
+    // standalone's per-input callbacks use this so a routed device's CCs, pitch bend
+    // and sustain reach the synth (control messages are handled globally / on the
+    // live part; only notes carry the part). Bumps the surface's activity counter.
+    void routeMidi (const juce::MidiMessage& m, int part)
+    {
+        const auto* d = m.getRawData();
+        const int n = m.getRawDataSize();
+        if (n >= 1) pushRouted (d[0], n >= 2 ? d[1] : 0, n >= 3 ? d[2] : 0, part);
+    }
+
     // -- plug-and-play MIDI (the standalone hot-plug watcher drives these) ------
     // Apply the matched device profile's default CC map — factory first, then any
     // user override (user beats factory; a control the user has *learned* is never
@@ -157,6 +195,30 @@ private:
     // latest-wins forcer stack as edges (audio thread).
     void applyChordModifiers (std::uint32_t combinedMask);
 
+    // Note dispatch shared by the host `midi` buffer (part 0) and the routed FIFO:
+    // part 0 goes through the chord engine; locked parts play the note directly.
+    void dispatchNoteOn  (int note, float velocity, int part, bool chordOn);
+    void dispatchNoteOff (int note, int part, bool chordOn);
+
+    // -- routed-MIDI FIFO (surfaces -> parts) ---------------------------------
+    // Each event is a raw <=3-byte MIDI message + the routed part. Notes carry the
+    // part; control messages are handled globally on drain.
+    struct RoutedEvent { std::uint8_t status, d1, d2, part; };
+    void pushRouted (int status, int d1, int d2, int part)   // producers (non-audio)
+    {
+        if (part < 0 || part >= SynthEngine::maxParts) return;
+        const juce::SpinLock::ScopedLockType sl (routedPushLock);
+        int start1, size1, start2, size2;
+        routedFifo.prepareToWrite (1, start1, size1, start2, size2);
+        if (size1 > 0)
+        {
+            routedBuf[(std::size_t) start1] = { (std::uint8_t) status, (std::uint8_t) d1, (std::uint8_t) d2, (std::uint8_t) part };
+            routedFifo.finishedWrite (1);
+        }   // full -> drop (never blocks a producer)
+    }
+    void drainRoutedMidi (bool chordOn);              // audio thread
+    void handleControlMessage (const juce::MidiMessage& m); // CC/pitch-bend/all-off, shared
+
     // Parse an "a,b,c,d" fx_order property into the atomic mirror (used on load).
     void applyFxOrderProperty();
 
@@ -189,6 +251,22 @@ private:
     std::atomic<std::uint32_t> activeModMask { 0 };   // audio -> UI (held modifiers)
     std::uint32_t midiModMask   = 0;   // audio-thread: modifiers held via CC/note
     std::uint32_t lastFedModMask = 0;  // audio-thread: mask currently in the chord engine
+
+    // Parts (7C): locked-part preset names (message thread; persisted) + a routing
+    // table (surface name -> part). Routing/preset changes happen on the message
+    // thread; the baked params reach the audio thread via the engine's double buffer.
+    std::array<juce::String, SynthEngine::maxParts> partPresetName {};
+    juce::CriticalSection routingLock;
+    std::vector<std::pair<juce::String, int>> routingTable;          // surface -> part
+    std::vector<std::pair<juce::String, std::uint32_t>> surfaceHits; // surface -> activity count
+
+    // Routed-MIDI FIFO: surfaces (QWERTY / per-device MIDI) push part-tagged note
+    // events; processBlock drains them. Multi-producer push serialised by a SpinLock
+    // (producers are non-audio threads); the audio thread reads lock-free.
+    static constexpr int kRoutedCapacity = 2048;
+    juce::AbstractFifo routedFifo { kRoutedCapacity };
+    std::array<RoutedEvent, kRoutedCapacity> routedBuf {};
+    juce::SpinLock routedPushLock;
 
     // Toast (message-thread only): last message + a monotonically-increasing seq.
     juce::String       toastText;

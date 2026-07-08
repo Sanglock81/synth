@@ -67,6 +67,7 @@ add_executable(plugin_tests
     plugin/test_input_reliability.cpp
     plugin/test_drums.cpp
     plugin/test_chord_plugin.cpp
+    plugin/test_parts.cpp
     plugin/test_rt_safety.cpp
     plugin/test_smoothing.cpp
     plugin/test_performance_midi.cpp

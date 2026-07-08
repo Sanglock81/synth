@@ -56,7 +56,8 @@ static String preferredDefaultOutput()
 // obvious cause. So we re-assert enablement on every device-manager change, not
 // just on hot-plug. (Enabling also routes: the holder registers its player as an
 // all-device MIDI callback, so an enabled input reaches the processor.)
-class VASynthMidiHotplug : private ChangeListener
+class VASynthMidiHotplug : private ChangeListener,
+                           public  MidiInputCallback
 {
 public:
     VASynthMidiHotplug (AudioDeviceManager& dmToUse, ::VASynthProcessor& procToUse)
@@ -70,6 +71,20 @@ public:
     }
 
     ~VASynthMidiHotplug() override { dm.removeChangeListener (this); }
+
+    // 7C: per-input capture. We are registered as the all-device MIDI callback (in
+    // place of the holder's player), so every enabled input's MIDI arrives here
+    // tagged with its source device. We route it to the device's assigned part — one
+    // synth per part, "multiple synths into one pedalboard". No double-trigger: the
+    // player's merge is removed (see the app's initialise()), so this is the ONLY
+    // path for hardware MIDI. Runs on the MIDI thread (non-audio); routeMidi pushes
+    // into the processor's lock-free FIFO.
+    void handleIncomingMidiMessage (MidiInput* source, const MidiMessage& message) override
+    {
+        const auto name = source != nullptr ? source->getName() : juce::String();
+        proc.routeMidi (message, proc.getSurfaceRouting (name));
+        proc.bumpSurfaceActivity (name);
+    }
 
 private:
     static bool containsId (const Array<MidiDeviceInfo>& list, const String& id)
@@ -241,11 +256,24 @@ public:
         // start the plug-and-play MIDI watcher.
         deviceLogger = std::make_unique<VASynthDeviceLogger> (mainWindow->getDeviceManager());
         if (auto* va = dynamic_cast<::VASynthProcessor*> (mainWindow->pluginHolder->processor.get()))
-            midiHotplug = std::make_unique<VASynthMidiHotplug> (mainWindow->getDeviceManager(), *va);
+        {
+            auto& dm = mainWindow->getDeviceManager();
+            midiHotplug = std::make_unique<VASynthMidiHotplug> (dm, *va);
+
+            // 7C per-input routing: replace the holder player's all-device MIDI merge
+            // (which would send every device's notes to the live part) with our
+            // routing callback, so each surface reaches its assigned part and there
+            // is exactly ONE path for hardware MIDI (no double-trigger). QWERTY still
+            // flows via the processor's qwertyKeyboardState merge (the LIVE part).
+            dm.removeMidiInputDeviceCallback ({}, &mainWindow->pluginHolder->player);
+            dm.addMidiInputDeviceCallback    ({}, midiHotplug.get());
+        }
     }
 
     void shutdown() override
     {
+        if (midiHotplug != nullptr && mainWindow != nullptr)
+            mainWindow->getDeviceManager().removeMidiInputDeviceCallback ({}, midiHotplug.get());
         midiHotplug  = nullptr;
         deviceLogger = nullptr;
         mainWindow   = nullptr;

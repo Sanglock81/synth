@@ -35,7 +35,12 @@ a general-purpose synth that runs in any VST3 host or standalone.
   the tones a chord triggered no matter how the modifiers churn while it's held.
 - **Plug-and-play MIDI**: hot-plug auto-connect + JSON device profiles (Launchkey,
   Korg B2), MIDI-learn on every control (learned > user > factory precedence).
-- **16 factory presets** + user save/load + sound-design Randomize.
+- **Multi-surface parts (multitimbral-lite)**: up to 4 parts — part 0 is LIVE (what
+  the panel edits), parts 1–3 are LOCKED to a preset's voice character. Route each
+  input surface (QWERTY, each MIDI controller) to a part in the **INPUTS** dialog, so
+  a B2 can hold a bass part while a Launchkey plays the live patch. One shared 16-voice
+  pool; the FX chain + LFO are shared (v1 — "multiple synths into one pedalboard").
+- **16 factory presets + 6 drums** + user save/load + sound-design Randomize.
 - **Standalone extras**: QWERTY computer-keyboard note input, curated audio-device
   default (PipeWire), F11 fullscreen, F12 live health overlay.
 - **Observability**: RT-safe ring logger, per-block CPU/xrun/saturation telemetry,
@@ -106,6 +111,21 @@ auto-connects it, applies its **device profile** (default CC map), and toasts;
 unplugging releases held notes. Profiles are JSON (factory profiles embedded for
 the Launchkey Mini and Korg B2; user overrides in the config dir), with precedence
 **learned > user > factory**. Full details in [docs/midi.md](docs/midi.md).
+
+**Parts & input routing (7C).** The engine has up to **4 parts**. Part 0 = **LIVE**
+(snapshots the APVTS each block — what the panel edits); parts 1–3 = **LOCKED**, each
+holding a `VoiceParams` baked from a preset on the message thread and published to the
+audio thread lock-free (double-buffer). Voices carry a part index at note-on and render
+with that part's params via a single `paramsFor(part, note)` seam (the `note` arg is
+unused in v1 — it's the seam a future per-note "Kit part" plugs into). One **shared**
+16-voice pool with global oldest-steal. Each input **surface** (QWERTY, each MIDI input)
+routes to a part in the **INPUTS** dialog; assigning a preset bakes it. In the standalone,
+per-input MIDI capture replaces JUCE's device merge so each controller reaches its part
+(no double-trigger). **v1 simplifications (deliberate):** the FX chain, global LFO,
+poly-mode and master are **shared** and follow the LIVE part; a locked part contributes
+only voice-level character (osc/mix/filter/env/vel/env→pitch). On-screen edits, Randomize
+and the chord engine affect the LIVE part only. Routing + locked-preset refs persist with
+the session; a missing preset on load falls back to Init with a logged warning.
 
 **FX chain (6B).** A global, **reorderable** stereo chain of four hand-rolled,
 JUCE-free effects (all in `Source/DSP/`, allocation-free after `prepare`): chorus,

@@ -6,6 +6,7 @@
 #include "UI/Widgets.h"
 #include "UI/FXPanel.h"
 #include "UI/ChordPanel.h"
+#include "UI/InputsDialog.h"
 #include "PresetManager.h"
 
 // ============================================================================
