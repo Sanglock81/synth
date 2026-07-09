@@ -308,15 +308,13 @@ private:
     // Default order 0,1,2,3 packed one index per byte (byte i = slot i's effect).
     static constexpr std::uint32_t kDefaultOrderPacked = 0x03020100u;
 
-    SynthEngine        engine;
+    SynthEngine        engine;          // owns the per-part voices + per-part FX (Sub-phase 2)
     ChordEngine        chordEngine;
-    FXChain            fxChain;
     MidiLearnManager    midiLearn { apvts };
     ModifierLearnManager modifierLearn;
     MidiProfileLibrary  profileLib;
     FactoryPresetLibrary factoryPresets;
-    juce::AudioBuffer<float> monoScratch;
-    juce::AudioBuffer<float> stereoScratch;
+    juce::AudioBuffer<float> stereoScratch;   // master L/R sum target
     std::atomic<std::uint32_t> fxOrderPacked { kDefaultOrderPacked };
     std::atomic<bool>  panicRequested { false };
     std::atomic<float> pitchBendRangeSemis { 2.0f };

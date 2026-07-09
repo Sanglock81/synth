@@ -245,6 +245,12 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   ~47% budget at powersave, so ~23% at the performance governor. Same already-accepted
   16-voice worst case as 6B/7C — kit introduces no new cost. Real gate stays on-ThinkPad.
 
+### Deferred / future features
+- **Per-part mixer** (`partN_level`/`partN_pan` + MIX strip to balance each part's volume
+  and pan) — deferred by the user (2026-07-08) after kit hands-on. Sub-phase 2 proceeds
+  WITHOUT it: per-part FX + per-part LFOs only; parts sum at unity/centre (the safety
+  clipper handles multi-part peaks). Revisit later; frozen IDs allow adding it then.
+
 ## 8B–8F — not started (blocked on Phase 7)
 
 (To be filled in as each sub-phase runs.)

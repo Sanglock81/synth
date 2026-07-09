@@ -133,12 +133,11 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     engine.setOscQuality (VASYNTH_OSC_QUALITY);
     engine.setMaxVoices (VASYNTH_MAX_VOICES);
-    engine.prepare (sampleRate);
-    // Allocate the mono mixdown + stereo FX buffers ONCE, at the host's max block
-    // size. processBlock never resizes them (JUCE guarantees numSamples <= this).
-    monoScratch.setSize (1, juce::jmax (1, samplesPerBlock), false, false, true);
+    engine.prepare (sampleRate, juce::jmax (1, samplesPerBlock));   // sizes the per-part FX buffers too
+    // Allocate the stereo master buffer ONCE, at the host's max block size. processBlock
+    // never resizes it (JUCE guarantees numSamples <= this). Per-part mix buffers + FX
+    // live in the engine now (Sub-phase 2).
     stereoScratch.setSize (2, juce::jmax (1, samplesPerBlock), false, false, true);
-    fxChain.prepare (sampleRate, juce::jmax (1, samplesPerBlock));
 
     masterGain.reset (sampleRate, 0.02);                       // ~20 ms ramp
     masterGain.setCurrentAndTargetValue (
@@ -880,11 +879,9 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     buffer.clear();
 
     const int numSamples = buffer.getNumSamples();
-    // No resize on the audio thread — monoScratch was sized in prepareToPlay.
+    // No resize on the audio thread — buffers were sized in prepareToPlay.
     // Guard against a misbehaving host sending an oversized block.
-    jassert (numSamples <= monoScratch.getNumSamples());
-    auto* mono = monoScratch.getWritePointer (0);
-    juce::FloatVectorOperations::clear (mono, numSamples);
+    jassert (numSamples <= stereoScratch.getNumSamples());
 
     // QWERTY notes no longer merge here — they flow through the "QWERTY" surface zones
     // via routeSurfaceMessage() (resolved off the audio thread) and arrive on the routed
@@ -918,8 +915,10 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     drainRoutedMidi (chordOn);
 
     // --- sample-accurate MIDI dispatch --------------------------------------
-    // Render up to each event, dispatch it, continue. This keeps note timing
-    // tight even inside large buffers — important for anything sequenced.
+    // Multitimbral (Sub-phase 2): each part renders into its OWN buffer (in the engine)
+    // so it can run its OWN FX chain; the sum happens once, below. Voices still render
+    // per event segment to keep host MIDI note timing tight.
+    engine.beginMasterBlock (numSamples, params);
     int renderedUpTo = 0;
 
     for (const auto metadata : midi)
@@ -929,8 +928,8 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
         if (pos > renderedUpTo)
         {
-            engine.render (mono + renderedUpTo, pos - renderedUpTo,
-                           params, lfoRate, lfoShape, lfoDepth, lfoDest);
+            engine.renderParts (renderedUpTo, pos - renderedUpTo,
+                                params, lfoRate, lfoShape, lfoDepth, lfoDest);
             renderedUpTo = pos;
         }
 
@@ -942,24 +941,23 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             handleControlMessage (msg);                     // CC / pitch-bend / all-off
     }
 
-    if (renderedUpTo < buffer.getNumSamples())
-        engine.render (mono + renderedUpTo, buffer.getNumSamples() - renderedUpTo,
-                       params, lfoRate, lfoShape, lfoDepth, lfoDest);
+    if (renderedUpTo < numSamples)
+        engine.renderParts (renderedUpTo, numSamples - renderedUpTo,
+                            params, lfoRate, lfoShape, lfoDepth, lfoDest);
 
     // Publish the held-modifier mask (QWERTY | MIDI) for the CHORD UI indicators.
     activeModMask.store (qwertyModMask.load (std::memory_order_acquire) | midiModMask,
                          std::memory_order_release);
 
-    // --- stereo FX chain: the engine sums to mono, so duplicate to L/R and run
-    //     the reorderable chain (chorus/delay/reverb/width) in place. The chain
-    //     is allocation-free; disabled blocks cost nothing.
+    // --- per-part FX + master sum (Sub-phase 2). Part 0 (LIVE) uses the panel's FX;
+    //     locked/kit parts are dry until their bake includes FX (next increment). The
+    //     engine runs each part's own chain and sums to stereo, skipping silent parts.
     float* L = stereoScratch.getWritePointer (0);
     float* R = stereoScratch.getWritePointer (1);
-    juce::FloatVectorOperations::copy (L, mono, numSamples);
-    juce::FloatVectorOperations::copy (R, mono, numSamples);
 
-    fxChain.setParams (snapshotFXParams());
-    fxChain.process (L, R, numSamples);
+    std::array<FXParams, SynthEngine::maxParts> partFxParams;   // stack POD, RT-safe
+    partFxParams[0] = snapshotFXParams();                       // part 0 = live FX
+    engine.mixParts (L, R, numSamples, partFxParams.data());
 
     // --- master gain (per-sample ramp, kills zipper on gain steps/automation)
     //     followed by the safety soft-clipper — the LAST thing before output.

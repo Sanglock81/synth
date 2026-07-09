@@ -2,9 +2,11 @@
 #include "SynthVoice.h"
 #include "Kit.h"
 #include "LFO.h"
+#include "FXChain.h"
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <vector>
 
 // ============================================================================
 // The polyphonic engine. Owns the voice pool and the global LFO.
@@ -28,13 +30,24 @@ class SynthEngine
 public:
     static constexpr int maxVoices = 16;
 
-    void prepare (double newSampleRate)
+    void prepare (double newSampleRate, int maxBlock = 2048)
     {
         sampleRate = newSampleRate;
+        maxBlockSize = maxBlock;
         for (auto& v : voices)
         {
             v.setOscQuality (oscQuality);
             v.prepare (sampleRate);
+        }
+        // Per-part FX (Sub-phase 2): each part owns a chain + stereo scratch, all sized
+        // now so renderMaster() never allocates. Skipped for silent/bypassed parts.
+        for (int p = 0; p < maxParts; ++p)
+        {
+            partFx[(std::size_t) p].prepare (sampleRate, maxBlock);
+            partMono[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
+            partL[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
+            partR[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
+            fxSilentBlocks[(std::size_t) p] = kFxHoldBlocks;   // start idle
         }
         lfo.prepare (sampleRate);
         vibratoLFO.prepare (sampleRate);
@@ -313,6 +326,133 @@ public:
             out[i] *= voiceTrim;
     }
 
+    // ---- multitimbral master render (Sub-phase 2) --------------------------
+    // Full STEREO master: each part's voices render into that part's own buffer, run
+    // through that part's own FX chain, then sum (unity — per-part level/pan is a
+    // deferred mixer). A part with no active voices AND an idle FX chain is SKIPPED
+    // (the CPU control; a decaying FX tail keeps processing until silent). part 0 is
+    // the smoothed LIVE part; the shared LFO/bend/vibrato drive every part (per-part
+    // LFOs land next). Split into begin/renderParts/mixParts so the processor can keep
+    // host MIDI sample-accurate (render voices per event segment) while FX+sum run once
+    // per block. renderMaster() is the whole-block convenience for tests.
+
+    // Clear per-part accumulators + snapshot locked/kit state for the block.
+    void beginMasterBlock (int numSamples, VoiceParams liveParams)
+    {
+        for (int pt = 0; pt < maxParts; ++pt)
+            kitReadIdx[(std::size_t) pt] = kitSlots[(std::size_t) pt].idx.load (std::memory_order_acquire);
+        for (int pt = 1; pt < maxParts; ++pt)
+            partParams[(std::size_t) pt] = lockedSlots[(std::size_t) pt].current();
+        if (! smoothPrimed)
+        {
+            smCutoff = liveParams.cutoffHz; smReso = liveParams.resonance;
+            smL1 = liveParams.osc1Level; smL2 = liveParams.osc2Level; smL3 = liveParams.osc3Level;
+            smoothPrimed = true;
+        }
+        partHadVoice = {};
+        for (int p = 0; p < maxParts; ++p)
+            std::fill (partMono[(std::size_t) p].begin(), partMono[(std::size_t) p].begin() + numSamples, 0.0f);
+    }
+
+    // Render active voices for [startSample, startSample+numSamples) into their parts'
+    // buffers, smoothing part 0 and applying the shared LFO/bend/vibrato.
+    void renderParts (int startSample, int numSamples, VoiceParams liveParams,
+                      float lfoRate, int lfoShape, float lfoDepth, int lfoDest)
+    {
+        lfo.setRate (lfoRate);
+        lfo.setShape (static_cast<LFO::Shape> (lfoShape));
+        for (auto& v : voices) if (v.isActive()) partHadVoice[(std::size_t) v.getPart()] = true;
+
+        int done = 0;
+        while (done < numSamples)
+        {
+            const int chunk = std::min (kSmoothChunk, numSamples - done);
+
+            smCutoff += smoothCoef * (liveParams.cutoffHz  - smCutoff);
+            smReso   += smoothCoef * (liveParams.resonance - smReso);
+            smL1     += smoothCoef * (liveParams.osc1Level - smL1);
+            smL2     += smoothCoef * (liveParams.osc2Level - smL2);
+            smL3     += smoothCoef * (liveParams.osc3Level - smL3);
+
+            partParams[0] = liveParams;
+            partParams[0].cutoffHz  = smCutoff; partParams[0].resonance = smReso;
+            partParams[0].osc1Level = smL1; partParams[0].osc2Level = smL2; partParams[0].osc3Level = smL3;
+
+            const float lfoVal = lfo.advance (chunk) * lfoDepth;
+            float modPitch = 0.0f, modCutoffOct = 0.0f, modPw = 0.0f;
+            switch (lfoDest)
+            {
+                case 1: modPitch     = lfoVal * 2.0f;  break;
+                case 2: modCutoffOct = lfoVal * 3.0f;  break;
+                case 3: modPw        = lfoVal * 0.45f; break;
+                default: break;
+            }
+            const float vib = vibratoLFO.advance (chunk) * modWheel * kVibratoSemis;
+            modPitch += pitchBendSemis + vib;
+
+            const int off = startSample + done;
+            for (auto& v : voices)
+            {
+                if (! v.isActive()) continue;
+                VoiceParams p = paramsFor (v.getPart(), v.getSoundSlot());
+                p.pitchModSemis += modPitch; p.cutoffModOct = modCutoffOct; p.pwMod = modPw;
+                v.render (partMono[(std::size_t) v.getPart()].data() + off, chunk, p);
+            }
+            done += chunk;
+        }
+    }
+
+    // Number of parts actually processed (not skipped) in the last mixParts — the
+    // silent-part-skip CPU control is observable here for tests.
+    int partsProcessedLastBlock() const { return partsProcessed; }
+
+    // Trim + per-part FX + sum into the stereo master (once per block).
+    void mixParts (float* L, float* R, int numSamples, const FXParams* partFxParams)
+    {
+        std::fill (L, L + numSamples, 0.0f);
+        std::fill (R, R + numSamples, 0.0f);
+        partsProcessed = 0;
+
+        for (int p = 0; p < maxParts; ++p)
+        {
+            float* m = partMono[(std::size_t) p].data();
+            for (int i = 0; i < numSamples; ++i) m[i] *= voiceTrim;
+
+            bool fxOn = false;
+            if (partFxParams != nullptr)
+                for (int f = 0; f < FXChain::kNumFX; ++f) fxOn = fxOn || partFxParams[p].enabled[f];
+
+            if (partHadVoice[(std::size_t) p]) fxSilentBlocks[(std::size_t) p] = 0;
+            const bool skip = ! partHadVoice[(std::size_t) p]
+                              && (! fxOn || fxSilentBlocks[(std::size_t) p] >= kFxHoldBlocks);
+            if (skip) continue;
+            ++partsProcessed;
+
+            float* sL = partL[(std::size_t) p].data();
+            float* sR = partR[(std::size_t) p].data();
+            for (int i = 0; i < numSamples; ++i) { sL[i] = m[i]; sR[i] = m[i]; }
+            if (fxOn) { partFx[(std::size_t) p].setParams (partFxParams[p]); partFx[(std::size_t) p].process (sL, sR, numSamples); }
+            for (int i = 0; i < numSamples; ++i) { L[i] += sL[i]; R[i] += sR[i]; }
+
+            if (! partHadVoice[(std::size_t) p])
+            {
+                float pk = 0.0f;
+                for (int i = 0; i < numSamples; ++i) pk = std::max (pk, std::max (std::abs (sL[i]), std::abs (sR[i])));
+                if (pk < 1.0e-5f) ++fxSilentBlocks[(std::size_t) p]; else fxSilentBlocks[(std::size_t) p] = 0;
+            }
+        }
+    }
+
+    // Whole-block convenience (tests): begin + render all + mix.
+    void renderMaster (float* L, float* R, int numSamples, VoiceParams liveParams,
+                       float lfoRate, int lfoShape, float lfoDepth, int lfoDest,
+                       const FXParams* partFxParams)
+    {
+        beginMasterBlock (numSamples, liveParams);
+        renderParts (0, numSamples, liveParams, lfoRate, lfoShape, lfoDepth, lfoDest);
+        mixParts (L, R, numSamples, partFxParams);
+    }
+
 private:
     // ---- mono / legato (last-note priority, voice 0) -----------------------
     // Mono/legato is single-timbre in v1 (voice 0). `part` is carried through so a
@@ -402,6 +542,17 @@ private:
     };
     std::array<KitSlot, maxParts> kitSlots;
     std::array<int, maxParts> kitReadIdx {};          // per-block snapshot of each slot's read buffer
+
+    // Per-part FX (Sub-phase 2): one chain + mono/stereo scratch per part, all sized in
+    // prepare(). fxSilentBlocks counts consecutive silent (voice-free, FX-tail-decayed)
+    // blocks so an idle part's FX is skipped after a short hold.
+    static constexpr int kFxHoldBlocks = 4;
+    int maxBlockSize = 2048;
+    std::array<FXChain, maxParts> partFx;
+    std::array<std::vector<float>, maxParts> partMono, partL, partR;
+    std::array<int, maxParts> fxSilentBlocks {};
+    std::array<bool, maxParts> partHadVoice {};       // set across renderParts segments, read in mixParts
+    int partsProcessed = 0;                           // parts not skipped in the last mixParts (test observability)
 
     // Kit note-off ledger (audio-thread POD): a trigger note -> the sounding notes it
     // fired, so a note-off releases exactly those (chord pads, decoupled pitch).
