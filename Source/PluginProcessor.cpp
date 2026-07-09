@@ -664,6 +664,18 @@ juce::ValueTree VASynthProcessor::captureMultiState() const
         }
         multi.addChild (s, -1, nullptr);
     }
+
+    // Part mixer (level/pan per part) travels with the MULTI.
+    namespace ID = ParamID;
+    const char* lvlIDs[] { ID::part0Level, ID::part1Level, ID::part2Level, ID::part3Level };
+    const char* panIDs[] { ID::part0Pan,   ID::part1Pan,   ID::part2Pan,   ID::part3Pan   };
+    juce::ValueTree mix ("MIX");
+    for (int p = 0; p < SynthEngine::maxParts; ++p)
+    {
+        mix.setProperty ("l" + juce::String (p), rp (apvts, lvlIDs[p]), nullptr);
+        mix.setProperty ("p" + juce::String (p), rp (apvts, panIDs[p]), nullptr);
+    }
+    multi.addChild (mix, -1, nullptr);
     return multi;
 }
 
@@ -712,6 +724,19 @@ void VASynthProcessor::applyMultiState (const juce::ValueTree& multi)
                     z.part = 0;
                 }
             setSurfaceZones (e.getProperty ("name", juce::String()).toString(), std::move (zones));
+        }
+        else if (e.hasType ("MIX"))
+        {
+            namespace ID = ParamID;
+            const char* lvlIDs[] { ID::part0Level, ID::part1Level, ID::part2Level, ID::part3Level };
+            const char* panIDs[] { ID::part0Pan,   ID::part1Pan,   ID::part2Pan,   ID::part3Pan   };
+            auto set = [this] (const char* id, float v)
+            { if (auto* prm = apvts.getParameter (id)) prm->setValueNotifyingHost (prm->convertTo0to1 (v)); };
+            for (int p = 0; p < SynthEngine::maxParts; ++p)
+            {
+                set (lvlIDs[p], (float) e.getProperty ("l" + juce::String (p), 1.0));
+                set (panIDs[p], (float) e.getProperty ("p" + juce::String (p), 0.0));
+            }
         }
     }
 }
@@ -996,7 +1021,9 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     //     engine runs each part's own chain and sums to stereo, skipping silent parts.
     float* L = stereoScratch.getWritePointer (0);
     float* R = stereoScratch.getWritePointer (1);
-    engine.mixParts (L, R, numSamples);                         // per-part FX + sum (config set in beginMasterBlock)
+    engine.setMix ({ { rp (apvts, ID::part0Level), rp (apvts, ID::part1Level), rp (apvts, ID::part2Level), rp (apvts, ID::part3Level) } },
+                   { { rp (apvts, ID::part0Pan),   rp (apvts, ID::part1Pan),   rp (apvts, ID::part2Pan),   rp (apvts, ID::part3Pan)   } });
+    engine.mixParts (L, R, numSamples);                         // per-part FX + level/pan + sum
 
     // --- master gain (per-sample ramp, kills zipper on gain steps/automation)
     //     followed by the safety soft-clipper — the LAST thing before output.

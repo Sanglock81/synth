@@ -371,6 +371,8 @@ public:
             smoothPrimed = true;
         }
         partHadVoice = {};
+        partLevelUse = { { 1.0f, 1.0f, 1.0f, 1.0f } };   // unity until setMix() (test path stays unity)
+        partPanUse   = {};
         for (int p = 0; p < maxParts; ++p)
             std::fill (partMono[(std::size_t) p].begin(), partMono[(std::size_t) p].begin() + numSamples, 0.0f);
     }
@@ -441,6 +443,13 @@ public:
     // silent-part-skip CPU control is observable here for tests.
     int partsProcessedLastBlock() const { return partsProcessed; }
 
+    // Part mixer (Sub-phase 2): per-part output level + pan applied at the master sum.
+    // Set each block from the APVTS (part 0..3). Defaults (1.0 / 0.0) = unity/centre.
+    void setMix (const std::array<float, maxParts>& levels, const std::array<float, maxParts>& pans)
+    {
+        partLevelUse = levels; partPanUse = pans;
+    }
+
     // Trim + per-part FX (partFxUse) + sum into the stereo master (once per block).
     void mixParts (float* L, float* R, int numSamples)
     {
@@ -466,7 +475,13 @@ public:
             float* sR = partR[(std::size_t) p].data();
             for (int i = 0; i < numSamples; ++i) { sL[i] = m[i]; sR[i] = m[i]; }
             if (fxOn) { partFx[(std::size_t) p].setParams (partFxUse[(std::size_t) p]); partFx[(std::size_t) p].process (sL, sR, numSamples); }
-            for (int i = 0; i < numSamples; ++i) { L[i] += sL[i]; R[i] += sR[i]; }
+
+            // Mixer: 0 dB-centre balance pan law (centre keeps unity, so defaults are
+            // bit-identical): leftGain = level*(pan<=0 ? 1 : 1-pan), right symmetric.
+            const float lvl = partLevelUse[(std::size_t) p], pan = partPanUse[(std::size_t) p];
+            const float lg = lvl * (pan <= 0.0f ? 1.0f : 1.0f - pan);
+            const float rg = lvl * (pan >= 0.0f ? 1.0f : 1.0f + pan);
+            for (int i = 0; i < numSamples; ++i) { L[i] += sL[i] * lg; R[i] += sR[i] * rg; }
 
             if (! partHadVoice[(std::size_t) p])
             {
@@ -572,6 +587,8 @@ private:
     std::array<LockedSlot,  maxParts> lockedSlots {};
     std::array<FXParams, maxParts> partFxUse {};      // per-part FX in effect this block (part 0 live, 1-3 baked)
     std::array<PartLfos, maxParts> partLfoUse {};     // per-part LFOs in effect this block
+    std::array<float, maxParts> partLevelUse { { 1.0f, 1.0f, 1.0f, 1.0f } };   // mixer level (unity default)
+    std::array<float, maxParts> partPanUse   {};      // mixer pan (centre default = 0)
 
     // Kit parts: per-part double-buffered KitData (pads + baked params). Published on
     // the message thread; the audio thread reads buf[kitReadIdx[part]] (sampled once

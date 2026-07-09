@@ -92,6 +92,17 @@ namespace ParamID
     inline constexpr auto masterGain  = "master_gain";
     inline constexpr auto polyMode    = "poly_mode";     // poly / mono / legato
 
+    // Part mixer (Sub-phase 2). Per-part level (0..2, unity 1.0) + pan (-1..+1, centre 0).
+    // Defaults keep the master sum bit-identical. IDs part0_..part3_.
+    inline constexpr auto part0Level  = "part0_level";
+    inline constexpr auto part0Pan    = "part0_pan";
+    inline constexpr auto part1Level  = "part1_level";
+    inline constexpr auto part1Pan    = "part1_pan";
+    inline constexpr auto part2Level  = "part2_level";
+    inline constexpr auto part2Pan    = "part2_pan";
+    inline constexpr auto part3Level  = "part3_level";
+    inline constexpr auto part3Pan    = "part3_pan";
+
     // Chord engine (7B). Diatonic one-finger chords; momentary modifiers are NOT
     // params (they're momentary QWERTY/CC/note sources — see ModifierLearnManager).
     inline constexpr auto chordEnabled = "chord_enabled";
@@ -210,6 +221,19 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::glideTime, 1}, "Glide", juce::NormalisableRange<float>(0.0f, 2.0f, 0.0f, 0.4f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("s")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::masterGain, 1},"Master", juce::NormalisableRange<float>(0.0f, 1.0f), 0.7f));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::polyMode, 1},  "Mode", juce::StringArray{ "Poly", "Mono", "Legato" }, 0));
+
+    // --- Part mixer (Sub-phase 2) --------------------------------------------
+    // level 0..2 (unity 1.0), pan -1..+1 (centre 0). Defaults keep goldens.
+    {
+        const juce::NormalisableRange<float> lvlR (0.0f, 2.0f), panR (-1.0f, 1.0f);
+        const char* lvlIDs[] { ID::part0Level, ID::part1Level, ID::part2Level, ID::part3Level };
+        const char* panIDs[] { ID::part0Pan,   ID::part1Pan,   ID::part2Pan,   ID::part3Pan   };
+        for (int p = 0; p < 4; ++p)
+        {
+            params.push_back(std::make_unique<P>(juce::ParameterID{lvlIDs[p], 1}, "P" + juce::String(p) + " Level", lvlR, 1.0f));
+            params.push_back(std::make_unique<P>(juce::ParameterID{panIDs[p], 1}, "P" + juce::String(p) + " Pan",   panR, 0.0f));
+        }
+    }
 
     // --- Chord engine (7B) ---------------------------------------------------
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::chordEnabled, 1}, "Chord", false));

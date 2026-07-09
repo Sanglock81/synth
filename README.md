@@ -135,8 +135,12 @@ keeps processing until silent). Locked parts **bake** their FX + LFOs from their
 preset, so a locked part sounds exactly like loading that patch live. The panel edits the
 LIVE part's three LFOs (LFO 1/2/3); `lfo2_*`/`lfo3_*` default off. Still shared across
 parts: poly-mode, master gain, the safety clipper, and pitch-bend / mod-wheel (global
-performance controllers). A **per-part mixer** (level/pan) is a deferred future feature —
-for now parts sum at unity/centre.
+performance controllers). A **per-part mixer** (MIX section: `partN_level` 0–2, `partN_pan`)
+balances the parts — level fixes the classic "kit too quiet under the lead", pan spreads
+them across the stereo field. Pan uses a **0 dB-centre balance law** (`leftGain =
+level·(pan≤0 ? 1 : 1−pan)`, right symmetric) so centre/unity is bit-identical to no mixer.
+Mixer settings are MIDI-learnable and travel in a MULTI. Kit balance is two layers: the
+part level here, plus each pad's own level in the Kit Editor.
 
 **Key-range zones + routing lifecycle (Part B).** A surface isn't limited to one part —
 each is an ordered, gapless list of **zones** tiling the keyboard `{loNote, hiNote, part,

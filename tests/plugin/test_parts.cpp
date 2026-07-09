@@ -525,6 +525,21 @@ TEST_CASE ("MULTI captures + reapplies the layout (parts + surface zones)", "[pl
     REQUIRE (z[1].transpose == 12);
 }
 
+TEST_CASE ("MULTI carries the part mixer (level/pan) round-trip", "[plugin][partsB][multi][mix]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor src; src.prepareToPlay (48000.0, 256);
+    auto set = [&src] (const char* id, float v) { src.apvts.getParameter (id)->setValueNotifyingHost (src.apvts.getParameter (id)->convertTo0to1 (v)); };
+    set (ParamID::part1Level, 1.5f);
+    set (ParamID::part2Pan,  -0.8f);
+    auto multi = src.captureMultiState();
+
+    VASynthProcessor dst; dst.prepareToPlay (48000.0, 256);
+    dst.applyMultiState (multi);
+    REQUIRE (dst.apvts.getRawParameterValue (ParamID::part1Level)->load() == Catch::Approx (1.5f).margin (0.01));
+    REQUIRE (dst.apvts.getRawParameterValue (ParamID::part2Pan)->load()  == Catch::Approx (-0.8f).margin (0.01));
+}
+
 TEST_CASE ("MULTI apply repoints a zone off a missing preset to LIVE", "[plugin][partsB][multi][fallback]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

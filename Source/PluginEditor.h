@@ -261,6 +261,14 @@ private:
           addChoice (s, ID::polyMode, "Mode");
           buildGlobalExtras (s); }
 
+        // MIX (Sub-phase 2): per-part level + pan. Level fixes the classic "kit too quiet
+        // vs the lead" balance; pan spreads the parts. Defaults 1.0 / centre. MIDI-learnable.
+        { auto& s = addSection ("Mix", tGlobal, 2.6f);
+          addFader (s, ID::part0Level, "P0"); addFader (s, ID::part1Level, "P1");
+          addFader (s, ID::part2Level, "P2"); addFader (s, ID::part3Level, "P3");
+          addFader (s, ID::part0Pan, "Pan0"); addFader (s, ID::part1Pan, "Pan1");
+          addFader (s, ID::part2Pan, "Pan2"); addFader (s, ID::part3Pan, "Pan3"); }
+
         // CHORD column (7B): enable/root/scale + momentary modifier indicators.
         chordPanel = std::make_unique<ChordPanel> (proc);
         addAndMakeVisible (*chordPanel);

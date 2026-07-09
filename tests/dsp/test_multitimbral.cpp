@@ -4,6 +4,7 @@
 // and a part with no voices and idle FX must be skipped (the CPU control).
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include "SynthEngine.h"
 #include "test_util.h"
 #include <vector>
@@ -141,6 +142,45 @@ TEST_CASE ("multitimbral: each part has its OWN LFOs (independent modulation)", 
     REQUIRE (wOn > 0.10);              // part 0's own LFO modulates it
     REQUIRE (wOff < wOn * 0.25);       // no LFO -> steady
     REQUIRE (wIso < wOn * 0.25);       // part 1's LFO never touches part 0
+}
+
+TEST_CASE ("mixer: level scales and pan positions with a 0 dB-centre law", "[multi][mix]")
+{
+    auto sus = [] { VoiceParams p; p.osc1Wave = 3; p.osc1Level = 0.8f; p.osc2Level = 0.0f;
+                    p.cutoffHz = 16000.0f; p.resonance = 0.0f; p.filterEnvAmt = 0.0f; p.velToAmp = 0.0f;
+                    p.ampA = 0.002f; p.ampD = 0.02f; p.ampS = 0.9f; p.ampR = 0.05f; return p; };
+
+    auto render = [&] (float level, float pan)
+    {
+        SynthEngine e; e.setMaxVoices (16); e.prepare (kSR, 128);
+        FXParams fx0 {}; PartLfos lfo0 {};
+        std::array<float, SynthEngine::maxParts> lv { { 1, 1, 1, 1 } }, pn {};
+        lv[0] = level; pn[0] = pan;
+        e.noteOn (60, 0.9f, 0);
+        std::vector<float> L, R, l (128), r (128);
+        for (int b = 0; b < 80; ++b)
+        {
+            e.beginMasterBlock (128, sus(), fx0, lfo0);
+            e.setMix (lv, pn);
+            e.renderParts (0, 128, sus());
+            e.mixParts (l.data(), r.data(), 128);
+            for (int i = 0; i < 128; ++i) { L.push_back (l[i]); R.push_back (r[i]); }
+        }
+        return std::pair<double, double> { tu::rms (L), tu::rms (R) };
+    };
+
+    const auto [lFull,  rFull]  = render (1.0f,  0.0f);   // unity, centre
+    const auto [lHalf,  rHalf]  = render (0.5f,  0.0f);   // half level
+    const auto [lLeft,  rLeft]  = render (1.0f, -1.0f);   // hard left
+    const auto [lRight, rRight] = render (1.0f,  1.0f);   // hard right
+
+    REQUIRE (lFull > 0.01);
+    REQUIRE (lFull == Catch::Approx (rFull));             // centre: L == R
+    REQUIRE (lHalf == Catch::Approx (lFull * 0.5).epsilon (0.02));   // level scales linearly
+    REQUIRE (lLeft == Catch::Approx (lFull).epsilon (0.02));         // 0 dB centre: left unchanged at hard-left
+    REQUIRE (rLeft < lLeft * 0.01);                       // ...and right silent
+    REQUIRE (rRight == Catch::Approx (rFull).epsilon (0.02));
+    REQUIRE (lRight < rRight * 0.01);
 }
 
 TEST_CASE ("multitimbral: silent parts with idle FX are skipped", "[multi][skip]")
