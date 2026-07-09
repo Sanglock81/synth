@@ -894,11 +894,14 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const auto params = snapshotParams();
 
     namespace ID = ParamID;
-    const float lfoRate  = rp (apvts, ID::lfoRate);
-    const float lfoDepth = rp (apvts, ID::lfoDepth);
-    const int   lfoShape = (int) rp (apvts, ID::lfoShape);
-    const int   lfoDest  = (int) rp (apvts, ID::lfoDest);
     const float master   = rp (apvts, ID::masterGain);
+
+    // Per-part LFOs (Sub-phase 2). Part 0 (LIVE) = the panel's three LFOs; locked/kit
+    // parts get their LFOs from their bake (next increment), so no LFO here yet.
+    std::array<PartLfos, SynthEngine::maxParts> partLfos {};
+    partLfos[0].lfo[0] = { rp (apvts, ID::lfoRate),  rp (apvts, ID::lfoDepth),  (int) rp (apvts, ID::lfoShape),  (int) rp (apvts, ID::lfoDest) };
+    partLfos[0].lfo[1] = { rp (apvts, ID::lfo2Rate), rp (apvts, ID::lfo2Depth), (int) rp (apvts, ID::lfo2Shape), (int) rp (apvts, ID::lfo2Dest) };
+    partLfos[0].lfo[2] = { rp (apvts, ID::lfo3Rate), rp (apvts, ID::lfo3Depth), (int) rp (apvts, ID::lfo3Shape), (int) rp (apvts, ID::lfo3Dest) };
 
     // --- chord engine (7B): one played note -> a diatonic chord -------------
     const bool chordOn = rp (apvts, ID::chordEnabled) > 0.5f;
@@ -928,8 +931,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
         if (pos > renderedUpTo)
         {
-            engine.renderParts (renderedUpTo, pos - renderedUpTo,
-                                params, lfoRate, lfoShape, lfoDepth, lfoDest);
+            engine.renderParts (renderedUpTo, pos - renderedUpTo, params, partLfos.data());
             renderedUpTo = pos;
         }
 
@@ -942,8 +944,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     }
 
     if (renderedUpTo < numSamples)
-        engine.renderParts (renderedUpTo, numSamples - renderedUpTo,
-                            params, lfoRate, lfoShape, lfoDepth, lfoDest);
+        engine.renderParts (renderedUpTo, numSamples - renderedUpTo, params, partLfos.data());
 
     // Publish the held-modifier mask (QWERTY | MIDI) for the CHORD UI indicators.
     activeModMask.store (qwertyModMask.load (std::memory_order_acquire) | midiModMask,

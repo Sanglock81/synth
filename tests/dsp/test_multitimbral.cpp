@@ -84,6 +84,65 @@ TEST_CASE ("multitimbral: each part uses its OWN FX (delay isolation)", "[multi]
     }
 }
 
+TEST_CASE ("multitimbral: each part has its OWN LFOs (independent modulation)", "[multi][lfo]")
+{
+    // A resonant low-pass; a cutoff LFO makes the output wobble in level/brightness.
+    auto resoVoice = [] { VoiceParams p; p.osc1Wave = 0; p.osc1Level = 0.8f; p.osc2Level = 0.0f;
+                          p.cutoffHz = 700.0f; p.resonance = 0.7f; p.filterEnvAmt = 0.0f; p.velToAmp = 0.0f;
+                          p.ampA = 0.002f; p.ampD = 0.02f; p.ampS = 0.9f; p.ampR = 0.05f; return p; };
+    // Coefficient of variation of per-window RMS — high => the signal is being modulated.
+    auto wobble = [] (const std::vector<float>& x)
+    {
+        std::vector<double> r; const int w = 1024;
+        for (int s = 0; s + w <= (int) x.size(); s += w)
+        { double a = 0; for (int i = 0; i < w; ++i) a += (double) x[(std::size_t) (s + i)] * x[(std::size_t) (s + i)];
+          r.push_back (std::sqrt (a / w)); }
+        double mean = 0; for (double v : r) mean += v; mean /= (double) r.size();
+        double var = 0; for (double v : r) var += (v - mean) * (v - mean); var /= (double) r.size();
+        return mean > 1e-6 ? std::sqrt (var) / mean : 0.0;
+    };
+
+    const int blocks = 300;
+    std::array<FXParams, SynthEngine::maxParts> fx {};
+    PartLfos cutoffLfo {}; cutoffLfo.lfo[0] = { 6.0f, 1.0f, 1 /*sine*/, 2 /*cutoff*/ };
+
+    // (a) part 0 with a cutoff LFO -> strong wobble.
+    double wOn, wOff, wIso;
+    {
+        SynthEngine e; e.setMaxVoices (16); e.prepare (kSR, 128);
+        std::array<PartLfos, SynthEngine::maxParts> pl {}; pl[0] = cutoffLfo;
+        std::vector<float> out, L (128), R (128);
+        e.noteOn (60, 0.9f, 0);
+        for (int b = 0; b < blocks; ++b) { e.renderMaster (L.data(), R.data(), 128, resoVoice(), pl.data(), fx.data());
+                                           for (int i = 0; i < 128; ++i) out.push_back (L[i]); }
+        wOn = wobble (out);
+    }
+    // (b) part 0 with NO LFO -> steady.
+    {
+        SynthEngine e; e.setMaxVoices (16); e.prepare (kSR, 128);
+        std::array<PartLfos, SynthEngine::maxParts> pl {};
+        std::vector<float> out, L (128), R (128);
+        e.noteOn (60, 0.9f, 0);
+        for (int b = 0; b < blocks; ++b) { e.renderMaster (L.data(), R.data(), 128, resoVoice(), pl.data(), fx.data());
+                                           for (int i = 0; i < 128; ++i) out.push_back (L[i]); }
+        wOff = wobble (out);
+    }
+    // (c) LFO configured on part 1, but we play part 0 -> steady (isolation).
+    {
+        SynthEngine e; e.setMaxVoices (16); e.prepare (kSR, 128);
+        std::array<PartLfos, SynthEngine::maxParts> pl {}; pl[1] = cutoffLfo;   // on the OTHER part
+        std::vector<float> out, L (128), R (128);
+        e.noteOn (60, 0.9f, 0);                                                // play part 0
+        for (int b = 0; b < blocks; ++b) { e.renderMaster (L.data(), R.data(), 128, resoVoice(), pl.data(), fx.data());
+                                           for (int i = 0; i < 128; ++i) out.push_back (L[i]); }
+        wIso = wobble (out);
+    }
+    INFO ("wOn=" << wOn << " wOff=" << wOff << " wIso=" << wIso);
+    REQUIRE (wOn > 0.10);              // part 0's own LFO modulates it
+    REQUIRE (wOff < wOn * 0.25);       // no LFO -> steady
+    REQUIRE (wIso < wOn * 0.25);       // part 1's LFO never touches part 0
+}
+
 TEST_CASE ("multitimbral: silent parts with idle FX are skipped", "[multi][skip]")
 {
     SynthEngine e; e.setMaxVoices (16); e.prepare (kSR, 128);

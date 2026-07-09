@@ -25,6 +25,11 @@
 //          proper mod matrix replacing the single LFO destination.
 // ============================================================================
 
+// Per-part LFO configuration (Sub-phase 2). Three LFOs per part; each routes to a
+// single destination (0 off / 1 pitch / 2 cutoff / 3 PW). Depth 0 or dest 0 = inert.
+struct LfoConfig { float rate = 2.0f, depth = 0.0f; int shape = 0, dest = 0; };
+struct PartLfos  { LfoConfig lfo[3]; };
+
 class SynthEngine
 {
 public:
@@ -50,6 +55,7 @@ public:
             fxSilentBlocks[(std::size_t) p] = kFxHoldBlocks;   // start idle
         }
         lfo.prepare (sampleRate);
+        for (auto& part : partLfo) for (auto& l : part) l.prepare (sampleRate);   // 3 LFOs x maxParts
         vibratoLFO.prepare (sampleRate);
         vibratoLFO.setShape (LFO::Shape::Sine);
         vibratoLFO.setRate (5.5);                    // classic vibrato rate
@@ -355,12 +361,11 @@ public:
     }
 
     // Render active voices for [startSample, startSample+numSamples) into their parts'
-    // buffers, smoothing part 0 and applying the shared LFO/bend/vibrato.
-    void renderParts (int startSample, int numSamples, VoiceParams liveParams,
-                      float lfoRate, int lfoShape, float lfoDepth, int lfoDest)
+    // buffers, smoothing part 0 and applying EACH PART's own three LFOs plus the shared
+    // (global) pitch-bend + mod-wheel vibrato. LFOs only advance for parts that have
+    // active voices (a free-running LFO on a silent part costs nothing).
+    void renderParts (int startSample, int numSamples, VoiceParams liveParams, const PartLfos* partLfos)
     {
-        lfo.setRate (lfoRate);
-        lfo.setShape (static_cast<LFO::Shape> (lfoShape));
         for (auto& v : voices) if (v.isActive()) partHadVoice[(std::size_t) v.getPart()] = true;
 
         int done = 0;
@@ -378,25 +383,40 @@ public:
             partParams[0].cutoffHz  = smCutoff; partParams[0].resonance = smReso;
             partParams[0].osc1Level = smL1; partParams[0].osc2Level = smL2; partParams[0].osc3Level = smL3;
 
-            const float lfoVal = lfo.advance (chunk) * lfoDepth;
-            float modPitch = 0.0f, modCutoffOct = 0.0f, modPw = 0.0f;
-            switch (lfoDest)
+            // Per-part LFO modulation this chunk (three LFOs, summed per destination).
+            std::array<float, maxParts> pPitch {}, pCut {}, pPw {};
+            for (int p = 0; p < maxParts; ++p)
             {
-                case 1: modPitch     = lfoVal * 2.0f;  break;
-                case 2: modCutoffOct = lfoVal * 3.0f;  break;
-                case 3: modPw        = lfoVal * 0.45f; break;
-                default: break;
+                if (! partHadVoice[(std::size_t) p]) continue;
+                for (int k = 0; k < 3; ++k)
+                {
+                    const LfoConfig& c = partLfos[p].lfo[k];
+                    LFO& l = partLfo[(std::size_t) p][(std::size_t) k];
+                    l.setRate (c.rate); l.setShape (static_cast<LFO::Shape> (c.shape));
+                    const float v = l.advance (chunk) * c.depth;
+                    switch (c.dest)
+                    {
+                        case 1: pPitch[(std::size_t) p] += v * 2.0f;  break;
+                        case 2: pCut  [(std::size_t) p] += v * 3.0f;  break;
+                        case 3: pPw   [(std::size_t) p] += v * 0.45f; break;
+                        default: break;
+                    }
+                }
             }
+            // Shared performance mods (bend + mod-wheel vibrato) hit every part's pitch.
             const float vib = vibratoLFO.advance (chunk) * modWheel * kVibratoSemis;
-            modPitch += pitchBendSemis + vib;
+            const float bendVib = pitchBendSemis + vib;
 
             const int off = startSample + done;
             for (auto& v : voices)
             {
                 if (! v.isActive()) continue;
-                VoiceParams p = paramsFor (v.getPart(), v.getSoundSlot());
-                p.pitchModSemis += modPitch; p.cutoffModOct = modCutoffOct; p.pwMod = modPw;
-                v.render (partMono[(std::size_t) v.getPart()].data() + off, chunk, p);
+                const int pt = v.getPart();
+                VoiceParams p = paramsFor (pt, v.getSoundSlot());
+                p.pitchModSemis += pPitch[(std::size_t) pt] + bendVib;
+                p.cutoffModOct   = pCut[(std::size_t) pt];
+                p.pwMod          = pPw[(std::size_t) pt];
+                v.render (partMono[(std::size_t) pt].data() + off, chunk, p);
             }
             done += chunk;
         }
@@ -443,13 +463,21 @@ public:
         }
     }
 
-    // Whole-block convenience (tests): begin + render all + mix.
+    // Whole-block convenience (tests): begin + render all + mix. The single-LFO args map
+    // to part 0's LFO 1 (parts 1-3 get no LFO); the PartLfos overload is the full path.
     void renderMaster (float* L, float* R, int numSamples, VoiceParams liveParams,
                        float lfoRate, int lfoShape, float lfoDepth, int lfoDest,
                        const FXParams* partFxParams)
     {
+        std::array<PartLfos, maxParts> pl {};
+        pl[0].lfo[0] = { lfoRate, lfoDepth, lfoShape, lfoDest };
+        renderMaster (L, R, numSamples, liveParams, pl.data(), partFxParams);
+    }
+    void renderMaster (float* L, float* R, int numSamples, VoiceParams liveParams,
+                       const PartLfos* partLfos, const FXParams* partFxParams)
+    {
         beginMasterBlock (numSamples, liveParams);
-        renderParts (0, numSamples, liveParams, lfoRate, lfoShape, lfoDepth, lfoDest);
+        renderParts (0, numSamples, liveParams, partLfos);
         mixParts (L, R, numSamples, partFxParams);
     }
 
@@ -567,6 +595,7 @@ private:
     }
 
     LFO lfo, vibratoLFO;
+    std::array<std::array<LFO, 3>, maxParts> partLfo;   // 3 per-part LFOs (Sub-phase 2)
     std::uint64_t eventCounter = 0;
     std::uint64_t stealCounter = 0;
     double sampleRate = 0.0;
