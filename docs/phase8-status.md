@@ -255,8 +255,10 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   vibrato still global. LFOs advance only for parts with active voices.
 - **Bake (increment 3):** locked parts bake FX + LFOs from their source preset; published
   WITH the voice params in one LockedSlot buffer (race-free). Kit parts dry in v1.
-- **UI (increment 4):** LFO 1/2/3 sections on the panel (space-tight -> sign-off).
-- **Mixer:** per-part level/pan DEFERRED (see below); parts sum at unity/centre.
+- **UI (increment 4):** LFO 1/2/3 sections on the panel (user kept the 3-column layout).
+- **Mixer (R1):** per-part level (0-2) + pan (0 dB-centre balance law); MIX panel section,
+  MIDI-learnable, in MULTI. Kit balance = part level + per-pad Kit Editor level. Fixes the
+  quiet-kit-vs-lead issue. Defaults keep goldens. (Was briefly mis-scoped as deferred.)
 - **Tests:** dsp/test_multitimbral (delay isolation, silent-part skip, FX-tail keep-alive,
   per-part LFO independence); plugin [partsB2] (locked bake carries the preset's reverb
   tail). Full suites green: dsp 81 (goldens bit-identical), plugin 107. RT-safe.
@@ -276,12 +278,6 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   options: (a) part-count / voice default for the live target, (b) shared-reverb mode
   (reverb is the priciest FX; sharing it cuts the per-part multiplication), (c) documented
   guidance. Decision deferred to the user + the ThinkPad report — not absorbed.
-
-### Deferred / future features
-- **Per-part mixer** (`partN_level`/`partN_pan` + MIX strip to balance each part's volume
-  and pan) — deferred by the user (2026-07-08) after kit hands-on. Sub-phase 2 proceeds
-  WITHOUT it: per-part FX + per-part LFOs only; parts sum at unity/centre (the safety
-  clipper handles multi-part peaks). Revisit later; frozen IDs allow adding it then.
 
 ## 8B–8F — not started (blocked on Phase 7)
 

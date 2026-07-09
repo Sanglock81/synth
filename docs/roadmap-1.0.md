@@ -24,8 +24,8 @@ the user.
 | Phases 0–6, 7 (Bug B, 7A/B/C), 8A infra | done (pre-roadmap) |
 | Routing discoverability + key-range zones (Part A/B) | done, gated |
 | Sub-phase 1 — Kit parts | done, gated |
-| Sub-phase 2 — full multitimbral (per-part FX + 3 LFOs) | code complete; **CPU gate provisional** (ThinkPad pending); **mixer = R1** |
-| **R1 — clear the debts** | **in progress** |
+| Sub-phase 2 — full multitimbral (per-part FX + 3 LFOs + mixer) | **complete**; CPU gate provisional (ThinkPad pending) |
+| **R1 — clear the debts** | **in progress** — mixer done; push next |
 | R2 — GUI overhaul (+ help overlay) | not started |
 | R3 — 1.0 feature set (+ R3.11 QWERTY v2) | not started |
 | R4 — release engineering (v1.0.0) | not started |
@@ -33,9 +33,10 @@ the user.
 ## R1 — clear the debts
 
 1. **Part mixer** (closes Sub-phase 2): `partN_level` / `partN_pan` params (defaults 1.0 /
-   center keep goldens green), stated pan law, captured in MULTI saves, mixer-math tests,
-   reachable while playing. Kit balance is two layers — verify per-pad levels in the kit
-   editor work too. — *in progress*
+   center keep goldens green), **0 dB-centre balance pan law**, captured in MULTI saves,
+   mixer-math + pan-law + MULTI round-trip tests, MIX panel section (reachable while
+   playing, MIDI-learnable). Kit balance two layers: part level + per-pad Kit Editor level
+   (both verified). — **done** (commit b4a872b; dsp 82 / plugin 108 green).
 2. **GitHub push** authorized; push master, confirm CI green on both OSes, fix CI findings.
    Push at every gate hereafter.
 3. Clean slate (stale shells) — done.
