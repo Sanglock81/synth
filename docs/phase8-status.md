@@ -260,13 +260,22 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
 - **Tests:** dsp/test_multitimbral (delay isolation, silent-part skip, FX-tail keep-alive,
   per-part LFO independence); plugin [partsB2] (locked bake carries the preset's reverb
   tail). Full suites green: dsp 81 (goldens bit-identical), plugin 107. RT-safe.
-- **CPU GATE (hard stop, pending valid bench):** dsp_bench worst case "4 parts x4v + 4x
-  ALL FX" = ThinkPad-derated p99 **66.8% at powersave** (invalid; ~2x inflated -> ~33% at
-  performance governor). Per-part FX barely costs more than one chain (4-part ~ 1-part ~
-  67%) thanks to the silent-skip. Needs a PERFORMANCE-governor dev bench (user to run the
-  governor command) + cross-check vs the ThinkPad report before the gate is decided. If
-  the valid number busts ~30%, invoke the pre-agreed options (part-count default,
-  shared-reverb mode, documented guidance) — flag, don't absorb.
+- **CPU GATE (hard stop — FLAGGED, exceeds target at the assumed x3.5 derate):**
+  Measured at the **performance** governor (valid), ThinkPad-derated x3.5, load-robust
+  **p50** (p99 inflated by a running browser):
+    - 16 voices Efficient, no FX ...... ~33% budget
+    - 1 part, 16 voices + ALL FX ...... ~46%
+    - 4 parts x4v + 4x ALL FX (worst) . ~52%   (p99 ~85%)
+  Over the ~30% target. Notes: (1) the DEV BOX raw is comfortable (4-part p50 0.40 ms =
+  15% of the 2.667 ms budget) — the overage is entirely the assumed x3.5 derate; (2) NOT a
+  Sub-phase 2 regression in kind — per-part FX adds only ~7 pts over the pre-existing
+  1-chain-FX case (silent-skip works); the bulk (voices + FX) predates this since 6B;
+  (3) the powersave-vs-performance comparison was load-confounded (perf ~ powersave here),
+  so the assumed x3.5 derate itself is unverified. The **ThinkPad report** (validate.sh)
+  is the authoritative arbiter of the real derate. FLAGGED to the user with the pre-agreed
+  options: (a) part-count / voice default for the live target, (b) shared-reverb mode
+  (reverb is the priciest FX; sharing it cuts the per-part multiplication), (c) documented
+  guidance. Decision deferred to the user + the ThinkPad report — not absorbed.
 
 ### Deferred / future features
 - **Per-part mixer** (`partN_level`/`partN_pan` + MIX strip to balance each part's volume
