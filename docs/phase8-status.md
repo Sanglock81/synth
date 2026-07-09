@@ -245,6 +245,29 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   ~47% budget at powersave, so ~23% at the performance governor. Same already-accepted
   16-voice worst case as 6B/7C — kit introduces no new cost. Real gate stays on-ThinkPad.
 
+### Sub-phase 2 — FULL MULTITIMBRAL (per-part FX + LFO) — code complete, at CPU gate
+- **Per-part FX (increment 1):** engine renders each part into its own buffer -> its own
+  FXChain -> master sum. New stereo path split begin/renderParts/mixParts (host MIDI stays
+  sample-accurate). Silent parts with idle FX are skipped (partsProcessed counter; a
+  decaying tail keeps processing until silent). Mono render() untouched -> goldens exact.
+- **Per-part LFOs (increment 2):** lfo2_*/lfo3_* params; 3 LFOs x maxParts; each part's
+  three LFOs sum per destination and modulate only that part. Shared bend + mod-wheel
+  vibrato still global. LFOs advance only for parts with active voices.
+- **Bake (increment 3):** locked parts bake FX + LFOs from their source preset; published
+  WITH the voice params in one LockedSlot buffer (race-free). Kit parts dry in v1.
+- **UI (increment 4):** LFO 1/2/3 sections on the panel (space-tight -> sign-off).
+- **Mixer:** per-part level/pan DEFERRED (see below); parts sum at unity/centre.
+- **Tests:** dsp/test_multitimbral (delay isolation, silent-part skip, FX-tail keep-alive,
+  per-part LFO independence); plugin [partsB2] (locked bake carries the preset's reverb
+  tail). Full suites green: dsp 81 (goldens bit-identical), plugin 107. RT-safe.
+- **CPU GATE (hard stop, pending valid bench):** dsp_bench worst case "4 parts x4v + 4x
+  ALL FX" = ThinkPad-derated p99 **66.8% at powersave** (invalid; ~2x inflated -> ~33% at
+  performance governor). Per-part FX barely costs more than one chain (4-part ~ 1-part ~
+  67%) thanks to the silent-skip. Needs a PERFORMANCE-governor dev bench (user to run the
+  governor command) + cross-check vs the ThinkPad report before the gate is decided. If
+  the valid number busts ~30%, invoke the pre-agreed options (part-count default,
+  shared-reverb mode, documented guidance) — flag, don't absorb.
+
 ### Deferred / future features
 - **Per-part mixer** (`partN_level`/`partN_pan` + MIX strip to balance each part's volume
   and pan) — deferred by the user (2026-07-08) after kit hands-on. Sub-phase 2 proceeds

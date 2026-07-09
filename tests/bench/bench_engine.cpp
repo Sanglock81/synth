@@ -153,6 +153,47 @@ namespace
         return { times[(std::size_t) (blocks / 2)], times[(std::size_t) (int) (blocks * 0.99)], times.back() };
     }
 
+    // Sub-phase 2 worst case: `activeParts` parts all sounding at once, each running its
+    // OWN FX chain (all four effects), 16 voices spread across them, Efficient. This is
+    // the full-multitimbral gate. fxParts = how many parts have FX engaged.
+    Stat measureMulti (int activeParts, int voicesPerPart, int fxParts, int blocks)
+    {
+        SynthEngine engine;
+        engine.setOscQuality (PolyBlepOscillator::Quality::Efficient);
+        engine.setMaxVoices (16);
+        engine.prepare (kSR, kBlock);
+
+        VoiceParams vp;
+        vp.osc1Wave = vp.osc2Wave = vp.osc3Wave = 0;
+        vp.osc1Level = 0.8f; vp.osc2Level = 0.8f; vp.osc3Level = 0.8f;
+        vp.cutoffHz = 2000.0f; vp.resonance = 0.4f; vp.filterEnvAmt = 0.5f; vp.ampS = 0.9f;
+
+        std::array<FXParams, SynthEngine::maxParts> fx {};
+        std::array<PartLfos, SynthEngine::maxParts> lfo {};
+        for (int p = 0; p < activeParts && p < SynthEngine::maxParts; ++p)
+        {
+            if (p >= 1) engine.setLockedPartParams (p, vp);
+            if (p < fxParts)
+                for (int f = 0; f < FXChain::kNumFX; ++f) fx[(std::size_t) p].enabled[f] = true;
+            lfo[(std::size_t) p].lfo[0] = { 3.0f, 0.5f, 0, 2 };   // a cutoff LFO on every active part
+            for (int v = 0; v < voicesPerPart; ++v) engine.noteOn (36 + p * 12 + v, 0.7f, p);
+        }
+
+        std::vector<float> L (kBlock, 0.0f), R (kBlock, 0.0f);
+        for (int i = 0; i < 200; ++i) engine.renderMaster (L.data(), R.data(), kBlock, vp, lfo.data(), fx.data());
+
+        std::vector<double> times (blocks);
+        for (int b = 0; b < blocks; ++b)
+        {
+            const auto t0 = clk::now();
+            engine.renderMaster (L.data(), R.data(), kBlock, vp, lfo.data(), fx.data());
+            const auto t1 = clk::now();
+            times[(std::size_t) b] = std::chrono::duration<double, std::milli> (t1 - t0).count();
+        }
+        std::sort (times.begin(), times.end());
+        return { times[(std::size_t) (blocks / 2)], times[(std::size_t) (int) (blocks * 0.99)], times.back() };
+    }
+
     void row (const std::string& label, Stat s)
     {
         const double tpP99 = s.p99Ms * kThinkpadDerate;      // robust worst-case, derated
@@ -214,6 +255,13 @@ int main()
     std::printf ("\nSub-phase 1 kit (4 live + 12 kit pads = 16 voices, Efficient):\n");
     row ("kit engine only",     measureKit (4000, 0));
     row ("kit + ALL FX",        measureKit (4000, 15));
+
+    // Sub-phase 2 gate: full multitimbral. Worst case = 4 active parts, all with their
+    // own FX, 16 voices spread, Efficient. Plus the realistic case (2 parts, FX on one).
+    std::printf ("\nSub-phase 2 multitimbral (Efficient, per-part FX):\n");
+    row ("4 parts x4v + 4x ALL FX", measureMulti (4, 4, 4, 4000));   // hard-gate worst case
+    row ("2 parts x8v + 1x ALL FX", measureMulti (2, 8, 1, 4000));   // realistic case
+    row ("1 part 16v + ALL FX",     measureMulti (1, 16, 1, 4000));  // single-part reference
 
     std::printf ("\nBudget = 2.667 ms/block. Target: worst-case ThinkPad < 30%% "
                  "leaves headroom for GUI, other tracks, and OS jitter.\n");

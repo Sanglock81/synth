@@ -126,6 +126,18 @@ poly-mode and master are **shared** and follow the LIVE part; a locked part cont
 only voice-level character (osc/mix/filter/env/vel/env→pitch). On-screen edits, Randomize
 and the chord engine affect the LIVE part only.
 
+**Full multitimbral (Sub-phase 2).** The v1 "shared FX / shared LFO" simplification is
+retired: **each part owns its own FX chain and its own three LFOs**. A part renders into
+its own buffer → its own chorus/delay/reverb/width → summed into the master, so you can
+run a dry bass part next to a lead part drenched in delay + reverb. A part with no voices
+and an idle FX chain is skipped entirely (the CPU control; a decaying reverb/delay tail
+keeps processing until silent). Locked parts **bake** their FX + LFOs from their source
+preset, so a locked part sounds exactly like loading that patch live. The panel edits the
+LIVE part's three LFOs (LFO 1/2/3); `lfo2_*`/`lfo3_*` default off. Still shared across
+parts: poly-mode, master gain, the safety clipper, and pitch-bend / mod-wheel (global
+performance controllers). A **per-part mixer** (level/pan) is a deferred future feature —
+for now parts sum at unity/centre.
+
 **Key-range zones + routing lifecycle (Part B).** A surface isn't limited to one part —
 each is an ordered, gapless list of **zones** tiling the keyboard `{loNote, hiNote, part,
 transpose}` (default = one full-range LIVE zone). A note resolves to its zone's part and
