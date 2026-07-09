@@ -241,9 +241,17 @@ private:
           addFader (s, ID::fltSustain, "S"); addFader (s, ID::fltRelease, "R");
           addFader (s, ID::fltEnvToPitch, "Pitch"); }
 
-        { auto& s = addSection ("LFO", tLfo, 1.6f);
+        // Three per-part LFOs (Sub-phase 2). Compact side-by-side sections; LFO 2/3
+        // default depth 0 / dest Off (inert) so they don't change existing patches.
+        { auto& s = addSection ("LFO 1", tLfo, 1.5f);
           addFader (s, ID::lfoRate, "Rate"); addFader (s, ID::lfoDepth, "Depth");
           addChoice (s, ID::lfoShape, "Shape"); addChoice (s, ID::lfoDest, "Dest"); }
+        { auto& s = addSection ("LFO 2", tLfo, 1.5f);
+          addFader (s, ID::lfo2Rate, "Rate"); addFader (s, ID::lfo2Depth, "Depth");
+          addChoice (s, ID::lfo2Shape, "Shape"); addChoice (s, ID::lfo2Dest, "Dest"); }
+        { auto& s = addSection ("LFO 3", tLfo, 1.5f);
+          addFader (s, ID::lfo3Rate, "Rate"); addFader (s, ID::lfo3Depth, "Depth");
+          addChoice (s, ID::lfo3Shape, "Shape"); addChoice (s, ID::lfo3Dest, "Dest"); }
 
         { auto& s = addSection ("Global", tGlobal, 2.5f);
           addFader (s, ID::glideTime, "Glide"); addFader (s, ID::velToAmp, "Vel>Amp");
