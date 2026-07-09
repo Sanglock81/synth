@@ -266,7 +266,10 @@ public:
 private:
     VoiceParams snapshotParams() const;
     FXParams    snapshotFXParams() const;
-    VoiceParams bakePresetParams (const juce::String& name, bool& ok);   // shared by locked parts + kit pads
+    // Bake a source preset -> VoiceParams (+ optionally its FX + 3 LFOs). Shared by
+    // locked parts (fxOut/lfoOut set) and kit pads (null). ok=false if preset missing.
+    VoiceParams bakePresetParams (const juce::String& name, bool& ok,
+                                  FXParams* fxOut = nullptr, PartLfos* lfoOut = nullptr);
 
     // Feed the combined (QWERTY | MIDI) held-modifier mask into the chord engine's
     // latest-wins forcer stack as edges (audio thread).

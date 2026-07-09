@@ -185,11 +185,14 @@ public:
     // ---- parts (7C) --------------------------------------------------------
     static constexpr int maxParts = 4;   // v1 fixed cap: part 0 = LIVE, 1-3 = LOCKED
 
-    // Publish a locked part's baked VoiceParams (message thread; lock-free double-
-    // buffer, audio thread reads the current slot each render). No allocation.
-    void setLockedPartParams (int part, const VoiceParams& vp)
+    // Publish a locked part's baked voice params + its FX + its 3 LFOs (message thread;
+    // lock-free double-buffer, audio thread reads the current slot each block). The FX
+    // and LFOs travel WITH the voice params so a locked part is fully self-contained and
+    // there is no per-part FX/LFO data race with the audio thread (Sub-phase 2).
+    void setLockedPartParams (int part, const VoiceParams& vp,
+                              const FXParams& fx = {}, const PartLfos& lfo = {})
     {
-        if (part >= 1 && part < maxParts) lockedSlots[(std::size_t) part].publish (vp);
+        if (part >= 1 && part < maxParts) lockedSlots[(std::size_t) part].publish ({ vp, fx, lfo });
     }
 
     // ---- kit parts ---------------------------------------------------------
@@ -270,7 +273,7 @@ public:
         for (int pt = 0; pt < maxParts; ++pt)
             kitReadIdx[(std::size_t) pt] = kitSlots[(std::size_t) pt].idx.load (std::memory_order_acquire);
         for (int pt = 1; pt < maxParts; ++pt)
-            partParams[(std::size_t) pt] = lockedSlots[(std::size_t) pt].current();
+            partParams[(std::size_t) pt] = lockedSlots[(std::size_t) pt].current().vp;
 
         // Prime part-0 smoothers to the first targets so notes don't sweep from
         // stale state on the very first block (osc levels are on/off-folded already).
@@ -342,13 +345,25 @@ public:
     // host MIDI sample-accurate (render voices per event segment) while FX+sum run once
     // per block. renderMaster() is the whole-block convenience for tests.
 
-    // Clear per-part accumulators + snapshot locked/kit state for the block.
-    void beginMasterBlock (int numSamples, VoiceParams liveParams)
+    // Clear per-part accumulators + snapshot locked/kit state for the block. part 0 uses
+    // the caller's LIVE FX + LFOs; parts 1-3 use the FX/LFOs published WITH their baked
+    // voice params (a kit part is dry). partFxUse/partLfoUse become the per-part config
+    // for renderParts/mixParts — no data race with the message thread.
+    void beginMasterBlock (int numSamples, VoiceParams liveParams,
+                           const FXParams& live0Fx, const PartLfos& live0Lfo)
     {
         for (int pt = 0; pt < maxParts; ++pt)
             kitReadIdx[(std::size_t) pt] = kitSlots[(std::size_t) pt].idx.load (std::memory_order_acquire);
+
+        partFxUse[0]  = live0Fx;
+        partLfoUse[0] = live0Lfo;
         for (int pt = 1; pt < maxParts; ++pt)
-            partParams[(std::size_t) pt] = lockedSlots[(std::size_t) pt].current();
+        {
+            const LockedPub& cur = lockedSlots[(std::size_t) pt].current();
+            partParams[(std::size_t) pt] = cur.vp;
+            if (partIsKit (pt)) { partFxUse[(std::size_t) pt] = FXParams{}; partLfoUse[(std::size_t) pt] = PartLfos{}; }
+            else                { partFxUse[(std::size_t) pt] = cur.fx;     partLfoUse[(std::size_t) pt] = cur.lfo; }
+        }
         if (! smoothPrimed)
         {
             smCutoff = liveParams.cutoffHz; smReso = liveParams.resonance;
@@ -361,10 +376,10 @@ public:
     }
 
     // Render active voices for [startSample, startSample+numSamples) into their parts'
-    // buffers, smoothing part 0 and applying EACH PART's own three LFOs plus the shared
-    // (global) pitch-bend + mod-wheel vibrato. LFOs only advance for parts that have
+    // buffers, smoothing part 0 and applying EACH PART's own three LFOs (partLfoUse) plus
+    // the shared pitch-bend + mod-wheel vibrato. LFOs only advance for parts that have
     // active voices (a free-running LFO on a silent part costs nothing).
-    void renderParts (int startSample, int numSamples, VoiceParams liveParams, const PartLfos* partLfos)
+    void renderParts (int startSample, int numSamples, VoiceParams liveParams)
     {
         for (auto& v : voices) if (v.isActive()) partHadVoice[(std::size_t) v.getPart()] = true;
 
@@ -390,7 +405,7 @@ public:
                 if (! partHadVoice[(std::size_t) p]) continue;
                 for (int k = 0; k < 3; ++k)
                 {
-                    const LfoConfig& c = partLfos[p].lfo[k];
+                    const LfoConfig& c = partLfoUse[(std::size_t) p].lfo[k];
                     LFO& l = partLfo[(std::size_t) p][(std::size_t) k];
                     l.setRate (c.rate); l.setShape (static_cast<LFO::Shape> (c.shape));
                     const float v = l.advance (chunk) * c.depth;
@@ -426,8 +441,8 @@ public:
     // silent-part-skip CPU control is observable here for tests.
     int partsProcessedLastBlock() const { return partsProcessed; }
 
-    // Trim + per-part FX + sum into the stereo master (once per block).
-    void mixParts (float* L, float* R, int numSamples, const FXParams* partFxParams)
+    // Trim + per-part FX (partFxUse) + sum into the stereo master (once per block).
+    void mixParts (float* L, float* R, int numSamples)
     {
         std::fill (L, L + numSamples, 0.0f);
         std::fill (R, R + numSamples, 0.0f);
@@ -439,8 +454,7 @@ public:
             for (int i = 0; i < numSamples; ++i) m[i] *= voiceTrim;
 
             bool fxOn = false;
-            if (partFxParams != nullptr)
-                for (int f = 0; f < FXChain::kNumFX; ++f) fxOn = fxOn || partFxParams[p].enabled[f];
+            for (int f = 0; f < FXChain::kNumFX; ++f) fxOn = fxOn || partFxUse[(std::size_t) p].enabled[f];
 
             if (partHadVoice[(std::size_t) p]) fxSilentBlocks[(std::size_t) p] = 0;
             const bool skip = ! partHadVoice[(std::size_t) p]
@@ -451,7 +465,7 @@ public:
             float* sL = partL[(std::size_t) p].data();
             float* sR = partR[(std::size_t) p].data();
             for (int i = 0; i < numSamples; ++i) { sL[i] = m[i]; sR[i] = m[i]; }
-            if (fxOn) { partFx[(std::size_t) p].setParams (partFxParams[p]); partFx[(std::size_t) p].process (sL, sR, numSamples); }
+            if (fxOn) { partFx[(std::size_t) p].setParams (partFxUse[(std::size_t) p]); partFx[(std::size_t) p].process (sL, sR, numSamples); }
             for (int i = 0; i < numSamples; ++i) { L[i] += sL[i]; R[i] += sR[i]; }
 
             if (! partHadVoice[(std::size_t) p])
@@ -476,9 +490,12 @@ public:
     void renderMaster (float* L, float* R, int numSamples, VoiceParams liveParams,
                        const PartLfos* partLfos, const FXParams* partFxParams)
     {
-        beginMasterBlock (numSamples, liveParams);
-        renderParts (0, numSamples, liveParams, partLfos);
-        mixParts (L, R, numSamples, partFxParams);
+        // Test path: the passed per-part arrays override every part (incl. locked/kit),
+        // so a test can exercise any part's FX/LFO without going through the bake.
+        beginMasterBlock (numSamples, liveParams, partFxParams[0], partLfos[0]);
+        for (int p = 1; p < maxParts; ++p) { partFxUse[(std::size_t) p] = partFxParams[p]; partLfoUse[(std::size_t) p] = partLfos[p]; }
+        renderParts (0, numSamples, liveParams);
+        mixParts (L, R, numSamples);
     }
 
 private:
@@ -536,22 +553,25 @@ private:
     float voiceTrim = 0.25f;                        // 1/sqrt(maxVoices); headroom trim
 
     // Parts (7C): part 0 = LIVE (smoothed per chunk), parts 1-3 = LOCKED (baked,
-    // published lock-free via a double buffer). partParams[] is the audio-thread
-    // working copy that paramsFor() returns.
+    // published lock-free via a double buffer). A locked part publishes its voice params
+    // + FX + LFOs together, so the audio thread reads a consistent snapshot with no race.
+    struct LockedPub { VoiceParams vp; FXParams fx; PartLfos lfo; };
     struct LockedSlot
     {
-        VoiceParams buf[2];
+        LockedPub buf[2];
         std::atomic<int> idx { 0 };
-        const VoiceParams& current() const { return buf[(std::size_t) idx.load (std::memory_order_acquire)]; }
-        void publish (const VoiceParams& vp)          // message thread
+        const LockedPub& current() const { return buf[(std::size_t) idx.load (std::memory_order_acquire)]; }
+        void publish (const LockedPub& p)             // message thread
         {
             const int w = 1 - idx.load (std::memory_order_relaxed);
-            buf[(std::size_t) w] = vp;
+            buf[(std::size_t) w] = p;
             idx.store (w, std::memory_order_release);
         }
     };
     std::array<VoiceParams, maxParts> partParams {};
     std::array<LockedSlot,  maxParts> lockedSlots {};
+    std::array<FXParams, maxParts> partFxUse {};      // per-part FX in effect this block (part 0 live, 1-3 baked)
+    std::array<PartLfos, maxParts> partLfoUse {};     // per-part LFOs in effect this block
 
     // Kit parts: per-part double-buffered KitData (pads + baked params). Published on
     // the message thread; the audio thread reads buf[kitReadIdx[part]] (sampled once

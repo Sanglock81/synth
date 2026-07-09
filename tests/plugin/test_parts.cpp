@@ -67,6 +67,27 @@ TEST_CASE ("locked-part bake renders like the preset loaded live", "[plugin][7c]
     REQUIRE (rb == Catch::Approx (ra).epsilon (0.05));   // same voice params -> same sound
 }
 
+TEST_CASE ("locked-part bake now includes the preset's FX (Sub-phase 2)", "[plugin][partsB2][bake]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    // Live: Warm Pad (chorus + reverb + width) on part 0.
+    VASynthProcessor live; live.prepareToPlay (48000.0, 256);
+    live.loadFactoryPreset ("Warm Pad");
+    live.routeNoteOn (60, 0.8f, 0); auto a = capture (live, 24);
+    live.routeNoteOff (60, 0);      auto aTail = capture (live, 48);
+
+    // Locked: bake Warm Pad into part 1 -> it must carry the same FX (a reverb tail).
+    VASynthProcessor lockd; lockd.prepareToPlay (48000.0, 256);
+    lockd.setPartPreset (1, "Warm Pad");
+    lockd.routeNoteOn (60, 0.8f, 1); auto b = capture (lockd, 24);
+    lockd.routeNoteOff (60, 1);      auto bTail = capture (lockd, 48);
+
+    REQUIRE (tu::rms (a) == Catch::Approx (tu::rms (b)).epsilon (0.1));   // same voice + FX
+    REQUIRE (tu::rms (aTail) > 0.002);                                   // live has a reverb tail...
+    REQUIRE (tu::rms (bTail) > 0.002);                                   // ...and so does the baked locked part
+}
+
 TEST_CASE ("multi-surface contract: three parts sound at once with their own params", "[plugin][7c][parts][contract]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

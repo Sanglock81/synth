@@ -267,11 +267,48 @@ namespace
     }
 }
 
+// Read a full FX config (params + enables + chain order) from any APVTS — used to bake a
+// locked part's FX from its source preset, so the part sounds like loading it live.
+static FXParams fxParamsFrom (const juce::AudioProcessorValueTreeState& src)
+{
+    namespace ID = ParamID; FXParams p;
+    p.chorusRate = rp (src, ID::chorusRate); p.chorusDepth = rp (src, ID::chorusDepth); p.chorusMix = rp (src, ID::chorusMix);
+    p.delayTimeMs = rp (src, ID::delayTime); p.delayFeedback = rp (src, ID::delayFeedback);
+    p.delayMix = rp (src, ID::delayMix);     p.delaySpread = rp (src, ID::delaySpread);
+    p.reverbSize = rp (src, ID::reverbSize); p.reverbDamp = rp (src, ID::reverbDamp);
+    p.reverbWidth = rp (src, ID::reverbWidth); p.reverbMix = rp (src, ID::reverbMix);
+    p.width = rp (src, ID::stereoWidth);
+    p.enabled[FXChain::Chorus_] = rp (src, ID::fxChorusOn) > 0.5f;
+    p.enabled[FXChain::Delay_]  = rp (src, ID::fxDelayOn)  > 0.5f;
+    p.enabled[FXChain::Reverb_] = rp (src, ID::fxReverbOn) > 0.5f;
+    p.enabled[FXChain::Width_]  = rp (src, ID::fxWidthOn)  > 0.5f;
+    auto toks = juce::StringArray::fromTokens (src.state.getProperty (ID::fxOrder).toString(), ",", "");
+    if (toks.size() == 4)
+    {
+        int o[4]; bool seen[4] = {}; bool okOrder = true;
+        for (int i = 0; i < 4; ++i) { o[i] = toks[i].getIntValue(); if (o[i] < 0 || o[i] > 3 || seen[o[i]]) okOrder = false; else seen[o[i]] = true; }
+        if (okOrder) for (int i = 0; i < 4; ++i) p.order[i] = o[i];
+    }
+    return p;
+}
+
+// Read the three LFOs from any APVTS (for baking a locked part's modulation).
+static PartLfos lfosFrom (const juce::AudioProcessorValueTreeState& src)
+{
+    namespace ID = ParamID; PartLfos pl;
+    pl.lfo[0] = { rp (src, ID::lfoRate),  rp (src, ID::lfoDepth),  (int) rp (src, ID::lfoShape),  (int) rp (src, ID::lfoDest) };
+    pl.lfo[1] = { rp (src, ID::lfo2Rate), rp (src, ID::lfo2Depth), (int) rp (src, ID::lfo2Shape), (int) rp (src, ID::lfo2Dest) };
+    pl.lfo[2] = { rp (src, ID::lfo3Rate), rp (src, ID::lfo3Depth), (int) rp (src, ID::lfo3Shape), (int) rp (src, ID::lfo3Dest) };
+    return pl;
+}
+
 // Bake a source preset (factory / user / Init) into VoiceParams via the scratch APVTS,
 // reusing the exact kill-fold so a baked part is bit-identical to loading it live.
-// `ok` is false if a named preset was missing (Init baked instead). Shared by locked
-// parts and kit pads.
-VoiceParams VASynthProcessor::bakePresetParams (const juce::String& name, bool& ok)
+// `ok` is false if a named preset was missing (Init baked instead). Optionally also
+// extracts the preset's FX + LFO (for a locked part; kit pads pass null). Shared by
+// locked parts and kit pads.
+VoiceParams VASynthProcessor::bakePresetParams (const juce::String& name, bool& ok,
+                                                FXParams* fxOut, PartLfos* lfoOut)
 {
     BakeProcessor scratch;
     ok = true;
@@ -292,6 +329,8 @@ VoiceParams VASynthProcessor::bakePresetParams (const juce::String& name, bool& 
         bakeInitBaseline (scratch);
         juce::Logger::writeToLog ("preset '" + name + "' missing -> Init");
     }
+    if (fxOut  != nullptr) *fxOut  = fxParamsFrom (scratch.apvts);
+    if (lfoOut != nullptr) *lfoOut = lfosFrom (scratch.apvts);
     return buildVoiceParams (scratch.apvts);
 }
 
@@ -300,7 +339,9 @@ bool VASynthProcessor::setPartPreset (int part, const juce::String& name)
     if (part < 1 || part >= SynthEngine::maxParts) return false;
 
     bool ok = true;
-    engine.setLockedPartParams (part, bakePresetParams (name, ok));
+    FXParams fx; PartLfos lfo;
+    const VoiceParams vp = bakePresetParams (name, ok, &fx, &lfo);
+    engine.setLockedPartParams (part, vp, fx, lfo);  // voice + FX + LFOs published together
     engine.clearPartKit (part);                     // a plain preset turns any kit off
     partKits[(std::size_t) part] = KitDefinition{}; // forget the kit definition
     partPresetName[(std::size_t) part] = ok ? name : juce::String ("Init");
@@ -327,7 +368,7 @@ void VASynthProcessor::setPartKit (int part, const KitDefinition& def)
         for (int s = 0; s < kMaxPadSoundNotes; ++s) out.soundNote[(std::size_t) s] = pd.soundNote[(std::size_t) s];
         out.chokeGroup  = juce::jlimit (0, 8, pd.chokeGroup);
     }
-    engine.setPartKit (part, kd);
+    engine.setPartKit (part, kd);                    // a Kit part is dry in v1 (engine uses dry FX/LFO for kits)
     partKits[(std::size_t) part] = def;
     partPresetName[(std::size_t) part] = def.name.isNotEmpty() ? def.name : juce::String ("Kit");
 }
@@ -896,12 +937,12 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     namespace ID = ParamID;
     const float master   = rp (apvts, ID::masterGain);
 
-    // Per-part LFOs (Sub-phase 2). Part 0 (LIVE) = the panel's three LFOs; locked/kit
-    // parts get their LFOs from their bake (next increment), so no LFO here yet.
-    std::array<PartLfos, SynthEngine::maxParts> partLfos {};
-    partLfos[0].lfo[0] = { rp (apvts, ID::lfoRate),  rp (apvts, ID::lfoDepth),  (int) rp (apvts, ID::lfoShape),  (int) rp (apvts, ID::lfoDest) };
-    partLfos[0].lfo[1] = { rp (apvts, ID::lfo2Rate), rp (apvts, ID::lfo2Depth), (int) rp (apvts, ID::lfo2Shape), (int) rp (apvts, ID::lfo2Dest) };
-    partLfos[0].lfo[2] = { rp (apvts, ID::lfo3Rate), rp (apvts, ID::lfo3Depth), (int) rp (apvts, ID::lfo3Shape), (int) rp (apvts, ID::lfo3Dest) };
+    // Per-part LFOs (Sub-phase 2). Part 0 (LIVE) = the panel's three LFOs; locked parts'
+    // LFOs travel with their bake (read inside beginMasterBlock), so only part 0 here.
+    PartLfos live0Lfo;
+    live0Lfo.lfo[0] = { rp (apvts, ID::lfoRate),  rp (apvts, ID::lfoDepth),  (int) rp (apvts, ID::lfoShape),  (int) rp (apvts, ID::lfoDest) };
+    live0Lfo.lfo[1] = { rp (apvts, ID::lfo2Rate), rp (apvts, ID::lfo2Depth), (int) rp (apvts, ID::lfo2Shape), (int) rp (apvts, ID::lfo2Dest) };
+    live0Lfo.lfo[2] = { rp (apvts, ID::lfo3Rate), rp (apvts, ID::lfo3Depth), (int) rp (apvts, ID::lfo3Shape), (int) rp (apvts, ID::lfo3Dest) };
 
     // --- chord engine (7B): one played note -> a diatonic chord -------------
     const bool chordOn = rp (apvts, ID::chordEnabled) > 0.5f;
@@ -921,7 +962,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // Multitimbral (Sub-phase 2): each part renders into its OWN buffer (in the engine)
     // so it can run its OWN FX chain; the sum happens once, below. Voices still render
     // per event segment to keep host MIDI note timing tight.
-    engine.beginMasterBlock (numSamples, params);
+    engine.beginMasterBlock (numSamples, params, snapshotFXParams(), live0Lfo);
     int renderedUpTo = 0;
 
     for (const auto metadata : midi)
@@ -931,7 +972,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
         if (pos > renderedUpTo)
         {
-            engine.renderParts (renderedUpTo, pos - renderedUpTo, params, partLfos.data());
+            engine.renderParts (renderedUpTo, pos - renderedUpTo, params);
             renderedUpTo = pos;
         }
 
@@ -944,7 +985,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     }
 
     if (renderedUpTo < numSamples)
-        engine.renderParts (renderedUpTo, numSamples - renderedUpTo, params, partLfos.data());
+        engine.renderParts (renderedUpTo, numSamples - renderedUpTo, params);
 
     // Publish the held-modifier mask (QWERTY | MIDI) for the CHORD UI indicators.
     activeModMask.store (qwertyModMask.load (std::memory_order_acquire) | midiModMask,
@@ -955,10 +996,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     //     engine runs each part's own chain and sums to stereo, skipping silent parts.
     float* L = stereoScratch.getWritePointer (0);
     float* R = stereoScratch.getWritePointer (1);
-
-    std::array<FXParams, SynthEngine::maxParts> partFxParams;   // stack POD, RT-safe
-    partFxParams[0] = snapshotFXParams();                       // part 0 = live FX
-    engine.mixParts (L, R, numSamples, partFxParams.data());
+    engine.mixParts (L, R, numSamples);                         // per-part FX + sum (config set in beginMasterBlock)
 
     // --- master gain (per-sample ramp, kills zipper on gain steps/automation)
     //     followed by the safety soft-clipper — the LAST thing before output.
