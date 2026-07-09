@@ -25,8 +25,8 @@ the user.
 | Routing discoverability + key-range zones (Part A/B) | done, gated |
 | Sub-phase 1 — Kit parts | done, gated |
 | Sub-phase 2 — full multitimbral (per-part FX + 3 LFOs + mixer) | **complete**; CPU gate provisional (ThinkPad pending) |
-| **R1 — clear the debts** | **in progress** — mixer done; push next |
-| R2 — GUI overhaul (+ help overlay) | not started |
+| **R1 — clear the debts** | mixer done + gated; **push deferred** (token lacks `workflow` scope — user to resolve; code safe locally) |
+| R2 — GUI overhaul (+ help overlay) | **in progress** — touch-reliability diagnosis first |
 | R3 — 1.0 feature set (+ R3.11 QWERTY v2) | not started |
 | R4 — release engineering (v1.0.0) | not started |
 
@@ -37,10 +37,34 @@ the user.
    mixer-math + pan-law + MULTI round-trip tests, MIX panel section (reachable while
    playing, MIDI-learnable). Kit balance two layers: part level + per-pad Kit Editor level
    (both verified). — **done** (commit b4a872b; dsp 82 / plugin 108 green).
-2. **GitHub push** authorized; push master, confirm CI green on both OSes, fix CI findings.
-   Push at every gate hereafter.
+2. **GitHub push** authorized but BLOCKED: git authenticates via the `gh` token
+   (`Sanglock81`), which has `repo` but not `workflow` scope — GitHub refuses a push that
+   includes `.github/workflows/` files. `gh auth refresh -s workflow` hadn't taken effect
+   as of last check. SSH has no key on this box. User chose to defer and continue dev;
+   finish the push (+ confirm CI Linux/Windows) once the scope is granted. 65 commits wait
+   on local `master`.
 3. Clean slate (stale shells) — done.
 4. ThinkPad report reminder (above) — standing.
+
+## R2 — GUI overhaul
+
+**Touch reliability (first, before any layout) — diagnosis + fixes done; HARD USER GATE
+pending (hardware confirmation).**
+- Instrumented: `VASYNTH_TOUCH_TRACE=1` env var enables a global mouse-event trace to the
+  log (finger index, position, target component, live-drag count, modal state) + a line
+  whenever the focus watchdog grabs — so a failed first-touch on the Surface is captured
+  as data, not guessed.
+- Root-cause fix (strongest suspect): the 30 Hz focus-reclaim watchdog no longer grabs
+  keyboard focus while a touch/drag gesture is live (`getNumDraggingMouseSources() > 0`) —
+  grabbing focus mid-gesture is the classic cause of a dropped first touch. Predicate gains
+  a `gestureActive` arg; regression case added.
+- Touch hardening: linear faders `setSliderSnapsToMousePosition(true)` (first tap jumps to
+  the finger); velocity mode already off.
+- **HARD GATE:** user confirms first-touch reliability on the Surface. If it still flakes,
+  capture the trace log and the confirmed root cause gets the fix. Layout rebuild does NOT
+  start until this gate passes.
+- Then: layout rebuild (mockup sign-off gate), control grammar, master oscilloscope+FFT,
+  help overlay (R2 addition), invariants regression.
 
 ### Decisions log
 - 2026-07-08 — Per-part mixer is REQUIRED for Sub-phase 2 (user corrected an earlier misread

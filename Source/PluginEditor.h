@@ -1,6 +1,8 @@
 #pragma once
 #include "PluginProcessor.h"
 #include "QwertyKeyboard.h"
+#include <cstdlib>
+#include <typeinfo>
 #include "Observability/DebugOverlay.h"
 #include "UI/VASynthLookAndFeel.h"
 #include "UI/Widgets.h"
@@ -29,11 +31,16 @@
 //   and NO modal dialog or text field is up (else we'd steal Save/INPUTS typing).
 // Pure + free-standing so every case is unit-tested without a live window.
 inline bool qwertyShouldReclaimFocus (bool standalone, bool showing, bool windowActive,
-                                      bool weHaveFocus, bool modalOpen, bool textFieldFocused)
+                                      bool weHaveFocus, bool modalOpen, bool textFieldFocused,
+                                      bool gestureActive)
 {
     if (! standalone || ! showing || weHaveFocus) return false;
     if (! windowActive)                            return false;   // don't fight other apps
     if (modalOpen || textFieldFocused)             return false;   // don't steal typing
+    if (gestureActive)                             return false;   // R2: never reclaim focus mid
+                                                                   // touch/drag — grabbing focus
+                                                                   // during a gesture makes the
+                                                                   // FIRST touch on a control drop.
     return true;
 }
 
@@ -75,11 +82,23 @@ public:
             setWantsKeyboardFocus (true);
             startTimerHz (30);            // focus-loss watchdog
         }
+
+        // R2 touch diagnosis: env-gated global mouse-event trace. Run with
+        // VASYNTH_TOUCH_TRACE=1 to record every touch/mouse event app-wide (finger index,
+        // position, target, live-drag count, modal state) to the log — so a failed
+        // first-touch on the Surface is visible and the root cause is data, not a guess.
+        if (std::getenv ("VASYNTH_TOUCH_TRACE") != nullptr)
+        {
+            touchTrace = true;
+            juce::Desktop::getInstance().addGlobalMouseListener (&tracer);
+            juce::Logger::writeToLog ("TOUCH trace enabled");
+        }
     }
 
     ~VASynthEditor() override
     {
         stopTimer();
+        if (touchTrace) juce::Desktop::getInstance().removeGlobalMouseListener (&tracer);
         allNotesOff();
         setLookAndFeel (nullptr);
     }
@@ -299,11 +318,17 @@ private:
 
         // Bug B: reclaim keyboard focus for QWERTY play after a transient thief
         // (Load combo / settings dialog close / window re-activation) let it go.
+        // R2: but NEVER while a touch/drag gesture is live — grabbing focus mid-gesture
+        // is a prime suspect for first-touch flakiness on the Surface.
+        const bool gestureActive = juce::Desktop::getInstance().getNumDraggingMouseSources() > 0;
         if (qwertyShouldReclaimFocus (isStandalone(), isShowing(), topLevelWindowActive(),
                                       focused,
                                       juce::Component::getCurrentlyModalComponent() != nullptr,
-                                      aTextFieldHasFocus()))
+                                      aTextFieldHasFocus(), gestureActive))
+        {
+            if (touchTrace) juce::Logger::writeToLog ("TOUCH focus-reclaim grab (drags=" + juce::String (juce::Desktop::getInstance().getNumDraggingMouseSources()) + ")");
             grabKeyboardFocus();
+        }
 
         hadFocus = hasKeyboardFocus (true);
 
@@ -352,6 +377,27 @@ private:
     Toast toast;
     int  lastToastSeq = 0;
     bool hadFocus = false;
+
+    // R2 touch diagnosis: global mouse-event tracer (env-gated; see constructor).
+    struct TouchTracer : public juce::MouseListener
+    {
+        void emit (const char* kind, const juce::MouseEvent& e)
+        {
+            auto* c = e.eventComponent;
+            juce::Logger::writeToLog (juce::String ("TOUCH ") + kind
+                + " src="   + juce::String (e.source.getIndex()) + (e.source.isTouch() ? "t" : "m")
+                + " @"      + e.getScreenPosition().toString()
+                + " on="    + (c != nullptr ? (c->getName().isNotEmpty() ? c->getName() : juce::String (typeid (*c).name())) : juce::String ("null"))
+                + " drags=" + juce::String (juce::Desktop::getInstance().getNumDraggingMouseSources())
+                + " modal=" + juce::String (juce::Component::getCurrentlyModalComponent() != nullptr ? 1 : 0));
+        }
+        void mouseDown (const juce::MouseEvent& e) override { emit ("DOWN", e); }
+        void mouseUp   (const juce::MouseEvent& e) override { emit ("UP  ", e); }
+        void mouseDrag (const juce::MouseEvent& e) override { if ((++n & 7) == 0) emit ("DRAG", e); }
+        int n = 0;
+    };
+    TouchTracer tracer;
+    bool touchTrace = false;
 
     // Preset UI (built in buildGlobalExtras).
     std::unique_ptr<juce::Component> presetPanel;

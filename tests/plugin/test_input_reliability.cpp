@@ -27,45 +27,53 @@ TEST_CASE ("Bug B: QWERTY focus is reclaimed exactly when it is safe", "[plugin]
 
     // The four lifecycle scenarios where play must resume — window active, we lost
     // focus to a thief, nothing modal: RECLAIM.
+    // args: standalone, showing, windowActive, weHaveFocus, modalOpen, textFieldFocused, gestureActive
     SECTION ("startup / settings-close / preset-load / alt-tab-back → reclaim")
     {
-        REQUIRE (qwertyShouldReclaimFocus (true, true, true, false, false, false));
+        REQUIRE (qwertyShouldReclaimFocus (true, true, true, false, false, false, false));
     }
 
     // We already hold focus: do nothing (no thrash / no re-grab storms).
     SECTION ("already have focus → no reclaim")
     {
-        REQUIRE_FALSE (qwertyShouldReclaimFocus (true, true, true, true, false, false));
+        REQUIRE_FALSE (qwertyShouldReclaimFocus (true, true, true, true, false, false, false));
     }
 
     // Window not active (user Alt-Tabbed AWAY): never fight another app for focus.
     SECTION ("window inactive → no reclaim")
     {
-        REQUIRE_FALSE (qwertyShouldReclaimFocus (true, true, false, false, false, false));
+        REQUIRE_FALSE (qwertyShouldReclaimFocus (true, true, false, false, false, false, false));
     }
 
     // A modal dialog is up (Save / INPUTS name entry): don't steal the user's typing.
     SECTION ("modal dialog open → no reclaim")
     {
-        REQUIRE_FALSE (qwertyShouldReclaimFocus (true, true, true, false, true, false));
+        REQUIRE_FALSE (qwertyShouldReclaimFocus (true, true, true, false, true, false, false));
     }
 
     // A text field has focus: same — don't hijack typing.
     SECTION ("text field focused → no reclaim")
     {
-        REQUIRE_FALSE (qwertyShouldReclaimFocus (true, true, true, false, false, true));
+        REQUIRE_FALSE (qwertyShouldReclaimFocus (true, true, true, false, false, true, false));
     }
 
     // Not the standalone (plugin in a host): the host owns the keyboard.
     SECTION ("plugin (not standalone) → no reclaim")
     {
-        REQUIRE_FALSE (qwertyShouldReclaimFocus (false, true, true, false, false, false));
+        REQUIRE_FALSE (qwertyShouldReclaimFocus (false, true, true, false, false, false, false));
     }
 
     // Off screen: nothing to reclaim.
     SECTION ("not showing → no reclaim")
     {
-        REQUIRE_FALSE (qwertyShouldReclaimFocus (true, false, true, false, false, false));
+        REQUIRE_FALSE (qwertyShouldReclaimFocus (true, false, true, false, false, false, false));
+    }
+
+    // R2 touch fix: a drag/touch gesture is live — even in the reclaim scenario, do NOT
+    // grab focus, or the first touch on a control drops.
+    SECTION ("gesture active → no reclaim (would-be-reclaim scenario)")
+    {
+        REQUIRE_FALSE (qwertyShouldReclaimFocus (true, true, true, false, false, false, /*gesture*/ true));
     }
 }
 

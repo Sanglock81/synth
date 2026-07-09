@@ -172,6 +172,7 @@ public:
         slider.setSliderStyle (juce::Slider::LinearVertical);
         slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
         slider.setVelocityBasedMode (false);           // absolute-ish for predictable touch
+        slider.setSliderSnapsToMousePosition (true);   // R2 touch: first tap jumps to the finger
         slider.setWantsKeyboardFocus (false);
         addAndMakeVisible (slider);
         attachment = std::make_unique<juce::SliderParameterAttachment> (*apvts.getParameter (pid), slider);
