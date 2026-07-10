@@ -25,7 +25,7 @@ the user.
 | Routing discoverability + key-range zones (Part A/B) | done, gated |
 | Sub-phase 1 — Kit parts | done, gated |
 | Sub-phase 2 — full multitimbral (per-part FX + 3 LFOs + mixer) | **complete**; CPU gate provisional (ThinkPad pending) |
-| **R1 — clear the debts** | mixer done; **pushed to origin/master** (workflow scope granted); CI watched |
+| **R1 — clear the debts** | DONE — mixer + push; **CI green on Linux + Windows** (build-test). sanitize.yml is nightly; `--sanitize` verified locally (190/190) |
 | Static/pops regression hunt | two engine defects fixed (skip-resume FX clear, mixer zipper); exact static NOT reproduced offline — **user ear-confirm pending** |
 | R2 — GUI overhaul (+ help overlay) | touch reliability (focus-vs-gesture fix + GRAB mode) done; **hardware touch gate pending**; then layout-mockup gate |
 | R3 — 1.0 feature set (+ R3.11 QWERTY v2) | not started |
@@ -38,12 +38,12 @@ the user.
    mixer-math + pan-law + MULTI round-trip tests, MIX panel section (reachable while
    playing, MIDI-learnable). Kit balance two layers: part level + per-pad Kit Editor level
    (both verified). — **done** (commit b4a872b; dsp 82 / plugin 108 green).
-2. **GitHub push** authorized but BLOCKED: git authenticates via the `gh` token
-   (`Sanglock81`), which has `repo` but not `workflow` scope — GitHub refuses a push that
-   includes `.github/workflows/` files. `gh auth refresh -s workflow` hadn't taken effect
-   as of last check. SSH has no key on this box. User chose to defer and continue dev;
-   finish the push (+ confirm CI Linux/Windows) once the scope is granted. 65 commits wait
-   on local `master`.
+2. **GitHub push** DONE — `origin/master` live (workflow scope granted). First-ever Windows
+   CI surfaced latent Windows breaks, all fixed to green: POSIX `unistd.h`/`sysconf` in the
+   soak (guarded `__linux__`), MSVC C4996 (`_CRT_SECURE_NO_WARNINGS`), 1 MB stack overflow
+   from the ~344 KB SynthEngine (`/STACK:8388608`), and an em-dash test name that broke the
+   ctest name filter (ASCII-only). build-test green on Linux + Windows. Push at every gate
+   hereafter; treat CI failures as gate failures.
 3. Clean slate (stale shells) — done.
 4. ThinkPad report reminder (above) — standing.
 
