@@ -27,7 +27,7 @@ the user.
 | Sub-phase 2 — full multitimbral (per-part FX + 3 LFOs + mixer) | **complete**; CPU gate provisional (ThinkPad pending) |
 | **R1 — clear the debts** | DONE — mixer + push; **CI green on Linux + Windows** (build-test). sanitize.yml is nightly; `--sanitize` verified locally (190/190) |
 | Static/pops regression hunt | two engine defects fixed (skip-resume FX clear, mixer zipper); exact static NOT reproduced offline — **user ear-confirm pending** |
-| R2 — GUI overhaul (+ help overlay) | touch reliability (focus-vs-gesture fix + GRAB mode) done; **hardware touch gate pending**; then layout-mockup gate |
+| R2 — GUI overhaul (+ help overlay) | touch reliability done (hardware-confirmed); layout mockup signed off; **functional layout WIRED + gated** (see below); awaiting user review of the built editor |
 | R3 — 1.0 feature set (+ R3.11 QWERTY v2) | not started |
 | R4 — release engineering (v1.0.0) | not started |
 
@@ -71,6 +71,24 @@ pending (hardware confirmation).**
   attachments.**
 - Then: layout wire-up, control grammar at real sizes, master oscilloscope+FFT (RT-safe
   SPSC tap), help overlay (R2 addition), invariants regression.
+
+**Layout wire-up — DONE (2026-07-10), gated.** The signed-off mockup is now the live
+editor (`docs/editor.png`). New UI: `PanelChrome.h` (shared filled-tint frame/sub-box),
+`Sections.h` (OSC/FILTER/ENVELOPE/LFO), reworked `FXPanel.h` (backlit name-bar = on/off;
+tap toggles, drag reorders), `TopBar.h` (preset + Save/Random + live CPU + 8 macros +
+MASTER + REC placeholder + help), `PartRail.h` (P1-P4 + kit-pad grid + level + INPUTS),
+`ScopeView.h` + a processor RT-safe SPSC scope tap (`pushScope`/`readScope`), `BottomZones.h`
+(horizontal CHORD bar + collapsible RHYTHM/LOOPER placeholders), `HelpOverlay.h` ('?').
+Widgets gained `HSelector`, `ShapeSelector`, `RotaryKnob` side-label. 8 macro params appended
+(`macro1..8`; real/automatable/learnable — routing is R3).
+  - **Gates:** dsp 84 / plugin 113; Release run-all-checks **198/198 incl. pluginval s8**;
+    sanitizers (ASan/LSan/UBSan + soak) ALL PASSED; editor invariants (no focusable
+    descendant, state round-trip, open/close storm) green. Bench unchanged (GUI phase; DSP
+    engine untouched) — 4-part worst case ~83% p99 ThinkPad budget, still **provisional**.
+  - **Follow-ups flagged for the user:** (1) macros are unrouted until R3; (2) per-part PAN
+    + MIDI-learnable mixer level lost the dedicated MIX section — still in state/MULTI/
+    automation, needs a home (part-detail popup, or pan in the rail); (3) osc FINE->LEVEL +
+    small ON kill; filter DRIVE (R3) dropped for VEL>CUT; WT wave + RHYTHM/LOOPER engines R3.
 
 ## Static/pops regression (engine-first, telemetry = discontinuity not CPU)
 - **Fixed — silent-part FX skip resume (required):** FX chain state reset once on skip-entry
