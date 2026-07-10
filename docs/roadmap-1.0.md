@@ -61,11 +61,16 @@ pending (hardware confirmation).**
   a `gestureActive` arg; regression case added.
 - Touch hardening: linear faders `setSliderSnapsToMousePosition(true)` (first tap jumps to
   the finger); velocity mode already off.
-- **HARD GATE:** user confirms first-touch reliability on the Surface. If it still flakes,
-  capture the trace log and the confirmed root cause gets the fix. Layout rebuild does NOT
-  start until this gate passes.
-- Then: layout rebuild (mockup sign-off gate), control grammar, master oscilloscope+FFT,
-  help overlay (R2 addition), invariants regression.
+- **HARD GATE — PASSED (2026-07-09):** user confirmed first-touch reliable + grab-mode good
+  on hardware. Follow-up tuning: drag sensitivity gentled ~20% via one constant
+  `kDragPixelsForFullRange` (313). Static also confirmed clean by ear.
+- **Layout MOCKUP GATE (current):** non-functional mockup rendered at default/fullscreen/
+  narrow (docs/mockup-*.png) — left part rail (P1-P4 + kit-pad sub-selector seam), centre
+  in signal-flow order, right SCOPE+FFT, slim top bar, bottom CHORD row + collapsed
+  RHYTHM/LOOPER zones, knob/fader/selector grammar. **STOP for user sign-off before wiring
+  attachments.**
+- Then: layout wire-up, control grammar at real sizes, master oscilloscope+FFT (RT-safe
+  SPSC tap), help overlay (R2 addition), invariants regression.
 
 ## Static/pops regression (engine-first, telemetry = discontinuity not CPU)
 - **Fixed — silent-part FX skip resume (required):** FX chain state reset once on skip-entry
