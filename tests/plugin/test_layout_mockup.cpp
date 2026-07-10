@@ -115,6 +115,21 @@ namespace
         return r.reduced (6, 5);
     }
 
+    // A little waveform icon button (LFO shape): 0 Tri, 1 Sin, 2 Sqr, 3 S&H.
+    void shapeIcon (Graphics& g, Rectangle<int> r, int kind, bool on)
+    {
+        g.setColour (on ? accent() : track()); g.fillRoundedRectangle (r.toFloat(), 4.0f);
+        auto a = r.toFloat().reduced (r.getWidth() * 0.18f, r.getHeight() * 0.28f);
+        const float x0 = a.getX(), w = a.getWidth(), y0 = a.getCentreY(), h = a.getHeight() * 0.5f;
+        g.setColour (on ? onTint() : ink());
+        juce::Path p;
+        if (kind == 0)      { p.startNewSubPath (x0, y0); p.lineTo (x0+w*0.25f, y0-h); p.lineTo (x0+w*0.75f, y0+h); p.lineTo (x0+w, y0); }
+        else if (kind == 1) { p.startNewSubPath (x0, y0); for (int i = 1; i <= 20; ++i) { float t = i/20.0f; p.lineTo (x0+w*t, y0 - std::sin (t*6.283f)*h); } }
+        else if (kind == 2) { p.startNewSubPath (x0, y0+h); p.lineTo (x0, y0-h); p.lineTo (x0+w*0.5f, y0-h); p.lineTo (x0+w*0.5f, y0+h); p.lineTo (x0+w, y0+h); p.lineTo (x0+w, y0-h); }
+        else                { const float s[5] { 0.3f,-0.6f,0.5f,-0.2f,0.7f }; float px = x0; for (int i = 0; i < 5; ++i) { float ny = y0 - s[i]*h; p.startNewSubPath (px, ny); p.lineTo (px+w/5.0f, ny); px += w/5.0f; } }
+        g.strokePath (p, juce::PathStrokeType (1.6f));
+    }
+
     struct LayoutMockup : public juce::Component
     {
         void paint (Graphics& g) override
@@ -125,20 +140,28 @@ namespace
                        tLfo = Colour (0xfff0a04b), tFx = Colour (0xff5ecb8a), tChord = Colour (0xffe0733a),
                        tViz = Colour (0xff67c0c8), tParts = Colour (0xff9aa3ad), tRhy = Colour (0xffe0b13a), tLoop = Colour (0xffca6bd0);
 
-            // --- slim top bar ---------------------------------------------------
-            auto top = takeT (area, 46);
+            // --- top bar (taller: preset, 8 MACRO knobs, big master, rec, indicators) ---
+            auto top = takeT (area, 80);
             g.setColour (panelLt()); g.fillRoundedRectangle (top.toFloat(), 6.0f);
             auto tb = top.reduced (10, 7);
-            auto preset = takeL (tb, 250); g.setColour (track()); g.fillRoundedRectangle (preset.toFloat(), 5.0f);
+            auto preset = takeL (tb, 210);
+            g.setColour (track()); g.fillRoundedRectangle (preset.removeFromTop (34).toFloat(), 5.0f);
             g.setColour (ink()); g.setFont (juce::Font (juce::FontOptions (14.0f, juce::Font::bold)));
-            g.drawText ("  synth        Fat Saw Bass", preset, juce::Justification::centredLeft, false);
-            auto help = tb.removeFromRight (34); g.setColour (track()); g.fillRoundedRectangle (help.toFloat(), 5.0f);
-            g.setColour (ink()); g.drawText ("?", help, juce::Justification::centred, false); tb.removeFromRight (8);
-            g.setColour (dim()); g.setFont (juce::Font (juce::FontOptions (11.5f)));
-            g.drawText ("CPU 12%   MIDI ok   CLK 120 int   SCOPE [on]", tb.removeFromRight (250), juce::Justification::centredRight, false);
-            auto rec = tb.removeFromRight (74); g.setColour (Colour (0xffd8443a)); g.fillEllipse (rec.removeFromLeft (16).toFloat().reduced (2));
-            g.setColour (ink()); g.setFont (juce::Font (juce::FontOptions (12.0f, juce::Font::bold))); g.drawText (" REC", rec, juce::Justification::centredLeft, false);
-            knob (g, tb.removeFromRight (60), "MASTER", 0.7f);
+            g.drawText ("  synth   -   Fat Saw Bass", preset.translated (0, -23), juce::Justification::centredLeft, false);
+            g.setColour (dim()); g.setFont (juce::Font (juce::FontOptions (11.0f)));
+            g.drawText ("  CPU 12%   MIDI ok   CLK 120 int   SCOPE [on]", preset, juce::Justification::centredLeft, false);
+            // right cluster: help, master (bigger), rec
+            auto help = tb.removeFromRight (36); g.setColour (track()); g.fillRoundedRectangle (help.reduced (0, 18).toFloat(), 5.0f);
+            g.setColour (ink()); g.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold))); g.drawText ("?", help.reduced (0, 18), juce::Justification::centred, false);
+            tb.removeFromRight (6);
+            knob (g, tb.removeFromRight (90), "MASTER", 0.7f);                 // bigger master
+            auto rec = tb.removeFromRight (74).reduced (0, 24); g.setColour (Colour (0xffd8443a)); g.fillEllipse (rec.removeFromLeft (16).toFloat());
+            g.setColour (ink()); g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold))); g.drawText (" REC", rec, juce::Justification::centredLeft, false);
+            tb.removeFromRight (10);
+            // 8 MACRO knobs fill the middle
+            for (int m = 0; m < 8; ++m)
+            { auto mc = takeL (tb, tb.getWidth() / (8 - m));
+              knob (g, mc, "M" + String (m + 1), 0.3f + 0.08f * m); }
 
             // --- BOTTOM WORKSTATION: chord + RHYTHM + LOOPER -------------------
             auto work = area.removeFromBottom (juce::jmax (250, area.getHeight() * 38 / 100));
@@ -258,8 +281,10 @@ namespace
               for (int i = 0; i < 3; ++i)
               { auto box = subBox (g, takeT (s, bh), tLfo);
                 selector (g, takeT (box, 26), { "PITCH","CUTOFF","PW","OFF" }, i);
-                knob (g, takeL (box, box.getWidth()/3), "RATE"); knob (g, takeL (box, box.getWidth()/2), "DEPTH");
-                selector (g, box, { "TRI","SIN","SQR","S&H" }, 1); } }
+                auto shapes = box.removeFromRight (40);                    // shape icons stacked vertically
+                knob (g, takeL (box, box.getWidth()/2), "RATE"); knob (g, box, "DEPTH");
+                const int ih = (shapes.getHeight() - 3 * 3) / 4;
+                for (int k = 0; k < 4; ++k) { auto cell = shapes.removeFromTop (ih); shapes.removeFromTop (3); shapeIcon (g, cell, k, k == 1); } } }
 
             // FX: real draggable panel - Chorus / Delay / Reverb / Width, knobs + values.
             { auto s = section (g, centre, "FX  -  drag to reorder", tFx);
@@ -272,14 +297,18 @@ namespace
                 { "WIDTH",  false, { { "WIDTH","1.40",0.7f } } } };
               const int bh = (s.getHeight() - 3 * 5) / 4;
               for (auto& b : blocks)
-              { auto row = takeT (s, bh);
-                g.setColour (track()); g.fillRoundedRectangle (row.toFloat(), 5.0f);
-                grip (g, row.removeFromLeft (16));
-                auto lead = row.removeFromLeft (66);
-                toggle (g, lead.removeFromTop (lead.getHeight()/2).reduced (2), b.name, b.on);
-                g.setColour (dim()); g.setFont (juce::Font (juce::FontOptions (9.5f))); g.drawText ("on/off", lead.reduced (2), juce::Justification::centred, false);
-                const int kw = row.getWidth() / (int) b.k.size();
-                for (auto& kn : b.k) knobV (g, takeL (row, kw - 5), kn.l, kn.v, kn.p); }
+              { auto box = takeT (s, bh);
+                g.setColour (panel()); g.fillRoundedRectangle (box.toFloat(), 5.0f);
+                // backlit NAME BAR across the top = the on/off (glows when on, dark when off).
+                auto bar = box.removeFromTop (26);
+                g.setColour (b.on ? tFx : track().darker (0.35f)); g.fillRoundedRectangle (bar.toFloat(), 4.0f);
+                if (b.on) { g.setColour (tFx.brighter (0.5f)); g.drawRoundedRectangle (bar.toFloat().reduced (0.7f), 4.0f, 1.0f); }
+                grip (g, bar.removeFromLeft (18));
+                g.setColour (b.on ? onTint() : dim()); g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
+                g.drawText (b.name, bar.withTrimmedLeft (2), juce::Justification::centredLeft, false);
+                box.removeFromTop (3);
+                const int kw = box.getWidth() / (int) b.k.size();
+                for (auto& kn : b.k) knobV (g, takeL (box, kw - 5), kn.l, kn.v, kn.p); }
             }
         }
     };
@@ -296,10 +325,8 @@ namespace
     }
 }
 
-TEST_CASE ("R2 layout mockup renders at default / fullscreen / narrow", "[plugin][mockup][screenshot]")
+TEST_CASE ("R2 layout mockup renders (fullsize)", "[plugin][mockup][screenshot]")
 {
     juce::ScopedJuceInitialiser_GUI init;
-    render (1500, 900, "mockup-default.png");
-    render (1920, 1080, "mockup-fullscreen.png");
-    render (1180, 760, "mockup-narrow.png");
+    render (1760, 980, "mockup-default.png");
 }
