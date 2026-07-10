@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include <juce_gui_basics/juce_gui_basics.h>
+#include "UI/Widgets.h"     // kDragPixelsForFullRange
 
 namespace
 {
@@ -15,8 +16,9 @@ namespace
         s.setSliderStyle (juce::Slider::LinearVertical);
         s.setVelocityBasedMode (false);
         s.setSliderSnapsToMousePosition (false);
+        s.setMouseDragSensitivity (kDragPixelsForFullRange);
         s.setRange (0.0, 1.0, 0.0);
-        s.setSize (40, 200);
+        s.setSize (40, 600);   // taller than the drag extent so travel isn't clamped
     }
 
     juce::MouseEvent evt (juce::Component& c, juce::Point<float> pos, juce::Point<float> downPos, bool dragged)
@@ -57,4 +59,20 @@ TEST_CASE ("grab-mode: config is snap-off (regression pin)", "[plugin][touch][gr
     juce::ScopedJuceInitialiser_GUI init;
     juce::Slider s; configureGrab (s);
     REQUIRE_FALSE (s.getSliderSnapsToMousePosition());
+}
+
+TEST_CASE ("grab-mode: drag sensitivity = kDragPixelsForFullRange px for full range", "[plugin][touch][grab][sens]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    juce::Slider s; configureGrab (s);
+    s.setValue (0.1, juce::dontSendNotification);
+
+    // Drag UP exactly HALF the full-range extent -> the value must rise by ~0.5. This
+    // pins the tuned sensitivity: JUCE's default 250 px would give a different (larger)
+    // delta, so a lost/reverted setMouseDragSensitivity fails here.
+    const juce::Point<float> down (20.0f, 300.0f);
+    s.mouseDown (evt (s, down, down, false));
+    const float halfExtentPx = (float) kDragPixelsForFullRange * 0.5f;
+    s.mouseDrag (evt (s, { 20.0f, 300.0f - halfExtentPx }, down, true));
+    REQUIRE (s.getValue() == Catch::Approx (0.6).margin (0.04));   // 0.1 + 0.5
 }

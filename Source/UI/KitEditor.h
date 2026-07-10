@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "VASynthLookAndFeel.h"
+#include "Widgets.h"          // kDragPixelsForFullRange
 #include "../PluginProcessor.h"
 
 // ============================================================================
@@ -66,6 +67,7 @@ public:
 
         level.setSliderStyle (juce::Slider::LinearHorizontal); level.setWantsKeyboardFocus (false);
         level.setSliderSnapsToMousePosition (false);   // R2 grab mode (no jump on touch)
+        level.setMouseDragSensitivity (kDragPixelsForFullRange);   // R2: gentler drag-to-value
         level.setRange (0.0, 2.0, 0.01); level.setTextBoxStyle (juce::Slider::TextBoxRight, true, 44, 20);
         level.setTextBoxIsEditable (false);          // no focusable value editor (QWERTY stays live)
         level.onValueChange = [this] { pad().level = (float) level.getValue(); apply(); };

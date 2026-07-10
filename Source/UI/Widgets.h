@@ -14,6 +14,13 @@
 // and a small "CCnn" badge appears. The same gesture offers clear-mapping.
 // ============================================================================
 
+// R2 touch: pixels of finger travel to move a fader/knob across its FULL range
+// (JUCE's Slider default is 250). Higher = less sensitive, so small movements don't
+// over-shoot values during live play. Applied consistently to every fader + knob.
+// ONE knob to re-tune after the layout rebuild changes control sizes (larger controls
+// want more travel). ~313 = JUCE's 250 x 1.25 (~25% more travel / ~20% less per pixel).
+inline constexpr int kDragPixelsForFullRange = 313;
+
 // Clean, arm's-length-legible value readout for a float parameter: sensible
 // decimal places for the magnitude, plus the parameter's own unit label (Hz, s,
 // ms, ct) — JUCE's getCurrentValueAsText() shows neither (it dumps full float
@@ -176,6 +183,7 @@ public:
                                                        // control with NO value change; the value
                                                        // moves only on drag, relative to the grab
                                                        // point (snapping caused live-perf surprises).
+        slider.setMouseDragSensitivity (kDragPixelsForFullRange);   // R2: gentler drag-to-value
         slider.setWantsKeyboardFocus (false);
         addAndMakeVisible (slider);
         attachment = std::make_unique<juce::SliderParameterAttachment> (*apvts.getParameter (pid), slider);
@@ -302,6 +310,7 @@ public:
         slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
         slider.setVelocityBasedMode (false);           // relative drag distance (grab mode)
         slider.setSliderSnapsToMousePosition (false);  // R2: acquire on touch, no value jump
+        slider.setMouseDragSensitivity (kDragPixelsForFullRange);   // R2: gentler drag-to-value
         slider.setWantsKeyboardFocus (false);
         addAndMakeVisible (slider);
         attachment = std::make_unique<juce::SliderParameterAttachment> (*apvts.getParameter (pid), slider);
