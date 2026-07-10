@@ -25,8 +25,9 @@ the user.
 | Routing discoverability + key-range zones (Part A/B) | done, gated |
 | Sub-phase 1 — Kit parts | done, gated |
 | Sub-phase 2 — full multitimbral (per-part FX + 3 LFOs + mixer) | **complete**; CPU gate provisional (ThinkPad pending) |
-| **R1 — clear the debts** | mixer done + gated; **push deferred** (token lacks `workflow` scope — user to resolve; code safe locally) |
-| R2 — GUI overhaul (+ help overlay) | **in progress** — touch-reliability diagnosis first |
+| **R1 — clear the debts** | mixer done; **pushed to origin/master** (workflow scope granted); CI watched |
+| Static/pops regression hunt | two engine defects fixed (skip-resume FX clear, mixer zipper); exact static NOT reproduced offline — **user ear-confirm pending** |
+| R2 — GUI overhaul (+ help overlay) | touch reliability (focus-vs-gesture fix + GRAB mode) done; **hardware touch gate pending**; then layout-mockup gate |
 | R3 — 1.0 feature set (+ R3.11 QWERTY v2) | not started |
 | R4 — release engineering (v1.0.0) | not started |
 
@@ -65,6 +66,19 @@ pending (hardware confirmation).**
   start until this gate passes.
 - Then: layout rebuild (mockup sign-off gate), control grammar, master oscilloscope+FFT,
   help overlay (R2 addition), invariants regression.
+
+## Static/pops regression (engine-first, telemetry = discontinuity not CPU)
+- **Fixed — silent-part FX skip resume (required):** FX chain state reset once on skip-entry
+  (delay/reverb/chorus + chorus mod LFO). Dropped chorus resume jump 0.117→0.086.
+- **Fixed — mixer level/pan zipper (confirmed, maxJump 0.204→smoothed):** per-part L/R gains
+  ramp across the block; smoothers snap to first setMix.
+- **Verified:** voiceTrim applied once per part (== old mono sum), soft-clip last, bounds test
+  covers L+R. Permanent tortures: engine skip/resume over all 4 FX; processor multi-part
+  pedaled silence/return (live+locked+kit) scanning L+R for clicks/bounds/finite.
+- **OPEN:** the realistic processor torture is clean (maxJump 0.038) — the exact reported
+  static did NOT reproduce offline. May be real-time/device/action-specific or already fixed.
+  NOT closed until the user confirms clean by ear; if it persists, need a WAV recording + the
+  exact triggering action to nail the confirmed root cause.
 
 ### Decisions log
 - 2026-07-08 — Per-part mixer is REQUIRED for Sub-phase 2 (user corrected an earlier misread

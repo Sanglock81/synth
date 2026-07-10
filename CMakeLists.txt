@@ -5,6 +5,13 @@ project(VASynth VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# MSVC flags the standard std::getenv / fopen as "unsafe" (C4996). We use them
+# deliberately and portably (env-gated trace, golden WAV I/O); silence the noise so
+# the Windows CI build is clean.
+if(MSVC)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+endif()
+
 # --- Sanitizer builds (memory-leak / UB monitoring) -------------------------
 # Applied build-wide (JUCE + our code + tests). Use via run-all-checks.sh
 # --sanitize, or: cmake -B build-asan -DVASYNTH_ASAN=ON -DVASYNTH_BUILD_TESTS=ON

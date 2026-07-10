@@ -13,7 +13,6 @@
 #include <cstdlib>
 #include <vector>
 #include <cstdint>
-#include <unistd.h>
 
 namespace
 {
