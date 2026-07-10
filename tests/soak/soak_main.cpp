@@ -13,11 +13,17 @@
 #include <cstdlib>
 #include <vector>
 #include <cstdint>
+#if defined(__linux__)
+ #include <unistd.h>
+#endif
 
 namespace
 {
+    // Resident set size in KiB. Linux-only (via /proc/self/statm); on other platforms
+    // the soak still runs, it just skips the memory-growth readout.
     long readRssKb()
     {
+#if defined(__linux__)
         long pages = 0, resident = 0;
         if (FILE* f = std::fopen ("/proc/self/statm", "r"))
         {
@@ -25,6 +31,9 @@ namespace
             std::fclose (f);
         }
         return resident * (sysconf (_SC_PAGESIZE) / 1024);
+#else
+        return 0;
+#endif
     }
 }
 
