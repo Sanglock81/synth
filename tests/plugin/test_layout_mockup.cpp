@@ -1,17 +1,22 @@
 // ============================================================================
-// R2 layout MOCKUP (non-functional) - revision 3. Direction from sign-off:
-// denser (more params per section) + creative + more COMPACT synth, freeing real
-// estate for the RHYTHM (arp + 16-step sequencer) and LOOPER (per-part loop lanes)
-// zones. Filled tinted section headers kept. Arrangement: slim top bar; left PART
-// RAIL (P1-P4 + level + kit-pad seam); compact centre in signal-flow order with
-// MORE params visible; right SCOPE + FFT; bottom = CHORD row + substantial RHYTHM
-// + LOOPER zones (shown expanded here to prove the space; collapsed by default at
-// runtime, synth reflows into the freed space). Rendered at default/fullscreen/narrow.
+// R2 layout MOCKUP (non-functional) - revision 4, per detailed sign-off notes:
+//  - Parts rail: even-height cells (fixed a shrinking-row bug).
+//  - Oscillators: subdivided into a box PER OSC; wave shapes as touch buttons across
+//    the top (last = WT, opens a wavetable picker); OCT/DET/PW/FINE knobs below.
+//  - Filter: type buttons 50% taller; all knobs stacked VERTICALLY at equal size.
+//  - Envelope: unchanged (AMP/MOD + ADSR + Env>Pitch/Vel).
+//  - LFO: subdivided into a box PER LFO (like oscillators); DEST selector horizontal
+//    across the top with full labels; Rate/Depth knobs + Shape below.
+//  - FX: reverted to the real draggable panel - Chorus/Delay/Reverb/Width blocks with
+//    their own knobs + NUMERIC values, recoloured to match the UI.
+//  - Chord row, Scope/FFT, RHYTHM sequencer, LOOPER lanes: as before.
+// Rendered at default / fullscreen / narrow.
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "UI/VASynthLookAndFeel.h"
 #include <cmath>
+#include <vector>
 
 #ifndef VASYNTH_DOCS_DIR
  #define VASYNTH_DOCS_DIR "."
@@ -19,7 +24,7 @@
 
 namespace
 {
-    using juce::Rectangle; using juce::Colour; using juce::Graphics;
+    using juce::Rectangle; using juce::Colour; using juce::Graphics; using juce::String;
 
     Colour panel   () { return VASynthLookAndFeel::panel(); }
     Colour panelLt () { return VASynthLookAndFeel::panelLight(); }
@@ -32,10 +37,10 @@ namespace
     Rectangle<int> takeL (Rectangle<int>& r, int w) { auto c = r.removeFromLeft (w); r.removeFromLeft (5); return c; }
     Rectangle<int> takeT (Rectangle<int>& r, int h) { auto c = r.removeFromTop (h);  r.removeFromTop (5);  return c; }
 
-    void clabel (Graphics& g, Rectangle<int> r, const juce::String& t)
+    void clabel (Graphics& g, Rectangle<int> r, const String& t)
     { g.setColour (dim()); g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold))); g.drawText (t, r, juce::Justification::centred, false); }
 
-    Rectangle<int> section (Graphics& g, Rectangle<int> r, const juce::String& t, Colour tint)
+    Rectangle<int> section (Graphics& g, Rectangle<int> r, const String& t, Colour tint)
     {
         g.setColour (panelLt().darker (0.12f)); g.fillRoundedRectangle (r.toFloat(), 6.0f);
         auto head = r.removeFromTop (24);
@@ -45,10 +50,9 @@ namespace
         return r.reduced (6, 5);
     }
 
-    void knob (Graphics& g, Rectangle<int> r, const juce::String& label, float v = 0.62f)
+    void knobAt (Graphics& g, Rectangle<int> r, float v, int maxD)
     {
-        auto lab = r.removeFromBottom (13);
-        const int d = juce::jmin (juce::jmin (r.getWidth() - 2, r.getHeight() - 2), 96);
+        const int d = juce::jmin (juce::jmin (r.getWidth() - 2, r.getHeight() - 2), maxD);
         auto c = r.withSizeKeepingCentre (d, d).toFloat();
         g.setColour (track()); g.fillEllipse (c);
         const auto ctr = c.getCentre(); const float r0 = c.getWidth() * 0.5f - 3.0f;
@@ -56,10 +60,21 @@ namespace
         juce::Path arc; arc.addCentredArc (ctr.x, ctr.y, r0, r0, 0.0f, a0, a1, true);
         g.setColour (accent()); g.strokePath (arc, juce::PathStrokeType (3.0f));
         g.setColour (ink()); g.drawLine (ctr.x, ctr.y, ctr.x + std::cos (a1 + 1.57f) * r0 * 0.85f, ctr.y + std::sin (a1 + 1.57f) * r0 * 0.85f, 2.2f);
+    }
+    void knob (Graphics& g, Rectangle<int> r, const String& label, float v = 0.62f)
+    { auto lab = r.removeFromBottom (13); knobAt (g, r, v, 92); clabel (g, lab, label); }
+
+    // knob + label + numeric value (FX controls).
+    void knobV (Graphics& g, Rectangle<int> r, const String& label, const String& val, float v)
+    {
+        auto valR = r.removeFromBottom (13); auto lab = r.removeFromBottom (12);
+        knobAt (g, r, v, 58);
         clabel (g, lab, label);
+        g.setColour (accent()); g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 10.5f, juce::Font::bold)));
+        g.drawText (val, valR, juce::Justification::centred, false);
     }
 
-    void fader (Graphics& g, Rectangle<int> r, const juce::String& label, float v)
+    void fader (Graphics& g, Rectangle<int> r, const String& label, float v)
     {
         auto lab = r.removeFromBottom (13);
         auto col = r.withSizeKeepingCentre (juce::jmin (15, r.getWidth() - 2), r.getHeight() - 4);
@@ -75,16 +90,29 @@ namespace
         for (int i = 0; i < opts.size(); ++i)
         {
             auto cell = Rectangle<int> (r.getX() + i * r.getWidth() / n, r.getY(), r.getWidth() / n, r.getHeight()).reduced (2);
-            g.setColour (i == sel ? accent() : track()); g.fillRoundedRectangle (cell.toFloat(), 4.0f);
+            const bool wt = opts[i].startsWith ("WT");
+            g.setColour (i == sel ? accent() : (wt ? track().brighter (0.12f) : track())); g.fillRoundedRectangle (cell.toFloat(), 4.0f);
             g.setColour (i == sel ? onTint() : ink()); g.setFont (juce::Font (juce::FontOptions (11.5f, juce::Font::bold)));
             g.drawText (opts[i], cell, juce::Justification::centred, false);
         }
     }
-    void toggle (Graphics& g, Rectangle<int> r, const juce::String& t, bool on)
+    void toggle (Graphics& g, Rectangle<int> r, const String& t, bool on)
     {
         g.setColour (on ? accent() : track()); g.fillRoundedRectangle (r.toFloat(), 4.0f);
         g.setColour (on ? onTint() : ink()); g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
         g.drawText (t, r, juce::Justification::centred, false);
+    }
+    void grip (Graphics& g, Rectangle<int> r)   // drag handle (two columns of dots)
+    {
+        g.setColour (dim());
+        for (int x = 0; x < 2; ++x) for (int y = 0; y < 3; ++y)
+            g.fillEllipse ((float) (r.getCentreX() - 3 + x * 4), (float) (r.getCentreY() - 6 + y * 5), 2.4f, 2.4f);
+    }
+    Rectangle<int> subBox (Graphics& g, Rectangle<int> r, Colour tint)   // an inset box for one osc / lfo
+    {
+        g.setColour (panel()); g.fillRoundedRectangle (r.toFloat(), 5.0f);
+        g.setColour (tint.withAlpha (0.4f)); g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 5.0f, 1.0f);
+        return r.reduced (6, 5);
     }
 
     struct LayoutMockup : public juce::Component
@@ -112,9 +140,8 @@ namespace
             g.setColour (ink()); g.setFont (juce::Font (juce::FontOptions (12.0f, juce::Font::bold))); g.drawText (" REC", rec, juce::Justification::centredLeft, false);
             knob (g, tb.removeFromRight (60), "MASTER", 0.7f);
 
-            // --- BOTTOM WORKSTATION: chord + RHYTHM + LOOPER (substantial) ------
-            auto workH = juce::jmax (250, area.getHeight() * 38 / 100);
-            auto work = area.removeFromBottom (workH);
+            // --- BOTTOM WORKSTATION: chord + RHYTHM + LOOPER -------------------
+            auto work = area.removeFromBottom (juce::jmax (250, area.getHeight() * 38 / 100));
             {
                 auto chord = takeT (work, 48);
                 auto c = section (g, chord, "Chord", tChord);
@@ -129,8 +156,7 @@ namespace
                   selector (g, takeL (ctrls, 250), { "UP","DOWN","UP/DN","RAND","PLAYED" }, 0);
                   knob (g, takeL (ctrls, 60), "OCT"); knob (g, takeL (ctrls, 60), "GATE"); knob (g, takeL (ctrls, 60), "SWING");
                   toggle (g, takeL (ctrls, 66), "LATCH", true); toggle (g, ctrls.removeFromLeft (66), "HOLD", false); }
-                { auto lane = rb;                                   // 16-step grid
-                  const int cells = 16; const int cw = lane.getWidth() / cells;
+                { auto lane = rb; const int cells = 16; const int cw = lane.getWidth() / cells;
                   for (int s = 0; s < cells; ++s)
                   { auto cell = Rectangle<int> (lane.getX() + s * cw, lane.getY(), cw, lane.getHeight()).reduced (2);
                     const bool on = (s % 4 == 0) || s == 6 || s == 10 || s == 13;
@@ -144,31 +170,33 @@ namespace
                   g.setColour (dim()); g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
                   g.drawText ("EXPORT SESSION  ->  stems + MIDI", bar, juce::Justification::centredRight, false); }
                 const char* lanes[] { "P1 lead", "P2 drums", "P3 pad", "P4 --" };
+                const int lh = (lb.getHeight() - 3 * 5) / 4;
                 for (int i = 0; i < 4; ++i)
-                { auto lane = takeT (lb, (lb.getHeight() - 3 * 5) / 4);
+                { auto lane = takeT (lb, lh);
                   g.setColour (track()); g.fillRoundedRectangle (lane.toFloat(), 4.0f);
                   g.setColour (ink()); g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold)));
                   g.drawText (lanes[i], lane.removeFromLeft (70).withTrimmedLeft (8), juce::Justification::centredLeft, false);
                   if (i < 3) { g.setColour (tLoop.withAlpha (0.5f)); juce::Random rr (i + 3);
                     for (int x = 0; x < lane.getWidth(); x += 6) { float h = lane.getHeight() * (0.2f + 0.7f * rr.nextFloat());
-                      g.fillRect (Rectangle<float> ((float) (lane.getX() + x), lane.getCentreY() - h/2, 3.0f, h)); } } }
+                      g.fillRect (Rectangle<float> ((float) (lane.getX() + x), lane.getCentreY() - h / 2, 3.0f, h)); } } }
             }
 
-            // --- left PART RAIL -------------------------------------------------
+            // --- left PART RAIL (even-height cells) -----------------------------
             auto rail = takeL (area, 176);
             {
                 auto rl = section (g, rail, "Parts", tParts);
                 const char* pn[]  { "P1  LIVE", "P2  808 Basics", "P3  Warm Pad", "P4  (empty)" };
                 const char* sub[] { "Fat Saw Bass", "kit  -  6 pads", "chorus + reverb", "tap to add" };
+                const int cellH = (rl.getHeight() - 3 * 5) / 4;      // ONE height -> even cells
                 for (int i = 0; i < 4; ++i)
                 {
-                    auto cell = takeT (rl, (rl.getHeight() - 15) / 4);
+                    auto cell = takeT (rl, cellH);
                     const bool selp = i == 1;
                     g.setColour (selp ? track().brighter (0.16f) : track()); g.fillRoundedRectangle (cell.toFloat(), 6.0f);
                     if (selp) { g.setColour (accent()); g.drawRoundedRectangle (cell.toFloat().reduced (1), 6.0f, 2.0f); }
                     auto lvl = cell.removeFromRight (24).reduced (4, 7);
                     g.setColour (track().darker (0.35f)); g.fillRoundedRectangle (lvl.toFloat(), 3.0f);
-                    g.setColour (accent()); g.fillRoundedRectangle (lvl.withTrimmedTop (lvl.getHeight()/3).toFloat(), 3.0f);
+                    g.setColour (accent()); g.fillRoundedRectangle (lvl.withTrimmedTop (lvl.getHeight() / 3).toFloat(), 3.0f);
                     auto body = cell.reduced (7, 5);
                     g.setColour (i == 0 ? accent() : dim()); g.fillEllipse (body.removeFromLeft (11).removeFromTop (11).toFloat());
                     g.setColour (ink()); g.setFont (juce::Font (juce::FontOptions (12.0f, juce::Font::bold)));
@@ -194,51 +222,74 @@ namespace
                   g.setColour (accent().withAlpha (0.85f)); g.fillRect (Rectangle<float> ((float)(fb.getX()+b*bw+1), fb.getBottom()-h, bw-2.0f, h)); }
             }
 
-            // --- centre synth, COMPACT + dense (more params) --------------------
+            // --- centre synth --------------------------------------------------
             auto centre = area;
             const int u = juce::jmax (78, (centre.getWidth() - 4 * 5) / 13);
 
-            { auto s = section (g, takeL (centre, u * 4), "Oscillators + Mix", tOsc);   // 3 rows x 6 params
-              for (int i = 0; i < 3; ++i) { auto row = takeT (s, (s.getHeight() - 10) / 3);
-                selector (g, takeL (row, 116), { "SAW","SQR","TRI","SIN","WT" }, i);
-                for (auto* l : { "OCT","DET","PW","FINE" }) knob (g, takeL (row, row.getWidth()/(l[0]=='O'?4:l[0]=='D'?3:l[0]=='P'?2:1)), l);
-                fader (g, row.removeFromLeft (0).withWidth (0), "", 0.5f); } }
+            // OSCILLATORS: one sub-box per osc; wave buttons across top, knobs below.
+            { auto s = section (g, takeL (centre, u * 3), "Oscillators", tOsc);
+              const int bh = (s.getHeight() - 2 * 5) / 3;
+              for (int i = 0; i < 3; ++i)
+              { auto box = subBox (g, takeT (s, bh), tOsc);
+                selector (g, takeT (box, 28), { "SAW","SQR","TRI","SIN","WT.." }, i);
+                for (auto* l : { "OCTAVE","DETUNE","PW","FINE" }) knob (g, takeL (box, box.getWidth()/(l[0]=='O'?4:l[0]=='D'?3:l[1]=='W'?2:1)), l); } }
 
+            // FILTER: type buttons 50% taller; all knobs stacked vertically, equal size.
             { auto s = section (g, takeL (centre, u * 2), "Filter", tFilt);
-              selector (g, takeT (s, 34), { "LP","HP","BP","NOTCH" }, 0);
-              auto r1 = takeT (s, s.getHeight() * 3 / 5);
-              knob (g, takeL (r1, r1.getWidth()/2), "CUTOFF", 0.7f); knob (g, r1, "RESO", 0.35f);
-              for (auto* l : { "DRIVE","ENV","TRACK" }) knob (g, takeL (s, s.getWidth()/(l[0]=='D'?3:l[0]=='E'?2:1)), l, 0.2f); }
+              selector (g, takeT (s, 50), { "LP","HP","BP","NOTCH" }, 0);   // 50% taller
+              const char* fk[] { "CUTOFF","RESO","DRIVE","ENV AMT","KEYTRK" };
+              const float fv[] { 0.7f, 0.35f, 0.2f, 0.5f, 0.4f };
+              const int kh = (s.getHeight() - 4 * 5) / 5;
+              for (int i = 0; i < 5; ++i) { auto row = takeT (s, kh);
+                knobAt (g, row.removeFromLeft (kh + 6), fv[i], 60);
+                g.setColour (ink()); g.setFont (juce::Font (juce::FontOptions (11.5f, juce::Font::bold)));
+                g.drawText (fk[i], row.withTrimmedLeft (4), juce::Justification::centredLeft, false); } }
 
+            // ENVELOPE: unchanged.
             { auto s = section (g, takeL (centre, u * 2), "Envelope", tEnv);
               selector (g, takeT (s, 30), { "AMP","MOD" }, 0);
               auto kk = s.removeFromRight (s.getWidth() * 2 / 6);
               for (auto* l : { "A","D","S","R" }) fader (g, takeL (s, s.getWidth()/(l[0]=='A'?4:l[0]=='D'?3:l[0]=='S'?2:1)), l, 0.55f);
               knob (g, takeT (kk, kk.getHeight()/2), "E>PCH"); knob (g, kk, "VEL"); }
 
-            { auto s = section (g, takeL (centre, u * 3), "LFO 1 . 2 . 3", tLfo);        // 3 rows x 4 params
-              for (int i = 0; i < 3; ++i) { auto row = takeT (s, (s.getHeight() - 10) / 3);
-                knob (g, takeL (row, row.getWidth()/4), "RATE"); knob (g, takeL (row, row.getWidth()/3), "DEP");
-                selector (g, takeL (row, row.getWidth()/2), { "TRI","SIN","SQR","S&H" }, 1);
-                selector (g, row, { "PCH","CUT","PW","OFF" }, i); } }
+            // LFO: one sub-box per LFO; DEST selector horizontal across the top, knobs below.
+            { auto s = section (g, takeL (centre, u * 3), "LFO", tLfo);
+              const int bh = (s.getHeight() - 2 * 5) / 3;
+              for (int i = 0; i < 3; ++i)
+              { auto box = subBox (g, takeT (s, bh), tLfo);
+                selector (g, takeT (box, 26), { "PITCH","CUTOFF","PW","OFF" }, i);
+                knob (g, takeL (box, box.getWidth()/3), "RATE"); knob (g, takeL (box, box.getWidth()/2), "DEPTH");
+                selector (g, box, { "TRI","SIN","SQR","S&H" }, 1); } }
 
-            { auto s = section (g, centre, "FX  -  drag to reorder", tFx);              // 5 blocks + on/off
-              const char* fx[] { "CHORUS","DELAY","REVERB","WIDTH","EQ" };
-              for (int i = 0; i < 5; ++i) { auto row = takeT (s, (s.getHeight() - 20) / 5);
+            // FX: real draggable panel - Chorus / Delay / Reverb / Width, knobs + values.
+            { auto s = section (g, centre, "FX  -  drag to reorder", tFx);
+              struct K { const char* l; const char* v; float p; };
+              struct B { const char* name; bool on; std::vector<K> k; };
+              std::vector<B> blocks = {
+                { "CHORUS", true,  { { "RATE","0.80",0.6f }, { "DEPTH","0.50",0.5f }, { "MIX","0.50",0.5f } } },
+                { "DELAY",  true,  { { "TIME","300ms",0.5f }, { "FBK","0.35",0.35f }, { "PNG","1.0",0.7f }, { "MIX","0.35",0.35f } } },
+                { "REVERB", true,  { { "SIZE","0.50",0.5f }, { "DAMP","0.50",0.5f }, { "WIDTH","1.0",0.6f }, { "MIX","0.30",0.3f } } },
+                { "WIDTH",  false, { { "WIDTH","1.40",0.7f } } } };
+              const int bh = (s.getHeight() - 3 * 5) / 4;
+              for (auto& b : blocks)
+              { auto row = takeT (s, bh);
                 g.setColour (track()); g.fillRoundedRectangle (row.toFloat(), 5.0f);
-                auto t = row.removeFromLeft (28).reduced (5); g.setColour (i < 3 ? accent() : dim()); g.fillRoundedRectangle (t.toFloat(), 3.0f);
-                g.setColour (ink()); g.setFont (juce::Font (juce::FontOptions (12.0f, juce::Font::bold)));
-                g.drawText (fx[i], row.removeFromLeft (row.getWidth() - 52).withTrimmedLeft (6), juce::Justification::centredLeft, false);
-                knob (g, row, "MIX", 0.4f); } }
+                grip (g, row.removeFromLeft (16));
+                auto lead = row.removeFromLeft (66);
+                toggle (g, lead.removeFromTop (lead.getHeight()/2).reduced (2), b.name, b.on);
+                g.setColour (dim()); g.setFont (juce::Font (juce::FontOptions (9.5f))); g.drawText ("on/off", lead.reduced (2), juce::Justification::centred, false);
+                const int kw = row.getWidth() / (int) b.k.size();
+                for (auto& kn : b.k) knobV (g, takeL (row, kw - 5), kn.l, kn.v, kn.p); }
+            }
         }
     };
 
-    void render (int w, int h, const juce::String& name)
+    void render (int w, int h, const String& name)
     {
         LayoutMockup m; m.setSize (w, h);
         auto img = m.createComponentSnapshot (m.getLocalBounds(), false, 1.0f);
         REQUIRE (img.isValid());
-        juce::File out (juce::String (VASYNTH_DOCS_DIR) + "/" + name);
+        juce::File out (String (VASYNTH_DOCS_DIR) + "/" + name);
         out.deleteFile();
         juce::FileOutputStream os (out); REQUIRE (os.openedOk());
         juce::PNGImageFormat png; REQUIRE (png.writeImageToStream (img, os));
