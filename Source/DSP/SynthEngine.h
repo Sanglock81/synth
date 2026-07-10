@@ -448,6 +448,8 @@ public:
     void setMix (const std::array<float, maxParts>& levels, const std::array<float, maxParts>& pans)
     {
         partLevelUse = levels; partPanUse = pans;
+        if (! mixPrimed)        // snap the gain smoothers to the initial values (no startup ramp)
+        { for (int p = 0; p < maxParts; ++p) { prevLg[(std::size_t) p] = targetLg (p); prevRg[(std::size_t) p] = targetRg (p); } mixPrimed = true; }
     }
 
     // Trim + per-part FX (partFxUse) + sum into the stereo master (once per block).
@@ -468,7 +470,18 @@ public:
             if (partHadVoice[(std::size_t) p]) fxSilentBlocks[(std::size_t) p] = 0;
             const bool skip = ! partHadVoice[(std::size_t) p]
                               && (! fxOn || fxSilentBlocks[(std::size_t) p] >= kFxHoldBlocks);
-            if (skip) continue;
+            if (skip)
+            {
+                // Clear the chain's state ONCE on skip-entry (delay lines, reverb combs/
+                // allpasses, chorus buffers + its mod LFO). Skip only engages after the
+                // output has been silent, so there's nothing audible to lose — and the
+                // chain resumes from a clean zero, so retrigger can't emit stale garbage.
+                if (! fxCleared[(std::size_t) p]) { partFx[(std::size_t) p].reset(); fxCleared[(std::size_t) p] = true; }
+                // Keep the gain smoothers at target while skipped, so resume never ramps.
+                prevLg[(std::size_t) p] = targetLg (p); prevRg[(std::size_t) p] = targetRg (p);
+                continue;
+            }
+            fxCleared[(std::size_t) p] = false;
             ++partsProcessed;
 
             float* sL = partL[(std::size_t) p].data();
@@ -476,12 +489,14 @@ public:
             for (int i = 0; i < numSamples; ++i) { sL[i] = m[i]; sR[i] = m[i]; }
             if (fxOn) { partFx[(std::size_t) p].setParams (partFxUse[(std::size_t) p]); partFx[(std::size_t) p].process (sL, sR, numSamples); }
 
-            // Mixer: 0 dB-centre balance pan law (centre keeps unity, so defaults are
-            // bit-identical): leftGain = level*(pan<=0 ? 1 : 1-pan), right symmetric.
-            const float lvl = partLevelUse[(std::size_t) p], pan = partPanUse[(std::size_t) p];
-            const float lg = lvl * (pan <= 0.0f ? 1.0f : 1.0f - pan);
-            const float rg = lvl * (pan >= 0.0f ? 1.0f : 1.0f + pan);
-            for (int i = 0; i < numSamples; ++i) { L[i] += sL[i] * lg; R[i] += sR[i] * rg; }
+            // Mixer level/pan (0 dB-centre balance law), SMOOTHED: ramp the L/R gains from
+            // last block's values to this block's target across the block, so a stepped
+            // partN_level / pan (automation, MIDI-learn, a finger drag) never zippers.
+            const float lgT = targetLg (p), rgT = targetRg (p);
+            float lg = prevLg[(std::size_t) p], rg = prevRg[(std::size_t) p];
+            const float dlg = (lgT - lg) / (float) numSamples, drg = (rgT - rg) / (float) numSamples;
+            for (int i = 0; i < numSamples; ++i) { lg += dlg; rg += drg; L[i] += sL[i] * lg; R[i] += sR[i] * rg; }
+            prevLg[(std::size_t) p] = lgT; prevRg[(std::size_t) p] = rgT;
 
             if (! partHadVoice[(std::size_t) p])
             {
@@ -589,6 +604,11 @@ private:
     std::array<PartLfos, maxParts> partLfoUse {};     // per-part LFOs in effect this block
     std::array<float, maxParts> partLevelUse { { 1.0f, 1.0f, 1.0f, 1.0f } };   // mixer level (unity default)
     std::array<float, maxParts> partPanUse   {};      // mixer pan (centre default = 0)
+    std::array<float, maxParts> prevLg { { 1.0f, 1.0f, 1.0f, 1.0f } };         // per-block-ramped mixer L gain
+    std::array<float, maxParts> prevRg { { 1.0f, 1.0f, 1.0f, 1.0f } };         // ...and R gain (anti-zipper)
+    bool mixPrimed = false;                                                    // snap smoothers to first setMix
+    float targetLg (int p) const { const float pan = partPanUse[(std::size_t) p]; return partLevelUse[(std::size_t) p] * (pan <= 0.0f ? 1.0f : 1.0f - pan); }
+    float targetRg (int p) const { const float pan = partPanUse[(std::size_t) p]; return partLevelUse[(std::size_t) p] * (pan >= 0.0f ? 1.0f : 1.0f + pan); }
 
     // Kit parts: per-part double-buffered KitData (pads + baked params). Published on
     // the message thread; the audio thread reads buf[kitReadIdx[part]] (sampled once
@@ -616,6 +636,7 @@ private:
     std::array<FXChain, maxParts> partFx;
     std::array<std::vector<float>, maxParts> partMono, partL, partR;
     std::array<int, maxParts> fxSilentBlocks {};
+    std::array<bool, maxParts> fxCleared {};          // FX state reset on skip-entry (no stale-resume pop)
     std::array<bool, maxParts> partHadVoice {};       // set across renderParts segments, read in mixParts
     int partsProcessed = 0;                           // parts not skipped in the last mixParts (test observability)
 

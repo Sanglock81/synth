@@ -10,6 +10,7 @@
 #include <vector>
 #include <array>
 #include <cmath>
+#include <cstdio>
 
 namespace
 {
@@ -183,6 +184,34 @@ TEST_CASE ("mixer: level scales and pan positions with a 0 dB-centre law", "[mul
     REQUIRE (lRight < rRight * 0.01);
 }
 
+TEST_CASE ("mixer: sweeping level/pan per block does not zipper (smoothed)", "[multi][mix][zipper]")
+{
+    auto sus = [] { VoiceParams p; p.osc1Wave = 3; p.osc1Level = 0.8f; p.osc2Level = 0.0f;
+                    p.cutoffHz = 16000.0f; p.resonance = 0.0f; p.filterEnvAmt = 0.0f; p.velToAmp = 0.0f;
+                    p.ampA = 0.002f; p.ampD = 0.02f; p.ampS = 0.9f; p.ampR = 0.05f; return p; };
+
+    SynthEngine e; e.setMaxVoices (16); e.prepare (kSR, 128);
+    FXParams fx0 {}; PartLfos lfo0 {};
+    e.noteOn (60, 0.9f, 0);
+
+    std::vector<float> L (128), R (128);
+    float prev = 0.0f, maxJump = 0.0f;
+    for (int b = 0; b < 400; ++b)
+    {
+        // Abrupt per-block level + pan sweep — a raw (unsmoothed) mixer would step-zipper.
+        std::array<float, SynthEngine::maxParts> lv { { 1, 1, 1, 1 } }, pn {};
+        lv[0] = 0.4f + 1.4f * (float) (b % 20) / 20.0f;                 // sweep 0.4..1.8
+        pn[0] = -0.9f + 1.8f * (float) ((b * 3) % 20) / 20.0f;          // pan sweep
+        e.beginMasterBlock (128, sus(), fx0, lfo0);
+        e.setMix (lv, pn);
+        e.renderParts (0, 128, sus());
+        e.mixParts (L.data(), R.data(), 128);
+        for (int i = 0; i < 128; ++i) { maxJump = std::max (maxJump, std::abs (L[i] - prev)); prev = L[i]; }
+    }
+    INFO ("maxJump=" << maxJump);
+    REQUIRE (maxJump < 0.05f);   // smoothed gains -> no zipper across abrupt level/pan steps
+}
+
 TEST_CASE ("multitimbral: silent parts with idle FX are skipped", "[multi][skip]")
 {
     SynthEngine e; e.setMaxVoices (16); e.prepare (kSR, 128);
@@ -204,6 +233,48 @@ TEST_CASE ("multitimbral: silent parts with idle FX are skipped", "[multi][skip]
     e.allNotesOff();
     for (int b = 0; b < 40; ++b) e.renderMaster (L.data(), R.data(), 128, pluck(), 2.0f, 0, 0.0f, 0, fx.data());
     REQUIRE (e.partsProcessedLastBlock() == 0);
+}
+
+TEST_CASE ("multitimbral: FX skip -> retrigger resumes without a click (stale-state)", "[multi][skip][click]")
+{
+    // Reproduces the static/pops regression: a part with FX plays, goes silent long
+    // enough that its FX processing is SKIPPED, then retriggers. If the skipped chain
+    // kept stale delay/reverb/chorus state, the resume boundary pops.
+    auto susSaw = [] { VoiceParams p; p.osc1Wave = 0; p.osc1Level = 0.7f; p.osc2Level = 0.0f;
+                       p.cutoffHz = 12000.0f; p.resonance = 0.1f; p.filterEnvAmt = 0.0f; p.velToAmp = 0.0f;
+                       p.ampA = 0.005f; p.ampD = 0.02f; p.ampS = 0.8f; p.ampR = 0.03f; return p; };
+
+    for (int fxKind = 0; fxKind < FXChain::kNumFX; ++fxKind)
+    {
+        SynthEngine e; e.setMaxVoices (16); e.prepare (kSR, 128);
+        std::array<FXParams, SynthEngine::maxParts> fx {}; PartLfos lfo0 {};
+        fx[0].enabled[fxKind] = true;
+        fx[0].delayTimeMs = 80.0f; fx[0].delayFeedback = 0.45f; fx[0].delayMix = 0.6f;
+        fx[0].reverbMix = 0.6f; fx[0].reverbSize = 0.6f; fx[0].chorusMix = 0.6f; fx[0].width = 1.6f;
+        std::array<PartLfos, SynthEngine::maxParts> lfo {};
+
+        std::vector<float> L (128), R (128);
+        auto block = [&] { e.renderMaster (L.data(), R.data(), 128, susSaw(), lfo.data(), fx.data()); };
+
+        e.noteOn (60, 0.9f, 0); block();
+        e.noteOff (60, 0);
+        // Render until the FX has gone silent and the part is being SKIPPED.
+        int skipBlocks = 0;
+        for (int b = 0; b < 4000 && skipBlocks < 8; ++b) { block(); if (e.partsProcessedLastBlock() == 0) ++skipBlocks; else skipBlocks = 0; }
+        REQUIRE (skipBlocks >= 8);                          // skip really engaged
+
+        // Retrigger and scan the resume boundary for a click / non-finite.
+        e.noteOn (60, 0.9f, 0);
+        std::vector<float> resume;
+        for (int b = 0; b < 20; ++b) { block(); for (int i = 0; i < 128; ++i) { resume.push_back (L[i]); resume.push_back (R[i]); } }
+
+        REQUIRE (tu::allFinite (resume));
+        REQUIRE (tu::peak (resume) <= 1.0f);
+        float maxJump = 0.0f;
+        for (std::size_t i = 2; i < resume.size(); ++i) maxJump = std::max (maxJump, std::abs (resume[i] - resume[i - 2]));  // per-channel delta
+        INFO ("fxKind=" << fxKind << " maxJump=" << maxJump);
+        REQUIRE (maxJump < 0.20f);
+    }
 }
 
 TEST_CASE ("multitimbral: a part's delay TAIL keeps processing after its voice ends", "[multi][skip]")

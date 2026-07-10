@@ -8,6 +8,8 @@
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
 #include "PluginProcessor.h"
+#include <functional>
+#include <cmath>
 
 namespace
 {
@@ -74,6 +76,63 @@ TEST_CASE ("processor output never exceeds +/-1.0 (adversarial 16-voice chord)",
     const float worst = maxOutputOverBlocks (p, 16, 400, 256);
     INFO ("worst |output| = " << worst);
     REQUIRE (worst <= 1.0f);
+}
+
+// Largest sample-to-sample jump per channel (a click/pop detector) + bounds + finite,
+// over the REAL stereo multi-part -> mixer -> master -> soft-clip topology.
+TEST_CASE ("multi-part pedaled play stays clean across silence/return (static regression)", "[plugin][bounds][click][multi]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+
+    // Part 0 (live) = Warm Pad (chorus+reverb+width). Part 1 = locked Warm Pad. Part 2 = a kit.
+    p.loadFactoryPreset ("Warm Pad");
+    p.setPartPreset (1, "Warm Pad");
+    p.setPartKit (2, p.loadKit ("808 Basics"));
+    auto set = [&p] (const char* id, float v) { p.apvts.getParameter (id)->setValueNotifyingHost (p.apvts.getParameter (id)->convertTo0to1 (v)); };
+    set (ParamID::part1Level, 1.4f);   // exercise the mixer level
+    set (ParamID::part2Pan, -0.6f);    // and pan
+
+    juce::AudioBuffer<float> buf (2, 128);
+    float prevL = 0.0f, prevR = 0.0f, maxJump = 0.0f, peak = 0.0f;
+    bool finite = true;
+    auto pump = [&] (int blocks, std::function<void(juce::MidiBuffer&, int)> fill)
+    {
+        for (int b = 0; b < blocks; ++b)
+        {
+            juce::MidiBuffer m; if (fill) fill (m, b);
+            buf.clear(); p.processBlock (buf, m);
+            const float* L = buf.getReadPointer (0); const float* R = buf.getReadPointer (1);
+            for (int i = 0; i < 128; ++i)
+            {
+                finite = finite && std::isfinite (L[i]) && std::isfinite (R[i]);
+                peak = std::max ({ peak, std::abs (L[i]), std::abs (R[i]) });
+                maxJump = std::max ({ maxJump, std::abs (L[i] - prevL), std::abs (R[i] - prevR) });
+                prevL = L[i]; prevR = R[i];
+            }
+        }
+    };
+
+    // Warm up smoothers.
+    pump (10, {});
+    // Pedaled multi-part: chord on all three parts, hold, release (parts go silent + FX
+    // tails decay past the skip hold), then RETRIGGER — repeat many cycles.
+    for (int cycle = 0; cycle < 6; ++cycle)
+    {
+        pump (1, [] (juce::MidiBuffer& m, int) { m.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0); });        // part 0 (host->live)
+        p.routeMidi (juce::MidiMessage::noteOn (1, 55, 0.9f), 1);      // part 1
+        p.routeMidi (juce::MidiMessage::noteOn (1, 36, 1.0f), 2);      // part 2 kit
+        pump (40, {});                                                  // hold
+        pump (1, [] (juce::MidiBuffer& m, int) { m.addEvent (juce::MidiMessage::noteOff (1, 60), 0); });
+        p.routeMidi (juce::MidiMessage::noteOff (1, 55), 1);
+        p.routeMidi (juce::MidiMessage::noteOff (1, 36), 2);
+        pump (700, {});                                                 // silence: FX tails decay, parts get skipped
+    }
+
+    INFO ("peak=" << peak << " maxJump=" << maxJump);
+    REQUIRE (finite);
+    REQUIRE (peak <= 1.0f);
+    REQUIRE (maxJump < 0.35f);          // no discontinuity (static/pop) across the whole run
 }
 
 TEST_CASE ("processor output stays bounded across all factory presets", "[plugin][bug4][bounds][presets]")
