@@ -171,8 +171,11 @@ public:
     {
         slider.setSliderStyle (juce::Slider::LinearVertical);
         slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-        slider.setVelocityBasedMode (false);           // absolute-ish for predictable touch
-        slider.setSliderSnapsToMousePosition (true);   // R2 touch: first tap jumps to the finger
+        slider.setVelocityBasedMode (false);           // absolute drag distance, not velocity
+        slider.setSliderSnapsToMousePosition (false);  // R2 GRAB mode: first touch acquires the
+                                                       // control with NO value change; the value
+                                                       // moves only on drag, relative to the grab
+                                                       // point (snapping caused live-perf surprises).
         slider.setWantsKeyboardFocus (false);
         addAndMakeVisible (slider);
         attachment = std::make_unique<juce::SliderParameterAttachment> (*apvts.getParameter (pid), slider);
@@ -297,6 +300,8 @@ public:
     {
         slider.setSliderStyle (juce::Slider::RotaryVerticalDrag);
         slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        slider.setVelocityBasedMode (false);           // relative drag distance (grab mode)
+        slider.setSliderSnapsToMousePosition (false);  // R2: acquire on touch, no value jump
         slider.setWantsKeyboardFocus (false);
         addAndMakeVisible (slider);
         attachment = std::make_unique<juce::SliderParameterAttachment> (*apvts.getParameter (pid), slider);

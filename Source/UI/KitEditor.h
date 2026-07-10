@@ -65,6 +65,7 @@ public:
         clearPad.setButtonText ("Clear pad"); clearPad.onClick = [this] { def.pads[(std::size_t) selected] = {}; def.pads[(std::size_t) selected].triggerNote = -1; apply(); rebuildSelected(); };
 
         level.setSliderStyle (juce::Slider::LinearHorizontal); level.setWantsKeyboardFocus (false);
+        level.setSliderSnapsToMousePosition (false);   // R2 grab mode (no jump on touch)
         level.setRange (0.0, 2.0, 0.01); level.setTextBoxStyle (juce::Slider::TextBoxRight, true, 44, 20);
         level.setTextBoxIsEditable (false);          // no focusable value editor (QWERTY stays live)
         level.onValueChange = [this] { pad().level = (float) level.getValue(); apply(); };
