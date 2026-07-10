@@ -1044,6 +1044,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         if (engaged) ++clipSamples;
     }
     health.logClip (clipSamples);
+    pushScope (L, R, numSamples);                 // master scope/FFT tap (RT-safe)
 
     // --- write to the output bus. Stereo: L/R; extra channels get L; a mono host
     //     gets the L+R average so nothing wet is lost.

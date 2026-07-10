@@ -302,9 +302,12 @@ private:
 class RotaryKnob : public LearnableComponent
 {
 public:
+    // sideLabel: knob on the LEFT (square) with the name + value stacked to its
+    // right — for wide/short rows (e.g. the filter's vertical knob column) where a
+    // name-above/value-below stack would leave the row half-empty.
     RotaryKnob (juce::AudioProcessorValueTreeState& apvts, const juce::String& pid,
-                juce::String displayName, MidiLearnManager& learnMgr)
-        : LearnableComponent (learnMgr, pid), name (std::move (displayName))
+                juce::String displayName, MidiLearnManager& learnMgr, bool sideLabelLayout = false)
+        : LearnableComponent (learnMgr, pid), name (std::move (displayName)), sideLabel (sideLabelLayout)
     {
         slider.setSliderStyle (juce::Slider::RotaryVerticalDrag);
         slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
@@ -321,13 +324,26 @@ public:
 
     void paint (juce::Graphics& g) override
     {
+        const juce::String text = formatParamValue (param);
+        if (sideLabel)
+        {
+            auto lab = getLocalBounds().withTrimmedLeft (getHeight() + 4);
+            g.setColour (VASynthLookAndFeel::ink());
+            g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
+            g.drawFittedText (name, lab.removeFromTop (lab.getHeight() * 3 / 5), juce::Justification::centredLeft, 1);
+            g.setColour (VASynthLookAndFeel::accent());
+            g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 11.5f, juce::Font::bold)));
+            g.drawFittedText (text, lab, juce::Justification::centredLeft, 1);
+            paintLearnDecorations (g);
+            return;
+        }
+
         g.setColour (VASynthLookAndFeel::ink());
         g.setFont (juce::Font (juce::FontOptions (12.5f, juce::Font::bold)));
         g.drawFittedText (name, getLocalBounds().removeFromTop (16), juce::Justification::centred, 1);
 
         g.setColour (VASynthLookAndFeel::accent());
         g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold)));
-        const juce::String text = formatParamValue (param);
         g.drawFittedText (text, getLocalBounds().removeFromBottom (15), juce::Justification::centred, 1);
 
         paintLearnDecorations (g);
@@ -335,11 +351,15 @@ public:
 
     void resized() override
     {
-        slider.setBounds (getLocalBounds().withTrimmedTop (17).withTrimmedBottom (16));
+        if (sideLabel)
+            slider.setBounds (getLocalBounds().removeFromLeft (getHeight()));
+        else
+            slider.setBounds (getLocalBounds().withTrimmedTop (17).withTrimmedBottom (16));
     }
 
 private:
     juce::String name;
+    bool sideLabel = false;
     juce::Slider slider;
     juce::RangedAudioParameter* param = nullptr;
     std::unique_ptr<juce::SliderParameterAttachment> attachment;
@@ -422,4 +442,150 @@ private:
     std::unique_ptr<juce::ParameterAttachment> attachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SegmentedControl)
+};
+
+// ---------------------------------------------------------------------------
+// Horizontal one-tap selector for a choice parameter — headerless (the section
+// header names it), buttons spread left-to-right. This is the R2 layout's segmented
+// grammar (osc wave, LFO dest, filter type, chord degree/quality). Optional short
+// labels override the parameter's long choice names ("Square" -> "SQR"). Optionally
+// draws its own tinted labels above/beside (headerless by default). MIDI-learnable
+// and focus-refusing like every control.
+class HSelector : public LearnableComponent
+{
+public:
+    HSelector (juce::AudioProcessorValueTreeState& apvts, const juce::String& pid,
+               MidiLearnManager& learnMgr, juce::StringArray labelOverride = {})
+        : LearnableComponent (learnMgr, pid)
+    {
+        choice = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (pid));
+        jassert (choice != nullptr);
+        labels = labelOverride.isEmpty() ? choice->choices : labelOverride;
+
+        for (int i = 0; i < choice->choices.size(); ++i)
+        {
+            auto* b = buttons.add (new juce::TextButton (labels[juce::jmin (i, labels.size() - 1)]));
+            b->setClickingTogglesState (false);
+            b->setWantsKeyboardFocus (false);
+            b->setColour (juce::TextButton::buttonColourId, VASynthLookAndFeel::track());
+            b->setColour (juce::TextButton::buttonOnColourId, VASynthLookAndFeel::accent());
+            b->setColour (juce::TextButton::textColourOffId, VASynthLookAndFeel::ink());
+            b->setColour (juce::TextButton::textColourOnId, juce::Colours::black);
+            const int idx = i;
+            b->onClick = [this, idx] { setIndex (idx); };
+            addAndMakeVisible (b);
+            listenForLearnGestures (*b);
+        }
+        attachment = std::make_unique<juce::ParameterAttachment> (
+            *choice, [this] (float) { refresh(); }, nullptr);
+        attachment->sendInitialUpdate();
+    }
+
+    void paint (juce::Graphics& g) override { paintLearnDecorations (g); }
+
+    void resized() override
+    {
+        auto r = getLocalBounds();
+        const int n = buttons.size();
+        if (n == 0) return;
+        for (int i = 0; i < n; ++i)
+        {
+            auto cell = juce::Rectangle<int> (r.getX() + i * r.getWidth() / n, r.getY(),
+                                              r.getWidth() / n, r.getHeight());
+            buttons[i]->setBounds (cell.reduced (2));
+        }
+    }
+
+private:
+    void setIndex (int i)
+    {
+        choice->beginChangeGesture();
+        choice->setValueNotifyingHost (choice->convertTo0to1 ((float) i));
+        choice->endChangeGesture();
+        refresh();
+    }
+    void refresh()
+    {
+        const int current = choice->getIndex();
+        for (int i = 0; i < buttons.size(); ++i)
+            buttons[i]->setToggleState (i == current, juce::dontSendNotification);
+    }
+
+    juce::AudioParameterChoice* choice = nullptr;
+    juce::StringArray labels;
+    juce::OwnedArray<juce::TextButton> buttons;
+    std::unique_ptr<juce::ParameterAttachment> attachment;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HSelector)
+};
+
+// ---------------------------------------------------------------------------
+// LFO shape picker drawn as four stacked waveform ICONS (Triangle / Sine / Square /
+// S&H) bound to a choice parameter — the R2 LFO grammar. Tap an icon to select.
+// MIDI-learnable + focus-refusing.
+class ShapeSelector : public LearnableComponent
+{
+public:
+    ShapeSelector (juce::AudioProcessorValueTreeState& apvts, const juce::String& pid,
+                   MidiLearnManager& learnMgr)
+        : LearnableComponent (learnMgr, pid)
+    {
+        choice = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (pid));
+        jassert (choice != nullptr);
+        attachment = std::make_unique<juce::ParameterAttachment> (
+            *choice, [this] (float) { repaint(); }, nullptr);
+        attachment->sendInitialUpdate();
+    }
+
+    // Draw one waveform icon (0 Tri, 1 Sin, 2 Sqr, 3 S&H) filling r.
+    static void drawIcon (juce::Graphics& g, juce::Rectangle<int> r, int kind, bool on)
+    {
+        g.setColour (on ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::track());
+        g.fillRoundedRectangle (r.toFloat(), 4.0f);
+        auto a = r.toFloat().reduced (r.getWidth() * 0.18f, r.getHeight() * 0.28f);
+        const float x0 = a.getX(), w = a.getWidth(), y0 = a.getCentreY(), h = a.getHeight() * 0.5f;
+        g.setColour (on ? juce::Colour (0xff0e1319) : VASynthLookAndFeel::ink());
+        juce::Path p;
+        if (kind == 0)      { p.startNewSubPath (x0, y0); p.lineTo (x0+w*0.25f, y0-h); p.lineTo (x0+w*0.75f, y0+h); p.lineTo (x0+w, y0); }
+        else if (kind == 1) { p.startNewSubPath (x0, y0); for (int i = 1; i <= 20; ++i) { float t = i/20.0f; p.lineTo (x0+w*t, y0 - std::sin (t*6.283f)*h); } }
+        else if (kind == 2) { p.startNewSubPath (x0, y0+h); p.lineTo (x0, y0-h); p.lineTo (x0+w*0.5f, y0-h); p.lineTo (x0+w*0.5f, y0+h); p.lineTo (x0+w, y0+h); p.lineTo (x0+w, y0-h); }
+        else                { const float s[5] { 0.3f,-0.6f,0.5f,-0.2f,0.7f }; float px = x0; for (int i = 0; i < 5; ++i) { float ny = y0 - s[i]*h; p.startNewSubPath (px, ny); p.lineTo (px+w/5.0f, ny); px += w/5.0f; } }
+        g.strokePath (p, juce::PathStrokeType (1.6f));
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const int cur = choice != nullptr ? choice->getIndex() : 0;
+        const int n = 4;
+        const int ih = (getHeight() - (n - 1) * gap) / n;
+        for (int k = 0; k < n; ++k)
+        {
+            cells[(std::size_t) k] = juce::Rectangle<int> (0, k * (ih + gap), getWidth(), ih);
+            drawIcon (g, cells[(std::size_t) k], k, k == cur);
+        }
+        paintLearnDecorations (g);
+    }
+
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        LearnableComponent::mouseUp (e);
+        if (e.mods.isPopupMenu() || e.getDistanceFromDragStart() > 8) return;
+        for (int k = 0; k < 4; ++k)
+            if (cells[(std::size_t) k].contains (e.getPosition()) && choice != nullptr)
+            {
+                choice->beginChangeGesture();
+                choice->setValueNotifyingHost (choice->convertTo0to1 ((float) k));
+                choice->endChangeGesture();
+                repaint();
+                return;
+            }
+    }
+
+private:
+    static constexpr int gap = 3;
+    juce::AudioParameterChoice* choice = nullptr;
+    std::array<juce::Rectangle<int>, 4> cells {};
+    std::unique_ptr<juce::ParameterAttachment> attachment;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ShapeSelector)
 };

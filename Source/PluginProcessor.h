@@ -263,6 +263,27 @@ public:
     // for the debug overlay.
     AudioHealthLogger health;
 
+    // -- master scope tap (RT-safe SPSC ring) ---------------------------------
+    // The audio thread appends the post-master mono mix each block (relaxed atomic
+    // stores — no lock/alloc); the editor's scope + FFT read the latest samples. Not
+    // sample-exact under contention (it's a scope, not a meter), which is fine.
+    static constexpr int kScopeSize = 2048;                 // power of two
+    void pushScope (const float* l, const float* r, int n) noexcept
+    {
+        int w = scopeWrite.load (std::memory_order_relaxed);
+        for (int i = 0; i < n; ++i)
+            scopeRing[(std::size_t) (w++ & (kScopeSize - 1))].store (0.5f * (l[i] + r[i]), std::memory_order_relaxed);
+        scopeWrite.store (w, std::memory_order_release);
+    }
+    // Copy the latest n samples (oldest..newest) into dst. Message thread.
+    void readScope (float* dst, int n) const noexcept
+    {
+        n = juce::jmin (n, (int) kScopeSize);
+        const int w = scopeWrite.load (std::memory_order_acquire);
+        for (int i = 0; i < n; ++i)
+            dst[i] = scopeRing[(std::size_t) ((w - n + i) & (kScopeSize - 1))].load (std::memory_order_relaxed);
+    }
+
 private:
     VoiceParams snapshotParams() const;
     FXParams    snapshotFXParams() const;
@@ -375,6 +396,10 @@ private:
 
     // Per-sample master gain ramp to kill zipper on gain steps/automation.
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> masterGain;
+
+    // Master scope tap ring (see pushScope/readScope).
+    std::array<std::atomic<float>, kScopeSize> scopeRing {};
+    std::atomic<int> scopeWrite { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VASynthProcessor)
 };

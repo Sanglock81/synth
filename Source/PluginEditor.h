@@ -6,21 +6,24 @@
 #include "Observability/DebugOverlay.h"
 #include "UI/VASynthLookAndFeel.h"
 #include "UI/Widgets.h"
+#include "UI/Sections.h"
 #include "UI/FXPanel.h"
-#include "UI/ChordPanel.h"
-#include "UI/InputsDialog.h"
-#include "UI/PartsStrip.h"
+#include "UI/TopBar.h"
+#include "UI/PartRail.h"
+#include "UI/ScopeView.h"
+#include "UI/BottomZones.h"
+#include "UI/HelpOverlay.h"
 #include "PresetManager.h"
 
 // ============================================================================
-// Hardware-style custom editor. One surface, panel sections left-to-right in
-// signal-flow order, everything visible at once (no tabs/pages). Vertical
-// faders + segmented buttons bound to the APVTS via attachments; MIDI-learn on
-// every control (right-click / long-press). Dark hardware LookAndFeel.
+// R2 hardware-style editor. One surface, everything visible: a top bar (preset /
+// macros / master / CPU / help), a left PART RAIL, the centre synth in signal-flow
+// order (OSC -> FILTER -> ENVELOPE -> LFO -> FX), a right SCOPE + FFT, and a bottom
+// workstation (CHORD bar + collapsible RHYTHM / LOOPER). Controls bind to the APVTS
+// via attachments; every control is MIDI-learnable (right-click / long-press) and
+// refuses keyboard focus so QWERTY note input keeps working. Dark hardware LookAndFeel.
 //
-// Standalone: F11 fullscreen. F12 debug overlay (both formats). QWERTY note
-// input preserved (every control refuses keyboard focus). Layout is FlexBox-
-// based and scales with the window — no hardcoded pixel positions.
+// Standalone: F11 fullscreen, F12 debug overlay, '?' help. Grab-mode touch controls.
 // ============================================================================
 
 // Bug B: should the standalone editor RECLAIM keyboard focus for QWERTY play?
@@ -48,27 +51,24 @@ class VASynthEditor : public juce::AudioProcessorEditor,
                       private juce::Timer
 {
 public:
-    // Default window width — sized so 56 px fader thumbs are met at default
-    // scale for the full control count (grows as sections are added).
-    static constexpr int kDefaultWidth = 2760;
+    static constexpr int kDefaultWidth = 1760;
 
     explicit VASynthEditor (VASynthProcessor& p)
         : AudioProcessorEditor (p), proc (p), presets (p.apvts)
     {
         setLookAndFeel (&lnf);
 
-        buildSections();
+        buildUI();
         addChildComponent (overlay);
         addChildComponent (toast);
+        addChildComponent (helpOverlay);
+        helpOverlay.onDismiss = [this] { hideHelp(); };
         lastToastSeq = proc.toastSequence();       // don't replay a pre-existing toast on open
 
         setResizable (true, true);
-        setResizeLimits (900, 480, 3000, 1600);
+        setResizeLimits (900, 480, 3200, 1800);
 
-        // Default startup size. Wide enough that the 56 px fader thumbs are hit
-        // at default scale; clamped to the display so it never opens off-screen
-        // (on a narrower screen the FlexBox scales down proportionally).
-        int w = kDefaultWidth, h = 640;
+        int w = kDefaultWidth, h = 1000;
         if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
         {
             const auto area = disp->userArea;
@@ -83,10 +83,7 @@ public:
             startTimerHz (30);            // focus-loss watchdog
         }
 
-        // R2 touch diagnosis: env-gated global mouse-event trace. Run with
-        // VASYNTH_TOUCH_TRACE=1 to record every touch/mouse event app-wide (finger index,
-        // position, target, live-drag count, modal state) to the log — so a failed
-        // first-touch on the Surface is visible and the root cause is data, not a guess.
+        // R2 touch diagnosis: env-gated global mouse-event trace (VASYNTH_TOUCH_TRACE=1).
         if (std::getenv ("VASYNTH_TOUCH_TRACE") != nullptr)
         {
             touchTrace = true;
@@ -103,14 +100,12 @@ public:
         setLookAndFeel (nullptr);
     }
 
-    void paint (juce::Graphics& g) override { g.fillAll (VASynthLookAndFeel::panel()); }
+    void paint (juce::Graphics& g) override { g.fillAll (VASynthLookAndFeel::panel().darker (0.25f)); }
 
     // Clicking the panel background returns keyboard focus to the editor so
     // QWERTY resumes (controls refuse focus, so this only fires on the backdrop).
     void mouseDown (const juce::MouseEvent&) override { grabQwertyFocus(); }
 
-    // Deterministically own keyboard focus once we're actually on screen — not
-    // in the constructor (too early). Async re-grab defeats any startup race.
     void parentHierarchyChanged() override { grabQwertyFocus(); }
     void visibilityChanged() override      { grabQwertyFocus(); }
 
@@ -119,31 +114,46 @@ public:
 
     void resized() override
     {
-        overlay.setBounds (getWidth() - 320, 8, 312, 78);   // 4 lines incl. SAT
-        toast.setBounds ((getWidth() - 460) / 2, 14, 460, 46);   // top-centre
+        overlay.setBounds (getWidth() - 320, 92, 312, 78);
+        toast.setBounds ((getWidth() - 460) / 2, 92, 460, 46);
+        helpOverlay.setBounds (getLocalBounds());
 
         auto area = getLocalBounds().reduced (6);
-        if (partsStrip != nullptr)                    // always-visible PARTS strip + INPUTS
+        const int gap = 5;
+
+        topBar->setBounds (area.removeFromTop (80)); area.removeFromTop (gap);
+
+        if (bottomZones != nullptr)
         {
-            partsStrip->setBounds (area.removeFromTop (30));
-            area.removeFromTop (4);
+            const int bh = juce::jmin (area.getHeight() - 120, bottomZones->preferredHeight());
+            bottomZones->setBounds (area.removeFromBottom (juce::jmax (60, bh)));
+            area.removeFromBottom (gap);
         }
-        juce::FlexBox row;
-        row.flexDirection = juce::FlexBox::Direction::row;
-        for (auto& s : sections)
-            row.items.add (juce::FlexItem (*s.panel).withFlex (s.flex).withMargin (3.0f));
-        if (chordPanel != nullptr)                    // CHORD column (before FX)
-            row.items.add (juce::FlexItem (*chordPanel).withFlex (2.3f).withMargin (3.0f));
-        if (fxPanel != nullptr)                       // far-right FX column
-            row.items.add (juce::FlexItem (*fxPanel).withFlex (2.8f).withMargin (3.0f));
-        row.performLayout (area);
+
+        partRail->setBounds (area.removeFromLeft (176)); area.removeFromLeft (gap);
+        scopeView->setBounds (area.removeFromRight (280)); area.removeFromRight (gap);
+
+        auto centre = area;
+        const int u = juce::jmax (70, (centre.getWidth() - 4 * gap) / 13);
+        auto placeL = [&] (juce::Component& c, int units)
+        {
+            c.setBounds (centre.removeFromLeft (juce::jmin (u * units, centre.getWidth())));
+            centre.removeFromLeft (gap);
+        };
+        placeL (*oscSection, 3);
+        placeL (*filterSection, 2);
+        placeL (*envSection, 2);
+        placeL (*lfoSection, 3);
+        fxPanel->setBounds (centre);
     }
 
-    // F11 fullscreen (standalone), F12 debug overlay.
+    // F11 fullscreen (standalone), F12 debug overlay, '?' help.
     bool keyPressed (const juce::KeyPress& key) override
     {
         if (key == juce::KeyPress::F12Key) { overlay.setVisible (! overlay.isVisible()); return true; }
         if (key == juce::KeyPress::F11Key && isStandalone()) { toggleFullscreen(); return true; }
+        if (key.getTextCharacter() == '?') { toggleHelp(); return true; }
+        if (key == juce::KeyPress::escapeKey && helpOverlay.isVisible()) { hideHelp(); return true; }
         return false;
     }
 
@@ -163,16 +173,35 @@ public:
     }
 
 private:
-    struct SectionEntry { std::unique_ptr<Section> panel; float flex; };
-
     bool isStandalone() const { return proc.wrapperType == juce::AudioProcessor::wrapperType_Standalone; }
+
+    void buildUI()
+    {
+        topBar = std::make_unique<TopBar> (proc, presets,
+                                           [this] { restoreQwertyFocus(); },
+                                           [this] { toggleHelp(); });
+        addAndMakeVisible (*topBar);
+
+        partRail = std::make_unique<PartRail> (proc, [this] { restoreQwertyFocus(); });
+        addAndMakeVisible (*partRail);
+
+        oscSection    = std::make_unique<OscSection> (proc);    addAndMakeVisible (*oscSection);
+        filterSection = std::make_unique<FilterSection> (proc); addAndMakeVisible (*filterSection);
+        envSection    = std::make_unique<EnvSection> (proc);    addAndMakeVisible (*envSection);
+        lfoSection    = std::make_unique<LfoSection> (proc);    addAndMakeVisible (*lfoSection);
+
+        fxPanel   = std::make_unique<FXPanel> (proc);   addAndMakeVisible (*fxPanel);
+        scopeView = std::make_unique<ScopeView> (proc); addAndMakeVisible (*scopeView);
+
+        bottomZones = std::make_unique<BottomZones> (proc);
+        bottomZones->onResizeNeeded = [this] { resized(); };
+        addAndMakeVisible (*bottomZones);
+    }
 
     void grabQwertyFocus()
     {
         if (! isStandalone() || ! isShowing()) return;
         grabKeyboardFocus();
-        // Re-grab after the message loop settles, to win any startup focus race
-        // (e.g. a dialog or child that momentarily grabbed focus).
         juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<VASynthEditor> (this)]
         {
             if (safe != nullptr && safe->isShowing()) safe->grabKeyboardFocus();
@@ -191,118 +220,14 @@ private:
         return dynamic_cast<juce::TextEditor*> (f) != nullptr;
     }
 
-    Section& addSection (juce::String title, juce::Colour tint, float flex)
+    void toggleHelp()
     {
-        auto s = std::make_unique<Section> (std::move (title), tint);
-        addAndMakeVisible (*s);
-        auto& ref = *s;
-        sections.push_back ({ std::move (s), flex });
-        return ref;
+        const bool show = ! helpOverlay.isVisible();
+        helpOverlay.setVisible (show);
+        if (show) helpOverlay.toFront (false);
+        else      grabQwertyFocus();
     }
-
-    void addFader (Section& s, const char* pid, juce::String name,
-                   bool emphasise = false, double flex = 1.0)
-    {
-        auto* f = new LabelledFader (proc.apvts, pid, std::move (name), proc.getMidiLearn(), emphasise);
-        f->getProperties().set ("layoutFlex", flex);
-        controls.add (f);
-        s.addAndMakeVisible (f);
-    }
-    void addChoice (Section& s, const char* pid, juce::String name)
-    {
-        auto* c = new SegmentedControl (proc.apvts, pid, std::move (name), proc.getMidiLearn());
-        controls.add (c);
-        s.addAndMakeVisible (c);
-    }
-    void addToggle (Section& s, const char* pid, juce::String name)
-    {
-        auto* t = new PowerToggle (proc.apvts, pid, std::move (name));
-        controls.add (t);
-        s.addAndMakeVisible (t);
-    }
-
-    void buildSections()
-    {
-        namespace ID = ParamID;
-        const auto tOsc = VASynthLookAndFeel::accent();
-        const auto tFilt = juce::Colour (0xff6ea8ff);
-        const auto tEnv = juce::Colour (0xffb07cff);
-        const auto tLfo = juce::Colour (0xfff0a04b);
-        const auto tGlobal = juce::Colour (0xff8a929c);
-
-        { auto& s = addSection ("Osc 1", tOsc, 1.9f);
-          addToggle (s, ID::osc1On, "ON"); addChoice (s, ID::osc1Wave, "Wave"); addFader (s, ID::osc1Octave, "Oct");
-          addFader (s, ID::osc1Detune, "Detune"); addFader (s, ID::osc1PW, "PW"); }
-
-        { auto& s = addSection ("Osc 2", tOsc, 1.9f);
-          addToggle (s, ID::osc2On, "ON"); addChoice (s, ID::osc2Wave, "Wave"); addFader (s, ID::osc2Octave, "Oct");
-          addFader (s, ID::osc2Detune, "Detune"); addFader (s, ID::osc2PW, "PW"); }
-
-        { auto& s = addSection ("Osc 3", tOsc, 1.9f);
-          addToggle (s, ID::osc3On, "ON"); addChoice (s, ID::osc3Wave, "Wave"); addFader (s, ID::osc3Octave, "Oct");
-          addFader (s, ID::osc3Detune, "Detune"); addFader (s, ID::osc3PW, "PW"); }
-
-        { auto& s = addSection ("Mix", tOsc, 1.4f);
-          addFader (s, ID::osc1Level, "Osc1"); addFader (s, ID::osc2Level, "Osc2");
-          addFader (s, ID::osc3Level, "Osc3"); addFader (s, ID::noiseLevel, "Noise"); }
-
-        { auto& s = addSection ("Filter", tFilt, 2.2f);
-          addChoice (s, ID::filterType, "Type"); addFader (s, ID::filterCutoff, "Cutoff");
-          addFader (s, ID::filterReso, "Reso"); addFader (s, ID::filterEnvAmt, "Env");
-          addFader (s, ID::filterKeytrack, "Track"); addFader (s, ID::velToCutoff, "Vel>Cut"); }
-
-        { auto& s = addSection ("Amp Env", tEnv, 1.4f);
-          addFader (s, ID::ampAttack, "A"); addFader (s, ID::ampDecay, "D");
-          addFader (s, ID::ampSustain, "S"); addFader (s, ID::ampRelease, "R"); }
-
-        { auto& s = addSection ("Mod Env", tEnv, 1.7f);   // filter env, now also -> pitch
-          addFader (s, ID::fltAttack, "A"); addFader (s, ID::fltDecay, "D");
-          addFader (s, ID::fltSustain, "S"); addFader (s, ID::fltRelease, "R");
-          addFader (s, ID::fltEnvToPitch, "Pitch"); }
-
-        // Three per-part LFOs (Sub-phase 2). Compact side-by-side sections; LFO 2/3
-        // default depth 0 / dest Off (inert) so they don't change existing patches.
-        { auto& s = addSection ("LFO 1", tLfo, 1.5f);
-          addFader (s, ID::lfoRate, "Rate"); addFader (s, ID::lfoDepth, "Depth");
-          addChoice (s, ID::lfoShape, "Shape"); addChoice (s, ID::lfoDest, "Dest"); }
-        { auto& s = addSection ("LFO 2", tLfo, 1.5f);
-          addFader (s, ID::lfo2Rate, "Rate"); addFader (s, ID::lfo2Depth, "Depth");
-          addChoice (s, ID::lfo2Shape, "Shape"); addChoice (s, ID::lfo2Dest, "Dest"); }
-        { auto& s = addSection ("LFO 3", tLfo, 1.5f);
-          addFader (s, ID::lfo3Rate, "Rate"); addFader (s, ID::lfo3Depth, "Depth");
-          addChoice (s, ID::lfo3Shape, "Shape"); addChoice (s, ID::lfo3Dest, "Dest"); }
-
-        { auto& s = addSection ("Global", tGlobal, 2.5f);
-          addFader (s, ID::glideTime, "Glide"); addFader (s, ID::velToAmp, "Vel>Amp");
-          // MASTER is the headline output control: emphasised + given ~1.8x the
-          // width of a normal fader so it's the obvious grab in the Global section.
-          addFader (s, ID::masterGain, "Master", /*emphasise*/ true, /*flex*/ 1.8);
-          addChoice (s, ID::polyMode, "Mode");
-          buildGlobalExtras (s); }
-
-        // MIX (Sub-phase 2): per-part level + pan. Level fixes the classic "kit too quiet
-        // vs the lead" balance; pan spreads the parts. Defaults 1.0 / centre. MIDI-learnable.
-        { auto& s = addSection ("Mix", tGlobal, 2.6f);
-          addFader (s, ID::part0Level, "P0"); addFader (s, ID::part1Level, "P1");
-          addFader (s, ID::part2Level, "P2"); addFader (s, ID::part3Level, "P3");
-          addFader (s, ID::part0Pan, "Pan0"); addFader (s, ID::part1Pan, "Pan1");
-          addFader (s, ID::part2Pan, "Pan2"); addFader (s, ID::part3Pan, "Pan3"); }
-
-        // CHORD column (7B): enable/root/scale + momentary modifier indicators.
-        chordPanel = std::make_unique<ChordPanel> (proc);
-        addAndMakeVisible (*chordPanel);
-
-        // Far-right reorderable FX column (its own draggable component, not a Section).
-        fxPanel = std::make_unique<FXPanel> (proc);
-        addAndMakeVisible (*fxPanel);
-
-        // Always-visible PARTS strip + INPUTS button (discoverability for routing).
-        partsStrip = std::make_unique<PartsStrip> (proc, [this] { restoreQwertyFocus(); });
-        addAndMakeVisible (*partsStrip);
-    }
-
-    // Preset controls (Random / Save / Load) live in the Global section.
-    void buildGlobalExtras (Section& s);
+    void hideHelp() { helpOverlay.setVisible (false); grabQwertyFocus(); }
 
     void toggleFullscreen()
     {
@@ -316,10 +241,6 @@ private:
         const bool focused = hasKeyboardFocus (true);
         if (hadFocus && ! focused) allNotesOff();
 
-        // Bug B: reclaim keyboard focus for QWERTY play after a transient thief
-        // (Load combo / settings dialog close / window re-activation) let it go.
-        // R2: but NEVER while a touch/drag gesture is live — grabbing focus mid-gesture
-        // is a prime suspect for first-touch flakiness on the Surface.
         const bool gestureActive = juce::Desktop::getInstance().getNumDraggingMouseSources() > 0;
         if (qwertyShouldReclaimFocus (isStandalone(), isShowing(), topLevelWindowActive(),
                                       focused,
@@ -332,16 +253,12 @@ private:
 
         hadFocus = hasKeyboardFocus (true);
 
-        // Surface any pending toast (MIDI hot-plug connect/disconnect).
         const int seq = proc.toastSequence();
         if (seq != lastToastSeq) { lastToastSeq = seq; toast.show (proc.toastMessage()); }
     }
 
     void emitNote (int note, bool on)
     {
-        // QWERTY is a routed surface like any MIDI controller (Part B): its notes flow
-        // through the "QWERTY" zone map, so it can be split and transposed too. Default
-        // (no config) = the whole keyboard on the LIVE part.
         proc.routeSurfaceMessage ("QWERTY", on ? juce::MidiMessage::noteOn  (1, note, 0.8f)
                                                 : juce::MidiMessage::noteOff (1, note));
     }
@@ -369,12 +286,11 @@ private:
 
     VASynthProcessor& proc;
     VASynthLookAndFeel lnf;
-    std::vector<SectionEntry> sections;
-    juce::OwnedArray<juce::Component> controls;
     DebugOverlay overlay { proc.health };
     PresetManager presets;
     QwertyKeyboard qwerty;
     Toast toast;
+    HelpOverlay helpOverlay;
     int  lastToastSeq = 0;
     bool hadFocus = false;
 
@@ -399,13 +315,16 @@ private:
     TouchTracer tracer;
     bool touchTrace = false;
 
-    // Preset UI (built in buildGlobalExtras).
-    std::unique_ptr<juce::Component> presetPanel;
-
-    // Top PARTS strip, CHORD column, far-right reorderable FX column.
-    std::unique_ptr<PartsStrip> partsStrip;
-    std::unique_ptr<ChordPanel> chordPanel;
+    // R2 layout components.
+    std::unique_ptr<TopBar> topBar;
+    std::unique_ptr<PartRail> partRail;
+    std::unique_ptr<OscSection> oscSection;
+    std::unique_ptr<FilterSection> filterSection;
+    std::unique_ptr<EnvSection> envSection;
+    std::unique_ptr<LfoSection> lfoSection;
     std::unique_ptr<FXPanel> fxPanel;
+    std::unique_ptr<ScopeView> scopeView;
+    std::unique_ptr<BottomZones> bottomZones;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VASynthEditor)
 };

@@ -1,17 +1,19 @@
 #pragma once
 #include "VASynthLookAndFeel.h"
+#include "PanelChrome.h"
 #include "Widgets.h"
 #include "../PluginProcessor.h"
 #include <array>
 #include <vector>
 
 // ============================================================================
-// FX panel — the far-right column. Four effect blocks (chorus / delay / reverb /
-// width), each a rotary-knob strip with an on/off kill toggle, stacked in the
-// current chain order. Drag a block by its header (finger or mouse) to reorder;
-// on drop the new order is committed to the processor, which crossfades the audio
-// chain click-free. Knobs are MIDI-learnable and refuse keyboard focus like every
-// other control, so QWERTY note input keeps working.
+// FX panel — a centre section (signal-flow order). Four effect blocks (chorus /
+// delay / reverb / width), each a knob strip beneath a backlit NAME BAR: the bar
+// glows in the FX tint when the effect is on and darkens when off (tap it to
+// toggle) — the on/off IS the label, no separate switch. Drag a block by its bar
+// (finger or mouse) to reorder; on drop the new chain order is committed and the
+// audio chain crossfades click-free. Knobs are MIDI-learnable and refuse keyboard
+// focus, so QWERTY note input keeps working.
 // ============================================================================
 
 class FXPanel : public juce::Component,
@@ -31,24 +33,11 @@ public:
     }
 
     void paint (juce::Graphics& g) override
-    {
-        auto r = getLocalBounds().toFloat().reduced (2.0f);
-        g.setColour (VASynthLookAndFeel::panelLight().interpolatedWith (tint, 0.10f));
-        g.fillRoundedRectangle (r, 7.0f);
-        g.setColour (tint.withAlpha (0.55f));
-        g.drawRoundedRectangle (r, 7.0f, 1.2f);
-
-        g.setColour (VASynthLookAndFeel::ink());
-        g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
-        g.drawText ("FX  (drag to reorder)", getLocalBounds().removeFromTop (kHeaderH).withTrimmedLeft (10),
-                    juce::Justification::centredLeft, false);
-    }
+    { chrome::section (g, getLocalBounds(), "FX  -  drag to reorder", tint); }
 
     void resized() override { layoutBlocks(); }
 
 private:
-    // Keep the displayed order in step with the processor when it changes from
-    // outside the panel (preset/state load). Never fights an in-progress drag.
     void timerCallback() override
     {
         if (draggingFx >= 0) return;
@@ -65,14 +54,14 @@ private:
     {
         namespace ID = ParamID;
         static const std::array<BlockDef, 4> d { {
-            { "Chorus", juce::Colour (0xff46c9b0), ID::fxChorusOn,
-              { { ID::chorusRate, "Rate" }, { ID::chorusDepth, "Depth" }, { ID::chorusMix, "Mix" } } },
-            { "Delay",  juce::Colour (0xff6ea8ff), ID::fxDelayOn,
-              { { ID::delayTime, "Time" }, { ID::delayFeedback, "Fbk" }, { ID::delayMix, "Mix" }, { ID::delaySpread, "Png" } } },
-            { "Reverb", juce::Colour (0xffb07cff), ID::fxReverbOn,
-              { { ID::reverbSize, "Size" }, { ID::reverbDamp, "Damp" }, { ID::reverbWidth, "Wid" }, { ID::reverbMix, "Mix" } } },
-            { "Width",  juce::Colour (0xfff0a04b), ID::fxWidthOn,
-              { { ID::stereoWidth, "Width" } } },
+            { "CHORUS", juce::Colour (0xff46c9b0), ID::fxChorusOn,
+              { { ID::chorusRate, "RATE" }, { ID::chorusDepth, "DEPTH" }, { ID::chorusMix, "MIX" } } },
+            { "DELAY",  juce::Colour (0xff6ea8ff), ID::fxDelayOn,
+              { { ID::delayTime, "TIME" }, { ID::delayFeedback, "FBK" }, { ID::delaySpread, "PNG" }, { ID::delayMix, "MIX" } } },
+            { "REVERB", juce::Colour (0xffb07cff), ID::fxReverbOn,
+              { { ID::reverbSize, "SIZE" }, { ID::reverbDamp, "DAMP" }, { ID::reverbWidth, "WIDTH" }, { ID::reverbMix, "MIX" } } },
+            { "WIDTH",  juce::Colour (0xfff0a04b), ID::fxWidthOn,
+              { { ID::stereoWidth, "WIDTH" } } },
         } };
         return d;
     }
@@ -83,8 +72,10 @@ private:
         FXBlock (VASynthProcessor& p, int fxIndex, const BlockDef& def, FXPanel& ownerPanel)
             : fx (fxIndex), owner (ownerPanel), title (def.title), tint (def.tint)
         {
-            enable = std::make_unique<PowerToggle> (p.apvts, def.enablePid, "on");
-            addAndMakeVisible (*enable);
+            enableParam = dynamic_cast<juce::AudioParameterBool*> (p.apvts.getParameter (def.enablePid));
+            // Repaint the bar whenever the enable changes (automation / preset load).
+            enableAtt = std::make_unique<juce::ParameterAttachment> (
+                *p.apvts.getParameter (def.enablePid), [this] (float) { repaint(); }, nullptr);
             for (auto& kd : def.knobs)
             {
                 auto* k = new RotaryKnob (p.apvts, kd.pid, kd.name, p.getMidiLearn());
@@ -95,52 +86,69 @@ private:
 
         void paint (juce::Graphics& g) override
         {
-            auto r = getLocalBounds().toFloat().reduced (2.0f);
-            g.setColour (VASynthLookAndFeel::panel().interpolatedWith (tint, 0.14f));
-            g.fillRoundedRectangle (r, 5.0f);
-            g.setColour (tint.withAlpha (dragging ? 0.95f : 0.5f));
-            g.drawRoundedRectangle (r, 5.0f, dragging ? 2.0f : 1.0f);
+            g.setColour (VASynthLookAndFeel::panel());
+            g.fillRoundedRectangle (getLocalBounds().toFloat(), 5.0f);
 
-            g.setColour (VASynthLookAndFeel::ink());
-            g.setFont (juce::Font (juce::FontOptions (12.0f, juce::Font::bold)));
-            g.drawText (title, headerArea().withTrimmedLeft (46), juce::Justification::centredLeft, false);
+            const bool on = enableParam != nullptr && enableParam->get();
+            auto bar = barArea();
+            g.setColour (on ? tint : VASynthLookAndFeel::track().darker (0.35f));
+            g.fillRoundedRectangle (bar.toFloat(), 4.0f);
+            if (on) { g.setColour (tint.brighter (0.5f)); g.drawRoundedRectangle (bar.toFloat().reduced (0.7f), 4.0f, 1.0f); }
 
-            // grip dots (top-right) hint the header is a drag handle
-            g.setColour (VASynthLookAndFeel::dim().withAlpha (0.6f));
-            auto grip = headerArea().removeFromRight (18);
-            for (int row = 0; row < 3; ++row)
-                for (int col = 0; col < 2; ++col)
-                    g.fillEllipse ((float) grip.getX() + 3.0f + (float) col * 6.0f,
-                                   (float) grip.getCentreY() - 6.0f + (float) row * 6.0f, 2.2f, 2.2f);
+            // grip dots (left) hint the bar is a drag handle
+            auto grip = bar.removeFromLeft (18);
+            g.setColour (on ? chrome::onTint().withAlpha (0.6f) : VASynthLookAndFeel::dim());
+            for (int col = 0; col < 2; ++col)
+                for (int row = 0; row < 3; ++row)
+                    g.fillEllipse ((float) grip.getCentreX() - 3.0f + (float) col * 4.0f,
+                                   (float) grip.getCentreY() - 6.0f + (float) row * 5.0f, 2.4f, 2.4f);
+
+            g.setColour (on ? chrome::onTint() : VASynthLookAndFeel::dim());
+            g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
+            g.drawText (title, bar.withTrimmedLeft (2), juce::Justification::centredLeft, false);
+
+            if (dragging) { g.setColour (tint.withAlpha (0.9f)); g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 5.0f, 2.0f); }
         }
 
         void resized() override
         {
-            auto hb = headerArea();
-            enable->setBounds (hb.removeFromLeft (42).reduced (5, 6));
-            auto body = getLocalBounds().withTrimmedTop (kHeaderH).reduced (5, 2);
-            juce::FlexBox fb; fb.flexDirection = juce::FlexBox::Direction::row;
-            for (auto* k : knobs) fb.items.add (juce::FlexItem (*k).withFlex (1.0f).withMargin (2.0f));
-            fb.performLayout (body);
+            auto body = getLocalBounds().withTrimmedTop (kBarH + 3).reduced (5, 2);
+            const int n = knobs.size();
+            if (n == 0) return;
+            const int kw = body.getWidth() / n;
+            for (int i = 0; i < n; ++i)
+                knobs[i]->setBounds ((i < n - 1 ? body.removeFromLeft (kw) : body).reduced (3, 0));
         }
 
-        // Drag from the header only (so knob/toggle interaction is untouched).
+        // Tap the bar toggles on/off; drag the bar reorders. Knobs (below) untouched.
         void mouseDown (const juce::MouseEvent& e) override
         {
-            dragArmed = e.getPosition().y < kHeaderH;
+            dragArmed = e.getPosition().y < kBarH;
+            movedFar  = false;
             if (dragArmed) owner.beginDrag (fx, owner.getLocalPoint (this, e.position).y);
         }
         void mouseDrag (const juce::MouseEvent& e) override
         {
-            if (dragArmed) owner.dragTo (fx, owner.getLocalPoint (this, e.position).y);
+            if (! dragArmed) return;
+            if (e.getDistanceFromDragStart() > 8) movedFar = true;
+            owner.dragTo (fx, owner.getLocalPoint (this, e.position).y);
         }
         void mouseUp (const juce::MouseEvent&) override
         {
-            if (dragArmed) owner.endDrag();
+            if (dragArmed)
+            {
+                owner.endDrag();
+                if (! movedFar && enableParam != nullptr)     // a tap -> toggle on/off
+                {
+                    enableParam->beginChangeGesture();
+                    enableParam->setValueNotifyingHost (enableParam->get() ? 0.0f : 1.0f);
+                    enableParam->endChangeGesture();
+                }
+            }
             dragArmed = false;
         }
 
-        juce::Rectangle<int> headerArea() const { return getLocalBounds().removeFromTop (kHeaderH); }
+        juce::Rectangle<int> barArea() const { return getLocalBounds().removeFromTop (kBarH); }
 
         int  fx;
         FXPanel& owner;
@@ -148,7 +156,9 @@ private:
         juce::Colour tint;
         bool dragging  = false;
         bool dragArmed = false;
-        std::unique_ptr<PowerToggle> enable;
+        bool movedFar  = false;
+        juce::AudioParameterBool* enableParam = nullptr;
+        std::unique_ptr<juce::ParameterAttachment> enableAtt;
         juce::OwnedArray<RotaryKnob> knobs;
     };
 
@@ -187,24 +197,24 @@ private:
     void layoutBlocks()
     {
         const auto content = contentBounds();
-        const int blockH = juce::jmax (1, content.getHeight() / 4);
+        const int blockH = juce::jmax (1, (content.getHeight() - 3 * kGap) / 4);
         for (int slot = 0; slot < 4; ++slot)
         {
             const int fx = order[slot];
             if (fx == draggingFx) continue;
-            blocks[(size_t) fx]->setBounds (content.getX(), content.getY() + slot * blockH,
-                                            content.getWidth(), blockH - 2);
+            blocks[(size_t) fx]->setBounds (content.getX(), content.getY() + slot * (blockH + kGap),
+                                            content.getWidth(), blockH);
         }
         if (draggingFx >= 0)
         {
             const int y = juce::jlimit (content.getY(), content.getBottom() - blockH,
                                         (int) dragY - blockH / 2);
-            blocks[(size_t) draggingFx]->setBounds (content.getX(), y, content.getWidth(), blockH - 2);
+            blocks[(size_t) draggingFx]->setBounds (content.getX(), y, content.getWidth(), blockH);
             blocks[(size_t) draggingFx]->toFront (false);
         }
     }
 
-    juce::Rectangle<int> contentBounds() const { return getLocalBounds().withTrimmedTop (kHeaderH).reduced (6, 4); }
+    juce::Rectangle<int> contentBounds() const { return chrome::sectionContent (getLocalBounds()); }
 
     int slotOf (int fx) const
     {
@@ -219,10 +229,11 @@ private:
         order[to] = fx;
     }
 
-    static constexpr int kHeaderH = 26;
+    static constexpr int kBarH = 26;
+    static constexpr int kGap  = 5;
 
     VASynthProcessor& proc;
-    juce::Colour tint { 0xff8a929c };
+    juce::Colour tint { 0xff5ecb8a };
     std::array<std::unique_ptr<FXBlock>, 4> blocks;
     int order[4] { 0, 1, 2, 3 };
     int draggingFx = -1;

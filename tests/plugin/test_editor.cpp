@@ -105,11 +105,11 @@ TEST_CASE ("render a layout screenshot to docs/editor.png", "[plugin][editor][sc
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
     std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
-    ed->setSize (2760, 660);
+    ed->setSize (1760, 1000);
 
     auto img = ed->createComponentSnapshot (ed->getLocalBounds(), false, 1.0f);
     REQUIRE (img.isValid());
-    REQUIRE (img.getWidth() == 2760);
+    REQUIRE (img.getWidth() == 1760);
 
     juce::File out (juce::String (VASYNTH_DOCS_DIR) + "/editor.png");
     out.getParentDirectory().createDirectory();

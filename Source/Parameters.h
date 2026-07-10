@@ -132,6 +132,19 @@ namespace ParamID
     inline constexpr auto stereoWidth   = "stereo_width";    // 0=mono, 1=normal, 2=wide
 
     inline constexpr auto fxOrder       = "fx_order";        // state-tree property: "a,b,c,d"
+
+    // Macros (R2 layout). Eight performance knobs (0..1) surfaced in the top bar.
+    // They are real, automatable, MIDI-learnable, preset-saved parameters NOW; the
+    // mod-matrix that routes a macro to destinations arrives in R3. Appended last so
+    // existing IDs/ordering are untouched.
+    inline constexpr auto macro1 = "macro1";
+    inline constexpr auto macro2 = "macro2";
+    inline constexpr auto macro3 = "macro3";
+    inline constexpr auto macro4 = "macro4";
+    inline constexpr auto macro5 = "macro5";
+    inline constexpr auto macro6 = "macro6";
+    inline constexpr auto macro7 = "macro7";
+    inline constexpr auto macro8 = "macro8";
 }
 
 // Builds the full parameter layout. Called once in the processor constructor.
@@ -262,6 +275,15 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::fxWidthOn, 1},     "Width On", false));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::stereoWidth, 1},   "Stereo Width", juce::NormalisableRange<float>(0.0f, 2.0f), 1.4f));
+
+    // --- Macros (R2): 8 performance knobs, default 0 (inert; routed in R3) -----
+    {
+        const char* macroIDs[] { ID::macro1, ID::macro2, ID::macro3, ID::macro4,
+                                 ID::macro5, ID::macro6, ID::macro7, ID::macro8 };
+        for (int m = 0; m < 8; ++m)
+            params.push_back(std::make_unique<P>(juce::ParameterID{macroIDs[m], 1},
+                "Macro " + juce::String (m + 1), juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
+    }
 
     return { params.begin(), params.end() };
 }
