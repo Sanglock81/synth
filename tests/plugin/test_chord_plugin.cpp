@@ -102,7 +102,7 @@ TEST_CASE ("learn a modifier from a CC (footswitch)", "[plugin][7b][chord][learn
     REQUIRE_FALSE (p.isModifierActive (ChordEngine::ModMaj));
 }
 
-TEST_CASE ("learn a modifier from a note (pad) — the note is consumed", "[plugin][7b][chord][learn][note]")
+TEST_CASE ("learn a modifier from a note (pad) - the note is consumed", "[plugin][7b][chord][learn][note]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
