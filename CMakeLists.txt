@@ -10,6 +10,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # the Windows CI build is clean.
 if(MSVC)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+    # SynthEngine is a large fixed-size RT-safe object (~344 KB); tests stack-allocate
+    # several per function. MSVC defaults to a 1 MB stack (Linux uses 8 MB), which
+    # overflows -> give the Windows binaries the same 8 MB reserve so tests match Linux.
+    add_link_options(/STACK:8388608)
 endif()
 
 # --- Sanitizer builds (memory-leak / UB monitoring) -------------------------
