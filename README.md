@@ -318,24 +318,33 @@ a plugin the host owns the keyboard.
 
 ## Custom UI
 
-Hardware-style single-surface panel (`docs/editor.png`), left-to-right in signal
-flow: **Osc 1 · Osc 2 · Mix · Filter · Amp Env · Filter Env · LFO · Global**.
-Vertical faders + touch segmented buttons, each bound to its APVTS parameter via
-attachments (GUI ↔ automation ↔ MIDI-learn all stay in sync), with a live value
-readout. Dark hardware LookAndFeel; FlexBox layout scales with the window.
+Hardware-style single-surface panel (`docs/editor.png`), everything visible at once:
+a **top bar** (preset · Save/Random · poly/mono/legato · glide · master · REC ·
+fullscreen · help), a **MACRO strip** (M1–M8), a left **PART RAIL** (P1–P4 + level/
+pan + INPUTS), the **centre** in signal-flow order (**Oscillators · Filter · Envelope
+· LFO · FX**), a right **Scope + FFT + master EQ**, and a bottom **workstation**
+(Chord bar · Rhythm arp+sequencer · Looper). Every control is bound to its APVTS
+parameter via attachments (GUI ↔ automation ↔ MIDI-learn stay in sync); dark hardware
+LookAndFeel; layout scales with the window.
 
 - **MIDI-learn**: right-click (mouse) or long-press (touch) any control → arms it
   (amber pulse); the next CC binds it and a `CCnn` badge appears. Same gesture
-  clears a mapping. The 8 default Launchkey knobs show badges on first launch.
-- **Presets** (Global section): **Random** shuffles the **sound-design** parameters
-  only (oscillators, filter, envelopes, LFO, FX amounts) for exploration, and
-  leaves your **performance/global** controls put — master gain, velocity routing,
-  poly mode, glide, and MIDI mappings all keep their values (see the single
-  `randomizeExclusions()` list). **Save** stores the current settings by name; the
-  **Load** dropdown recalls them (`~/.config/synth/presets/`).
-- **Fullscreen**: F11 (standalone). **Debug overlay**: F12.
-- QWERTY note input keeps working while twisting controls (controls refuse
-  keyboard focus). VST3 uses the same editor, freely resizable.
+  clears a mapping. The 8 Launchkey Mini pots (CC 21–28) map to **the 8 macros**
+  (M1–M8) by default — assign each macro to a destination, or hit **Random**.
+- **Random** shuffles the **sound-design** parameters only (oscillators, filter,
+  envelopes, LFO, FX amounts) and leaves your **performance** controls put — master
+  gain, velocity routing, poly mode, glide, MIDI mappings, and the whole **rhythm
+  section (arp / sequencer / looper / tempo)** all keep their values (single
+  `randomizeExclusions()` list). It also assigns 1–4 macros to random destinations.
+- **Live / touchscreen use — run fullscreen.** The FS button, **F11**, or the window
+  title-bar's maximise button put the app in kiosk mode, which **removes the native
+  title bar** so a touch near the top of the window can never be hijacked as a
+  window-move/edge gesture. The macros were moved OFF the top bar into their own strip
+  below it for the same reason; the remaining top-bar controls are buttons + two knobs
+  (master, glide) set in from the top edge. Fullscreen is the recommended live mode.
+- **Debug overlay**: F12. **Help**: `?` (Shift+/).
+- QWERTY note input keeps working while twisting controls (controls refuse keyboard
+  focus). VST3 uses the same editor, freely resizable.
 
 ## Observability (logging, health, debugging)
 

@@ -9,6 +9,7 @@
 #include "UI/Sections.h"
 #include "UI/FXPanel.h"
 #include "UI/TopBar.h"
+#include "UI/MacroStrip.h"
 #include "UI/PartRail.h"
 #include "UI/ScopeView.h"
 #include "UI/EQPanel.h"
@@ -123,6 +124,7 @@ public:
         const int gap = 5;
 
         topBar->setBounds (area.removeFromTop (86)); area.removeFromTop (gap);
+        macroStrip->setBounds (area.removeFromTop (64)); area.removeFromTop (gap);
 
         if (bottomZones != nullptr)
         {
@@ -186,6 +188,9 @@ private:
                                            [this] { toggleHelp(); },
                                            [this] { toggleFullscreen(); });
         addAndMakeVisible (*topBar);
+
+        macroStrip = std::make_unique<MacroStrip> (proc);
+        addAndMakeVisible (*macroStrip);
 
         partRail = std::make_unique<PartRail> (proc, [this] { restoreQwertyFocus(); });
         addAndMakeVisible (*partRail);
@@ -330,6 +335,7 @@ private:
 
     // R2 layout components.
     std::unique_ptr<TopBar> topBar;
+    std::unique_ptr<MacroStrip> macroStrip;
     std::unique_ptr<PartRail> partRail;
     std::unique_ptr<OscSection> oscSection;
     std::unique_ptr<FilterSection> filterSection;

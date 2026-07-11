@@ -47,8 +47,8 @@ public:
             juce::Random rng;
             presets.randomize (rng);
             proc.randomizeMacros (rng);        // assign 1-4 macros to random params + values
-            currentName = "Random"; refreshTitle(); refreshMacroLabels();
-            if (restoreFocus) restoreFocus();
+            currentName = "Random"; refreshTitle();
+            if (restoreFocus) restoreFocus();  // MacroStrip's timer reflects the new macro map
         };
         addAndMakeVisible (random);
 
@@ -65,19 +65,8 @@ public:
         help.onClick = [this] { if (toggleHelp) toggleHelp(); };
         addAndMakeVisible (help);
 
-        const char* ids[] { ParamID::macro1, ParamID::macro2, ParamID::macro3, ParamID::macro4,
-                            ParamID::macro5, ParamID::macro6, ParamID::macro7, ParamID::macro8 };
-        for (int m = 0; m < 8; ++m)
-        {
-            auto* k = new RotaryKnob (proc.apvts, ids[m], "M" + juce::String (m + 1), proc.getMidiLearn());
-            k->setShowValue (false);                             // no number under macros (shorter top bar)
-            k->setDragPixels ((kDragPixelsForFullRange * 10) / 27);   // ~2.7x responsive (2x, then +35%)
-            macros.add (k); addAndMakeVisible (k);
-            // When a macro moves, drive its assigned target (message-thread routing).
-            const int idx = m;
-            macroAtt.add (new juce::ParameterAttachment (*proc.apvts.getParameter (ids[m]),
-                [this, idx] (float v) { applyMacro (idx, v); }, nullptr));
-        }
+        // The 8 macros live in the MacroStrip below the top bar (defect 1.2: keep touch
+        // targets off the native title-bar drag region).
 
         master = std::make_unique<RotaryKnob> (proc.apvts, ParamID::masterGain, "MASTER", proc.getMidiLearn());
         addAndMakeVisible (*master);
@@ -88,8 +77,7 @@ public:
         glide = std::make_unique<RotaryKnob> (proc.apvts, ParamID::glideTime, "GLIDE", proc.getMidiLearn());
         addAndMakeVisible (*mode); addAndMakeVisible (*glide);
 
-        refreshMacroLabels();
-        startTimerHz (4);   // CPU readout + macro-label resync (map may change on preset load)
+        startTimerHz (4);   // CPU readout
     }
 
     void paint (juce::Graphics& g) override
@@ -121,15 +109,7 @@ public:
 
         // Voice group (poly/mono/legato + glide), just right of the preset area.
         mode->setBounds (tb.removeFromLeft (128).withSizeKeepingCentre (128, 30)); tb.removeFromLeft (6);
-        glide->setBounds (tb.removeFromLeft (56)); tb.removeFromLeft (12);
-
-        // 8 macro knobs, packed together (fixed width) and centred in the free span
-        // between the voice group and the right cluster.
-        const int mw = juce::jmin (86, tb.getWidth() / 8);
-        const int pack = mw * 8;
-        tb.removeFromLeft (juce::jmax (0, (tb.getWidth() - pack) / 2));   // centre the group
-        for (int m = 0; m < macros.size(); ++m)
-            macros[m]->setBounds (tb.removeFromLeft (mw));
+        glide->setBounds (tb.removeFromLeft (56));
     }
 
     // Update the shown patch name from outside (e.g. a factory load elsewhere).
@@ -141,27 +121,6 @@ private:
         const int cpu = (int) juce::roundToInt (proc.health.snapshot().cpuPercent);
         auto line = "CPU " + juce::String (juce::jlimit (0, 999, cpu)) + "%";
         if (line != statusLine) { statusLine = line; repaint (statusArea); }
-        refreshMacroLabels();     // map can change on preset/session load
-    }
-
-    // Drive a macro's assigned target parameter (message thread).
-    void applyMacro (int idx, float value)
-    {
-        const auto id = proc.getMacroTargetId (idx);
-        if (id.isEmpty()) return;
-        if (auto* target = proc.apvts.getParameter (id))
-            if (! juce::approximatelyEqual (target->getValue(), value))
-                target->setValueNotifyingHost (value);
-    }
-
-    // Macro knob shows its assigned target's short name (or M1..M8 when unassigned).
-    void refreshMacroLabels()
-    {
-        for (int m = 0; m < macros.size(); ++m)
-        {
-            const auto tgt = proc.getMacroTargetName (m);
-            macros[m]->setDisplayName (tgt.isNotEmpty() ? tgt : ("M" + juce::String (m + 1)));
-        }
     }
 
     void refreshTitle() { presetBtn.setButtonText ("synth  -  " + currentName); }
@@ -226,8 +185,6 @@ private:
     std::function<void()> restoreFocus, toggleHelp, toggleFullscreen;
 
     juce::TextButton presetBtn, save, random, rec, full, help;
-    juce::OwnedArray<RotaryKnob> macros;
-    juce::OwnedArray<juce::ParameterAttachment> macroAtt;
     std::unique_ptr<RotaryKnob> master, glide;
     std::unique_ptr<HSelector> mode;
     juce::Rectangle<int> statusArea;
