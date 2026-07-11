@@ -117,52 +117,6 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChordBar)
 };
 
-// ---- static paint helpers for the (non-functional) rhythm/looper previews ---
-namespace bottomdraw
-{
-    inline void selector (juce::Graphics& g, juce::Rectangle<int> r, juce::StringArray opts, int sel)
-    {
-        const int n = juce::jmax (1, opts.size());
-        for (int i = 0; i < opts.size(); ++i)
-        {
-            auto cell = juce::Rectangle<int> (r.getX() + i * r.getWidth() / n, r.getY(), r.getWidth() / n, r.getHeight()).reduced (2);
-            g.setColour (i == sel ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::track());
-            g.fillRoundedRectangle (cell.toFloat(), 4.0f);
-            g.setColour (i == sel ? chrome::onTint() : VASynthLookAndFeel::ink());
-            g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
-            g.drawText (opts[i], cell, juce::Justification::centred, false);
-        }
-    }
-    inline void toggle (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& t, bool on)
-    {
-        g.setColour (on ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::track());
-        g.fillRoundedRectangle (r.reduced (2).toFloat(), 4.0f);
-        g.setColour (on ? chrome::onTint() : VASynthLookAndFeel::ink());
-        g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
-        g.drawText (t, r, juce::Justification::centred, false);
-    }
-    inline void knob (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& label, float v)
-    {
-        auto lab = r.removeFromBottom (13);
-        const int d = juce::jmin (juce::jmin (r.getWidth() - 2, r.getHeight() - 2), 46);
-        auto c = r.withSizeKeepingCentre (d, d).toFloat();
-        g.setColour (VASynthLookAndFeel::track()); g.fillEllipse (c);
-        const auto ctr = c.getCentre(); const float r0 = c.getWidth() * 0.5f - 3.0f;
-        const float a1 = 2.30f + v * 4.66f;
-        juce::Path arc; arc.addCentredArc (ctr.x, ctr.y, r0, r0, 0.0f, 2.30f, a1, true);
-        g.setColour (VASynthLookAndFeel::accent()); g.strokePath (arc, juce::PathStrokeType (2.5f));
-        g.setColour (VASynthLookAndFeel::ink()); g.drawLine (ctr.x, ctr.y, ctr.x + std::cos (a1 + 1.57f) * r0 * 0.8f, ctr.y + std::sin (a1 + 1.57f) * r0 * 0.8f, 2.0f);
-        g.setColour (VASynthLookAndFeel::dim()); g.setFont (juce::Font (juce::FontOptions (10.0f, juce::Font::bold)));
-        g.drawText (label, lab, juce::Justification::centred, false);
-    }
-    inline void previewTag (juce::Graphics& g, juce::Rectangle<int> header)
-    {
-        g.setColour (chrome::onTint().withAlpha (0.6f));
-        g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold)));
-        g.drawText ("preview  -  R3", header.reduced (10, 0), juce::Justification::centredRight, false);
-    }
-}
-
 // ---- RHYTHM: functional arpeggiator + editable 16-step sequencer ------------
 class RhythmPanel : public juce::Component,
                     private juce::Timer
@@ -252,43 +206,102 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RhythmPanel)
 };
 
-// ---- LOOPER preview (per-part MIDI loops + export; engine lands in R3) ------
-class LooperPanel : public juce::Component
+// ---- LOOPER: functional per-part MIDI looper + MIDI export ------------------
+class LooperPanel : public juce::Component,
+                    private juce::Timer
 {
 public:
-    LooperPanel() { setWantsKeyboardFocus (false); }
+    explicit LooperPanel (VASynthProcessor& p) : proc (p)
+    {
+        setWantsKeyboardFocus (false);
+        rec  = std::make_unique<PowerToggle> (p.apvts, ParamID::loopRec,  "REC");
+        play = std::make_unique<PowerToggle> (p.apvts, ParamID::loopPlay, "PLAY");
+        sync = std::make_unique<HSelector> (p.apvts, ParamID::loopBars, p.getMidiLearn(),
+                                            juce::StringArray { "1 BAR", "2 BAR", "4 BAR" });
+        addAndMakeVisible (*rec); addAndMakeVisible (*play); addAndMakeVisible (*sync);
+
+        auto styleBtn = [] (juce::TextButton& b)
+        {
+            b.setWantsKeyboardFocus (false);
+            b.setColour (juce::TextButton::buttonColourId, VASynthLookAndFeel::track());
+            b.setColour (juce::TextButton::textColourOffId, VASynthLookAndFeel::ink());
+        };
+        clear.setButtonText ("CLEAR"); styleBtn (clear);
+        clear.onClick = [this] { proc.clearLoops(); };
+        addAndMakeVisible (clear);
+        expo.setButtonText ("EXPORT MIDI"); styleBtn (expo);
+        expo.onClick = [this] { exportMidi(); };
+        addAndMakeVisible (expo);
+
+        startTimerHz (20);   // playhead
+    }
+
     void paint (juce::Graphics& g) override
     {
         const auto tLoop = juce::Colour (0xffca6bd0);
-        auto r = chrome::section (g, getLocalBounds(), "Looper  -  per-part MIDI loops + session export", tLoop);
-        bottomdraw::previewTag (g, getLocalBounds().removeFromTop (chrome::kHeaderH));
+        chrome::section (g, getLocalBounds(), "Looper  -  per-part MIDI loops + session export", tLoop);
 
-        auto bar = r.removeFromTop (40); r.removeFromTop (6);
-        bottomdraw::toggle (g, bar.removeFromLeft (70), "REC", false);
-        bottomdraw::toggle (g, bar.removeFromLeft (70), "PLAY", true);
-        bottomdraw::toggle (g, bar.removeFromLeft (70), "CLEAR", false);
-        bottomdraw::toggle (g, bar.removeFromLeft (94), "SYNC 1 bar", true);
-        g.setColour (VASynthLookAndFeel::dim());
-        g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
-        g.drawText ("EXPORT  ->  stems + MIDI", bar, juce::Justification::centredRight, false);
-
-        const char* lanes[] { "P1 lead", "P2 drums", "P3 pad", "P4 --" };
-        const int lh = juce::jmax (1, (r.getHeight() - 3 * 5) / 4);
+        const float ph = proc.loopPlayhead();
         for (int i = 0; i < 4; ++i)
         {
-            auto lane = r.removeFromTop (lh); r.removeFromTop (5);
-            g.setColour (VASynthLookAndFeel::track()); g.fillRoundedRectangle (lane.toFloat(), 4.0f);
-            g.setColour (VASynthLookAndFeel::ink()); g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold)));
-            g.drawText (lanes[i], lane.removeFromLeft (70).withTrimmedLeft (8), juce::Justification::centredLeft, false);
-            if (i < 3)
+            auto lane = laneRects[(std::size_t) i];
+            if (lane.isEmpty()) continue;
+            g.setColour (VASynthLookAndFeel::track());
+            g.fillRoundedRectangle (lane.toFloat(), 4.0f);
+            g.setColour (VASynthLookAndFeel::ink());
+            g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold)));
+            g.drawText ("P" + juce::String (i + 1), lane.removeFromLeft (48).withTrimmedLeft (8), juce::Justification::centredLeft, false);
+
+            if (proc.loopLaneHasContent (i))
             {
-                g.setColour (tLoop.withAlpha (0.5f)); juce::Random rr (i + 3);
-                for (int x = 0; x < lane.getWidth(); x += 6)
-                { float h = lane.getHeight() * (0.2f + 0.7f * rr.nextFloat());
-                  g.fillRect (juce::Rectangle<float> ((float) (lane.getX() + x), lane.getCentreY() - h / 2, 3.0f, h)); }
+                g.setColour (tLoop.withAlpha (0.35f));
+                g.fillRoundedRectangle (lane.reduced (2, 4).toFloat(), 3.0f);
             }
+            // playhead
+            const int px = lane.getX() + juce::roundToInt (ph * lane.getWidth());
+            g.setColour (tLoop.brighter (0.3f));
+            g.fillRect (juce::Rectangle<int> (px - 1, lane.getY() + 2, 2, lane.getHeight() - 4));
         }
     }
+
+    void resized() override
+    {
+        auto c = chrome::sectionContent (getLocalBounds());
+        auto bar = c.removeFromTop (40); c.removeFromTop (6);
+        rec->setBounds  (bar.removeFromLeft (70).reduced (2, 4));
+        play->setBounds (bar.removeFromLeft (70).reduced (2, 4));
+        clear.setBounds (bar.removeFromLeft (70).reduced (2, 4));
+        sync->setBounds (bar.removeFromLeft (150).reduced (2, 4)); bar.removeFromLeft (8);
+        expo.setBounds  (bar.removeFromRight (120).reduced (2, 4));
+
+        const int lh = juce::jmax (1, (c.getHeight() - 3 * 5) / 4);
+        for (int i = 0; i < 4; ++i) { laneRects[(std::size_t) i] = c.removeFromTop (lh); c.removeFromTop (5); }
+    }
+
+private:
+    void exportMidi()
+    {
+        chooser = std::make_unique<juce::FileChooser> ("Export loops to MIDI",
+                                                       juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("synth-loops.mid"),
+                                                       "*.mid");
+        chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+            [this] (const juce::FileChooser& fc)
+            {
+                const auto f = fc.getResult();
+                if (f != juce::File())
+                    proc.postToast (proc.exportLoopsToMidiFile (f) ? "Loops exported to MIDI"
+                                                                   : "Nothing recorded to export");
+            });
+    }
+    void timerCallback() override { repaint(); }
+
+    VASynthProcessor& proc;
+    std::unique_ptr<PowerToggle> rec, play;
+    std::unique_ptr<HSelector> sync;
+    juce::TextButton clear, expo;
+    std::array<juce::Rectangle<int>, 4> laneRects { };
+    std::unique_ptr<juce::FileChooser> chooser;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LooperPanel)
 };
 
@@ -296,7 +309,7 @@ public:
 class BottomZones : public juce::Component
 {
 public:
-    explicit BottomZones (VASynthProcessor& p) : chord (p), rhythm (p)
+    explicit BottomZones (VASynthProcessor& p) : chord (p), rhythm (p), looper (p)
     {
         setWantsKeyboardFocus (false);
         addAndMakeVisible (chord);

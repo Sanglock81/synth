@@ -170,6 +170,12 @@ namespace ParamID
     inline constexpr auto arpSwing    = "arp_swing";     // 0..0.7
     inline constexpr auto arpLatch    = "arp_latch";
     inline constexpr auto arpHold     = "arp_hold";
+
+    // Per-part MIDI looper (R3). Transport bools + loop length in bars. Default off /
+    // 1 bar; the recorded loop content is runtime-only (exported to MIDI, not preset).
+    inline constexpr auto loopRec     = "loop_rec";
+    inline constexpr auto loopPlay    = "loop_play";
+    inline constexpr auto loopBars    = "loop_bars";      // 1 / 2 / 4
 }
 
 // Builds the full parameter layout. Called once in the processor constructor.
@@ -339,6 +345,11 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::arpSwing, 1}, "Arp Swing", juce::NormalisableRange<float>(0.0f, 0.7f), 0.0f));
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::arpLatch, 1}, "Arp Latch", false));
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::arpHold, 1}, "Arp Hold", false));
+
+    // --- Looper (R3) ---------------------------------------------------------
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::loopRec, 1},  "Loop Rec", false));
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::loopPlay, 1}, "Loop Play", false));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::loopBars, 1}, "Loop Bars", juce::StringArray{ "1", "2", "4" }, 0));
 
     return { params.begin(), params.end() };
 }

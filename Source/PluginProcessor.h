@@ -10,6 +10,7 @@
 #include "DSP/FXChain.h"
 #include "DSP/ParametricEQ.h"
 #include "DSP/Arpeggiator.h"
+#include "DSP/Looper.h"
 #include "Observability/AudioHealthLogger.h"
 #include <atomic>
 
@@ -292,6 +293,20 @@ public:
     // The arp's currently-playing step (-1 = idle) for the sequencer playhead. UI polls it.
     int arpDisplayStep() const { return arpStepDisp.load (std::memory_order_relaxed); }
 
+    // -- looper (R3) ----------------------------------------------------------
+    // Runtime loop content (recorded notes) is NOT preset material; it's exported to
+    // MIDI. The UI reads the playhead + per-lane content for drawing. Message thread.
+    void  clearLoops() { loopClear.store (true, std::memory_order_release); }   // RT-safe request
+    float loopPlayhead() const                                                 // 0..1 through the loop
+    {
+        const int len = loopLenDisp.load (std::memory_order_relaxed);
+        return len > 0 ? (float) loopPosDisp.load (std::memory_order_relaxed) / (float) len : 0.0f;
+    }
+    bool  loopLaneHasContent (int part) const { return looper.hasContent (part); }
+    // Write the recorded loops to a Standard MIDI File (one track per part). Audio-stem
+    // export is a follow-up. Returns false if there's nothing recorded or the write fails.
+    bool  exportLoopsToMidiFile (const juce::File& file) const;
+
     // Test seam: build the plugin's binary state format from an XML tree (so the
     // osc_mix->levels migration can be tested with a synthetic pre-level state).
     static void xmlToBinaryForTest (const juce::XmlElement& xml, juce::MemoryBlock& out)
@@ -460,6 +475,12 @@ private:
     int arpEvCount = 0;
     bool arpWasOn = false;
     std::atomic<int> arpStepDisp { -1 };   // audio -> UI: current arp step (playhead)
+
+    // Looper (audio thread). Playback dispatches at block start; recording captures the
+    // performance input in drain/host. Display mirrors + a CLEAR request are atomics.
+    Looper looper;
+    std::atomic<bool> loopClear { false };
+    std::atomic<int>  loopPosDisp { 0 }, loopLenDisp { 48000 };
 
     // Master scope tap ring (see pushScope/readScope).
     std::array<std::atomic<float>, kScopeSize> scopeRing {};

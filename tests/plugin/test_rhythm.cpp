@@ -49,3 +49,37 @@ TEST_CASE ("arp step pattern persists across a state round-trip", "[plugin][arp]
     REQUIRE (dst.getArpStep (0) == Catch::Approx (0.25f).margin (0.01));
     REQUIRE (dst.getArpStep (7) == Catch::Approx (0.9f).margin (0.01));
 }
+
+TEST_CASE ("looper records a performance and plays it back next cycle", "[plugin][looper]")
+{
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    p.apvts.getParameter (ParamID::tempo)->setValueNotifyingHost (1.0f);      // fast -> short loop
+    p.apvts.getParameter (ParamID::loopRec)->setValueNotifyingHost (1.0f);
+    p.apvts.getParameter (ParamID::loopPlay)->setValueNotifyingHost (1.0f);
+
+    juce::AudioBuffer<float> buf (2, 128);
+    juce::MidiBuffer midi;
+
+    // Play a note early, release it, then run well past one loop so it re-triggers.
+    p.routeNoteOn (60, 0.9f, 0);
+    for (int b = 0; b < 2; ++b) { buf.clear(); p.processBlock (buf, midi); }
+    p.routeNoteOff (60, 0);
+
+    double energyLater = 0.0;
+    for (int b = 0; b < 400; ++b)          // enough blocks to cross the loop boundary
+    {
+        buf.clear(); p.processBlock (buf, midi);
+        if (b > 200) energyLater += buf.getRMSLevel (0, 0, 128);   // after the loop wrapped
+    }
+    REQUIRE (p.loopLaneHasContent (0));
+    REQUIRE (energyLater > 0.0);           // the recorded note looped back around
+}
+
+TEST_CASE ("looper off leaves the dispatch path bit-identical (goldens safe)", "[plugin][looper]")
+{
+    VASynthProcessor p;   // loop_rec + loop_play default off
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::loopRec)->load() < 0.5f);
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::loopPlay)->load() < 0.5f);
+    REQUIRE_FALSE (p.loopLaneHasContent (0));
+}

@@ -891,8 +891,8 @@ void VASynthProcessor::drainRoutedMidi (bool chordOn)
         // When the arp is on, LIVE-part (0) played notes feed the arp instead of sounding
         // directly; it re-emits them on its clock. Locked parts + control are unaffected.
         const bool arpCapture = arp.enabled() && e.part == 0;
-        if (m.isNoteOn())       { if (arpCapture) arp.noteOn (e.d1, e.d2 / 127.0f); else dispatchNoteOn  (e.d1, e.d2 / 127.0f, e.part, chordOn); }
-        else if (m.isNoteOff()) { if (arpCapture) arp.noteOff (e.d1);               else dispatchNoteOff (e.d1, e.part, chordOn); }
+        if (m.isNoteOn())       { looper.recordNote (e.part, 0, e.d1, e.d2 / 127.0f, true);  if (arpCapture) arp.noteOn (e.d1, e.d2 / 127.0f); else dispatchNoteOn  (e.d1, e.d2 / 127.0f, e.part, chordOn); }
+        else if (m.isNoteOff()) { looper.recordNote (e.part, 0, e.d1, 0.0f, false);           if (arpCapture) arp.noteOff (e.d1);               else dispatchNoteOff (e.d1, e.part, chordOn); }
         else                    handleControlMessage (m);
     };
     for (int i = 0; i < size1; ++i) handle (start1 + i);
@@ -991,6 +991,44 @@ void VASynthProcessor::applyArpStepsProperty()
                                                         : 0.8f;   // sensible default: all steps on
 }
 
+bool VASynthProcessor::exportLoopsToMidiFile (const juce::File& file) const
+{
+    bool any = false;
+    for (int p = 0; p < Looper::kParts; ++p) any = any || looper.hasContent (p);
+    if (! any) return false;
+
+    const double bpm = juce::jmax (20.0f, apvts.getRawParameterValue (ParamID::tempo)->load());
+    const double sr  = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    const int    ppq = 960;
+    const double samplesPerBeat = sr * 60.0 / bpm;
+
+    juce::MidiFile mf;
+    mf.setTicksPerQuarterNote (ppq);
+    {
+        juce::MidiMessageSequence tempoTrack;                       // track 0: tempo map
+        tempoTrack.addEvent (juce::MidiMessage::tempoMetaEvent ((int) (60000000.0 / bpm)), 0.0);
+        mf.addTrack (tempoTrack);
+    }
+    for (int p = 0; p < Looper::kParts; ++p)
+    {
+        if (! looper.hasContent (p)) continue;
+        juce::MidiMessageSequence seq;
+        for (int i = 0; i < looper.eventCount (p); ++i)
+        {
+            const auto& e = looper.event (p, i);
+            const double ticks = (double) e.t / samplesPerBeat * ppq;
+            seq.addEvent (e.on ? juce::MidiMessage::noteOn  ((p % 16) + 1, e.note, e.vel)
+                               : juce::MidiMessage::noteOff ((p % 16) + 1, e.note), ticks);
+        }
+        seq.updateMatchedPairs();
+        mf.addTrack (seq);
+    }
+
+    file.deleteFile();
+    juce::FileOutputStream os (file);
+    return os.openedOk() && mf.writeTo (os);
+}
+
 void VASynthProcessor::randomizeMacros (juce::Random& rng)
 {
     const auto routable = macroRoutableIDs();
@@ -1083,6 +1121,24 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         arpWasOn = ac.enabled;
     }
 
+    // --- looper (R3): loop length from tempo + bars; play this block's loop at block
+    //     start (before input, so looped notes aren't re-recorded); record the live
+    //     performance in drainRoutedMidi + the host loop while REC is armed.
+    {
+        if (loopClear.exchange (false, std::memory_order_acq_rel)) looper.clear();
+        const double bpm = juce::jmax (20.0f, rp (apvts, ID::tempo));
+        const double sr  = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+        const int barsSel = (int) rp (apvts, ID::loopBars);          // 0->1, 1->2, 2->4 bars
+        const int bars = (barsSel == 2) ? 4 : (barsSel == 1) ? 2 : 1;
+        looper.setLoopLength (juce::jmax (1, (int) (sr * 60.0 / bpm * 4.0 * bars)));   // 4 beats/bar
+        looper.setRecording (rp (apvts, ID::loopRec)  > 0.5f);
+        looper.setPlaying   (rp (apvts, ID::loopPlay) > 0.5f);
+    }
+    looper.playBlock (numSamples, [this, chordOn] (int part, int note, float vel, bool on)
+    {
+        if (on) dispatchNoteOn (note, vel, part, chordOn); else dispatchNoteOff (note, part, chordOn);
+    });
+
     // Routed surfaces (per-input MIDI / QWERTY-to-part) — drained at block start, so
     // they sound from sample 0 (block-granular; sample-accurate routing is future).
     drainRoutedMidi (chordOn);
@@ -1101,8 +1157,8 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         for (const auto metadata : midi)
         {
             const auto msg = metadata.getMessage();
-            if      (msg.isNoteOn())  arp.noteOn (msg.getNoteNumber(), msg.getFloatVelocity());
-            else if (msg.isNoteOff()) arp.noteOff (msg.getNoteNumber());
+            if      (msg.isNoteOn())  { looper.recordNote (0, metadata.samplePosition, msg.getNoteNumber(), msg.getFloatVelocity(), true);  arp.noteOn (msg.getNoteNumber(), msg.getFloatVelocity()); }
+            else if (msg.isNoteOff()) { looper.recordNote (0, metadata.samplePosition, msg.getNoteNumber(), 0.0f, false);                    arp.noteOff (msg.getNoteNumber()); }
             else                      handleControlMessage (msg);
         }
 
@@ -1139,9 +1195,15 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             }
 
             if (msg.isNoteOn())                                 // host / QWERTY -> LIVE part 0
+            {
+                looper.recordNote (0, pos, msg.getNoteNumber(), msg.getFloatVelocity(), true);
                 dispatchNoteOn (msg.getNoteNumber(), msg.getFloatVelocity(), 0, chordOn);
+            }
             else if (msg.isNoteOff())
+            {
+                looper.recordNote (0, pos, msg.getNoteNumber(), 0.0f, false);
                 dispatchNoteOff (msg.getNoteNumber(), 0, chordOn);
+            }
             else
                 handleControlMessage (msg);                     // CC / pitch-bend / all-off
         }
@@ -1149,6 +1211,11 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         if (renderedUpTo < numSamples)
             engine.renderParts (renderedUpTo, numSamples - renderedUpTo, params);
     }
+
+    // Advance the loop clock + mirror its position for the UI.
+    looper.advance (numSamples);
+    loopPosDisp.store (looper.position(), std::memory_order_relaxed);
+    loopLenDisp.store (looper.loopLength(), std::memory_order_relaxed);
 
     // Publish the held-modifier mask (QWERTY | MIDI) for the CHORD UI indicators.
     activeModMask.store (qwertyModMask.load (std::memory_order_acquire) | midiModMask,
