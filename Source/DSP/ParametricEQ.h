@@ -2,6 +2,10 @@
 #include <cmath>
 #include <array>
 
+// M_PI isn't standard (absent under MSVC without _USE_MATH_DEFINES); Source/DSP/ is
+// dependency-free, so define our own.
+namespace eqconst { inline constexpr double kPi = 3.14159265358979323846; }
+
 // ============================================================================
 // Master parametric EQ — JUCE-free (standard library only, like everything in
 // Source/DSP/). Four RBJ biquad bands in series: low shelf, two sweepable bells,
@@ -71,7 +75,7 @@ private:
         {
             const double f = band.freq < 20.0 ? 20.0 : (band.freq > fs * 0.49 ? fs * 0.49 : band.freq);
             const double A = std::pow (10.0, band.gainDb / 40.0);
-            const double w0 = 2.0 * M_PI * f / fs;
+            const double w0 = 2.0 * eqconst::kPi * f / fs;
             const double cw = std::cos (w0), sw = std::sin (w0);
             const double Q = band.q < 0.1 ? 0.1 : band.q;
             double B0, B1, B2, A0, A1, A2;
@@ -111,7 +115,7 @@ private:
         // |H(e^jw)| for the response curve.
         double magnitude (double freq, double fs) const noexcept
         {
-            const double w = 2.0 * M_PI * freq / fs;
+            const double w = 2.0 * eqconst::kPi * freq / fs;
             const double cw = std::cos (w), c2w = std::cos (2 * w);
             const double sw = std::sin (w), s2w = std::sin (2 * w);
             const double numRe = b0 + b1 * cw + b2 * c2w, numIm = -(b1 * sw + b2 * s2w);

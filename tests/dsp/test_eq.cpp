@@ -65,7 +65,7 @@ TEST_CASE ("EQ boost raises a tone at the band centre", "[dsp][eq]")
     };
     const int N = 4096;
     std::vector<float> a (N), b (N), dummy (N, 0.0f);
-    for (int i = 0; i < N; ++i) a[(size_t) i] = b[(size_t) i] = (float) std::sin (2.0 * M_PI * 1000.0 * i / kSR);
+    for (int i = 0; i < N; ++i) a[(size_t) i] = b[(size_t) i] = (float) std::sin (2.0 * eqconst::kPi * 1000.0 * i / kSR);
     const double before = rms (a);
 
     ParametricEQ eq; eq.prepare (kSR);
