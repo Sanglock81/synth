@@ -163,35 +163,92 @@ namespace bottomdraw
     }
 }
 
-// ---- RHYTHM preview (arp + 16-step sequencer; engine lands in R3) -----------
-class RhythmPanel : public juce::Component
+// ---- RHYTHM: functional arpeggiator + editable 16-step sequencer ------------
+class RhythmPanel : public juce::Component,
+                    private juce::Timer
 {
 public:
-    RhythmPanel() { setWantsKeyboardFocus (false); }
+    explicit RhythmPanel (VASynthProcessor& p) : proc (p)
+    {
+        setWantsKeyboardFocus (false);
+        arpOn = std::make_unique<PowerToggle> (p.apvts, ParamID::arpOn, "ARP");
+        mode  = std::make_unique<HSelector> (p.apvts, ParamID::arpMode, p.getMidiLearn(),
+                                             juce::StringArray { "UP", "DOWN", "UP-DN", "RAND", "PLAYED" });
+        oct   = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpOctaves, "OCT",   p.getMidiLearn());
+        gate  = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpGate,    "GATE",  p.getMidiLearn());
+        swing = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpSwing,   "SWING", p.getMidiLearn());
+        tempo = std::make_unique<RotaryKnob> (p.apvts, ParamID::tempo,      "TEMPO", p.getMidiLearn());
+        latch = std::make_unique<PowerToggle> (p.apvts, ParamID::arpLatch, "LATCH");
+        hold  = std::make_unique<PowerToggle> (p.apvts, ParamID::arpHold,  "HOLD");
+        addAndMakeVisible (*arpOn); addAndMakeVisible (*mode);
+        addAndMakeVisible (*oct);   addAndMakeVisible (*gate);
+        addAndMakeVisible (*swing); addAndMakeVisible (*tempo);
+        addAndMakeVisible (*latch); addAndMakeVisible (*hold);
+        startTimerHz (20);   // playhead + reflect external step changes
+    }
+
     void paint (juce::Graphics& g) override
     {
         const auto tRhy = juce::Colour (0xffe0b13a);
-        auto r = chrome::section (g, getLocalBounds(), "Rhythm  -  arp + sequencer", tRhy);
-        bottomdraw::previewTag (g, getLocalBounds().removeFromTop (chrome::kHeaderH));
+        chrome::section (g, getLocalBounds(), "Rhythm  -  arp + sequencer", tRhy);
 
-        auto ctrls = r.removeFromTop (44); r.removeFromTop (6);
-        bottomdraw::selector (g, ctrls.removeFromLeft (250), { "UP","DOWN","UP/DN","RAND","PLAYED" }, 0); ctrls.removeFromLeft (6);
-        bottomdraw::knob (g, ctrls.removeFromLeft (58), "OCT", 0.3f); ctrls.removeFromLeft (2);
-        bottomdraw::knob (g, ctrls.removeFromLeft (58), "GATE", 0.6f); ctrls.removeFromLeft (2);
-        bottomdraw::knob (g, ctrls.removeFromLeft (58), "SWING", 0.5f); ctrls.removeFromLeft (8);
-        bottomdraw::toggle (g, ctrls.removeFromLeft (66), "LATCH", true);
-        bottomdraw::toggle (g, ctrls.removeFromLeft (66), "HOLD", false);
-
-        const int cells = 16, cw = juce::jmax (1, r.getWidth() / cells);
+        const int play = proc.arpDisplayStep();
+        const int cells = VASynthProcessor::kArpSteps;
+        const int cw = juce::jmax (1, gridArea.getWidth() / cells);
         for (int s = 0; s < cells; ++s)
         {
-            auto cell = juce::Rectangle<int> (r.getX() + s * cw, r.getY(), cw, r.getHeight()).reduced (2);
-            const bool on = (s % 4 == 0) || s == 6 || s == 10 || s == 13;
-            g.setColour (on ? tRhy : VASynthLookAndFeel::track());
+            auto cell = juce::Rectangle<int> (gridArea.getX() + s * cw, gridArea.getY(), cw, gridArea.getHeight()).reduced (2);
+            g.setColour (VASynthLookAndFeel::track());
             g.fillRoundedRectangle (cell.toFloat(), 3.0f);
-            if (on) { g.setColour (chrome::onTint().withAlpha (0.4f)); g.fillRect (cell.removeFromBottom (cell.getHeight() * (s % 3 + 1) / 4)); }
+            const float v = proc.getArpStep (s);
+            if (v > 0.001f)
+            {
+                auto bar = cell.removeFromBottom (juce::roundToInt (cell.getHeight() * v));
+                g.setColour ((s == play) ? tRhy.brighter (0.3f) : tRhy);
+                g.fillRoundedRectangle (bar.toFloat(), 3.0f);
+            }
+            if (s == play) { g.setColour (VASynthLookAndFeel::ink().withAlpha (0.85f)); g.drawRoundedRectangle (cell.toFloat(), 3.0f, 1.5f); }
         }
     }
+
+    void resized() override
+    {
+        auto c = chrome::sectionContent (getLocalBounds());
+        auto row = c.removeFromTop (juce::jmin (66, c.getHeight() / 2)); c.removeFromTop (6);
+        arpOn->setBounds (row.removeFromLeft (58).reduced (2, 6)); row.removeFromLeft (6);
+        mode->setBounds  (row.removeFromLeft (juce::jmin (230, row.getWidth() / 2)).reduced (0, 8)); row.removeFromLeft (8);
+        for (RotaryKnob* k : { oct.get(), gate.get(), swing.get(), tempo.get() })
+            k->setBounds (row.removeFromLeft (juce::jmin (58, row.getWidth() / 4)));
+        row.removeFromLeft (6);
+        latch->setBounds (row.removeFromLeft (60).reduced (2, 6));
+        hold->setBounds  (row.removeFromLeft (60).reduced (2, 6));
+        gridArea = c;
+    }
+
+    void mouseDown (const juce::MouseEvent& e) override { paintStep (e); }
+    void mouseDrag (const juce::MouseEvent& e) override { paintStep (e); }
+
+private:
+    void paintStep (const juce::MouseEvent& e)
+    {
+        if (! gridArea.contains (e.getPosition())) return;
+        const int cells = VASynthProcessor::kArpSteps;
+        const int cw = juce::jmax (1, gridArea.getWidth() / cells);
+        const int s = juce::jlimit (0, cells - 1, (e.getPosition().x - gridArea.getX()) / cw);
+        float v = 1.0f - (float) (e.getPosition().y - gridArea.getY()) / juce::jmax (1, gridArea.getHeight());
+        v = juce::jlimit (0.0f, 1.0f, v);
+        if (v < 0.06f) v = 0.0f;                 // snap the bottom to a rest
+        proc.setArpStep (s, v);
+        repaint();
+    }
+    void timerCallback() override { repaint(); }
+
+    VASynthProcessor& proc;
+    std::unique_ptr<PowerToggle> arpOn, latch, hold;
+    std::unique_ptr<HSelector> mode;
+    std::unique_ptr<RotaryKnob> oct, gate, swing, tempo;
+    juce::Rectangle<int> gridArea;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RhythmPanel)
 };
 
@@ -239,7 +296,7 @@ public:
 class BottomZones : public juce::Component
 {
 public:
-    explicit BottomZones (VASynthProcessor& p) : chord (p)
+    explicit BottomZones (VASynthProcessor& p) : chord (p), rhythm (p)
     {
         setWantsKeyboardFocus (false);
         addAndMakeVisible (chord);

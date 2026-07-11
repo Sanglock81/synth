@@ -62,6 +62,8 @@ VASynthProcessor::VASynthProcessor()
                    [] (const auto& a, const auto& b) { return a.first < b.first; });
         for (auto& kv : byFile) factoryPresets.add (kv.second);
     }
+
+    applyArpStepsProperty();      // seed the 16-step pattern with its default (all on)
 }
 
 void VASynthProcessor::loadFactoryPreset (const juce::String& name)
@@ -886,8 +888,11 @@ void VASynthProcessor::drainRoutedMidi (bool chordOn)
     {
         const auto& e = routedBuf[(std::size_t) idx];
         const juce::MidiMessage m (e.status, e.d1, e.d2);
-        if (m.isNoteOn())       dispatchNoteOn  (e.d1, e.d2 / 127.0f, e.part, chordOn);
-        else if (m.isNoteOff()) dispatchNoteOff (e.d1, e.part, chordOn);
+        // When the arp is on, LIVE-part (0) played notes feed the arp instead of sounding
+        // directly; it re-emits them on its clock. Locked parts + control are unaffected.
+        const bool arpCapture = arp.enabled() && e.part == 0;
+        if (m.isNoteOn())       { if (arpCapture) arp.noteOn (e.d1, e.d2 / 127.0f); else dispatchNoteOn  (e.d1, e.d2 / 127.0f, e.part, chordOn); }
+        else if (m.isNoteOff()) { if (arpCapture) arp.noteOff (e.d1);               else dispatchNoteOff (e.d1, e.part, chordOn); }
         else                    handleControlMessage (m);
     };
     for (int i = 0; i < size1; ++i) handle (start1 + i);
@@ -970,6 +975,22 @@ void VASynthProcessor::applyMacroMapProperty()
             macroTargetId[(std::size_t) i] = tokens[i];
 }
 
+void VASynthProcessor::writeArpStepsProperty()
+{
+    juce::StringArray v;
+    for (float s : arpSteps) v.add (juce::String (s, 3));
+    apvts.state.setProperty ("arp_steps", v.joinIntoString (","), nullptr);
+}
+
+void VASynthProcessor::applyArpStepsProperty()
+{
+    const auto str = apvts.state.getProperty ("arp_steps").toString();
+    auto tokens = juce::StringArray::fromTokens (str, ",", "");
+    for (int i = 0; i < kArpSteps; ++i)
+        arpSteps[(std::size_t) i] = (i < tokens.size()) ? juce::jlimit (0.0f, 1.0f, tokens[i].getFloatValue())
+                                                        : 0.8f;   // sensible default: all steps on
+}
+
 void VASynthProcessor::randomizeMacros (juce::Random& rng)
 {
     const auto routable = macroRoutableIDs();
@@ -1040,6 +1061,28 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // Feed QWERTY modifier edges (message thread) into the latest-wins forcer stack.
     applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
 
+    // --- arpeggiator (R3): configure from params + tempo. When ON, it captures the LIVE
+    //     part's played notes (in drainRoutedMidi + the host loop below) and re-emits them
+    //     on its internal clock. OFF => note dispatch is unchanged (bit-identical goldens).
+    {
+        Arpeggiator::Config ac;
+        ac.enabled = rp (apvts, ID::arpOn) > 0.5f;
+        ac.mode    = (int) rp (apvts, ID::arpMode);
+        ac.octaves = (int) rp (apvts, ID::arpOctaves);
+        ac.gate    = rp (apvts, ID::arpGate);
+        ac.swing   = rp (apvts, ID::arpSwing);
+        ac.latch   = (rp (apvts, ID::arpLatch) > 0.5f) || (rp (apvts, ID::arpHold) > 0.5f);
+        const double bpm = juce::jmax (20.0f, rp (apvts, ID::tempo));
+        const double sr  = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+        ac.samplesPerStep = juce::jmax (1.0, sr * 60.0 / bpm / 4.0);        // 16th-note steps
+        for (int i = 0; i < kArpSteps; ++i) ac.steps[(std::size_t) i] = arpSteps[(std::size_t) i];
+        arp.setConfig (ac);
+
+        // On an arp ON->OFF toggle, clear the arp and release any note it left sounding.
+        if (arpWasOn && ! ac.enabled) { arp.reset(); engine.allNotesOff(); }
+        arpWasOn = ac.enabled;
+    }
+
     // Routed surfaces (per-input MIDI / QWERTY-to-part) — drained at block start, so
     // they sound from sample 0 (block-granular; sample-accurate routing is future).
     drainRoutedMidi (chordOn);
@@ -1049,29 +1092,63 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // so it can run its OWN FX chain; the sum happens once, below. Voices still render
     // per event segment to keep host MIDI note timing tight.
     engine.beginMasterBlock (numSamples, params, snapshotFXParams(), live0Lfo);
-    int renderedUpTo = 0;
 
-    for (const auto metadata : midi)
+    if (arp.enabled())
     {
-        const auto msg = metadata.getMessage();
-        const int  pos = metadata.samplePosition;
-
-        if (pos > renderedUpTo)
+        // Host/DAW notes feed the arp (block-granular input is fine — the arp re-times its
+        // output); control applies immediately. Then generate clock-timed arp events and
+        // render the block segmented by THOSE.
+        for (const auto metadata : midi)
         {
-            engine.renderParts (renderedUpTo, pos - renderedUpTo, params);
-            renderedUpTo = pos;
+            const auto msg = metadata.getMessage();
+            if      (msg.isNoteOn())  arp.noteOn (msg.getNoteNumber(), msg.getFloatVelocity());
+            else if (msg.isNoteOff()) arp.noteOff (msg.getNoteNumber());
+            else                      handleControlMessage (msg);
         }
 
-        if (msg.isNoteOn())                                 // host / QWERTY -> LIVE part 0
-            dispatchNoteOn (msg.getNoteNumber(), msg.getFloatVelocity(), 0, chordOn);
-        else if (msg.isNoteOff())
-            dispatchNoteOff (msg.getNoteNumber(), 0, chordOn);
-        else
-            handleControlMessage (msg);                     // CC / pitch-bend / all-off
-    }
+        arpEvCount = 0;
+        arp.process (numSamples, [this] (int off, int note, float vel, bool on)
+        {
+            if (arpEvCount < (int) arpEv.size()) arpEv[(std::size_t) arpEvCount++] = { off, note, vel, on };
+        });
 
-    if (renderedUpTo < numSamples)
-        engine.renderParts (renderedUpTo, numSamples - renderedUpTo, params);
+        int upTo = 0;
+        for (int i = 0; i < arpEvCount; ++i)
+        {
+            const auto& ev = arpEv[(std::size_t) i];
+            const int off = juce::jlimit (0, numSamples, ev.offset);
+            if (off > upTo) { engine.renderParts (upTo, off - upTo, params); upTo = off; }
+            if (ev.on) engine.noteOn (ev.note, ev.vel, 0); else engine.noteOff (ev.note, 0);
+        }
+        if (upTo < numSamples) engine.renderParts (upTo, numSamples - upTo, params);
+        arpStepDisp.store (arp.currentStep(), std::memory_order_relaxed);   // playhead for the UI
+    }
+    else
+    {
+        arpStepDisp.store (-1, std::memory_order_relaxed);
+        int renderedUpTo = 0;
+        for (const auto metadata : midi)
+        {
+            const auto msg = metadata.getMessage();
+            const int  pos = metadata.samplePosition;
+
+            if (pos > renderedUpTo)
+            {
+                engine.renderParts (renderedUpTo, pos - renderedUpTo, params);
+                renderedUpTo = pos;
+            }
+
+            if (msg.isNoteOn())                                 // host / QWERTY -> LIVE part 0
+                dispatchNoteOn (msg.getNoteNumber(), msg.getFloatVelocity(), 0, chordOn);
+            else if (msg.isNoteOff())
+                dispatchNoteOff (msg.getNoteNumber(), 0, chordOn);
+            else
+                handleControlMessage (msg);                     // CC / pitch-bend / all-off
+        }
+
+        if (renderedUpTo < numSamples)
+            engine.renderParts (renderedUpTo, numSamples - renderedUpTo, params);
+    }
 
     // Publish the held-modifier mask (QWERTY | MIDI) for the CHORD UI indicators.
     activeModMask.store (qwertyModMask.load (std::memory_order_acquire) | midiModMask,
@@ -1185,6 +1262,7 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
         // Restore the FX chain order (state-tree property, not an APVTS param).
         applyFxOrderProperty();
         applyMacroMapProperty();       // restore macro->param routing
+        applyArpStepsProperty();       // restore the arp step pattern
 
         // Routing lifecycle rule 2: do NOT restore the multitimbral layout from ordinary
         // state — routing/zones reset to default on load. (Only an explicit MULTI load

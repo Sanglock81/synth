@@ -40,6 +40,7 @@ add_executable(dsp_tests
     dsp/test_golden.cpp
     dsp/test_softclip.cpp
     dsp/test_eq.cpp
+    dsp/test_arp.cpp
     dsp/test_chord.cpp
     dsp/test_rt_safety.cpp
     dsp/test_rtlogring.cpp
@@ -87,6 +88,7 @@ add_executable(plugin_tests
     plugin/test_midi_hotplug.cpp
     plugin/test_presets_factory.cpp
     plugin/test_macros.cpp
+    plugin/test_rhythm.cpp
     dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests
 
 target_include_directories(plugin_tests PRIVATE

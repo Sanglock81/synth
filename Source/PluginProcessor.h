@@ -9,6 +9,7 @@
 #include "DSP/ChordEngine.h"
 #include "DSP/FXChain.h"
 #include "DSP/ParametricEQ.h"
+#include "DSP/Arpeggiator.h"
 #include "Observability/AudioHealthLogger.h"
 #include <atomic>
 
@@ -277,6 +278,20 @@ public:
     // Curated musical parameters a macro may target.
     static juce::StringArray macroRoutableIDs();
 
+    // -- arpeggiator 16-step pattern (R3) -------------------------------------
+    // Per-step velocity 0..1 (0 = rest). Lives in the state tree ("arp_steps") so it
+    // saves/loads with presets; the RHYTHM panel edits it. Message thread + UI only.
+    static constexpr int kArpSteps = Arpeggiator::kNumSteps;
+    float getArpStep (int i) const { return (i >= 0 && i < kArpSteps) ? arpSteps[(std::size_t) i] : 0.0f; }
+    void  setArpStep (int i, float v)
+    {
+        if (i < 0 || i >= kArpSteps) return;
+        arpSteps[(std::size_t) i] = juce::jlimit (0.0f, 1.0f, v);
+        writeArpStepsProperty();
+    }
+    // The arp's currently-playing step (-1 = idle) for the sequencer playhead. UI polls it.
+    int arpDisplayStep() const { return arpStepDisp.load (std::memory_order_relaxed); }
+
     // Test seam: build the plugin's binary state format from an XML tree (so the
     // osc_mix->levels migration can be tested with a synthetic pre-level state).
     static void xmlToBinaryForTest (const juce::XmlElement& xml, juce::MemoryBlock& out)
@@ -352,6 +367,11 @@ private:
     std::array<juce::String, 8> macroTargetId {};
     void writeMacroMapProperty();
     void applyMacroMapProperty();
+
+    // Arpeggiator step pattern <-> "arp_steps" state property.
+    std::array<float, kArpSteps> arpSteps { };
+    void writeArpStepsProperty();
+    void applyArpStepsProperty();
 
     static juce::String orderToString (const int order[4])
     {
@@ -430,6 +450,16 @@ private:
     // Master parametric EQ (end of chain, post-FX sum / pre master gain). Audio thread only.
     ParametricEQ masterEQ;
     bool eqWasOn = false;
+
+    // Arpeggiator (audio thread). When enabled it captures the LIVE part's played notes
+    // and re-emits them on its internal clock. A fixed per-block event buffer keeps the
+    // emit path alloc-free.
+    Arpeggiator arp;
+    struct ArpEvent { int offset; int note; float vel; bool on; };
+    std::array<ArpEvent, 512> arpEv { };
+    int arpEvCount = 0;
+    bool arpWasOn = false;
+    std::atomic<int> arpStepDisp { -1 };   // audio -> UI: current arp step (playhead)
 
     // Master scope tap ring (see pushScope/readScope).
     std::array<std::atomic<float>, kScopeSize> scopeRing {};

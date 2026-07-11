@@ -155,6 +155,21 @@ namespace ParamID
     inline constexpr auto eqLmFreq  = "eq_lm_freq";   inline constexpr auto eqLmGain = "eq_lm_gain";   inline constexpr auto eqLmQ = "eq_lm_q";
     inline constexpr auto eqHmFreq  = "eq_hm_freq";   inline constexpr auto eqHmGain = "eq_hm_gain";   inline constexpr auto eqHmQ = "eq_hm_q";
     inline constexpr auto eqHsFreq  = "eq_hs_freq";   inline constexpr auto eqHsGain = "eq_hs_gain";
+
+    // Tempo (R3): internal clock BPM, drives the arpeggiator + looper. (Host-tempo
+    // sync in a DAW is future; standalone uses this.)
+    inline constexpr auto tempo     = "tempo";
+
+    // Arpeggiator / step sequencer (R3). Default off => note dispatch is unchanged
+    // (goldens bit-identical). The 16-step velocity pattern lives in the state tree
+    // ("arp_steps"), not as 16 automatable params.
+    inline constexpr auto arpOn      = "arp_on";
+    inline constexpr auto arpMode     = "arp_mode";      // Up/Down/Up-Down/Random/As-played
+    inline constexpr auto arpOctaves  = "arp_octaves";   // 1..4
+    inline constexpr auto arpGate     = "arp_gate";      // 0..1 of a step
+    inline constexpr auto arpSwing    = "arp_swing";     // 0..0.7
+    inline constexpr auto arpLatch    = "arp_latch";
+    inline constexpr auto arpHold     = "arp_hold";
 }
 
 // Builds the full parameter layout. Called once in the processor constructor.
@@ -314,6 +329,16 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHsFreq, 1}, "EQ High Freq", fR, 8000.0f, hz));
         params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHsGain, 1}, "EQ High Gain", gainR, 0.0f, db));
     }
+
+    // --- Tempo + arpeggiator (R3) --------------------------------------------
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::tempo, 1}, "Tempo", juce::NormalisableRange<float>(20.0f, 300.0f), 120.0f, juce::AudioParameterFloatAttributes().withLabel ("bpm")));
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::arpOn, 1}, "Arp", false));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::arpMode, 1}, "Arp Mode", juce::StringArray{ "Up", "Down", "Up-Down", "Random", "As-Played" }, 0));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::arpOctaves, 1}, "Arp Octaves", juce::NormalisableRange<float>(1.0f, 4.0f, 1.0f), 1.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::arpGate, 1}, "Arp Gate", juce::NormalisableRange<float>(0.05f, 1.0f), 0.5f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::arpSwing, 1}, "Arp Swing", juce::NormalisableRange<float>(0.0f, 0.7f), 0.0f));
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::arpLatch, 1}, "Arp Latch", false));
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::arpHold, 1}, "Arp Hold", false));
 
     return { params.begin(), params.end() };
 }
