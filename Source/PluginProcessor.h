@@ -300,10 +300,12 @@ public:
     // from their baked states. Tapping a part swaps the whole panel to its state (the UI
     // calls setEditFocus). Focus 0 is the default and is bit-identical to the old model.
     int  editFocus() const { return editFocusPart.load (std::memory_order_relaxed); }
-    // Move the edit focus to `part` (0..3): save the current part's panel state, load the
-    // tapped part's state into the APVTS (the panel refreshes), bake the now-defocused
-    // part into its engine slot, re-prime smoothing. Message thread (UI). A kit part has
-    // no single panel sound, so focusing one is a no-op (edit it in the Kit Editor).
+    int  playFocus() const { return playFocusPart.load (std::memory_order_relaxed); }   // which part the LIVE keyboard plays
+    // Focus a part (0..3): the LIVE keyboard PLAYS it (so a kit part triggers its pads).
+    // A SYNTH part also becomes the panel's EDIT focus — save the current part's sound, load
+    // the tapped part's sound into the APVTS (panel refreshes). A KIT part has no single
+    // panel sound, so the panel keeps editing the current synth part (edit the kit in the
+    // Kit Editor); only play-focus moves. Message thread (UI).
     void setEditFocus (int part);
     // Has this locked part diverged from its assigned preset (shows the "(edited)" tag)?
     bool partIsEdited (int part) const
@@ -445,7 +447,8 @@ private:
     // Edit focus (1.3). editFocusPart = the part the APVTS currently represents (panel +
     // engine live slot). partEditState holds the OTHER parts' full panel states; on a
     // focus swap they exchange with the APVTS. partEdited marks divergence from a preset.
-    std::atomic<int> editFocusPart { 0 };
+    std::atomic<int> editFocusPart { 0 };   // panel + engine live-param slot (synth parts)
+    std::atomic<int> playFocusPart { 0 };   // which part the LIVE keyboard routes to (any part)
     std::array<juce::ValueTree, SynthEngine::maxParts> partEditState {};
     std::array<bool, SynthEngine::maxParts> partEdited {};
     bool loadingPartState = false;   // guards the edited-flag listener during programmatic loads
@@ -507,7 +510,7 @@ private:
     std::array<ArpEvent, 512> arpEv { };
     int arpEvCount = 0;
     bool arpWasOn = false;
-    int  prevFocus = 0;                    // audio-thread mirror of the focus, for hand-off
+    int  prevPlayFocus = 0;                // audio-thread mirror of play-focus, for hand-off
     std::atomic<int> arpStepDisp { -1 };   // audio -> UI: current arp step (playhead)
 
     // Looper (audio thread). Playback dispatches at block start; recording captures the

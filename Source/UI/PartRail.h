@@ -56,7 +56,7 @@ public:
         {
             auto cell = cells[(std::size_t) i];
             const bool live    = (i == 0);
-            const bool focused = (i == proc.editFocus());   // this part is on the panel now
+            const bool focused = (i == proc.playFocus());   // this part is what the keyboard plays
             const bool lit  = blink[(std::size_t) i] > 0;
             const bool locked = i > 0 && proc.getPartPreset (i).isNotEmpty();
             const bool kit    = proc.isPartKit (i);
@@ -131,10 +131,10 @@ public:
         const int i = cellAt (e.getPosition());
         pressCell = -1;
         if (i < 0 || e.mods.isPopupMenu() || e.getDistanceFromDragStart() > 8) return;
-        if (i >= 1 && proc.isPartKit (i))
-            KitEditor::show (proc, getTopLevelComponent(), i, [this] { if (restoreFocus) restoreFocus(); });
-        else
-        { proc.setEditFocus (i); repaint(); if (restoreFocus) restoreFocus(); }
+        // Tap PLAYS the part (a kit triggers its pads; a synth also becomes the panel edit
+        // focus). Edit a kit via long-press -> Drum kit editor.
+        proc.setEditFocus (i);
+        repaint(); if (restoreFocus) restoreFocus();
     }
 
 private:

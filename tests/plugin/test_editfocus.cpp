@@ -89,13 +89,36 @@ TEST_CASE ("edit-focus: revert restores the clean preset (clears edited)", "[plu
     juce::ignoreUnused (clean);
 }
 
-TEST_CASE ("edit-focus: a kit part is not a focus target (edit it in the Kit Editor)", "[plugin][editfocus]")
+TEST_CASE ("edit-focus: tapping a kit part plays it but keeps the panel on the synth", "[plugin][editfocus]")
 {
     VASynthProcessor p;
     p.prepareToPlay (48000.0, 128);
     p.setPartKit (2, p.loadKit ("808 Basics"));
     p.setEditFocus (2);
-    REQUIRE (p.editFocus() == 0);      // stayed on 0 (kit focus is a no-op)
+    REQUIRE (p.playFocus() == 2);      // the keyboard now plays the kit (per-pad)
+    REQUIRE (p.editFocus() == 0);      // panel stays editing the synth (edit the kit in the Kit Editor)
+}
+
+TEST_CASE ("edit-focus: playing a loaded kit triggers per-pad drums, not one pitched voice", "[plugin][editfocus][kit]")
+{
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    p.setPartKit (2, p.loadKit ("808 Basics"));   // pads on trigger notes 36..41
+    p.setEditFocus (2);                            // route the keyboard to the kit
+
+    auto rms = [&] (int trigNote, int blocks)
+    {
+        juce::AudioBuffer<float> buf (2, 128);
+        p.routeNoteOn (trigNote, 1.0f, 0);         // LIVE note -> play-focus (the kit)
+        double e = 0.0;
+        for (int b = 0; b < blocks; ++b) { buf.clear(); juce::MidiBuffer m; p.processBlock (buf, m); e += buf.getRMSLevel (0, 0, 128); }
+        p.routeNoteOff (trigNote, 0);
+        return e;
+    };
+    // Two different kit trigger notes both make sound (different pads), proving the kit is
+    // being played per-pad rather than a single pitched synth voice on the wrong part.
+    REQUIRE (rms (36, 12) > 0.0);      // kick pad
+    REQUIRE (rms (38, 12) > 0.0);      // snare pad
 }
 
 TEST_CASE ("edit-focus: switching parts while holding a note releases it (no stuck note)", "[plugin][editfocus]")

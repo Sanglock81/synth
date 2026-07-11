@@ -286,7 +286,7 @@ void VASynthProcessor::applyChordModifiers (std::uint32_t combined)
     // unchanged tones keep sounding. So holding a chord and tapping MIN->MAJ7 morphs it.
     if (chordEngine.isEnabled())
     {
-        const int part = editFocusPart.load (std::memory_order_relaxed);
+        const int part = playFocusPart.load (std::memory_order_relaxed);
         chordEngine.revoiceHeld ([this, part] (int n)          { engine.noteOff (n, part); },
                                  [this, part] (int n, float v) { engine.noteOn  (n, v, part); });
     }
@@ -428,9 +428,17 @@ void VASynthProcessor::applyPartSoundFromTree (const juce::ValueTree& tree)
 void VASynthProcessor::setEditFocus (int part)
 {
     if (part < 0 || part >= SynthEngine::maxParts) return;
+
+    // The LIVE keyboard always follows the tap (a kit part triggers its pads; a synth part
+    // plays its sound). The audio thread does the note hand-off when play-focus changes.
+    playFocusPart.store (part, std::memory_order_release);
+
+    // A KIT part has no single panel sound, so the panel/edit-focus stays on the current
+    // synth part (edit the kit in the Kit Editor).
+    if (isPartKit (part)) return;
+
     const int cur = editFocusPart.load (std::memory_order_relaxed);
     if (part == cur) return;
-    if (isPartKit (part)) return;                      // kit parts edit in the Kit Editor
 
     partEditState[(std::size_t) cur] = apvts.copyState();                    // remember cur's sound
     engine.setLockedPartParams (cur, snapshotParams(), snapshotFXParams(), lfosFrom (apvts));  // keep it playing
@@ -948,7 +956,7 @@ void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chord
     if (part >= 0 && part < SynthEngine::maxParts)
         partHits[(std::size_t) part].fetch_add (1, std::memory_order_relaxed);   // PARTS strip flicker
 
-    if (part == editFocusPart.load (std::memory_order_relaxed) && chordOn)   // chord = focused/live part
+    if (part == playFocusPart.load (std::memory_order_relaxed) && chordOn)   // chord = focused/live part
     {
         const int mod = modifierLearn.handleNoteOn (note);   // learned pad consumed
         if (mod >= 0)
@@ -973,7 +981,7 @@ void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chord
 
 void VASynthProcessor::dispatchNoteOff (int note, int part, bool chordOn)
 {
-    if (part == editFocusPart.load (std::memory_order_relaxed) && chordOn)   // chord = focused/live part
+    if (part == playFocusPart.load (std::memory_order_relaxed) && chordOn)   // chord = focused/live part
     {
         const int mod = modifierLearn.handleNoteOff (note);
         if (mod >= 0)
@@ -1230,18 +1238,19 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         { engine.allNotesOff(); chordEngine.reset(); midiModMask = 0; lastFedModMask = 0; }
 
     const auto params = snapshotParams();
-    const int focus = editFocusPart.load (std::memory_order_relaxed);   // LIVE/edited part (1.3)
+    const int editF = editFocusPart.load (std::memory_order_relaxed);   // panel + engine live-param slot
+    const int playF = playFocusPart.load (std::memory_order_relaxed);   // which part the LIVE keyboard plays
 
-    // Edit-focus hand-off: when the live part changes, release the notes still sounding on
-    // the part we left (else a held note's later note-off routes to the new part and the old
-    // voice sticks). Also drop the arp's held set + the chord ledger so nothing replays onto
-    // the new part; the momentary chord modifiers themselves stay held.
-    if (focus != prevFocus)
+    // Play-focus hand-off: when the LIVE keyboard moves to a different part, release the
+    // notes still sounding on the part we left (else a held note's later note-off routes to
+    // the new part and the old voice sticks). Also drop the arp's held set + the chord ledger
+    // so nothing replays onto the new part; the momentary chord modifiers stay held.
+    if (playF != prevPlayFocus)
     {
-        engine.releasePartNotes (prevFocus);
+        engine.releasePartNotes (prevPlayFocus);
         arp.reset();
         chordEngine.clearHeld();
-        prevFocus = focus;
+        prevPlayFocus = playF;
     }
 
     namespace ID = ParamID;
@@ -1306,13 +1315,13 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     // Routed surfaces (per-input MIDI / QWERTY-to-part) — drained at block start, so
     // they sound from sample 0 (block-granular; sample-accurate routing is future).
-    drainRoutedMidi (chordOn, focus);
+    drainRoutedMidi (chordOn, playF);
 
     // --- sample-accurate MIDI dispatch --------------------------------------
     // Multitimbral (Sub-phase 2): each part renders into its OWN buffer (in the engine)
     // so it can run its OWN FX chain; the sum happens once, below. Voices still render
     // per event segment to keep host MIDI note timing tight.
-    engine.beginMasterBlock (numSamples, params, snapshotFXParams(), live0Lfo, focus);
+    engine.beginMasterBlock (numSamples, params, snapshotFXParams(), live0Lfo, editF);
 
     if (arp.enabled())
     {
@@ -1322,8 +1331,8 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         for (const auto metadata : midi)
         {
             const auto msg = metadata.getMessage();
-            if      (msg.isNoteOn())  { looper.recordNote (focus, metadata.samplePosition, msg.getNoteNumber(), msg.getFloatVelocity(), true);  arp.noteOn (msg.getNoteNumber(), msg.getFloatVelocity()); }
-            else if (msg.isNoteOff()) { looper.recordNote (focus, metadata.samplePosition, msg.getNoteNumber(), 0.0f, false);                    arp.noteOff (msg.getNoteNumber()); }
+            if      (msg.isNoteOn())  { looper.recordNote (playF, metadata.samplePosition, msg.getNoteNumber(), msg.getFloatVelocity(), true);  arp.noteOn (msg.getNoteNumber(), msg.getFloatVelocity()); }
+            else if (msg.isNoteOff()) { looper.recordNote (playF, metadata.samplePosition, msg.getNoteNumber(), 0.0f, false);                    arp.noteOff (msg.getNoteNumber()); }
             else                      handleControlMessage (msg);
         }
 
@@ -1339,7 +1348,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             const auto& ev = arpEv[(std::size_t) i];
             const int off = juce::jlimit (0, numSamples, ev.offset);
             if (off > upTo) { engine.renderParts (upTo, off - upTo, params); upTo = off; }
-            if (ev.on) engine.noteOn (ev.note, ev.vel, focus); else engine.noteOff (ev.note, focus);
+            if (ev.on) engine.noteOn (ev.note, ev.vel, playF); else engine.noteOff (ev.note, playF);
         }
         if (upTo < numSamples) engine.renderParts (upTo, numSamples - upTo, params);
         arpStepDisp.store (arp.currentStep(), std::memory_order_relaxed);   // playhead for the UI
@@ -1361,13 +1370,13 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
             if (msg.isNoteOn())                                 // host / QWERTY -> LIVE part 0
             {
-                looper.recordNote (focus, pos, msg.getNoteNumber(), msg.getFloatVelocity(), true);
-                dispatchNoteOn (msg.getNoteNumber(), msg.getFloatVelocity(), focus, chordOn);
+                looper.recordNote (playF, pos, msg.getNoteNumber(), msg.getFloatVelocity(), true);
+                dispatchNoteOn (msg.getNoteNumber(), msg.getFloatVelocity(), playF, chordOn);
             }
             else if (msg.isNoteOff())
             {
-                looper.recordNote (focus, pos, msg.getNoteNumber(), 0.0f, false);
-                dispatchNoteOff (msg.getNoteNumber(), focus, chordOn);
+                looper.recordNote (playF, pos, msg.getNoteNumber(), 0.0f, false);
+                dispatchNoteOff (msg.getNoteNumber(), playF, chordOn);
             }
             else
                 handleControlMessage (msg);                     // CC / pitch-bend / all-off
