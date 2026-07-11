@@ -249,6 +249,14 @@ public:
             false,                 // appProperties owns the settings
             preferredOut));        // preferredDefaultDeviceName (Bug 1: just-works output)
 
+        // Add a MAXIMISE (full-screen) button to the window title bar, next to the
+        // minimise + close buttons. StandaloneFilterWindow ships with only minimise +
+        // close, so there was no title-bar way to fill the screen; the maximise button
+        // toggles full-screen (fills the display) via DocumentWindow.
+        mainWindow->setTitleBarButtonsRequired (
+            DocumentWindow::minimiseButton | DocumentWindow::maximiseButton | DocumentWindow::closeButton,
+            false);
+
         mainWindow->setVisible (true);
 
         // Holder + processor now exist; start logging device / MIDI state, and

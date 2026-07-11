@@ -342,9 +342,12 @@ public:
         g.setFont (juce::Font (juce::FontOptions (12.5f, juce::Font::bold)));
         g.drawFittedText (name, getLocalBounds().removeFromTop (16), juce::Justification::centred, 1);
 
-        g.setColour (VASynthLookAndFeel::accent());
-        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold)));
-        g.drawFittedText (text, getLocalBounds().removeFromBottom (15), juce::Justification::centred, 1);
+        if (showValue)
+        {
+            g.setColour (VASynthLookAndFeel::accent());
+            g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold)));
+            g.drawFittedText (text, getLocalBounds().removeFromBottom (15), juce::Justification::centred, 1);
+        }
 
         paintLearnDecorations (g);
     }
@@ -354,7 +357,7 @@ public:
         if (sideLabel)
             slider.setBounds (getLocalBounds().removeFromLeft (getHeight()));
         else
-            slider.setBounds (getLocalBounds().withTrimmedTop (17).withTrimmedBottom (16));
+            slider.setBounds (getLocalBounds().withTrimmedTop (17).withTrimmedBottom (showValue ? 16 : 2));
     }
 
     // Update the displayed name (e.g. a macro showing its assigned target).
@@ -364,9 +367,13 @@ public:
     // fewer px = more responsive). Default is kDragPixelsForFullRange for all controls.
     void setDragPixels (int px) { slider.setMouseDragSensitivity (juce::jmax (1, px)); }
 
+    // Hide the numeric value readout (macros — keeps the top bar compact).
+    void setShowValue (bool b) { if (b != showValue) { showValue = b; resized(); repaint(); } }
+
 private:
     juce::String name;
     bool sideLabel = false;
+    bool showValue = true;
     juce::Slider slider;
     juce::RangedAudioParameter* param = nullptr;
     std::unique_ptr<juce::SliderParameterAttachment> attachment;

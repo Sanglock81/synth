@@ -122,7 +122,7 @@ public:
         auto area = getLocalBounds().reduced (6);
         const int gap = 5;
 
-        topBar->setBounds (area.removeFromTop (104)); area.removeFromTop (gap);
+        topBar->setBounds (area.removeFromTop (86)); area.removeFromTop (gap);
 
         if (bottomZones != nullptr)
         {
