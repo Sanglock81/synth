@@ -2,15 +2,15 @@
   "name": "Novation Launchkey Mini",
   "match": ["Launchkey Mini", "Launchkey Mini MK3", "LKMK3 Mini"],
   "pitchBendRange": 2,
-  "notes": "Default: the 8 rotary pots send CC 21-28. Pads/transport are not mapped here (they send notes/other CCs). Learn any control to override.",
+  "notes": "Default: the 8 rotary pots (CC 21-28) drive the 8 MACRO knobs (macro1-8); assign each macro to a destination in the app (or hit RANDOM). Pads/transport send notes/other CCs. Learn any control to override.",
   "mappings": [
-    { "cc": 21, "param": "filter_cutoff" },
-    { "cc": 22, "param": "filter_reso" },
-    { "cc": 23, "param": "filter_env_amt" },
-    { "cc": 24, "param": "amp_release" },
-    { "cc": 25, "param": "lfo_rate" },
-    { "cc": 26, "param": "lfo_depth" },
-    { "cc": 27, "param": "reverb_mix" },
-    { "cc": 28, "param": "delay_mix" }
+    { "cc": 21, "param": "macro1" },
+    { "cc": 22, "param": "macro2" },
+    { "cc": 23, "param": "macro3" },
+    { "cc": 24, "param": "macro4" },
+    { "cc": 25, "param": "macro5" },
+    { "cc": 26, "param": "macro6" },
+    { "cc": 27, "param": "macro7" },
+    { "cc": 28, "param": "macro8" }
   ]
 }

@@ -73,8 +73,15 @@ public:
             ID::chordEnabled,   // chord engine config (performance, not sound design)
             ID::chordRoot,
             ID::chordScale,
-            ID::oscMix          // frozen legacy crossfade (engine ignores it)
+            ID::oscMix,         // frozen legacy crossfade (engine ignores it)
+            // Rhythm section (R3): the arp / sequencer / looper + shared tempo are
+            // PERFORMANCE state, not sound design — Random must leave them alone.
+            ID::tempo,
+            ID::arpOn, ID::arpMode, ID::arpOctaves, ID::arpGate, ID::arpSwing, ID::arpLatch, ID::arpHold,
+            ID::loopRec, ID::loopPlay, ID::loopBars
         };
+        // The arp 16-step PATTERN is a state-tree property (not an APVTS parameter), so
+        // randomize()'s getParameters() loop never reaches it — the pattern is safe too.
         // Not APVTS parameters, so getParameters() below never reaches them — but
         // recorded here so the exclusion policy is complete: oscillator QUALITY
         // mode (compile-time), the FX chain ORDER (state-tree property), MIDI-learn

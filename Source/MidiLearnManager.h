@@ -52,17 +52,18 @@ public:
         for (auto& a : ccToParam) a.store (-1, std::memory_order_relaxed);
         for (auto& a : ccSource)  a.store ((int) Source::None, std::memory_order_relaxed);
 
-        // Built-in factory map (Launchkey Mini pots 21-28). This is the baseline
-        // for plugin/DAW use where there's no device hot-plug; the standalone app
-        // layers the matched device profile on top. Learn / user profiles override.
-        setDefault (21, "filter_cutoff");
-        setDefault (22, "filter_reso");
-        setDefault (23, "filter_env_amt");
-        setDefault (24, "amp_release");
-        setDefault (25, "lfo_rate");
-        setDefault (26, "lfo_depth");
-        setDefault (27, "reverb_mix");
-        setDefault (28, "delay_mix");
+        // Built-in factory map (Launchkey Mini pots 21-28). The 8 pots drive the 8
+        // MACRO knobs (macro1-8); assign each macro to a destination in the app (or hit
+        // RANDOM). Baseline for plugin/DAW use where there's no device hot-plug; the
+        // standalone app layers the matched device profile on top. Learn/user override.
+        setDefault (21, "macro1");
+        setDefault (22, "macro2");
+        setDefault (23, "macro3");
+        setDefault (24, "macro4");
+        setDefault (25, "macro5");
+        setDefault (26, "macro6");
+        setDefault (27, "macro7");
+        setDefault (28, "macro8");
     }
 
     // ---- message thread -----------------------------------------------------

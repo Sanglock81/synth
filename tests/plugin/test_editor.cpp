@@ -84,8 +84,8 @@ TEST_CASE ("MIDI-learn badge query reflects a learned CC", "[plugin][editor][mid
     p.prepareToPlay (48000.0, 64);
     auto& learn = p.getMidiLearn();
 
-    // Default Launchkey map -> CC21 is filter_cutoff (badge should show it).
-    REQUIRE (learn.getCCForParam ("filter_cutoff") == 21);
+    // Default Launchkey map -> CC21 is macro1 (badge should show it).
+    REQUIRE (learn.getCCForParam ("macro1") == 21);
 
     // Arm + bind a new CC, then the badge query reflects it.
     learn.armLearn ("osc_mix");

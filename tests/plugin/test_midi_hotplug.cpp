@@ -55,7 +55,7 @@ TEST_CASE ("applyDeviceProfile on a factory device keeps its default map", "[plu
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
     p.applyDeviceProfile ("Novation Launchkey Mini MK3");
-    REQUIRE (p.getMidiLearn().getCCForParam ("filter_cutoff") == 21);   // factory 21 -> cutoff
+    REQUIRE (p.getMidiLearn().getCCForParam ("macro1") == 21);          // factory 21 -> macro1
 }
 
 TEST_CASE ("a no-CC-map profile still passes notes through (Korg B2)", "[plugin][6c][hotplug][bug2]")

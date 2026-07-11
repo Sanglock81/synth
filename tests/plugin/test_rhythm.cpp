@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include "PluginProcessor.h"
+#include "PresetManager.h"
 
 namespace
 {
@@ -82,4 +83,32 @@ TEST_CASE ("looper off leaves the dispatch path bit-identical (goldens safe)", "
     REQUIRE (p.apvts.getRawParameterValue (ParamID::loopRec)->load() < 0.5f);
     REQUIRE (p.apvts.getRawParameterValue (ParamID::loopPlay)->load() < 0.5f);
     REQUIRE_FALSE (p.loopLaneHasContent (0));
+}
+
+TEST_CASE ("Random leaves arp / sequencer / looper / tempo untouched", "[plugin][rhythm][random]")
+{
+    VASynthProcessor p;
+    PresetManager pm (p.apvts);
+
+    // Set the rhythm section to distinctive NON-default values.
+    auto set01 = [&] (const char* id, float v) { p.apvts.getParameter (id)->setValueNotifyingHost (v); };
+    const char* rhythmIds[] { ParamID::tempo, ParamID::arpOn, ParamID::arpMode, ParamID::arpOctaves,
+                              ParamID::arpGate, ParamID::arpSwing, ParamID::arpLatch, ParamID::arpHold,
+                              ParamID::loopRec, ParamID::loopPlay, ParamID::loopBars };
+    for (auto* id : rhythmIds) set01 (id, 0.42f);
+    p.setArpStep (3, 0.15f);                            // and a distinctive step-pattern value
+
+    std::vector<float> before;
+    for (auto* id : rhythmIds) before.push_back (p.apvts.getRawParameterValue (id)->load());
+    const float cutoffBefore = p.apvts.getRawParameterValue (ParamID::filterCutoff)->load();
+
+    juce::Random rng (12345);
+    pm.randomize (rng);
+
+    // Every rhythm param is unchanged...
+    for (size_t i = 0; i < before.size(); ++i)
+        REQUIRE (p.apvts.getRawParameterValue (rhythmIds[i])->load() == Catch::Approx (before[i]).margin (1e-6));
+    REQUIRE (p.getArpStep (3) == Catch::Approx (0.15f).margin (1e-4));   // pattern untouched
+    // ...while a sound-design param DID move (proves randomize actually ran).
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::filterCutoff)->load() != Catch::Approx (cutoffBefore));
 }

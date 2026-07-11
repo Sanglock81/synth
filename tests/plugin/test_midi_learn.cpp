@@ -33,12 +33,12 @@ TEST_CASE ("mapped CC (Launchkey default) moves its target parameter", "[plugin]
     VASynthProcessor p;
     p.prepareToPlay (48000.0, 64);
 
-    // CC 21 is the default map for filter_cutoff.
+    // CC 21 is the default map for macro1 (the Launchkey pots drive the 8 macros).
     sendCC (p, 21, 127);
-    REQUIRE (paramValue (p, "filter_cutoff") == Catch::Approx (1.0f).margin (1e-3));
+    REQUIRE (paramValue (p, "macro1") == Catch::Approx (1.0f).margin (1e-3));
 
     sendCC (p, 21, 0);
-    REQUIRE (paramValue (p, "filter_cutoff") == Catch::Approx (0.0f).margin (1e-3));
+    REQUIRE (paramValue (p, "macro1") == Catch::Approx (0.0f).margin (1e-3));
 }
 
 TEST_CASE ("learn mode binds a new CC to a parameter", "[plugin][midilearn]")
@@ -84,8 +84,8 @@ TEST_CASE ("profile mapping precedence: learned > user > factory", "[plugin][6c]
     auto& learn = p.getMidiLearn();
     using S = MidiLearnManager::Source;
 
-    // CC 21 starts as a factory default (filter_cutoff).
-    REQUIRE (learn.getCCForParam ("filter_cutoff") == 21);
+    // CC 21 starts as a factory default (macro1).
+    REQUIRE (learn.getCCForParam ("macro1") == 21);
     REQUIRE (learn.getSource (21) == S::Factory);
 
     // A user profile overrides factory on the same CC.

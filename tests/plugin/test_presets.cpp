@@ -53,6 +53,19 @@ TEST_CASE ("randomize never touches the performance/global exclusion list", "[pl
         { ParamID::chordRoot,   0.5f  },
         { ParamID::chordScale,  1.0f  },
         { ParamID::oscMix,      0.9f  },
+        // Rhythm section (R3): arp / sequencer / looper + shared tempo are performance
+        // state Random must never touch.
+        { ParamID::tempo,       0.42f },
+        { ParamID::arpOn,       1.0f  },
+        { ParamID::arpMode,     0.5f  },
+        { ParamID::arpOctaves,  0.66f },
+        { ParamID::arpGate,     0.4f  },
+        { ParamID::arpSwing,    0.3f  },
+        { ParamID::arpLatch,    1.0f  },
+        { ParamID::arpHold,     1.0f  },
+        { ParamID::loopRec,     1.0f  },
+        { ParamID::loopPlay,    1.0f  },
+        { ParamID::loopBars,    0.5f  },
     };
     for (auto& kv : pinned) p.apvts.getParameter (kv.id)->setValueNotifyingHost (kv.norm);
     std::vector<float> want;
@@ -64,7 +77,7 @@ TEST_CASE ("randomize never touches the performance/global exclusion list", "[pl
     for (size_t i = 0; i < pinned.size(); ++i)
         REQUIRE (p.apvts.getParameter (pinned[i].id)->getValue() == Catch::Approx (want[i]).margin (1e-6));
 
-    // Sanity: the policy list is exactly these six (a single visible source).
+    // Sanity: the policy list is exactly this pinned set (a single visible source).
     REQUIRE (PresetManager::randomizeExclusions().size() == (int) pinned.size());
     for (auto& kv : pinned)
         REQUIRE (PresetManager::randomizeExclusions().contains (kv.id));
