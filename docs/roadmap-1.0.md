@@ -85,10 +85,24 @@ Widgets gained `HSelector`, `ShapeSelector`, `RotaryKnob` side-label. 8 macro pa
     sanitizers (ASan/LSan/UBSan + soak) ALL PASSED; editor invariants (no focusable
     descendant, state round-trip, open/close storm) green. Bench unchanged (GUI phase; DSP
     engine untouched) — 4-part worst case ~83% p99 ThinkPad budget, still **provisional**.
-  - **Follow-ups flagged for the user:** (1) macros are unrouted until R3; (2) per-part PAN
-    + MIDI-learnable mixer level lost the dedicated MIX section — still in state/MULTI/
-    automation, needs a home (part-detail popup, or pan in the rail); (3) osc FINE->LEVEL +
-    small ON kill; filter DRIVE (R3) dropped for VEL>CUT; WT wave + RHYTHM/LOOPER engines R3.
+  - **Follow-ups flagged for the user:** (3) osc FINE->LEVEL + small ON kill; filter DRIVE
+    (R3) dropped for VEL>CUT; WT wave + RHYTHM/LOOPER engines R3.
+
+**R2 refinement pass (2026-07-10, gated) — user review of the built layout.**
+  - **Master parametric EQ** at the end of the chain (post-FX sum / pre master gain):
+    `DSP/ParametricEQ.h` (JUCE-free 4-band biquad — low shelf, 2 bells, high shelf) +
+    `UI/EQPanel.h` (response curve + band knobs) under a shortened scope/FFT. Default
+    off/flat = bit-identical bypass. `test_eq` + a plugin bypass-default test.
+  - **Macros now routable + Random-assigned** (closes follow-up 1): Random assigns 1-4
+    macros (100/50/25/10%) each to a DISTINCT routable param + randomizes values; map
+    persists in state (`macro_map`); a macro knob drives its target on the message thread
+    and shows the target's name. `test_macros`. (Full mod-matrix still R3.)
+  - **Per-part LEVEL + PAN knobs** (MIDI-learnable) in the widened Parts cells — closes
+    follow-up 2 (the mixer's on-panel home; the old MIX section stays retired).
+  - Scope amplitude +40%; bigger SAVE/RANDOM; **fullscreen (FS) button**; taller CHORD bar;
+    RHYTHM+LOOPER rebuilt as filled `preview - R3` panels (visual only until their engines).
+  - **Gates:** dsp 88 / plugin 116; Release 205/205 incl. pluginval s8; sanitizers ALL
+    PASSED; clean bench worst case ~49% p99 ThinkPad budget (EQ-off bypass adds nothing).
 
 ## Static/pops regression (engine-first, telemetry = discontinuity not CPU)
 - **Fixed — silent-part FX skip resume (required):** FX chain state reset once on skip-entry
