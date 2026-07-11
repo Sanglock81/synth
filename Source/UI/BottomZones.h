@@ -3,15 +3,17 @@
 #include "VASynthLookAndFeel.h"
 #include "PanelChrome.h"
 #include "Widgets.h"
+#include "SeqPanel.h"
 #include "../PluginProcessor.h"
 #include "../DSP/ChordEngine.h"
 
 // ============================================================================
-// Bottom workstation: a horizontal CHORD bar (enable / root / scale + the seven
-// momentary, MIDI-learnable modifier chips) and two collapsible zones — RHYTHM
-// (arp + sequencer) and LOOPER (per-part MIDI loops + export). The rhythm/looper
-// ENGINES arrive in R3; here they are collapsed-by-default placeholders that
-// expand to preview their planned home. Refuses keyboard focus.
+// Bottom workstation (R3 Group 2 layout): a horizontal CHORD bar (enable / root /
+// scale + the seven momentary, MIDI-learnable modifier chips), a compact ARP bar
+// (toggle / mode / OCT-GATE-SWING-TEMPO / HOLD, sharing the one transport clock),
+// and, below, the 8-row step SEQUENCER (left) beside the per-part LOOPER (right).
+// The arp and sequencer are decoupled: the arp reorders held notes; the sequencer
+// runs its own drum grid into a selectable part. Refuses keyboard focus.
 // ============================================================================
 
 // ---- horizontal chord bar --------------------------------------------------
@@ -117,12 +119,15 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChordBar)
 };
 
-// ---- RHYTHM: functional arpeggiator + editable 16-step sequencer ------------
-class RhythmPanel : public juce::Component,
-                    private juce::Timer
+// ---- ARP: compact arpeggiator bar (decoupled from the step sequencer) -------
+// One row of controls; no step grid (the arp reorders held notes, it doesn't paint a
+// pattern). HOLD is the single latch source (LATCH was merged into HOLD in Group 2).
+// OCT/GATE/SWING/TEMPO drive the shared transport clock the sequencer also rides.
+class ArpBar : public juce::Component,
+               private juce::Timer
 {
 public:
-    explicit RhythmPanel (VASynthProcessor& p) : proc (p)
+    explicit ArpBar (VASynthProcessor& p) : proc (p)
     {
         setWantsKeyboardFocus (false);
         arpOn = std::make_unique<PowerToggle> (p.apvts, ParamID::arpOn, "ARP");
@@ -132,78 +137,51 @@ public:
         gate  = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpGate,    "GATE",  p.getMidiLearn());
         swing = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpSwing,   "SWING", p.getMidiLearn());
         tempo = std::make_unique<RotaryKnob> (p.apvts, ParamID::tempo,      "TEMPO", p.getMidiLearn());
-        latch = std::make_unique<PowerToggle> (p.apvts, ParamID::arpLatch, "LATCH");
         hold  = std::make_unique<PowerToggle> (p.apvts, ParamID::arpHold,  "HOLD");
         addAndMakeVisible (*arpOn); addAndMakeVisible (*mode);
         addAndMakeVisible (*oct);   addAndMakeVisible (*gate);
         addAndMakeVisible (*swing); addAndMakeVisible (*tempo);
-        addAndMakeVisible (*latch); addAndMakeVisible (*hold);
-        startTimerHz (20);   // playhead + reflect external step changes
+        addAndMakeVisible (*hold);
+        startTimerHz (12);   // pulse the beat dot with the transport
     }
 
     void paint (juce::Graphics& g) override
     {
         const auto tRhy = juce::Colour (0xffe0b13a);
-        chrome::section (g, getLocalBounds(), "Rhythm  -  arp + sequencer", tRhy);
-
-        const int play = proc.arpDisplayStep();
-        const int cells = VASynthProcessor::kArpSteps;
-        const int cw = juce::jmax (1, gridArea.getWidth() / cells);
-        for (int s = 0; s < cells; ++s)
+        chrome::section (g, getLocalBounds(), "Arpeggiator", tRhy);
+        // a small beat indicator that blinks on the downbeat of the shared clock
+        const int step = proc.arpDisplayStep();
+        auto dot = beatDot.toFloat();
+        if (! dot.isEmpty())
         {
-            auto cell = juce::Rectangle<int> (gridArea.getX() + s * cw, gridArea.getY(), cw, gridArea.getHeight()).reduced (2);
-            g.setColour (VASynthLookAndFeel::track());
-            g.fillRoundedRectangle (cell.toFloat(), 3.0f);
-            const float v = proc.getArpStep (s);
-            if (v > 0.001f)
-            {
-                auto bar = cell.removeFromBottom (juce::roundToInt (cell.getHeight() * v));
-                g.setColour ((s == play) ? tRhy.brighter (0.3f) : tRhy);
-                g.fillRoundedRectangle (bar.toFloat(), 3.0f);
-            }
-            if (s == play) { g.setColour (VASynthLookAndFeel::ink().withAlpha (0.85f)); g.drawRoundedRectangle (cell.toFloat(), 3.0f, 1.5f); }
+            const bool on = proc.apvts.getRawParameterValue (ParamID::arpOn)->load() > 0.5f && (step % 4 == 0);
+            g.setColour (on ? tRhy.brighter (0.3f) : VASynthLookAndFeel::track());
+            g.fillEllipse (dot);
         }
     }
 
     void resized() override
     {
         auto c = chrome::sectionContent (getLocalBounds());
-        auto row = c.removeFromTop (juce::jmin (66, c.getHeight() / 2)); c.removeFromTop (6);
-        arpOn->setBounds (row.removeFromLeft (58).reduced (2, 6)); row.removeFromLeft (6);
-        mode->setBounds  (row.removeFromLeft (juce::jmin (230, row.getWidth() / 2)).reduced (0, 8)); row.removeFromLeft (8);
+        auto row = c;
+        arpOn->setBounds (row.removeFromLeft (58).reduced (2, 6)); row.removeFromLeft (8);
+        mode->setBounds  (row.removeFromLeft (juce::jmin (230, row.getWidth() / 2)).reduced (0, 8)); row.removeFromLeft (16);
+        hold->setBounds  (row.removeFromRight (62).reduced (2, 6)); row.removeFromRight (8);
+        beatDot = row.removeFromRight (16).withSizeKeepingCentre (10, 10); row.removeFromRight (8);
         for (RotaryKnob* k : { oct.get(), gate.get(), swing.get(), tempo.get() })
-            k->setBounds (row.removeFromLeft (juce::jmin (58, row.getWidth() / 4)));
-        row.removeFromLeft (6);
-        latch->setBounds (row.removeFromLeft (60).reduced (2, 6));
-        hold->setBounds  (row.removeFromLeft (60).reduced (2, 6));
-        gridArea = c;
+            { k->setBounds (row.removeFromLeft (juce::jmin (78, row.getWidth() / 4))); row.removeFromLeft (4); }
     }
-
-    void mouseDown (const juce::MouseEvent& e) override { paintStep (e); }
-    void mouseDrag (const juce::MouseEvent& e) override { paintStep (e); }
 
 private:
-    void paintStep (const juce::MouseEvent& e)
-    {
-        if (! gridArea.contains (e.getPosition())) return;
-        const int cells = VASynthProcessor::kArpSteps;
-        const int cw = juce::jmax (1, gridArea.getWidth() / cells);
-        const int s = juce::jlimit (0, cells - 1, (e.getPosition().x - gridArea.getX()) / cw);
-        float v = 1.0f - (float) (e.getPosition().y - gridArea.getY()) / juce::jmax (1, gridArea.getHeight());
-        v = juce::jlimit (0.0f, 1.0f, v);
-        if (v < 0.06f) v = 0.0f;                 // snap the bottom to a rest
-        proc.setArpStep (s, v);
-        repaint();
-    }
     void timerCallback() override { repaint(); }
 
     VASynthProcessor& proc;
-    std::unique_ptr<PowerToggle> arpOn, latch, hold;
+    std::unique_ptr<PowerToggle> arpOn, hold;
     std::unique_ptr<HSelector> mode;
     std::unique_ptr<RotaryKnob> oct, gate, swing, tempo;
-    juce::Rectangle<int> gridArea;
+    juce::Rectangle<int> beatDot;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RhythmPanel)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ArpBar)
 };
 
 // ---- LOOPER: functional per-part MIDI looper + MIDI export ------------------
@@ -309,30 +287,34 @@ private:
 class BottomZones : public juce::Component
 {
 public:
-    explicit BottomZones (VASynthProcessor& p) : chord (p), rhythm (p), looper (p)
+    explicit BottomZones (VASynthProcessor& p) : chord (p), arp (p), seq (p), looper (p)
     {
         setWantsKeyboardFocus (false);
         addAndMakeVisible (chord);
-        addAndMakeVisible (rhythm);
+        addAndMakeVisible (arp);
+        addAndMakeVisible (seq);
         addAndMakeVisible (looper);
     }
 
-    // Editor calls this to size the bottom band (fixed: chord bar + workstation).
-    int preferredHeight() const { return kChordH + gap + kWorkH; }
+    // Editor calls this to size the bottom band: chord bar + arp bar + [seq | looper].
+    int preferredHeight() const { return kChordH + gap + kArpH + gap + kGridH; }
     std::function<void()> onResizeNeeded;   // kept for API compatibility (unused now)
 
     void resized() override
     {
         auto r = getLocalBounds();
         chord.setBounds (r.removeFromTop (kChordH)); r.removeFromTop (gap);
-        rhythm.setBounds (r.removeFromLeft (r.getWidth() * 55 / 100)); r.removeFromLeft (gap);
+        arp.setBounds   (r.removeFromTop (kArpH));   r.removeFromTop (gap);
+        // 8-row sequencer needs the width; the looper takes the remainder on the right.
+        seq.setBounds   (r.removeFromLeft (r.getWidth() * 58 / 100)); r.removeFromLeft (gap);
         looper.setBounds (r);
     }
 
 private:
-    static constexpr int kChordH = 64, kWorkH = 214, gap = 5;
+    static constexpr int kChordH = 60, kArpH = 60, kGridH = 196, gap = 5;
     ChordBar chord;
-    RhythmPanel rhythm;
+    ArpBar arp;
+    SeqPanel seq;
     LooperPanel looper;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BottomZones)
