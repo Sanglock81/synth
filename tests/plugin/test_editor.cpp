@@ -24,6 +24,33 @@ namespace
         }
         return false;
     }
+
+    // Collect the parameter IDs of every APVTS-bound (learnable) control in the tree.
+    void collectParamIds (juce::Component& c, juce::StringArray& out)
+    {
+        for (auto* ch : c.getChildren())
+        {
+            if (auto* lc = dynamic_cast<LearnableComponent*> (ch)) out.addIfNotAlreadyThere (lc->parameterID());
+            collectParamIds (*ch, out);
+        }
+    }
+}
+
+TEST_CASE ("editor surfaces the voice controls + key params (drop regression)", "[plugin][editor][regression]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+
+    juce::StringArray ids;
+    collectParamIds (*ed, ids);
+
+    // poly/mono/legato + glide were dropped in the R2 rebuild — guard against re-dropping
+    // these (and a few other must-haves) when the layout changes again.
+    for (auto* id : { "poly_mode", "glide_time", "master_gain", "filter_cutoff",
+                      "arp_mode", "loop_bars", "macro1" })
+        { INFO ("missing control for " << id); REQUIRE (ids.contains (id)); }
 }
 
 TEST_CASE ("no editor descendant wants keyboard focus (QWERTY never starved)", "[plugin][editor][focus]")

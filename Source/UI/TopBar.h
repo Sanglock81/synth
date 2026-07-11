@@ -82,6 +82,12 @@ public:
         master = std::make_unique<RotaryKnob> (proc.apvts, ParamID::masterGain, "MASTER", proc.getMidiLearn());
         addAndMakeVisible (*master);
 
+        // Voice controls (ex-Global): poly/mono/legato + glide.
+        mode  = std::make_unique<HSelector> (proc.apvts, ParamID::polyMode, proc.getMidiLearn(),
+                                             juce::StringArray { "POLY", "MONO", "LEG" });
+        glide = std::make_unique<RotaryKnob> (proc.apvts, ParamID::glideTime, "GLIDE", proc.getMidiLearn());
+        addAndMakeVisible (*mode); addAndMakeVisible (*glide);
+
         refreshMacroLabels();
         startTimerHz (4);   // CPU readout + macro-label resync (map may change on preset load)
     }
@@ -113,8 +119,12 @@ public:
         master->setBounds (tb.removeFromRight (92)); tb.removeFromRight (4);
         rec.setBounds (tb.removeFromRight (54).reduced (0, 16)); tb.removeFromRight (10);
 
+        // Voice group (poly/mono/legato + glide), just right of the preset area.
+        mode->setBounds (tb.removeFromLeft (128).withSizeKeepingCentre (128, 30)); tb.removeFromLeft (6);
+        glide->setBounds (tb.removeFromLeft (56)); tb.removeFromLeft (12);
+
         // 8 macro knobs, packed together (fixed width) and centred in the free span
-        // between the preset area and the right cluster.
+        // between the voice group and the right cluster.
         const int mw = juce::jmin (86, tb.getWidth() / 8);
         const int pack = mw * 8;
         tb.removeFromLeft (juce::jmax (0, (tb.getWidth() - pack) / 2));   // centre the group
@@ -218,7 +228,8 @@ private:
     juce::TextButton presetBtn, save, random, rec, full, help;
     juce::OwnedArray<RotaryKnob> macros;
     juce::OwnedArray<juce::ParameterAttachment> macroAtt;
-    std::unique_ptr<RotaryKnob> master;
+    std::unique_ptr<RotaryKnob> master, glide;
+    std::unique_ptr<HSelector> mode;
     juce::Rectangle<int> statusArea;
     juce::String statusLine { "CPU 0%" }, currentName { "Init" };
 
