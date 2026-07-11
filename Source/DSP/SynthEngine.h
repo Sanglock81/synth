@@ -168,6 +168,16 @@ public:
         for (auto& e : kitLedger) { e.part = -1; e.trigger = -1; e.num = 0; }
     }
 
+    // Release every voice sounding on `part` (1.3: clean hand-off when the edit focus /
+    // live part changes, so a note played on the old part can't get stranded when its
+    // note-off later routes to the new part). Voices fade via their release envelope.
+    void releasePartNotes (int part)
+    {
+        for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i)
+            if (voices[i].isActive() && voices[i].getPart() == part) { voices[i].noteOff(); sustained[i] = false; }
+        for (auto& e : kitLedger) if (e.part == part) { e.part = -1; e.trigger = -1; e.num = 0; }
+    }
+
     // ---- performance controllers (from any device) -------------------------
     void setPitchBend (float semitones) { pitchBendSemis = semitones; }
     void setModWheel   (float amount01) { modWheel = amount01; }        // -> vibrato depth

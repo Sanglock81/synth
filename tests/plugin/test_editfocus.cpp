@@ -98,6 +98,27 @@ TEST_CASE ("edit-focus: a kit part is not a focus target (edit it in the Kit Edi
     REQUIRE (p.editFocus() == 0);      // stayed on 0 (kit focus is a no-op)
 }
 
+TEST_CASE ("edit-focus: switching parts while holding a note releases it (no stuck note)", "[plugin][editfocus]")
+{
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    set01 (p, ParamID::ampRelease, 0.0f);      // fast release so a freed note decays quickly
+
+    auto energy = [&] (int blocks)
+    {
+        juce::AudioBuffer<float> buf (2, 128); juce::MidiBuffer m; double e = 0.0;
+        for (int b = 0; b < blocks; ++b) { buf.clear(); p.processBlock (buf, m); e += buf.getRMSLevel (0, 0, 128); }
+        return e;
+    };
+
+    p.routeNoteOn (60, 0.9f, 0);               // play a held note on part 0 (focus 0)
+    REQUIRE (energy (8) > 0.0);                // it's sounding
+
+    p.setEditFocus (1);                        // switch parts WITHOUT releasing the key
+    energy (4);                                // let the hand-off release it
+    REQUIRE (energy (40) < 1.0e-3);            // the held note was released, not stuck
+}
+
 TEST_CASE ("torture: rapid edit-focus swaps while playing stay click-free", "[plugin][click][editfocus]")
 {
     VASynthProcessor p;

@@ -507,6 +507,7 @@ private:
     std::array<ArpEvent, 512> arpEv { };
     int arpEvCount = 0;
     bool arpWasOn = false;
+    int  prevFocus = 0;                    // audio-thread mirror of the focus, for hand-off
     std::atomic<int> arpStepDisp { -1 };   // audio -> UI: current arp step (playhead)
 
     // Looper (audio thread). Playback dispatches at block start; recording captures the

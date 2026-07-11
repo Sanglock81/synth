@@ -147,15 +147,35 @@ private:
     }
     void showCellMenu (int i)
     {
+        // Switch this part between a SYNTH PATCH (edited on the panel via focus) and a
+        // DRUM KIT (per-pad, edited in the Kit Editor).
+        juce::StringArray patchNames { "Init" };
+        for (auto& fp : proc.factoryPresetLibrary().all()) patchNames.add (fp.name);
+        const auto kitNames = proc.getKitNames();
+
+        juce::PopupMenu patches;
+        for (int k = 0; k < patchNames.size(); ++k) patches.addItem (1000 + k, patchNames[k]);
+        juce::PopupMenu kits;
+        for (int k = 0; k < kitNames.size(); ++k) kits.addItem (2000 + k, kitNames[k]);
+
         juce::PopupMenu m;
-        m.addItem (1, "Assign preset / kit (Kit Editor)");
+        m.addSubMenu ("Load synth patch", patches);
+        m.addSubMenu ("Load drum kit", kits);
+        m.addItem (3, "Drum kit editor...");
         if (proc.partIsEdited (i) && proc.getPartPreset (i).isNotEmpty())
-            m.addItem (2, "Revert to preset (" + proc.getPartPreset (i) + ")");
+            m.addItem (4, "Revert to preset (" + proc.getPartPreset (i) + ")");
+
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
-            [this, i] (int r)
+            [this, i, patchNames, kitNames] (int r)
             {
-                if (r == 1) KitEditor::show (proc, getTopLevelComponent(), i, [this] { if (restoreFocus) restoreFocus(); });
-                else if (r == 2) { proc.revertPartToPreset (i); repaint(); if (restoreFocus) restoreFocus(); }
+                if (r >= 1000 && r < 1000 + patchNames.size())
+                { proc.setPartPreset (i, patchNames[r - 1000]); proc.setEditFocus (i); }   // synth patch + focus
+                else if (r >= 2000 && r < 2000 + kitNames.size())
+                    proc.setPartKit (i, proc.loadKit (kitNames[r - 2000]));                 // drum kit
+                else if (r == 3)
+                    KitEditor::show (proc, getTopLevelComponent(), i, [this] { if (restoreFocus) restoreFocus(); });
+                else if (r == 4) proc.revertPartToPreset (i);
+                repaint(); if (restoreFocus) restoreFocus();
             });
     }
 

@@ -1232,6 +1232,18 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     const auto params = snapshotParams();
     const int focus = editFocusPart.load (std::memory_order_relaxed);   // LIVE/edited part (1.3)
 
+    // Edit-focus hand-off: when the live part changes, release the notes still sounding on
+    // the part we left (else a held note's later note-off routes to the new part and the old
+    // voice sticks). Also drop the arp's held set + the chord ledger so nothing replays onto
+    // the new part; the momentary chord modifiers themselves stay held.
+    if (focus != prevFocus)
+    {
+        engine.releasePartNotes (prevFocus);
+        arp.reset();
+        chordEngine.clearHeld();
+        prevFocus = focus;
+    }
+
     namespace ID = ParamID;
     const float master   = rp (apvts, ID::masterGain);
 

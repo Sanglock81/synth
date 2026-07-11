@@ -145,6 +145,11 @@ public:
         e.active = false; e.count = 0;
     }
 
+    // Forget held chords WITHOUT touching the momentary forcer stack (1.3: on an edit-focus
+    // hand-off the caller releases the old part's voices; drop the ledger so a later note-off
+    // doesn't replay tones onto the new part, but keep any still-held modifier keys).
+    void clearHeld() { for (auto& e : ledger) { e.active = false; e.count = 0; } }
+
     // Forget all held chords (e.g. on disable/panic). The caller is expected to
     // have released voices separately (allNotesOff).
     void reset()
