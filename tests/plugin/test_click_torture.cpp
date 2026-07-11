@@ -106,7 +106,7 @@ TEST_CASE ("torture: single-note arp, instant release, retrigger every step", "[
     REQUIRE (pm.s.maxJump < kClick);
 }
 
-TEST_CASE ("torture: arp with reverb — rhythmic gaps don't pop the FX", "[plugin][click][arp][fx]")
+TEST_CASE ("torture: arp with reverb - rhythmic gaps don't pop the FX", "[plugin][click][arp][fx]")
 {
     juce::ScopedJuceInitialiser_GUI init;
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
