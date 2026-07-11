@@ -28,7 +28,7 @@ the user.
 | **R1 — clear the debts** | DONE — mixer + push; **CI green on Linux + Windows** (build-test). sanitize.yml is nightly; `--sanitize` verified locally (190/190) |
 | Static/pops regression hunt | two engine defects fixed (skip-resume FX clear, mixer zipper); exact static NOT reproduced offline — **user ear-confirm pending** |
 | R2 — GUI overhaul (+ help overlay) | touch reliability done (hardware-confirmed); layout mockup signed off; **functional layout WIRED + gated** (see below); awaiting user review of the built editor |
-| R3 — 1.0 feature set (+ R3.11 QWERTY v2) | not started |
+| R3 — 1.0 feature set (+ R3.11 QWERTY v2) | IN PROGRESS — master parametric EQ, macro routing, **arpeggiator/step sequencer**, **per-part MIDI looper + MIDI export** all shipped + gated. Remaining: mod matrix (macro→multi-dest), osc cross-mod, wavetable, host tempo-sync/MIDI clock, unison, filter drive, parametric EQ done, QWERTY v2, audio-stem export |
 | R4 — release engineering (v1.0.0) | not started |
 
 ## R1 — clear the debts
