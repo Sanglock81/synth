@@ -337,11 +337,11 @@ LookAndFeel; layout scales with the window.
   section (arp / sequencer / looper / tempo)** all keep their values (single
   `randomizeExclusions()` list). It also assigns 1–4 macros to random destinations.
 - **Live / touchscreen use — run fullscreen.** The FS button, **F11**, or the window
-  title-bar's maximise button put the app in kiosk mode, which **removes the native
-  title bar** so a touch near the top of the window can never be hijacked as a
-  window-move/edge gesture. The macros were moved OFF the top bar into their own strip
-  below it for the same reason; the remaining top-bar controls are buttons + two knobs
-  (master, glide) set in from the top edge. Fullscreen is the recommended live mode.
+  title-bar's maximise button put the app in **kiosk mode**, which fills the screen and
+  **removes the native title bar** — so a touch near the top of the window (e.g. a
+  macro knob) can never be hijacked by the window manager as a window-move/edge gesture.
+  Fullscreen is the recommended live mode; the macros live in the compact top bar
+  alongside the preset selector and master.
 - **Debug overlay**: F12. **Help**: `?` (Shift+/).
 - QWERTY note input keeps working while twisting controls (controls refuse keyboard
   focus). VST3 uses the same editor, freely resizable.
