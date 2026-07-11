@@ -85,6 +85,29 @@ TEST_CASE ("torture: fast short-gate arp over a chord stays click-free (FX off)"
     REQUIRE (pm.s.maxJump < kClick);
 }
 
+TEST_CASE ("torture: arp gate pattern with rests, sparse retriggers stay click-free", "[plugin][click][arp][gate]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+    setVal (p, ParamID::ampRelease, 0.002f);   // fast release -> each rest cuts a note hard
+    setVal (p, ParamID::tempo, 280.0f);
+    set01 (p, ParamID::arpGate, 0.14f);
+    // A syncopated on/off gate: rests interleaved with hits (the note-off on a rest edge
+    // is the click risk the standing rule guards).
+    for (int i = 0; i < VASynthProcessor::kArpSteps; ++i) p.setArpStep (i, (i % 3 == 0) ? 1.0f : 0.0f);
+    set01 (p, ParamID::arpOn, 1.0f);
+
+    Pumper pm (p, 128);
+    pm.pump (10);
+    p.routeNoteOn (60, 0.9f, 0); p.routeNoteOn (64, 0.9f, 0); p.routeNoteOn (67, 0.9f, 0);
+    pm.pump (2500);
+    INFO ("peak=" << pm.s.peak << " maxJump=" << pm.s.maxJump);
+    REQUIRE (pm.s.finite);
+    REQUIRE (pm.s.peak <= 1.0f);
+    REQUIRE (pm.s.maxJump < kClick);
+}
+
 TEST_CASE ("torture: single-note arp, instant release, retrigger every step", "[plugin][click][arp][retrig]")
 {
     juce::ScopedJuceInitialiser_GUI init;

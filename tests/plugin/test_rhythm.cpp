@@ -38,6 +38,25 @@ TEST_CASE ("arp off: dispatch path unchanged (held note still sounds)", "[plugin
     REQUIRE (energyOverBlocks (p, 60, 20) > 0.0);
 }
 
+TEST_CASE ("arp gate pattern: all-rest steps silence the arp; a pattern sounds", "[plugin][arp][gate]")
+{
+    // With the arp on and a note held, blanking every step (all rests) must produce no
+    // sound, while restoring even one step brings it back. Proves the 16-step gate grid
+    // actually drives the arp (each step >0 plays, 0 rests).
+    VASynthProcessor p;
+    p.apvts.getParameter (ParamID::arpOn)->setValueNotifyingHost (1.0f);
+    p.apvts.getParameter (ParamID::tempo)->setValueNotifyingHost (0.8f);
+    for (int i = 0; i < VASynthProcessor::kArpSteps; ++i) p.setArpStep (i, 0.0f);   // all rests
+    REQUIRE (energyOverBlocks (p, 60, 60) < 1.0e-9);
+
+    VASynthProcessor q;
+    q.apvts.getParameter (ParamID::arpOn)->setValueNotifyingHost (1.0f);
+    q.apvts.getParameter (ParamID::tempo)->setValueNotifyingHost (0.8f);
+    for (int i = 0; i < VASynthProcessor::kArpSteps; ++i) q.setArpStep (i, 0.0f);
+    q.setArpStep (0, 1.0f);                                                          // one step on
+    REQUIRE (energyOverBlocks (q, 60, 60) > 0.0);
+}
+
 TEST_CASE ("arp step pattern persists across a state round-trip", "[plugin][arp][state]")
 {
     VASynthProcessor src;

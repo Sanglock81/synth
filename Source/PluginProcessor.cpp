@@ -1320,7 +1320,10 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         ac.swing   = swing;
         ac.latch   = rp (apvts, ID::arpHold) > 0.5f;
         ac.samplesPerStep = samplesPerStep;
-        ac.steps.fill (1.0f);                       // pure arp: every step plays (grid moved to the SEQ)
+        // The arp's OWN 16-step on/off gate (independent of the SEQ drum grid): a step
+        // at 0 is a rest, >0 plays. Default pattern is all-on, so a fresh arp runs 16ths.
+        for (int i = 0; i < Arpeggiator::kNumSteps; ++i)
+            ac.steps[(std::size_t) i] = arpSteps[(std::size_t) i];
         arp.setConfig (ac);
         if (arpWasOn && ! ac.enabled) { arp.reset(); engine.allNotesOff(); }
         arpWasOn = ac.enabled;

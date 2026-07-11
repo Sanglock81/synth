@@ -53,7 +53,7 @@ public:
                 g.drawRoundedRectangle (cell.toFloat().reduced (1.0f), 4.0f, 2.0f);
             }
             g.setColour (lit ? juce::Colours::black : VASynthLookAndFeel::ink());
-            g.setFont (juce::Font (juce::FontOptions (11.5f, juce::Font::bold)));
+            g.setFont (juce::Font (juce::FontOptions (14.5f, juce::Font::bold)));
             g.drawText (ChordEngine::modifierName (i), cell, juce::Justification::centred, false);
 
             const int cc = proc.getModifierLearn().getCCForModifier (i);
@@ -120,9 +120,10 @@ private:
 };
 
 // ---- ARP: compact arpeggiator bar (decoupled from the step sequencer) -------
-// One row of controls; no step grid (the arp reorders held notes, it doesn't paint a
-// pattern). HOLD is the single latch source (LATCH was merged into HOLD in Group 2).
-// OCT/GATE/SWING/TEMPO drive the shared transport clock the sequencer also rides.
+// Controls on the left; a 16-square single-level ON/OFF gate grid fills the middle-
+// right, giving the arp its own rhythm (a rest step is skipped) — independent of the
+// SEQ drum grid. HOLD is the single latch source (LATCH was merged into HOLD in
+// Group 2). OCT/GATE/SWING/TEMPO drive the shared transport clock the SEQ also rides.
 class ArpBar : public juce::Component,
                private juce::Timer
 {
@@ -142,21 +143,28 @@ public:
         addAndMakeVisible (*oct);   addAndMakeVisible (*gate);
         addAndMakeVisible (*swing); addAndMakeVisible (*tempo);
         addAndMakeVisible (*hold);
-        startTimerHz (12);   // pulse the beat dot with the transport
+        startTimerHz (20);   // playhead on the gate grid
     }
 
     void paint (juce::Graphics& g) override
     {
         const auto tRhy = juce::Colour (0xffe0b13a);
-        chrome::section (g, getLocalBounds(), "Arpeggiator", tRhy);
-        // a small beat indicator that blinks on the downbeat of the shared clock
-        const int step = proc.arpDisplayStep();
-        auto dot = beatDot.toFloat();
-        if (! dot.isEmpty())
+        chrome::section (g, getLocalBounds(), "Arpeggiator  -  gate pattern", tRhy);
+
+        // 16-square single-level ON/OFF gate grid (middle-right).
+        const int play = proc.arpDisplayStep();
+        const int n = VASynthProcessor::kArpSteps;
+        const int cw = juce::jmax (1, gridArea.getWidth() / n);
+        for (int s = 0; s < n; ++s)
         {
-            const bool on = proc.apvts.getRawParameterValue (ParamID::arpOn)->load() > 0.5f && (step % 4 == 0);
-            g.setColour (on ? tRhy.brighter (0.3f) : VASynthLookAndFeel::track());
-            g.fillEllipse (dot);
+            auto cell = juce::Rectangle<int> (gridArea.getX() + s * cw, gridArea.getY(), cw, gridArea.getHeight()).reduced (2);
+            const bool on = proc.getArpStep (s) > 0.5f;
+            juce::Colour c = on ? tRhy : VASynthLookAndFeel::track();
+            if (! on && s % 4 == 0) c = VASynthLookAndFeel::track().brighter (0.07f);   // beat guides
+            g.setColour (c);
+            g.fillRoundedRectangle (cell.toFloat(), 3.0f);
+            if (s == play && proc.apvts.getRawParameterValue (ParamID::arpOn)->load() > 0.5f)
+            { g.setColour (VASynthLookAndFeel::ink().withAlpha (0.8f)); g.drawRoundedRectangle (cell.toFloat(), 3.0f, 1.5f); }
         }
     }
 
@@ -165,21 +173,36 @@ public:
         auto c = chrome::sectionContent (getLocalBounds());
         auto row = c;
         arpOn->setBounds (row.removeFromLeft (58).reduced (2, 6)); row.removeFromLeft (8);
-        mode->setBounds  (row.removeFromLeft (juce::jmin (230, row.getWidth() / 2)).reduced (0, 8)); row.removeFromLeft (16);
-        hold->setBounds  (row.removeFromRight (62).reduced (2, 6)); row.removeFromRight (8);
-        beatDot = row.removeFromRight (16).withSizeKeepingCentre (10, 10); row.removeFromRight (8);
+        mode->setBounds  (row.removeFromLeft (juce::jmin (210, row.getWidth() / 3)).reduced (0, 8)); row.removeFromLeft (12);
+        hold->setBounds  (row.removeFromRight (62).reduced (2, 6)); row.removeFromRight (10);
         for (RotaryKnob* k : { oct.get(), gate.get(), swing.get(), tempo.get() })
-            { k->setBounds (row.removeFromLeft (juce::jmin (78, row.getWidth() / 4))); row.removeFromLeft (4); }
+            { k->setBounds (row.removeFromLeft (juce::jmin (72, row.getWidth() / 5))); row.removeFromLeft (4); }
+        row.removeFromLeft (10);
+        gridArea = row;                                   // the remaining middle-right span
     }
 
+    void mouseDown (const juce::MouseEvent& e) override { paintStep (e, true); }
+    void mouseDrag (const juce::MouseEvent& e) override { paintStep (e, false); }
+
 private:
+    // Tap toggles a step; drag paints the value set by the initial tap.
+    void paintStep (const juce::MouseEvent& e, bool isDown)
+    {
+        if (! gridArea.contains (e.getPosition())) return;
+        const int n = VASynthProcessor::kArpSteps;
+        const int cw = juce::jmax (1, gridArea.getWidth() / n);
+        const int s = juce::jlimit (0, n - 1, (e.getPosition().x - gridArea.getX()) / cw);
+        if (isDown) dragVal = (proc.getArpStep (s) > 0.5f) ? 0.0f : 1.0f;   // toggle vs the tapped cell
+        if ((proc.getArpStep (s) > 0.5f) != (dragVal > 0.5f)) { proc.setArpStep (s, dragVal); repaint(); }
+    }
     void timerCallback() override { repaint(); }
 
     VASynthProcessor& proc;
     std::unique_ptr<PowerToggle> arpOn, hold;
     std::unique_ptr<HSelector> mode;
     std::unique_ptr<RotaryKnob> oct, gate, swing, tempo;
-    juce::Rectangle<int> beatDot;
+    juce::Rectangle<int> gridArea;
+    float dragVal = 1.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ArpBar)
 };
@@ -311,7 +334,9 @@ public:
     }
 
 private:
-    static constexpr int kChordH = 60, kArpH = 60, kGridH = 196, gap = 5;
+    // Taller than R2: chord chips ~2x tall (readability), arp holds the gate grid,
+    // seq rows ~60% taller. The centre synth section flows shorter to make the room.
+    static constexpr int kChordH = 92, kArpH = 74, kGridH = 268, gap = 5;
     ChordBar chord;
     ArpBar arp;
     SeqPanel seq;
