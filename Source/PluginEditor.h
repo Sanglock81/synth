@@ -11,6 +11,7 @@
 #include "UI/TopBar.h"
 #include "UI/PartRail.h"
 #include "UI/ScopeView.h"
+#include "UI/EQPanel.h"
 #include "UI/BottomZones.h"
 #include "UI/HelpOverlay.h"
 #include "PresetManager.h"
@@ -130,8 +131,11 @@ public:
             area.removeFromBottom (gap);
         }
 
-        partRail->setBounds (area.removeFromLeft (176)); area.removeFromLeft (gap);
-        scopeView->setBounds (area.removeFromRight (280)); area.removeFromRight (gap);
+        partRail->setBounds (area.removeFromLeft (232)); area.removeFromLeft (gap);
+
+        auto right = area.removeFromRight (286); area.removeFromRight (gap);
+        scopeView->setBounds (right.removeFromTop (right.getHeight() * 56 / 100)); right.removeFromTop (gap);
+        eqPanel->setBounds (right);
 
         auto centre = area;
         const int u = juce::jmax (70, (centre.getWidth() - 4 * gap) / 13);
@@ -179,7 +183,8 @@ private:
     {
         topBar = std::make_unique<TopBar> (proc, presets,
                                            [this] { restoreQwertyFocus(); },
-                                           [this] { toggleHelp(); });
+                                           [this] { toggleHelp(); },
+                                           [this] { toggleFullscreen(); });
         addAndMakeVisible (*topBar);
 
         partRail = std::make_unique<PartRail> (proc, [this] { restoreQwertyFocus(); });
@@ -192,6 +197,7 @@ private:
 
         fxPanel   = std::make_unique<FXPanel> (proc);   addAndMakeVisible (*fxPanel);
         scopeView = std::make_unique<ScopeView> (proc); addAndMakeVisible (*scopeView);
+        eqPanel   = std::make_unique<EQPanel> (proc);   addAndMakeVisible (*eqPanel);
 
         bottomZones = std::make_unique<BottomZones> (proc);
         bottomZones->onResizeNeeded = [this] { resized(); };
@@ -324,6 +330,7 @@ private:
     std::unique_ptr<LfoSection> lfoSection;
     std::unique_ptr<FXPanel> fxPanel;
     std::unique_ptr<ScopeView> scopeView;
+    std::unique_ptr<EQPanel> eqPanel;
     std::unique_ptr<BottomZones> bottomZones;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VASynthEditor)

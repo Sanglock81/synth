@@ -2,6 +2,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "VASynthLookAndFeel.h"
 #include "PanelChrome.h"
+#include "Widgets.h"
 #include "KitEditor.h"
 #include "InputsDialog.h"
 #include "../PluginProcessor.h"
@@ -26,17 +27,13 @@ public:
     {
         setWantsKeyboardFocus (false);
         const char* lvlIds[] { ParamID::part0Level, ParamID::part1Level, ParamID::part2Level, ParamID::part3Level };
+        const char* panIds[] { ParamID::part0Pan,   ParamID::part1Pan,   ParamID::part2Pan,   ParamID::part3Pan   };
         for (int i = 0; i < SynthEngine::maxParts; ++i)
         {
-            auto* s = level.add (new juce::Slider());
-            s->setSliderStyle (juce::Slider::LinearVertical);
-            s->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-            s->setVelocityBasedMode (false);
-            s->setSliderSnapsToMousePosition (false);
-            s->setMouseDragSensitivity (kDragPixelsForFullRange);
-            s->setWantsKeyboardFocus (false);
-            addAndMakeVisible (s);
-            levelAtt.add (new juce::SliderParameterAttachment (*proc.apvts.getParameter (lvlIds[i]), *s));
+            lvl[(std::size_t) i] = std::make_unique<RotaryKnob> (proc.apvts, lvlIds[i], "LVL", proc.getMidiLearn());
+            pan[(std::size_t) i] = std::make_unique<RotaryKnob> (proc.apvts, panIds[i], "PAN", proc.getMidiLearn());
+            addAndMakeVisible (*lvl[(std::size_t) i]);
+            addAndMakeVisible (*pan[(std::size_t) i]);
         }
 
         inputs.setButtonText ("INPUTS");
@@ -68,7 +65,7 @@ public:
             g.fillRoundedRectangle (cell.toFloat(), 6.0f);
             if (live) { g.setColour (VASynthLookAndFeel::accent().withAlpha (0.9f)); g.drawRoundedRectangle (cell.toFloat().reduced (1), 6.0f, 2.0f); }
 
-            cell.removeFromRight (26);                 // the level fader column (laid out in resized)
+            cell.removeFromRight (kKnobCol);           // level + pan knob column (laid out in resized)
             auto body = cell.reduced (7, 5);
 
             g.setColour ((live || lit) ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::dim());
@@ -111,14 +108,18 @@ public:
         auto rl = chrome::sectionContent (getLocalBounds());
         auto cells = cellRects (rl);
         for (int i = 0; i < SynthEngine::maxParts; ++i)
-            level[i]->setBounds (cells[(std::size_t) i].removeFromRight (26).reduced (5, 8));
+        {
+            auto col = cells[(std::size_t) i].removeFromRight (kKnobCol).reduced (2, 6);
+            lvl[(std::size_t) i]->setBounds (col.removeFromLeft (col.getWidth() / 2).reduced (1, 0));
+            pan[(std::size_t) i]->setBounds (col.reduced (1, 0));
+        }
     }
 
     void mouseUp (const juce::MouseEvent& e) override
     {
         auto cells = cellRects (chrome::sectionContent (getLocalBounds()));
         for (int i = 1; i < SynthEngine::maxParts; ++i)          // P1 (LIVE) edited on the panel
-            if (cells[(std::size_t) i].withTrimmedRight (26).contains (e.getPosition()))
+            if (cells[(std::size_t) i].withTrimmedRight (kKnobCol).contains (e.getPosition()))
             { KitEditor::show (proc, getTopLevelComponent(), i, [this] { if (restoreFocus) restoreFocus(); }); return; }
     }
 
@@ -150,11 +151,12 @@ private:
         repaint();
     }
 
+    static constexpr int kKnobCol = 100;   // per-cell level+pan knob column width
+
     VASynthProcessor& proc;
     std::function<void()> restoreFocus;
     juce::TextButton inputs;
-    juce::OwnedArray<juce::Slider> level;
-    juce::OwnedArray<juce::SliderParameterAttachment> levelAtt;
+    std::array<std::unique_ptr<RotaryKnob>, SynthEngine::maxParts> lvl, pan;
     std::array<std::uint32_t, SynthEngine::maxParts> lastHits {};
     std::array<int, SynthEngine::maxParts> blink {};
 

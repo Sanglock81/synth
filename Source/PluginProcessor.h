@@ -8,6 +8,7 @@
 #include "DSP/SynthEngine.h"
 #include "DSP/ChordEngine.h"
 #include "DSP/FXChain.h"
+#include "DSP/ParametricEQ.h"
 #include "Observability/AudioHealthLogger.h"
 #include <atomic>
 
@@ -252,6 +253,30 @@ public:
     // Reset every parameter to its default and the FX order to 0,1,2,3 ("Init").
     void loadInitPreset();
 
+    // -- macros (R2) ----------------------------------------------------------
+    // Each macro (0..7) can route to one target parameter; the value knob then drives
+    // that parameter (applied on the message thread by the editor). The map persists in
+    // the apvts state ("macro_map" property), so it saves/loads with presets/sessions.
+    juce::String getMacroTargetId (int i) const
+    { return (i >= 0 && i < 8) ? macroTargetId[(std::size_t) i] : juce::String(); }
+    juce::String getMacroTargetName (int i) const
+    {
+        const auto id = getMacroTargetId (i);
+        if (auto* p = id.isNotEmpty() ? apvts.getParameter (id) : nullptr) return p->getName (16);
+        return {};
+    }
+    void setMacroTarget (int i, const juce::String& paramId)
+    {
+        if (i < 0 || i >= 8) return;
+        macroTargetId[(std::size_t) i] = paramId;
+        writeMacroMapProperty();
+    }
+    // Randomize: assign 1..4 macros (100/50/25/10% for 1/2/3/4) each to a DISTINCT
+    // routable parameter and randomize their values. Called by the Random button.
+    void randomizeMacros (juce::Random& rng);
+    // Curated musical parameters a macro may target.
+    static juce::StringArray macroRoutableIDs();
+
     // Test seam: build the plugin's binary state format from an XML tree (so the
     // osc_mix->levels migration can be tested with a synthetic pre-level state).
     static void xmlToBinaryForTest (const juce::XmlElement& xml, juce::MemoryBlock& out)
@@ -322,6 +347,11 @@ private:
 
     // Parse an "a,b,c,d" fx_order property into the atomic mirror (used on load).
     void applyFxOrderProperty();
+
+    // Macro routing map <-> the "macro_map" state property (persists with presets).
+    std::array<juce::String, 8> macroTargetId {};
+    void writeMacroMapProperty();
+    void applyMacroMapProperty();
 
     static juce::String orderToString (const int order[4])
     {
@@ -396,6 +426,10 @@ private:
 
     // Per-sample master gain ramp to kill zipper on gain steps/automation.
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> masterGain;
+
+    // Master parametric EQ (end of chain, post-FX sum / pre master gain). Audio thread only.
+    ParametricEQ masterEQ;
+    bool eqWasOn = false;
 
     // Master scope tap ring (see pushScope/readScope).
     std::array<std::atomic<float>, kScopeSize> scopeRing {};

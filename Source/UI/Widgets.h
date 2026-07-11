@@ -357,6 +357,9 @@ public:
             slider.setBounds (getLocalBounds().withTrimmedTop (17).withTrimmedBottom (16));
     }
 
+    // Update the displayed name (e.g. a macro showing its assigned target).
+    void setDisplayName (juce::String n) { if (n != name) { name = std::move (n); repaint(); } }
+
 private:
     juce::String name;
     bool sideLabel = false;

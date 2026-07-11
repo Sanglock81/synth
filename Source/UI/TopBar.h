@@ -17,9 +17,11 @@ class TopBar : public juce::Component,
 {
 public:
     TopBar (VASynthProcessor& p, PresetManager& pm,
-            std::function<void()> restoreFocusFn, std::function<void()> toggleHelpFn)
+            std::function<void()> restoreFocusFn, std::function<void()> toggleHelpFn,
+            std::function<void()> toggleFullscreenFn)
         : proc (p), presets (pm),
-          restoreFocus (std::move (restoreFocusFn)), toggleHelp (std::move (toggleHelpFn))
+          restoreFocus (std::move (restoreFocusFn)), toggleHelp (std::move (toggleHelpFn)),
+          toggleFullscreen (std::move (toggleFullscreenFn))
     {
         setWantsKeyboardFocus (false);
 
@@ -39,8 +41,15 @@ public:
         save.onClick = [this] { showSaveDialog(); };
         addAndMakeVisible (save);
 
-        random.setButtonText ("RND"); styleBtn (random);
-        random.onClick = [this] { juce::Random rng; presets.randomize (rng); currentName = "Random"; refreshTitle(); if (restoreFocus) restoreFocus(); };
+        random.setButtonText ("RANDOM"); styleBtn (random);
+        random.onClick = [this]
+        {
+            juce::Random rng;
+            presets.randomize (rng);
+            proc.randomizeMacros (rng);        // assign 1-4 macros to random params + values
+            currentName = "Random"; refreshTitle(); refreshMacroLabels();
+            if (restoreFocus) restoreFocus();
+        };
         addAndMakeVisible (random);
 
         rec.setButtonText ("REC"); styleBtn (rec);
@@ -48,22 +57,31 @@ public:
         rec.onClick = [this] { proc.postToast ("Recording lands with the looper (R3)"); if (restoreFocus) restoreFocus(); };
         addAndMakeVisible (rec);
 
+        full.setButtonText ("FS"); styleBtn (full);
+        full.onClick = [this] { if (toggleFullscreen) toggleFullscreen(); if (restoreFocus) restoreFocus(); };
+        addAndMakeVisible (full);
+
         help.setButtonText ("?"); styleBtn (help);
         help.onClick = [this] { if (toggleHelp) toggleHelp(); };
         addAndMakeVisible (help);
 
+        const char* ids[] { ParamID::macro1, ParamID::macro2, ParamID::macro3, ParamID::macro4,
+                            ParamID::macro5, ParamID::macro6, ParamID::macro7, ParamID::macro8 };
         for (int m = 0; m < 8; ++m)
         {
-            const char* ids[] { ParamID::macro1, ParamID::macro2, ParamID::macro3, ParamID::macro4,
-                                ParamID::macro5, ParamID::macro6, ParamID::macro7, ParamID::macro8 };
             auto* k = new RotaryKnob (proc.apvts, ids[m], "M" + juce::String (m + 1), proc.getMidiLearn());
             macros.add (k); addAndMakeVisible (k);
+            // When a macro moves, drive its assigned target (message-thread routing).
+            const int idx = m;
+            macroAtt.add (new juce::ParameterAttachment (*proc.apvts.getParameter (ids[m]),
+                [this, idx] (float v) { applyMacro (idx, v); }, nullptr));
         }
 
         master = std::make_unique<RotaryKnob> (proc.apvts, ParamID::masterGain, "MASTER", proc.getMidiLearn());
         addAndMakeVisible (*master);
 
-        startTimerHz (4);   // CPU readout
+        refreshMacroLabels();
+        startTimerHz (4);   // CPU readout + macro-label resync (map may change on preset load)
     }
 
     void paint (juce::Graphics& g) override
@@ -80,23 +98,26 @@ public:
     {
         auto tb = getLocalBounds().reduced (10, 7);
 
-        auto preset = tb.removeFromLeft (210); tb.removeFromLeft (5);
+        auto preset = tb.removeFromLeft (250); tb.removeFromLeft (8);
         auto pTop = preset.removeFromTop (34);
-        presetBtn.setBounds (pTop.removeFromLeft (150));
-        save.setBounds   (pTop.removeFromLeft (32).reduced (2, 0));
-        random.setBounds (pTop.reduced (2, 0));
+        presetBtn.setBounds (pTop.removeFromLeft (150).reduced (0, 1));
+        save.setBounds   (pTop.removeFromLeft (48).reduced (2, 1));
+        random.setBounds (pTop.reduced (2, 1));
         statusArea = preset;
 
-        auto help_ = tb.removeFromRight (36); tb.removeFromRight (6);
+        auto help_ = tb.removeFromRight (34); tb.removeFromRight (4);
         help.setBounds (help_.reduced (0, 16));
+        full.setBounds (tb.removeFromRight (36).reduced (0, 16)); tb.removeFromRight (6);
         master->setBounds (tb.removeFromRight (92)); tb.removeFromRight (4);
-        rec.setBounds (tb.removeFromRight (60).reduced (0, 16)); tb.removeFromRight (10);
+        rec.setBounds (tb.removeFromRight (54).reduced (0, 16)); tb.removeFromRight (10);
 
+        // 8 macro knobs, packed together (fixed width) and centred in the free span
+        // between the preset area and the right cluster.
+        const int mw = juce::jmin (86, tb.getWidth() / 8);
+        const int pack = mw * 8;
+        tb.removeFromLeft (juce::jmax (0, (tb.getWidth() - pack) / 2));   // centre the group
         for (int m = 0; m < macros.size(); ++m)
-        {
-            const int w = tb.getWidth() / (macros.size() - m);
-            macros[m]->setBounds (tb.removeFromLeft (w)); tb.removeFromLeft (5);
-        }
+            macros[m]->setBounds (tb.removeFromLeft (mw));
     }
 
     // Update the shown patch name from outside (e.g. a factory load elsewhere).
@@ -108,6 +129,27 @@ private:
         const int cpu = (int) juce::roundToInt (proc.health.snapshot().cpuPercent);
         auto line = "CPU " + juce::String (juce::jlimit (0, 999, cpu)) + "%";
         if (line != statusLine) { statusLine = line; repaint (statusArea); }
+        refreshMacroLabels();     // map can change on preset/session load
+    }
+
+    // Drive a macro's assigned target parameter (message thread).
+    void applyMacro (int idx, float value)
+    {
+        const auto id = proc.getMacroTargetId (idx);
+        if (id.isEmpty()) return;
+        if (auto* target = proc.apvts.getParameter (id))
+            if (! juce::approximatelyEqual (target->getValue(), value))
+                target->setValueNotifyingHost (value);
+    }
+
+    // Macro knob shows its assigned target's short name (or M1..M8 when unassigned).
+    void refreshMacroLabels()
+    {
+        for (int m = 0; m < macros.size(); ++m)
+        {
+            const auto tgt = proc.getMacroTargetName (m);
+            macros[m]->setDisplayName (tgt.isNotEmpty() ? tgt : ("M" + juce::String (m + 1)));
+        }
     }
 
     void refreshTitle() { presetBtn.setButtonText ("synth  -  " + currentName); }
@@ -169,10 +211,11 @@ private:
 
     VASynthProcessor& proc;
     PresetManager& presets;
-    std::function<void()> restoreFocus, toggleHelp;
+    std::function<void()> restoreFocus, toggleHelp, toggleFullscreen;
 
-    juce::TextButton presetBtn, save, random, rec, help;
+    juce::TextButton presetBtn, save, random, rec, full, help;
     juce::OwnedArray<RotaryKnob> macros;
+    juce::OwnedArray<juce::ParameterAttachment> macroAtt;
     std::unique_ptr<RotaryKnob> master;
     juce::Rectangle<int> statusArea;
     juce::String statusLine { "CPU 0%" }, currentName { "Init" };

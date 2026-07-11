@@ -143,6 +143,8 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     masterGain.setCurrentAndTargetValue (
         apvts.getRawParameterValue (ParamID::masterGain)->load());
 
+    masterEQ.prepare (sampleRate);
+
     budgetMs = (sampleRate > 0.0) ? (double (samplesPerBlock) / sampleRate * 1000.0) : 2.667;
 
     // Startup banner (processor-accessible fields; device/type/MIDI-inputs are
@@ -937,6 +939,65 @@ void VASynthProcessor::applyFxOrderProperty()
     setFxOrder (order);        // validates the permutation; ignores if malformed
 }
 
+// --- macros ------------------------------------------------------------------
+
+juce::StringArray VASynthProcessor::macroRoutableIDs()
+{
+    namespace ID = ParamID;
+    return { ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack,
+             ID::osc1Detune, ID::osc2Detune, ID::osc1PW, ID::osc2PW,
+             ID::chorusMix, ID::chorusRate, ID::delayMix, ID::delayFeedback,
+             ID::reverbMix, ID::reverbSize, ID::stereoWidth,
+             ID::lfoDepth, ID::lfo2Depth, ID::glideTime, ID::ampRelease,
+             ID::fltEnvToPitch, ID::velToCutoff };
+}
+
+void VASynthProcessor::writeMacroMapProperty()
+{
+    juce::StringArray ids;
+    for (auto& id : macroTargetId) ids.add (id.isEmpty() ? "-" : id);
+    apvts.state.setProperty ("macro_map", ids.joinIntoString (","), nullptr);
+}
+
+void VASynthProcessor::applyMacroMapProperty()
+{
+    for (auto& t : macroTargetId) t.clear();
+    const auto str = apvts.state.getProperty ("macro_map").toString();
+    if (str.isEmpty()) return;
+    auto tokens = juce::StringArray::fromTokens (str, ",", "");
+    for (int i = 0; i < juce::jmin (8, tokens.size()); ++i)
+        if (tokens[i] != "-" && apvts.getParameter (tokens[i]) != nullptr)
+            macroTargetId[(std::size_t) i] = tokens[i];
+}
+
+void VASynthProcessor::randomizeMacros (juce::Random& rng)
+{
+    const auto routable = macroRoutableIDs();
+    if (routable.isEmpty()) return;
+
+    // How many macros to assign: 1 always, then 50% / 25% / 10% cumulative for 2 / 3 / 4.
+    int count = 1;
+    if (rng.nextFloat() < 0.5f) { count = 2; if (rng.nextFloat() < 0.5f) { count = 3; if (rng.nextFloat() < 0.4f) count = 4; } }
+
+    // Distinct macros + distinct target params (Fisher-Yates on both index lists).
+    std::array<int, 8> macroIdx { 0, 1, 2, 3, 4, 5, 6, 7 };
+    for (int i = 7; i > 0; --i) std::swap (macroIdx[(std::size_t) i], macroIdx[(std::size_t) rng.nextInt (i + 1)]);
+    std::vector<int> paramIdx (routable.size());
+    for (int i = 0; i < routable.size(); ++i) paramIdx[(std::size_t) i] = i;
+    for (int i = routable.size() - 1; i > 0; --i) std::swap (paramIdx[(std::size_t) i], paramIdx[(std::size_t) rng.nextInt (i + 1)]);
+
+    for (auto& t : macroTargetId) t.clear();
+    const char* macroIDs[] { ParamID::macro1, ParamID::macro2, ParamID::macro3, ParamID::macro4,
+                             ParamID::macro5, ParamID::macro6, ParamID::macro7, ParamID::macro8 };
+    for (int k = 0; k < count && k < (int) paramIdx.size(); ++k)
+    {
+        const int m = macroIdx[(std::size_t) k];
+        macroTargetId[(std::size_t) m] = routable[paramIdx[(std::size_t) k]];
+        if (auto* p = apvts.getParameter (macroIDs[m])) p->setValueNotifyingHost (rng.nextFloat());
+    }
+    writeMacroMapProperty();
+}
+
 void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                      juce::MidiBuffer& midi)
 {
@@ -1025,6 +1086,20 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                    { { rp (apvts, ID::part0Pan),   rp (apvts, ID::part1Pan),   rp (apvts, ID::part2Pan),   rp (apvts, ID::part3Pan)   } });
     engine.mixParts (L, R, numSamples);                         // per-part FX + level/pan + sum
 
+    // --- master parametric EQ (end of chain: post-FX sum, pre master gain). Off/flat
+    //     is a true bypass (skipped), so the output is bit-identical until it's used.
+    const bool eqOn = rp (apvts, ID::eqOn) > 0.5f;
+    if (eqOn)
+    {
+        if (! eqWasOn) masterEQ.reset();                        // clean state on off->on
+        masterEQ.setBands ({ rp (apvts, ID::eqLsFreq), rp (apvts, ID::eqLsGain), 0.7f },
+                           { rp (apvts, ID::eqLmFreq), rp (apvts, ID::eqLmGain), rp (apvts, ID::eqLmQ) },
+                           { rp (apvts, ID::eqHmFreq), rp (apvts, ID::eqHmGain), rp (apvts, ID::eqHmQ) },
+                           { rp (apvts, ID::eqHsFreq), rp (apvts, ID::eqHsGain), 0.7f });
+        masterEQ.process (L, R, numSamples);
+    }
+    eqWasOn = eqOn;
+
     // --- master gain (per-sample ramp, kills zipper on gain steps/automation)
     //     followed by the safety soft-clipper — the LAST thing before output.
     //     The clipper is transparent (bit-exact) below its threshold, so normal
@@ -1109,6 +1184,7 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
 
         // Restore the FX chain order (state-tree property, not an APVTS param).
         applyFxOrderProperty();
+        applyMacroMapProperty();       // restore macro->param routing
 
         // Routing lifecycle rule 2: do NOT restore the multitimbral layout from ordinary
         // state — routing/zones reset to default on load. (Only an explicit MULTI load

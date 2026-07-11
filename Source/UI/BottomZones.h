@@ -71,9 +71,9 @@ public:
     void resized() override
     {
         auto c = chrome::sectionContent (getLocalBounds());
-        enable->setBounds (c.removeFromLeft (78).reduced (2)); c.removeFromLeft (6);
-        root->setBounds  (c.removeFromLeft (juce::jmin (300, c.getWidth() / 2))); c.removeFromLeft (6);
-        scale->setBounds (c.removeFromLeft (110)); c.removeFromLeft (8);
+        enable->setBounds (c.removeFromLeft (86).reduced (2, 4)); c.removeFromLeft (8);
+        root->setBounds  (c.removeFromLeft (juce::jmin (330, c.getWidth() / 2)).reduced (0, 4)); c.removeFromLeft (8);
+        scale->setBounds (c.removeFromLeft (120).reduced (0, 4)); c.removeFromLeft (10);
         chipArea = c;
     }
 
@@ -117,94 +117,153 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChordBar)
 };
 
-// ---- a collapsible placeholder zone (rhythm / looper; engines land in R3) ---
-class CollapZone : public juce::Component
+// ---- static paint helpers for the (non-functional) rhythm/looper previews ---
+namespace bottomdraw
 {
-public:
-    CollapZone (juce::String titleText, juce::Colour tintColour, juce::String note)
-        : title (std::move (titleText)), tint (tintColour), blurb (std::move (note))
+    inline void selector (juce::Graphics& g, juce::Rectangle<int> r, juce::StringArray opts, int sel)
     {
-        setWantsKeyboardFocus (false);
-    }
-
-    std::function<void()> onToggle;
-    bool expanded = false;
-    static constexpr int kBarH = 32, kExpandedH = 150;
-    int preferredHeight() const { return expanded ? kExpandedH : kBarH; }
-
-    void paint (juce::Graphics& g) override
-    {
-        auto r = getLocalBounds();
-        auto bar = r.removeFromTop (kBarH);
-        g.setColour (tint); g.fillRoundedRectangle (bar.toFloat(), 5.0f);
-        g.fillRect (bar.withTop (bar.getCentreY()));
-        g.setColour (chrome::onTint());
-        g.setFont (juce::Font (juce::FontOptions (12.5f, juce::Font::bold)));
-        g.drawText ((expanded ? "  v   " : "  >   ") + title.toUpperCase(), bar, juce::Justification::centredLeft, false);
-
-        if (expanded)
+        const int n = juce::jmax (1, opts.size());
+        for (int i = 0; i < opts.size(); ++i)
         {
-            g.setColour (VASynthLookAndFeel::panelLight().darker (0.12f));
-            g.fillRoundedRectangle (r.toFloat(), 5.0f);
-            g.setColour (VASynthLookAndFeel::dim());
-            g.setFont (juce::Font (juce::FontOptions (13.0f)));
-            g.drawText (blurb, r.reduced (16, 0), juce::Justification::centred, false);
+            auto cell = juce::Rectangle<int> (r.getX() + i * r.getWidth() / n, r.getY(), r.getWidth() / n, r.getHeight()).reduced (2);
+            g.setColour (i == sel ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::track());
+            g.fillRoundedRectangle (cell.toFloat(), 4.0f);
+            g.setColour (i == sel ? chrome::onTint() : VASynthLookAndFeel::ink());
+            g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
+            g.drawText (opts[i], cell, juce::Justification::centred, false);
         }
     }
-
-    void mouseUp (const juce::MouseEvent& e) override
+    inline void toggle (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& t, bool on)
     {
-        if (e.getDistanceFromDragStart() > 8) return;
-        if (e.getPosition().y < kBarH) { expanded = ! expanded; if (onToggle) onToggle(); }
+        g.setColour (on ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::track());
+        g.fillRoundedRectangle (r.reduced (2).toFloat(), 4.0f);
+        g.setColour (on ? chrome::onTint() : VASynthLookAndFeel::ink());
+        g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
+        g.drawText (t, r, juce::Justification::centred, false);
     }
+    inline void knob (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& label, float v)
+    {
+        auto lab = r.removeFromBottom (13);
+        const int d = juce::jmin (juce::jmin (r.getWidth() - 2, r.getHeight() - 2), 46);
+        auto c = r.withSizeKeepingCentre (d, d).toFloat();
+        g.setColour (VASynthLookAndFeel::track()); g.fillEllipse (c);
+        const auto ctr = c.getCentre(); const float r0 = c.getWidth() * 0.5f - 3.0f;
+        const float a1 = 2.30f + v * 4.66f;
+        juce::Path arc; arc.addCentredArc (ctr.x, ctr.y, r0, r0, 0.0f, 2.30f, a1, true);
+        g.setColour (VASynthLookAndFeel::accent()); g.strokePath (arc, juce::PathStrokeType (2.5f));
+        g.setColour (VASynthLookAndFeel::ink()); g.drawLine (ctr.x, ctr.y, ctr.x + std::cos (a1 + 1.57f) * r0 * 0.8f, ctr.y + std::sin (a1 + 1.57f) * r0 * 0.8f, 2.0f);
+        g.setColour (VASynthLookAndFeel::dim()); g.setFont (juce::Font (juce::FontOptions (10.0f, juce::Font::bold)));
+        g.drawText (label, lab, juce::Justification::centred, false);
+    }
+    inline void previewTag (juce::Graphics& g, juce::Rectangle<int> header)
+    {
+        g.setColour (chrome::onTint().withAlpha (0.6f));
+        g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold)));
+        g.drawText ("preview  -  R3", header.reduced (10, 0), juce::Justification::centredRight, false);
+    }
+}
 
-private:
-    juce::String title;
-    juce::Colour tint;
-    juce::String blurb;
+// ---- RHYTHM preview (arp + 16-step sequencer; engine lands in R3) -----------
+class RhythmPanel : public juce::Component
+{
+public:
+    RhythmPanel() { setWantsKeyboardFocus (false); }
+    void paint (juce::Graphics& g) override
+    {
+        const auto tRhy = juce::Colour (0xffe0b13a);
+        auto r = chrome::section (g, getLocalBounds(), "Rhythm  -  arp + sequencer", tRhy);
+        bottomdraw::previewTag (g, getLocalBounds().removeFromTop (chrome::kHeaderH));
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CollapZone)
+        auto ctrls = r.removeFromTop (44); r.removeFromTop (6);
+        bottomdraw::selector (g, ctrls.removeFromLeft (250), { "UP","DOWN","UP/DN","RAND","PLAYED" }, 0); ctrls.removeFromLeft (6);
+        bottomdraw::knob (g, ctrls.removeFromLeft (58), "OCT", 0.3f); ctrls.removeFromLeft (2);
+        bottomdraw::knob (g, ctrls.removeFromLeft (58), "GATE", 0.6f); ctrls.removeFromLeft (2);
+        bottomdraw::knob (g, ctrls.removeFromLeft (58), "SWING", 0.5f); ctrls.removeFromLeft (8);
+        bottomdraw::toggle (g, ctrls.removeFromLeft (66), "LATCH", true);
+        bottomdraw::toggle (g, ctrls.removeFromLeft (66), "HOLD", false);
+
+        const int cells = 16, cw = juce::jmax (1, r.getWidth() / cells);
+        for (int s = 0; s < cells; ++s)
+        {
+            auto cell = juce::Rectangle<int> (r.getX() + s * cw, r.getY(), cw, r.getHeight()).reduced (2);
+            const bool on = (s % 4 == 0) || s == 6 || s == 10 || s == 13;
+            g.setColour (on ? tRhy : VASynthLookAndFeel::track());
+            g.fillRoundedRectangle (cell.toFloat(), 3.0f);
+            if (on) { g.setColour (chrome::onTint().withAlpha (0.4f)); g.fillRect (cell.removeFromBottom (cell.getHeight() * (s % 3 + 1) / 4)); }
+        }
+    }
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RhythmPanel)
+};
+
+// ---- LOOPER preview (per-part MIDI loops + export; engine lands in R3) ------
+class LooperPanel : public juce::Component
+{
+public:
+    LooperPanel() { setWantsKeyboardFocus (false); }
+    void paint (juce::Graphics& g) override
+    {
+        const auto tLoop = juce::Colour (0xffca6bd0);
+        auto r = chrome::section (g, getLocalBounds(), "Looper  -  per-part MIDI loops + session export", tLoop);
+        bottomdraw::previewTag (g, getLocalBounds().removeFromTop (chrome::kHeaderH));
+
+        auto bar = r.removeFromTop (40); r.removeFromTop (6);
+        bottomdraw::toggle (g, bar.removeFromLeft (70), "REC", false);
+        bottomdraw::toggle (g, bar.removeFromLeft (70), "PLAY", true);
+        bottomdraw::toggle (g, bar.removeFromLeft (70), "CLEAR", false);
+        bottomdraw::toggle (g, bar.removeFromLeft (94), "SYNC 1 bar", true);
+        g.setColour (VASynthLookAndFeel::dim());
+        g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
+        g.drawText ("EXPORT  ->  stems + MIDI", bar, juce::Justification::centredRight, false);
+
+        const char* lanes[] { "P1 lead", "P2 drums", "P3 pad", "P4 --" };
+        const int lh = juce::jmax (1, (r.getHeight() - 3 * 5) / 4);
+        for (int i = 0; i < 4; ++i)
+        {
+            auto lane = r.removeFromTop (lh); r.removeFromTop (5);
+            g.setColour (VASynthLookAndFeel::track()); g.fillRoundedRectangle (lane.toFloat(), 4.0f);
+            g.setColour (VASynthLookAndFeel::ink()); g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold)));
+            g.drawText (lanes[i], lane.removeFromLeft (70).withTrimmedLeft (8), juce::Justification::centredLeft, false);
+            if (i < 3)
+            {
+                g.setColour (tLoop.withAlpha (0.5f)); juce::Random rr (i + 3);
+                for (int x = 0; x < lane.getWidth(); x += 6)
+                { float h = lane.getHeight() * (0.2f + 0.7f * rr.nextFloat());
+                  g.fillRect (juce::Rectangle<float> ((float) (lane.getX() + x), lane.getCentreY() - h / 2, 3.0f, h)); }
+            }
+        }
+    }
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LooperPanel)
 };
 
 // ---- the whole bottom workstation ------------------------------------------
 class BottomZones : public juce::Component
 {
 public:
-    explicit BottomZones (VASynthProcessor& p)
-        : chord (p),
-          rhythm ("Rhythm  -  arp + sequencer",  juce::Colour (0xffe0b13a), "16-step arp + step sequencer per part  -  arrives in R3"),
-          looper ("Looper  -  per-part MIDI loops + session export", juce::Colour (0xffca6bd0), "record + overdub MIDI loops per part, export stems + MIDI  -  arrives in R3")
+    explicit BottomZones (VASynthProcessor& p) : chord (p)
     {
         setWantsKeyboardFocus (false);
         addAndMakeVisible (chord);
         addAndMakeVisible (rhythm);
         addAndMakeVisible (looper);
-        rhythm.onToggle = [this] { relayout(); };
-        looper.onToggle = [this] { relayout(); };
     }
 
-    // Editor calls this to size the bottom band; it changes as zones expand.
-    int preferredHeight() const
-    {
-        return kChordH + gap + rhythm.preferredHeight() + gap + looper.preferredHeight();
-    }
-
-    std::function<void()> onResizeNeeded;
+    // Editor calls this to size the bottom band (fixed: chord bar + workstation).
+    int preferredHeight() const { return kChordH + gap + kWorkH; }
+    std::function<void()> onResizeNeeded;   // kept for API compatibility (unused now)
 
     void resized() override
     {
         auto r = getLocalBounds();
         chord.setBounds (r.removeFromTop (kChordH)); r.removeFromTop (gap);
-        rhythm.setBounds (r.removeFromTop (rhythm.preferredHeight())); r.removeFromTop (gap);
-        looper.setBounds (r.removeFromTop (looper.preferredHeight()));
+        rhythm.setBounds (r.removeFromLeft (r.getWidth() * 55 / 100)); r.removeFromLeft (gap);
+        looper.setBounds (r);
     }
 
 private:
-    void relayout() { if (onResizeNeeded) onResizeNeeded(); else resized(); }
-
-    static constexpr int kChordH = 46, gap = 5;
+    static constexpr int kChordH = 64, kWorkH = 214, gap = 5;
     ChordBar chord;
-    CollapZone rhythm, looper;
+    RhythmPanel rhythm;
+    LooperPanel looper;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BottomZones)
 };

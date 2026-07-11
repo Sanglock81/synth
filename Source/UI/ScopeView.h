@@ -36,7 +36,9 @@ public:
         for (int x = 0; x < sw; ++x)
         {
             const int idx = juce::jlimit (0, fftSize - 1, x * fftSize / sw);
-            const float y = sc.getCentreY() - juce::jlimit (-1.0f, 1.0f, scope[(std::size_t) idx]) * sc.getHeight() * 0.46f;
+            // +40% vertical gain vs the raw 0.46 half-height (more visible at low levels),
+            // clamped so a hot signal still can't paint outside the scope box.
+            const float y = sc.getCentreY() - juce::jlimit (-0.98f, 0.98f, scope[(std::size_t) idx] * 1.4f) * sc.getHeight() * 0.46f;
             if (x == 0) w.startNewSubPath ((float) sc.getX(), y);
             else        w.lineTo ((float) (sc.getX() + x), y);
         }

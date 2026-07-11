@@ -145,6 +145,16 @@ namespace ParamID
     inline constexpr auto macro6 = "macro6";
     inline constexpr auto macro7 = "macro7";
     inline constexpr auto macro8 = "macro8";
+
+    // Master parametric EQ (R2): a 4-band shaper at the END of the signal chain
+    // (post per-part FX sum, pre master gain). Low shelf, two sweepable bells, high
+    // shelf. All gains default 0 dB and eq_on defaults false -> a true bypass, so the
+    // master output is bit-identical until the player dials it in. IDs appended last.
+    inline constexpr auto eqOn      = "eq_on";
+    inline constexpr auto eqLsFreq  = "eq_ls_freq";   inline constexpr auto eqLsGain = "eq_ls_gain";
+    inline constexpr auto eqLmFreq  = "eq_lm_freq";   inline constexpr auto eqLmGain = "eq_lm_gain";   inline constexpr auto eqLmQ = "eq_lm_q";
+    inline constexpr auto eqHmFreq  = "eq_hm_freq";   inline constexpr auto eqHmGain = "eq_hm_gain";   inline constexpr auto eqHmQ = "eq_hm_q";
+    inline constexpr auto eqHsFreq  = "eq_hs_freq";   inline constexpr auto eqHsGain = "eq_hs_gain";
 }
 
 // Builds the full parameter layout. Called once in the processor constructor.
@@ -283,6 +293,26 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         for (int m = 0; m < 8; ++m)
             params.push_back(std::make_unique<P>(juce::ParameterID{macroIDs[m], 1},
                 "Macro " + juce::String (m + 1), juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
+    }
+
+    // --- Master parametric EQ (R2): defaults flat + off => bit-identical bypass ---
+    {
+        const juce::NormalisableRange<float> gainR (-18.0f, 18.0f), qR (0.3f, 8.0f, 0.0f, 0.5f);
+        const juce::NormalisableRange<float> fR (20.0f, 20000.0f, 0.0f, 0.25f);
+        const auto hz = juce::AudioParameterFloatAttributes().withLabel ("Hz");
+        const auto db = juce::AudioParameterFloatAttributes().withLabel ("dB");
+
+        params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::eqOn, 1}, "EQ On", false));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqLsFreq, 1}, "EQ Low Freq",  fR, 120.0f,  hz));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqLsGain, 1}, "EQ Low Gain",  gainR, 0.0f, db));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqLmFreq, 1}, "EQ LoMid Freq", fR, 500.0f, hz));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqLmGain, 1}, "EQ LoMid Gain", gainR, 0.0f, db));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqLmQ, 1},    "EQ LoMid Q",   qR, 0.9f));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHmFreq, 1}, "EQ HiMid Freq", fR, 3000.0f, hz));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHmGain, 1}, "EQ HiMid Gain", gainR, 0.0f, db));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHmQ, 1},    "EQ HiMid Q",   qR, 0.9f));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHsFreq, 1}, "EQ High Freq", fR, 8000.0f, hz));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHsGain, 1}, "EQ High Gain", gainR, 0.0f, db));
     }
 
     return { params.begin(), params.end() };
