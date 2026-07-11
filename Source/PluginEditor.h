@@ -122,7 +122,7 @@ public:
         auto area = getLocalBounds().reduced (6);
         const int gap = 5;
 
-        topBar->setBounds (area.removeFromTop (80)); area.removeFromTop (gap);
+        topBar->setBounds (area.removeFromTop (104)); area.removeFromTop (gap);
 
         if (bottomZones != nullptr)
         {
@@ -235,11 +235,18 @@ private:
     }
     void hideHelp() { helpOverlay.setVisible (false); grabQwertyFocus(); }
 
+    // True full-screen via JUCE kiosk mode: the window fills the display and sits on
+    // top, so you can't accidentally click an app behind it. Toggles back to windowed.
+    // Standalone only (a plugin must never take over the host's screen).
     void toggleFullscreen()
     {
-        if (auto* w = getTopLevelComponent())
-            if (auto* peer = w->getPeer())
-                peer->setFullScreen (! peer->isFullScreen());
+        if (! isStandalone()) return;
+        auto& desktop = juce::Desktop::getInstance();
+        if (desktop.getKioskModeComponent() != nullptr)
+            desktop.setKioskModeComponent (nullptr);
+        else if (auto* top = getTopLevelComponent())
+            desktop.setKioskModeComponent (top, false);
+        grabQwertyFocus();
     }
 
     void timerCallback() override

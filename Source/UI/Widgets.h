@@ -360,6 +360,10 @@ public:
     // Update the displayed name (e.g. a macro showing its assigned target).
     void setDisplayName (juce::String n) { if (n != name) { name = std::move (n); repaint(); } }
 
+    // Override drag sensitivity for this knob (pixels of travel for the full range;
+    // fewer px = more responsive). Default is kDragPixelsForFullRange for all controls.
+    void setDragPixels (int px) { slider.setMouseDragSensitivity (juce::jmax (1, px)); }
+
 private:
     juce::String name;
     bool sideLabel = false;

@@ -35,6 +35,7 @@ public:
         for (auto& d : kd)
         {
             auto* k = new RotaryKnob (proc.apvts, d.pid, d.name, proc.getMidiLearn());
+            k->setDragPixels (kDragPixelsForFullRange / 2);    // 2x more responsive to finger drags
             knobs.add (k); cols.add (d.col); addAndMakeVisible (k);
         }
         startTimerHz (20);   // refresh the curve as params move

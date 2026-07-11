@@ -70,6 +70,7 @@ public:
         for (int m = 0; m < 8; ++m)
         {
             auto* k = new RotaryKnob (proc.apvts, ids[m], "M" + juce::String (m + 1), proc.getMidiLearn());
+            k->setDragPixels (kDragPixelsForFullRange / 2);    // 2x more responsive to finger drags
             macros.add (k); addAndMakeVisible (k);
             // When a macro moves, drive its assigned target (message-thread routing).
             const int idx = m;
