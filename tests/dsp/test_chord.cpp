@@ -15,7 +15,7 @@ namespace
     Vec chord (ChordEngine& ce, int note)
     {
         int trig[4], rel[4]; int nt = 0, nr = 0;
-        ce.noteOn (note, trig, nt, rel, nr);
+        ce.noteOn (note, 0.8f, trig, nt, rel, nr);
         Vec v (trig, trig + nt);
         int r2[4]; int nr2 = 0; ce.noteOff (note, r2, nr2);
         std::sort (v.begin(), v.end());
@@ -122,7 +122,7 @@ TEST_CASE ("ledger: note-off releases the note-ON tones despite modifier churn",
     ce.setForcerHeld (ChordEngine::Min, true);
 
     int trig[4], rel[4]; int nt = 0, nr = 0;
-    ce.noteOn (60, trig, nt, rel, nr);                              // Cm: 60 63 67
+    ce.noteOn (60, 0.8f, trig, nt, rel, nr);                              // Cm: 60 63 67
     Vec on (trig, trig + nt); std::sort (on.begin(), on.end());
     REQUIRE (on == Vec {60, 63, 67});
 
@@ -143,12 +143,12 @@ TEST_CASE ("re-press releases only changed tones, keeps the rest (no stuck notes
     int trig[4], rel[4]; int nt = 0, nr = 0;
 
     ce.setForcerHeld (ChordEngine::Min, true);
-    ce.noteOn (60, trig, nt, rel, nr);                             // Cm 60 63 67, nothing to release
+    ce.noteOn (60, 0.8f, trig, nt, rel, nr);                             // Cm 60 63 67, nothing to release
     REQUIRE (nr == 0);
 
     ce.setForcerHeld (ChordEngine::Min, false);
     ce.setForcerHeld (ChordEngine::Maj, true);
-    ce.noteOn (60, trig, nt, rel, nr);                             // re-press -> CMaj 60 64 67
+    ce.noteOn (60, 0.8f, trig, nt, rel, nr);                             // re-press -> CMaj 60 64 67
     Vec trigger (trig, trig + nt); std::sort (trigger.begin(), trigger.end());
     Vec release (rel, rel + nr);   std::sort (release.begin(), release.end());
     REQUIRE (trigger == Vec {60, 64, 67});
@@ -159,7 +159,7 @@ TEST_CASE ("enable toggled mid-hold strands no notes", "[7b][chord][toggle]")
 {
     auto ce = make (0, ChordEngine::Major);
     int trig[4], rel[4]; int nt = 0, nr = 0;
-    ce.noteOn (60, trig, nt, rel, nr);                             // C E G held
+    ce.noteOn (60, 0.8f, trig, nt, rel, nr);                             // C E G held
     REQUIRE (nt == 3);
 
     ce.setEnabled (false);                                        // toggle OFF while held
@@ -167,4 +167,66 @@ TEST_CASE ("enable toggled mid-hold strands no notes", "[7b][chord][toggle]")
     ce.noteOff (60, roff, nroff);
     Vec off (roff, roff + nroff); std::sort (off.begin(), off.end());
     REQUIRE (off == Vec {60, 64, 67});                            // ledger still releases the chord
+}
+
+// ---- 1.4: re-voicing HELD chords on a modifier edge ------------------------
+
+TEST_CASE ("revoice: holding a chord and morphing MIN->MAJ swaps only the third", "[dsp][chord][revoice]")
+{
+    auto ce = make (0, ChordEngine::Major);
+    ce.setModifierHeld (ChordEngine::ModMin, true);
+    int trig[4], rel[4]; int nt = 0, nr = 0;
+    ce.noteOn (60, 0.9f, trig, nt, rel, nr);                      // Cm: 60 63 67
+
+    // Morph to major (release MIN, press MAJ), then re-voice the held chord.
+    ce.setModifierHeld (ChordEngine::ModMin, false);
+    ce.setModifierHeld (ChordEngine::ModMaj, true);
+    std::vector<int> rel2; std::vector<std::pair<int,float>> trg2;
+    ce.revoiceHeld ([&] (int n) { rel2.push_back (n); }, [&] (int n, float v) { trg2.push_back ({ n, v }); });
+
+    REQUIRE (rel2 == std::vector<int> { 63 });                    // minor third dropped
+    REQUIRE (trg2.size() == 1);
+    REQUIRE (trg2[0].first == 64);                               // major third added
+    REQUIRE (trg2[0].second == 0.9f);                            // velocity inherited
+
+    // note-off now releases the MORPHED set (60 64 67), via the updated ledger.
+    int roff[4]; int nroff = 0; ce.noteOff (60, roff, nroff);
+    Vec off (roff, roff + nroff); std::sort (off.begin(), off.end());
+    REQUIRE (off == Vec { 60, 64, 67 });
+}
+
+TEST_CASE ("revoice: adding 7TH to a held chord triggers only the seventh", "[dsp][chord][revoice]")
+{
+    auto ce = make (0, ChordEngine::Major);
+    int trig[4], rel[4]; int nt = 0, nr = 0;
+    ce.noteOn (60, 0.8f, trig, nt, rel, nr);                      // C major triad: 60 64 67
+
+    ce.setModifierHeld (ChordEngine::Mod7th, true);
+    std::vector<int> rel2; std::vector<int> trg2;
+    ce.revoiceHeld ([&] (int n) { rel2.push_back (n); }, [&] (int n, float) { trg2.push_back (n); });
+    REQUIRE (rel2.empty());                                       // nothing removed
+    REQUIRE (trg2 == std::vector<int> { 71 });                    // Cmaj7 adds B(71)
+}
+
+TEST_CASE ("revoice: rapid modifier churn leaves no stuck tones", "[dsp][chord][revoice]")
+{
+    auto ce = make (0, ChordEngine::Major);
+    int trig[4], rel[4]; int nt = 0, nr = 0;
+    ce.noteOn (60, 0.8f, trig, nt, rel, nr);
+
+    // A pile of morphs.
+    const int mods[] { ChordEngine::ModMin, ChordEngine::ModSus4, ChordEngine::ModDom7,
+                       ChordEngine::ModSus2, ChordEngine::ModDim, ChordEngine::ModMaj };
+    int held = 0;
+    for (int m : mods)
+    {
+        ce.setModifierHeld (m, true);
+        ce.revoiceHeld ([&] (int) { --held; }, [&] (int, float) { ++held; });
+        ce.setModifierHeld (m, false);
+        ce.revoiceHeld ([&] (int) { --held; }, [&] (int, float) { ++held; });
+    }
+    // Back to the plain diatonic triad; the running (added - released) count == the
+    // sounding tones, which must equal what note-off releases (no leak).
+    int roff[4]; int nroff = 0; ce.noteOff (60, roff, nroff);
+    REQUIRE (3 + held == nroff);       // 3 initial tones + net revoice delta == released count
 }

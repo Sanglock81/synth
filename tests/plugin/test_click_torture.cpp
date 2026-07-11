@@ -151,6 +151,27 @@ TEST_CASE ("torture: looper overdub onto identical pitches while live-playing", 
     REQUIRE (pm.s.maxJump < kClick);
 }
 
+TEST_CASE ("torture: chord modifier morph churn under held notes (1.4)", "[plugin][click][chord]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+    set01 (p, ParamID::chordEnabled, 1.0f);
+
+    Pumper pm (p, 128);
+    pm.pump (10);
+    p.routeNoteOn (60, 0.9f, 0); p.routeNoteOn (64, 0.9f, 0); p.routeNoteOn (67, 0.9f, 0);   // hold 3 triggers
+    const std::uint32_t MIN = 1u << ChordEngine::ModMin,  MAJ = 1u << ChordEngine::ModMaj;
+    const std::uint32_t D7  = 1u << ChordEngine::ModDom7, S7  = 1u << ChordEngine::Mod7th;
+    const std::uint32_t masks[] { MIN, MAJ, MIN | S7, D7, MAJ | S7, 0u };
+    for (int c = 0; c < 24; ++c) { p.setQwertyChordModifiers (masks[c % 6]); pm.pump (15); }   // morph the held chords
+
+    INFO ("peak=" << pm.s.peak << " maxJump=" << pm.s.maxJump);
+    REQUIRE (pm.s.finite);
+    REQUIRE (pm.s.peak <= 1.0f);
+    REQUIRE (pm.s.maxJump < kClick);
+}
+
 TEST_CASE ("torture: HOLD chord-replacement churn", "[plugin][click][arp][hold]")
 {
     juce::ScopedJuceInitialiser_GUI init;

@@ -94,7 +94,7 @@ public:
     // engine.noteOn (all at `velocity` — caller supplies it) and `release` with any
     // prior tones on this note that are no longer part of the chord (to noteOff
     // first). Returns nothing; counts come back through the out params.
-    void noteOn (int note, int* trigger, int& nTrigger, int* release, int& nRelease)
+    void noteOn (int note, float velocity, int* trigger, int& nTrigger, int* release, int& nRelease)
     {
         note = clampNote (note);
         int tones[kMaxTones]; int n = buildChord (note, tones);
@@ -110,8 +110,28 @@ public:
         // record + emit the new tones
         nTrigger = n;
         for (int i = 0; i < n; ++i) trigger[i] = tones[i];
-        e.active = true; e.count = n;
+        e.active = true; e.count = n; e.vel = velocity;   // remember velocity for re-voicing (1.4)
         for (int i = 0; i < n; ++i) e.tones[i] = tones[i];
+    }
+
+    // 1.4: re-voice every HELD chord for the current modifier state (call after a modifier
+    // press/release edge). Per held trigger note, diff old vs new tones: releases removed
+    // tones and triggers added tones at the note's stored velocity; unchanged tones keep
+    // sounding (no retrigger click). Updates the ledger. RT-safe (no allocation).
+    //   release(int note);  trigger(int note, float velocity)
+    template <typename Release, typename Trigger>
+    void revoiceHeld (Release&& release, Trigger&& trigger)
+    {
+        if (! enabled) return;
+        for (int played = 0; played < 128; ++played)
+        {
+            auto& e = ledger[(std::size_t) played];
+            if (! e.active) continue;
+            int tones[kMaxTones]; const int n = buildChord (played, tones);
+            for (int i = 0; i < e.count; ++i) if (! contains (tones, n, e.tones[i]))       release (e.tones[i]);
+            for (int i = 0; i < n; ++i)       if (! contains (e.tones, e.count, tones[i])) trigger (tones[i], e.vel);
+            e.count = n; for (int i = 0; i < n; ++i) e.tones[i] = tones[i];
+        }
     }
 
     // Release exactly the tones this note produced; clears the ledger entry.
@@ -137,7 +157,7 @@ public:
     static constexpr int maxTonesPerNote() { return kMaxTones; }
 
 private:
-    struct Entry { bool active = false; int count = 0; int tones[kMaxTones] {}; };
+    struct Entry { bool active = false; int count = 0; int tones[kMaxTones] {}; float vel = 0.8f; };
 
     static int clampNote (int n) { return n < 0 ? 0 : (n > 127 ? 127 : n); }
     static bool contains (const int* a, int n, int v) { for (int i = 0; i < n; ++i) if (a[i] == v) return true; return false; }

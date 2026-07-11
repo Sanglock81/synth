@@ -275,10 +275,21 @@ static const juce::StringArray& perPartSoundIds()
 void VASynthProcessor::applyChordModifiers (std::uint32_t combined)
 {
     const std::uint32_t changed = combined ^ lastFedModMask;
+    if (changed == 0) return;
     for (int i = 0; i < ChordEngine::kNumModifiers; ++i)
         if ((changed >> i) & 1u)
             chordEngine.setModifierHeld (i, (combined >> i) & 1u);
     lastFedModMask = combined;
+
+    // 1.4: a modifier edge RE-VOICES every held chord on the LIVE/focused part — release
+    // the tones that dropped out, trigger the ones that came in (velocity inherited);
+    // unchanged tones keep sounding. So holding a chord and tapping MIN->MAJ7 morphs it.
+    if (chordEngine.isEnabled())
+    {
+        const int part = editFocusPart.load (std::memory_order_relaxed);
+        chordEngine.revoiceHeld ([this, part] (int n)          { engine.noteOff (n, part); },
+                                 [this, part] (int n, float v) { engine.noteOn  (n, v, part); });
+    }
 }
 
 // ---- parts (7C) -----------------------------------------------------------
@@ -947,9 +958,9 @@ void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chord
             return;
         }
         int trig[ChordEngine::kMaxTones], rel[ChordEngine::kMaxTones]; int nt = 0, nr = 0;
-        chordEngine.noteOn (note, trig, nt, rel, nr);
-        for (int i = 0; i < nr; ++i) engine.noteOff (rel[i], 0);
-        for (int i = 0; i < nt; ++i) engine.noteOn (trig[i], vel, 0);
+        chordEngine.noteOn (note, vel, trig, nt, rel, nr);
+        for (int i = 0; i < nr; ++i) engine.noteOff (rel[i], part);
+        for (int i = 0; i < nt; ++i) engine.noteOn (trig[i], vel, part);
     }
     else if (engine.partIsKit (part))
     {
@@ -973,7 +984,7 @@ void VASynthProcessor::dispatchNoteOff (int note, int part, bool chordOn)
         }
         int rel[ChordEngine::kMaxTones]; int nr = 0;
         chordEngine.noteOff (note, rel, nr);
-        for (int i = 0; i < nr; ++i) engine.noteOff (rel[i], 0);
+        for (int i = 0; i < nr; ++i) engine.noteOff (rel[i], part);
     }
     else if (engine.partIsKit (part))
         engine.kitNoteOff (part, note);
