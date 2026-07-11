@@ -192,7 +192,9 @@ public:
     void setLockedPartParams (int part, const VoiceParams& vp,
                               const FXParams& fx = {}, const PartLfos& lfo = {})
     {
-        if (part >= 1 && part < maxParts) lockedSlots[(std::size_t) part].publish ({ vp, fx, lfo });
+        // part 0 is publishable too now: when the edit focus moves OFF part 0, its last
+        // state is baked into slot 0 like any other locked part (1.3 edit-focus).
+        if (part >= 0 && part < maxParts) lockedSlots[(std::size_t) part].publish ({ vp, fx, lfo });
     }
 
     // ---- kit parts ---------------------------------------------------------
@@ -349,16 +351,24 @@ public:
     // the caller's LIVE FX + LFOs; parts 1-3 use the FX/LFOs published WITH their baked
     // voice params (a kit part is dry). partFxUse/partLfoUse become the per-part config
     // for renderParts/mixParts — no data race with the message thread.
+    // `focus` = the LIVE/edited part (1.3): its params come from liveParams (APVTS,
+    // smoothed); every OTHER part plays from its baked locked slot. focus == 0 is the
+    // historical behaviour (part 0 live, 1-3 baked) — bit-identical.
     void beginMasterBlock (int numSamples, VoiceParams liveParams,
-                           const FXParams& live0Fx, const PartLfos& live0Lfo)
+                           const FXParams& liveFx, const PartLfos& liveLfo, int focus = 0)
     {
+        if (focus < 0 || focus >= maxParts) focus = 0;
+        if (focus != liveIndex) smoothPrimed = false;    // re-prime smoothing to the new focus
+        liveIndex = focus;
+
         for (int pt = 0; pt < maxParts; ++pt)
             kitReadIdx[(std::size_t) pt] = kitSlots[(std::size_t) pt].idx.load (std::memory_order_acquire);
 
-        partFxUse[0]  = live0Fx;
-        partLfoUse[0] = live0Lfo;
-        for (int pt = 1; pt < maxParts; ++pt)
+        partFxUse[(std::size_t) focus]  = liveFx;
+        partLfoUse[(std::size_t) focus] = liveLfo;
+        for (int pt = 0; pt < maxParts; ++pt)
         {
+            if (pt == focus) continue;                   // the live part is filled by renderParts
             const LockedPub& cur = lockedSlots[(std::size_t) pt].current();
             partParams[(std::size_t) pt] = cur.vp;
             if (partIsKit (pt)) { partFxUse[(std::size_t) pt] = FXParams{}; partLfoUse[(std::size_t) pt] = PartLfos{}; }
@@ -396,9 +406,9 @@ public:
             smL2     += smoothCoef * (liveParams.osc2Level - smL2);
             smL3     += smoothCoef * (liveParams.osc3Level - smL3);
 
-            partParams[0] = liveParams;
-            partParams[0].cutoffHz  = smCutoff; partParams[0].resonance = smReso;
-            partParams[0].osc1Level = smL1; partParams[0].osc2Level = smL2; partParams[0].osc3Level = smL3;
+            partParams[(std::size_t) liveIndex] = liveParams;
+            partParams[(std::size_t) liveIndex].cutoffHz  = smCutoff; partParams[(std::size_t) liveIndex].resonance = smReso;
+            partParams[(std::size_t) liveIndex].osc1Level = smL1; partParams[(std::size_t) liveIndex].osc2Level = smL2; partParams[(std::size_t) liveIndex].osc3Level = smL3;
 
             // Per-part LFO modulation this chunk (three LFOs, summed per destination).
             std::array<float, maxParts> pPitch {}, pCut {}, pPw {};
@@ -672,4 +682,5 @@ private:
     float smoothCoef = 0.05f, smCutoff = 0.0f, smReso = 0.0f;
     float smL1 = 0.8f, smL2 = 0.8f, smL3 = 0.0f;   // smoothed effective osc levels
     bool  smoothPrimed = false;
+    int   liveIndex = 0;                            // the APVTS-driven (focused) part (1.3)
 };

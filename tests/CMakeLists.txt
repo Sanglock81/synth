@@ -91,6 +91,7 @@ add_executable(plugin_tests
     plugin/test_macros.cpp
     plugin/test_rhythm.cpp
     plugin/test_click_torture.cpp
+    plugin/test_editfocus.cpp
     dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests
 
 target_include_directories(plugin_tests PRIVATE

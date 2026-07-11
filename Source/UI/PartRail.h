@@ -55,20 +55,22 @@ public:
         for (int i = 0; i < SynthEngine::maxParts; ++i)
         {
             auto cell = cells[(std::size_t) i];
-            const bool live = (i == 0);
+            const bool live    = (i == 0);
+            const bool focused = (i == proc.editFocus());   // this part is on the panel now
             const bool lit  = blink[(std::size_t) i] > 0;
             const bool locked = i > 0 && proc.getPartPreset (i).isNotEmpty();
             const bool kit    = proc.isPartKit (i);
+            const bool edited = proc.partIsEdited (i);
 
             g.setColour (lit ? VASynthLookAndFeel::track().brighter (0.28f)
-                             : (live ? VASynthLookAndFeel::track().brighter (0.10f) : VASynthLookAndFeel::track()));
+                             : (focused ? VASynthLookAndFeel::track().brighter (0.10f) : VASynthLookAndFeel::track()));
             g.fillRoundedRectangle (cell.toFloat(), 6.0f);
-            if (live) { g.setColour (VASynthLookAndFeel::accent().withAlpha (0.9f)); g.drawRoundedRectangle (cell.toFloat().reduced (1), 6.0f, 2.0f); }
+            if (focused) { g.setColour (VASynthLookAndFeel::accent().withAlpha (0.9f)); g.drawRoundedRectangle (cell.toFloat().reduced (1), 6.0f, 2.0f); }
 
             cell.removeFromRight (kKnobCol);           // level + pan knob column (laid out in resized)
             auto body = cell.reduced (7, 5);
 
-            g.setColour ((live || lit) ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::dim());
+            g.setColour ((focused || lit) ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::dim());
             g.fillEllipse (body.removeFromLeft (11).removeFromTop (11).toFloat());
             body.removeFromLeft (2);
 
@@ -76,8 +78,8 @@ public:
             juce::String sub;
             if (live)        sub = "live patch";
             else if (kit)    sub = "kit  -  " + juce::String (kitPadCount (i)) + " pads";
-            else if (locked) sub = proc.getPartPreset (i);
-            else           { name = "P" + juce::String (i + 1); sub = "tap to add"; }
+            else if (locked) sub = proc.getPartPreset (i) + (edited ? "  (edited)" : juce::String());
+            else           { name = "P" + juce::String (i + 1); sub = edited ? "custom  (edited)" : juce::String ("tap to edit"); }
 
             g.setColour (VASynthLookAndFeel::ink());
             g.setFont (juce::Font (juce::FontOptions (12.0f, juce::Font::bold)));
@@ -115,15 +117,48 @@ public:
         }
     }
 
+    // Tap a cell -> focus that part (the whole panel swaps to its sound). A kit part
+    // opens the Kit Editor instead (it has no single panel sound). Right-click / long-press
+    // -> per-part menu (Kit/preset editor + Revert to preset).
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        const int i = cellAt (e.getPosition());
+        if (e.mods.isPopupMenu()) { if (i >= 1) showCellMenu (i); return; }
+        pressCell = i; pressStart = juce::Time::getMillisecondCounter();
+    }
     void mouseUp (const juce::MouseEvent& e) override
     {
-        auto cells = cellRects (chrome::sectionContent (getLocalBounds()));
-        for (int i = 1; i < SynthEngine::maxParts; ++i)          // P1 (LIVE) edited on the panel
-            if (cells[(std::size_t) i].withTrimmedRight (kKnobCol).contains (e.getPosition()))
-            { KitEditor::show (proc, getTopLevelComponent(), i, [this] { if (restoreFocus) restoreFocus(); }); return; }
+        const int i = cellAt (e.getPosition());
+        pressCell = -1;
+        if (i < 0 || e.mods.isPopupMenu() || e.getDistanceFromDragStart() > 8) return;
+        if (i >= 1 && proc.isPartKit (i))
+            KitEditor::show (proc, getTopLevelComponent(), i, [this] { if (restoreFocus) restoreFocus(); });
+        else
+        { proc.setEditFocus (i); repaint(); if (restoreFocus) restoreFocus(); }
     }
 
 private:
+    int cellAt (juce::Point<int> pos) const
+    {
+        auto cells = cellRects (chrome::sectionContent (getLocalBounds()));
+        for (int i = 0; i < SynthEngine::maxParts; ++i)
+            if (cells[(std::size_t) i].withTrimmedRight (kKnobCol).contains (pos)) return i;
+        return -1;
+    }
+    void showCellMenu (int i)
+    {
+        juce::PopupMenu m;
+        m.addItem (1, "Assign preset / kit (Kit Editor)");
+        if (proc.partIsEdited (i) && proc.getPartPreset (i).isNotEmpty())
+            m.addItem (2, "Revert to preset (" + proc.getPartPreset (i) + ")");
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+            [this, i] (int r)
+            {
+                if (r == 1) KitEditor::show (proc, getTopLevelComponent(), i, [this] { if (restoreFocus) restoreFocus(); });
+                else if (r == 2) { proc.revertPartToPreset (i); repaint(); if (restoreFocus) restoreFocus(); }
+            });
+    }
+
     std::array<juce::Rectangle<int>, SynthEngine::maxParts> cellRects (juce::Rectangle<int> rl) const
     {
         const int n = SynthEngine::maxParts, gap = 5;
@@ -142,6 +177,10 @@ private:
 
     void timerCallback() override
     {
+        // Long-press (touch) opens the per-part menu, like the right-click gesture.
+        if (pressCell >= 1 && juce::Time::getMillisecondCounter() - pressStart > 500)
+        { const int i = pressCell; pressCell = -1; showCellMenu (i); }
+
         for (int i = 0; i < SynthEngine::maxParts; ++i)
         {
             const auto now = proc.partActivity (i);
@@ -159,6 +198,8 @@ private:
     std::array<std::unique_ptr<RotaryKnob>, SynthEngine::maxParts> lvl, pan;
     std::array<std::uint32_t, SynthEngine::maxParts> lastHits {};
     std::array<int, SynthEngine::maxParts> blink {};
+    int pressCell = -1;
+    juce::uint32 pressStart = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PartRail)
 };

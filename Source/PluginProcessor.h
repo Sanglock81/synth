@@ -31,10 +31,12 @@
 // the Korg B2 and Launchkey Mini).
 // ============================================================================
 
-class VASynthProcessor : public juce::AudioProcessor
+class VASynthProcessor : public juce::AudioProcessor,
+                         private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     VASynthProcessor();
+    ~VASynthProcessor() override;
 
     // -- lifecycle -----------------------------------------------------------
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
@@ -181,7 +183,7 @@ public:
     // plus every surface's zones (ranges/parts/transposes). Since ordinary routing RESETS
     // on relaunch, a MULTI is the only way to recall a layout, and it applies ONLY on an
     // explicit load. Stored as XML under AppInfo::multiDir(). Message thread only.
-    juce::ValueTree captureMultiState() const;                 // shared serialise format
+    juce::ValueTree captureMultiState();                       // shared serialise format (1.3: incl. edits)
     void applyMultiState (const juce::ValueTree& multi);       // a zone on a missing-preset part repoints to LIVE (logged)
     bool saveMulti (const juce::String& name);
     bool loadMulti (const juce::String& name);
@@ -293,6 +295,23 @@ public:
     // The arp's currently-playing step (-1 = idle) for the sequencer playhead. UI polls it.
     int arpDisplayStep() const { return arpStepDisp.load (std::memory_order_relaxed); }
 
+    // -- edit focus (1.3): which part the panel edits / the LIVE surface plays --------
+    // The focused part is the APVTS-driven (live, smoothed) part; the other three play
+    // from their baked states. Tapping a part swaps the whole panel to its state (the UI
+    // calls setEditFocus). Focus 0 is the default and is bit-identical to the old model.
+    int  editFocus() const { return editFocusPart.load (std::memory_order_relaxed); }
+    // Move the edit focus to `part` (0..3): save the current part's panel state, load the
+    // tapped part's state into the APVTS (the panel refreshes), bake the now-defocused
+    // part into its engine slot, re-prime smoothing. Message thread (UI). A kit part has
+    // no single panel sound, so focusing one is a no-op (edit it in the Kit Editor).
+    void setEditFocus (int part);
+    // Has this locked part diverged from its assigned preset (shows the "(edited)" tag)?
+    bool partIsEdited (int part) const
+    { return part >= 0 && part < SynthEngine::maxParts && partEdited[(std::size_t) part]; }
+    // Revert a locked part to its assigned preset (undo panel edits), symmetric with how
+    // the edit began. Message thread.
+    void revertPartToPreset (int part);
+
     // -- looper (R3) ----------------------------------------------------------
     // Runtime loop content (recorded notes) is NOT preset material; it's exported to
     // MIDI. The UI reads the playhead + per-lane content for drawing. Message thread.
@@ -345,7 +364,8 @@ private:
     // Bake a source preset -> VoiceParams (+ optionally its FX + 3 LFOs). Shared by
     // locked parts (fxOut/lfoOut set) and kit pads (null). ok=false if preset missing.
     VoiceParams bakePresetParams (const juce::String& name, bool& ok,
-                                  FXParams* fxOut = nullptr, PartLfos* lfoOut = nullptr);
+                                  FXParams* fxOut = nullptr, PartLfos* lfoOut = nullptr,
+                                  juce::ValueTree* stateOut = nullptr);
 
     // Feed the combined (QWERTY | MIDI) held-modifier mask into the chord engine's
     // latest-wins forcer stack as edges (audio thread).
@@ -372,7 +392,7 @@ private:
             routedFifo.finishedWrite (1);
         }   // full -> drop (never blocks a producer)
     }
-    void drainRoutedMidi (bool chordOn);              // audio thread
+    void drainRoutedMidi (bool chordOn, int focus);   // audio thread (focus = LIVE part remap, 1.3)
     void handleControlMessage (const juce::MidiMessage& m); // CC/pitch-bend/all-off, shared
 
     // Parse an "a,b,c,d" fx_order property into the atomic mirror (used on load).
@@ -421,6 +441,19 @@ private:
     // thread; the baked params reach the audio thread via the engine's double buffer.
     std::array<juce::String, SynthEngine::maxParts> partPresetName {};
     std::array<KitDefinition, SynthEngine::maxParts> partKits {};   // per-part kit definition (message thread)
+
+    // Edit focus (1.3). editFocusPart = the part the APVTS currently represents (panel +
+    // engine live slot). partEditState holds the OTHER parts' full panel states; on a
+    // focus swap they exchange with the APVTS. partEdited marks divergence from a preset.
+    std::atomic<int> editFocusPart { 0 };
+    std::array<juce::ValueTree, SynthEngine::maxParts> partEditState {};
+    std::array<bool, SynthEngine::maxParts> partEdited {};
+    bool loadingPartState = false;   // guards the edited-flag listener during programmatic loads
+    void parameterChanged (const juce::String& id, float newValue) override;   // marks a focused locked part edited
+    void bakeStateToSlot (int part, const juce::ValueTree& state);   // state tree -> VoiceParams/FX/LFO -> engine slot
+    void applyPartSoundFromTree (const juce::ValueTree& tree);       // copy sound params (+fx order) -> live APVTS
+    void syncFocusedPartState();                                     // capture the focused part's live sound into its store
+
     juce::CriticalSection routingLock;
     std::vector<std::pair<juce::String, std::uint32_t>> surfaceHits; // surface -> activity count
     std::vector<std::pair<juce::String, int>> surfaceNotes;         // surface -> last note (split-by-play)

@@ -27,6 +27,8 @@ static void vaSynthCrashHandler (void*)
     juce::Logger::writeToLog (juce::SystemStats::getStackBacktrace());
 }
 
+static const juce::StringArray& perPartSoundIds();   // fwd (defined below) — the per-part sound params
+
 VASynthProcessor::VASynthProcessor()
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMS", createParameterLayout())
@@ -64,6 +66,21 @@ VASynthProcessor::VASynthProcessor()
     }
 
     applyArpStepsProperty();      // seed the 16-step pattern with its default (all on)
+
+    // 1.3: mark a focused LOCKED part "(edited)" when the panel changes a sound param.
+    for (auto& id : perPartSoundIds()) apvts.addParameterListener (id, this);
+}
+
+VASynthProcessor::~VASynthProcessor()
+{
+    for (auto& id : perPartSoundIds()) apvts.removeParameterListener (id, this);
+}
+
+void VASynthProcessor::parameterChanged (const juce::String&, float)
+{
+    if (loadingPartState) return;                       // ignore programmatic focus/preset loads
+    const int f = editFocusPart.load (std::memory_order_relaxed);
+    if (f > 0 && f < SynthEngine::maxParts) partEdited[(std::size_t) f] = true;
 }
 
 void VASynthProcessor::loadFactoryPreset (const juce::String& name)
@@ -229,6 +246,32 @@ static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& a
 
 VoiceParams VASynthProcessor::snapshotParams() const { return buildVoiceParams (apvts); }
 
+// The per-part SOUND parameters — everything buildVoiceParams / fxParamsFrom / lfosFrom
+// read. Edit-focus swaps ONLY these between parts; global/performance params (master,
+// mixer, tempo, arp, chord, macros, poly mode) stay put. (fx ORDER travels via its state
+// property, handled alongside.)
+static const juce::StringArray& perPartSoundIds()
+{
+    namespace ID = ParamID;
+    static const juce::StringArray ids {
+        ID::osc1Wave, ID::osc2Wave, ID::osc3Wave, ID::osc1Octave, ID::osc2Octave, ID::osc3Octave,
+        ID::osc1Detune, ID::osc2Detune, ID::osc3Detune, ID::osc1PW, ID::osc2PW, ID::osc3PW,
+        ID::oscMix, ID::noiseLevel, ID::osc1Level, ID::osc2Level, ID::osc3Level, ID::osc1On, ID::osc2On, ID::osc3On,
+        ID::velToAmp, ID::velToCutoff,
+        ID::filterType, ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack,
+        ID::ampAttack, ID::ampDecay, ID::ampSustain, ID::ampRelease,
+        ID::fltAttack, ID::fltDecay, ID::fltSustain, ID::fltRelease, ID::fltEnvToPitch, ID::glideTime,
+        ID::lfoRate, ID::lfoDepth, ID::lfoShape, ID::lfoDest,
+        ID::lfo2Rate, ID::lfo2Depth, ID::lfo2Shape, ID::lfo2Dest,
+        ID::lfo3Rate, ID::lfo3Depth, ID::lfo3Shape, ID::lfo3Dest,
+        ID::chorusRate, ID::chorusDepth, ID::chorusMix, ID::fxChorusOn,
+        ID::delayTime, ID::delayFeedback, ID::delayMix, ID::delaySpread, ID::fxDelayOn,
+        ID::reverbSize, ID::reverbDamp, ID::reverbWidth, ID::reverbMix, ID::fxReverbOn,
+        ID::stereoWidth, ID::fxWidthOn
+    };
+    return ids;
+}
+
 void VASynthProcessor::applyChordModifiers (std::uint32_t combined)
 {
     const std::uint32_t changed = combined ^ lastFedModMask;
@@ -312,7 +355,8 @@ static PartLfos lfosFrom (const juce::AudioProcessorValueTreeState& src)
 // extracts the preset's FX + LFO (for a locked part; kit pads pass null). Shared by
 // locked parts and kit pads.
 VoiceParams VASynthProcessor::bakePresetParams (const juce::String& name, bool& ok,
-                                                FXParams* fxOut, PartLfos* lfoOut)
+                                                FXParams* fxOut, PartLfos* lfoOut,
+                                                juce::ValueTree* stateOut)
 {
     BakeProcessor scratch;
     ok = true;
@@ -333,9 +377,66 @@ VoiceParams VASynthProcessor::bakePresetParams (const juce::String& name, bool& 
         bakeInitBaseline (scratch);
         juce::Logger::writeToLog ("preset '" + name + "' missing -> Init");
     }
-    if (fxOut  != nullptr) *fxOut  = fxParamsFrom (scratch.apvts);
-    if (lfoOut != nullptr) *lfoOut = lfosFrom (scratch.apvts);
+    if (fxOut    != nullptr) *fxOut    = fxParamsFrom (scratch.apvts);
+    if (lfoOut   != nullptr) *lfoOut   = lfosFrom (scratch.apvts);
+    if (stateOut != nullptr) *stateOut = scratch.apvts.copyState();   // full panel state (1.3 edit-focus)
     return buildVoiceParams (scratch.apvts);
+}
+
+// Bake an arbitrary panel state tree into a part's engine slot (1.3): the part plays
+// this (possibly edited) sound while it's not the focused/live part.
+void VASynthProcessor::bakeStateToSlot (int part, const juce::ValueTree& state)
+{
+    if (part < 0 || part >= SynthEngine::maxParts) return;
+    BakeProcessor scratch;
+    if (state.isValid()) scratch.apvts.replaceState (state.createCopy());
+    else                 bakeInitBaseline (scratch);
+    engine.setLockedPartParams (part, buildVoiceParams (scratch.apvts),
+                                fxParamsFrom (scratch.apvts), lfosFrom (scratch.apvts));
+}
+
+// Copy ONLY the per-part sound params (+ fx order) from a stored state tree into the live
+// APVTS, leaving global/performance params untouched. The panel refreshes via attachments.
+void VASynthProcessor::applyPartSoundFromTree (const juce::ValueTree& tree)
+{
+    const juce::ScopedValueSetter<bool> guard (loadingPartState, true);   // don't flag "(edited)"
+    BakeProcessor scratch;
+    if (tree.isValid()) scratch.apvts.replaceState (tree.createCopy());
+    else                bakeInitBaseline (scratch);
+    for (auto& id : perPartSoundIds())
+        if (auto* dst = apvts.getParameter (id))
+            if (auto* src = scratch.apvts.getParameter (id))
+                dst->setValueNotifyingHost (src->getValue());
+    apvts.state.setProperty (ParamID::fxOrder, scratch.apvts.state.getProperty (ParamID::fxOrder), nullptr);
+    applyFxOrderProperty();
+}
+
+// Move the edit focus (1.3). Save the current part's sound + bake it into its slot so it
+// keeps sounding; load the tapped part's sound into the APVTS (panel refreshes). Only the
+// per-part SOUND params move — the mixer, tempo, arp, chord, macros, master stay put.
+void VASynthProcessor::setEditFocus (int part)
+{
+    if (part < 0 || part >= SynthEngine::maxParts) return;
+    const int cur = editFocusPart.load (std::memory_order_relaxed);
+    if (part == cur) return;
+    if (isPartKit (part)) return;                      // kit parts edit in the Kit Editor
+
+    partEditState[(std::size_t) cur] = apvts.copyState();                    // remember cur's sound
+    engine.setLockedPartParams (cur, snapshotParams(), snapshotFXParams(), lfosFrom (apvts));  // keep it playing
+
+    if (! partEditState[(std::size_t) part].isValid())                       // never visited -> Init
+    { BakeProcessor b; bakeInitBaseline (b); partEditState[(std::size_t) part] = b.apvts.copyState(); }
+
+    applyPartSoundFromTree (partEditState[(std::size_t) part]);              // panel swaps to this part
+    editFocusPart.store (part, std::memory_order_release);                   // audio thread re-primes smoothing
+}
+
+void VASynthProcessor::revertPartToPreset (int part)
+{
+    if (part < 1 || part >= SynthEngine::maxParts) return;
+    const auto name = partPresetName[(std::size_t) part];
+    if (name.isEmpty()) return;
+    setPartPreset (part, name);                        // re-bakes + repopulates the edit state, clears edited
 }
 
 bool VASynthProcessor::setPartPreset (int part, const juce::String& name)
@@ -343,12 +444,18 @@ bool VASynthProcessor::setPartPreset (int part, const juce::String& name)
     if (part < 1 || part >= SynthEngine::maxParts) return false;
 
     bool ok = true;
-    FXParams fx; PartLfos lfo;
-    const VoiceParams vp = bakePresetParams (name, ok, &fx, &lfo);
+    FXParams fx; PartLfos lfo; juce::ValueTree st;
+    const VoiceParams vp = bakePresetParams (name, ok, &fx, &lfo, &st);
     engine.setLockedPartParams (part, vp, fx, lfo);  // voice + FX + LFOs published together
     engine.clearPartKit (part);                     // a plain preset turns any kit off
     partKits[(std::size_t) part] = KitDefinition{}; // forget the kit definition
     partPresetName[(std::size_t) part] = ok ? name : juce::String ("Init");
+
+    // 1.3 edit-focus: the preset IS this part's editable panel state now (fresh, unedited).
+    partEditState[(std::size_t) part] = st;
+    partEdited[(std::size_t) part] = false;
+    if (editFocusPart.load (std::memory_order_relaxed) == part)     // focused -> refresh the panel
+        applyPartSoundFromTree (st);
     return ok;
 }
 
@@ -635,8 +742,17 @@ void VASynthProcessor::routeSurfaceMessage (const juce::String& surface, const j
 
 // ---- MULTI layouts: a named snapshot of parts + surface zones ---------------
 
-juce::ValueTree VASynthProcessor::captureMultiState() const
+// Capture the focused part's current live sound into its store, so a MULTI/session save
+// reflects edits made to a locked part that hasn't been focused away from yet.
+void VASynthProcessor::syncFocusedPartState()
 {
+    const int f = editFocusPart.load (std::memory_order_relaxed);
+    if (f > 0 && f < SynthEngine::maxParts) partEditState[(std::size_t) f] = apvts.copyState();
+}
+
+juce::ValueTree VASynthProcessor::captureMultiState()
+{
+    syncFocusedPartState();
     juce::ValueTree multi ("MULTI");
     for (int p = 1; p < SynthEngine::maxParts; ++p)
     {
@@ -651,6 +767,13 @@ juce::ValueTree VASynthProcessor::captureMultiState() const
             juce::ValueTree e ("PART");
             e.setProperty ("index", p, nullptr);
             e.setProperty ("preset", partPresetName[(std::size_t) p], nullptr);
+            // 1.3: an EDITED part carries its full custom sound so recall restores the tweaks,
+            // not the clean preset.
+            if (partEdited[(std::size_t) p] && partEditState[(std::size_t) p].isValid())
+            {
+                e.setProperty ("edited", true, nullptr);
+                e.addChild (partEditState[(std::size_t) p].createCopy(), -1, nullptr);
+            }
             multi.addChild (e, -1, nullptr);
         }
     }
@@ -704,7 +827,21 @@ void VASynthProcessor::applyMultiState (const juce::ValueTree& multi)
         {
             const int p = (int) e.getProperty ("index", -1);
             if (p >= 1 && p < SynthEngine::maxParts)
+            {
                 partOk[(std::size_t) p] = setPartPreset (p, e.getProperty ("preset", juce::String()).toString());
+                // 1.3: restore an edited part's custom sound over the clean preset.
+                if ((bool) e.getProperty ("edited", false))
+                    for (auto child : e)
+                        if (child.getType().toString() == apvts.state.getType().toString())
+                        {
+                            partEditState[(std::size_t) p] = child.createCopy();
+                            partEdited[(std::size_t) p] = true;
+                            bakeStateToSlot (p, partEditState[(std::size_t) p]);
+                            if (editFocusPart.load (std::memory_order_relaxed) == p)
+                                applyPartSoundFromTree (partEditState[(std::size_t) p]);
+                            break;
+                        }
+            }
         }
         else if (e.hasType ("KIT"))
         {
@@ -800,7 +937,7 @@ void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chord
     if (part >= 0 && part < SynthEngine::maxParts)
         partHits[(std::size_t) part].fetch_add (1, std::memory_order_relaxed);   // PARTS strip flicker
 
-    if (part == 0 && chordOn)
+    if (part == editFocusPart.load (std::memory_order_relaxed) && chordOn)   // chord = focused/live part
     {
         const int mod = modifierLearn.handleNoteOn (note);   // learned pad consumed
         if (mod >= 0)
@@ -825,7 +962,7 @@ void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chord
 
 void VASynthProcessor::dispatchNoteOff (int note, int part, bool chordOn)
 {
-    if (part == 0 && chordOn)
+    if (part == editFocusPart.load (std::memory_order_relaxed) && chordOn)   // chord = focused/live part
     {
         const int mod = modifierLearn.handleNoteOff (note);
         if (mod >= 0)
@@ -880,7 +1017,7 @@ void VASynthProcessor::handleControlMessage (const juce::MidiMessage& msg)
     }
 }
 
-void VASynthProcessor::drainRoutedMidi (bool chordOn)
+void VASynthProcessor::drainRoutedMidi (bool chordOn, int focus)
 {
     int start1, size1, start2, size2;
     routedFifo.prepareToRead (routedFifo.getNumReady(), start1, size1, start2, size2);
@@ -888,11 +1025,15 @@ void VASynthProcessor::drainRoutedMidi (bool chordOn)
     {
         const auto& e = routedBuf[(std::size_t) idx];
         const juce::MidiMessage m (e.status, e.d1, e.d2);
-        // When the arp is on, LIVE-part (0) played notes feed the arp instead of sounding
-        // directly; it re-emits them on its clock. Locked parts + control are unaffected.
-        const bool arpCapture = arp.enabled() && e.part == 0;
-        if (m.isNoteOn())       { looper.recordNote (e.part, 0, e.d1, e.d2 / 127.0f, true);  if (arpCapture) arp.noteOn (e.d1, e.d2 / 127.0f); else dispatchNoteOn  (e.d1, e.d2 / 127.0f, e.part, chordOn); }
-        else if (m.isNoteOff()) { looper.recordNote (e.part, 0, e.d1, 0.0f, false);           if (arpCapture) arp.noteOff (e.d1);               else dispatchNoteOff (e.d1, e.part, chordOn); }
+        // The LIVE zone resolves to part 0; edit-focus remaps it to the focused part so the
+        // main keyboard plays (and edits) whatever part is in focus (1.3). Surfaces routed
+        // to an explicit part are unaffected.
+        const int part = (e.part == 0) ? focus : e.part;
+        // When the arp is on, the LIVE/focused part's played notes feed the arp instead of
+        // sounding directly; it re-emits them on its clock. Locked parts + control unaffected.
+        const bool arpCapture = arp.enabled() && part == focus;
+        if (m.isNoteOn())       { looper.recordNote (part, 0, e.d1, e.d2 / 127.0f, true);  if (arpCapture) arp.noteOn (e.d1, e.d2 / 127.0f); else dispatchNoteOn  (e.d1, e.d2 / 127.0f, part, chordOn); }
+        else if (m.isNoteOff()) { looper.recordNote (part, 0, e.d1, 0.0f, false);           if (arpCapture) arp.noteOff (e.d1);               else dispatchNoteOff (e.d1, part, chordOn); }
         else                    handleControlMessage (m);
     };
     for (int i = 0; i < size1; ++i) handle (start1 + i);
@@ -1078,6 +1219,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         { engine.allNotesOff(); chordEngine.reset(); midiModMask = 0; lastFedModMask = 0; }
 
     const auto params = snapshotParams();
+    const int focus = editFocusPart.load (std::memory_order_relaxed);   // LIVE/edited part (1.3)
 
     namespace ID = ParamID;
     const float master   = rp (apvts, ID::masterGain);
@@ -1141,13 +1283,13 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     // Routed surfaces (per-input MIDI / QWERTY-to-part) — drained at block start, so
     // they sound from sample 0 (block-granular; sample-accurate routing is future).
-    drainRoutedMidi (chordOn);
+    drainRoutedMidi (chordOn, focus);
 
     // --- sample-accurate MIDI dispatch --------------------------------------
     // Multitimbral (Sub-phase 2): each part renders into its OWN buffer (in the engine)
     // so it can run its OWN FX chain; the sum happens once, below. Voices still render
     // per event segment to keep host MIDI note timing tight.
-    engine.beginMasterBlock (numSamples, params, snapshotFXParams(), live0Lfo);
+    engine.beginMasterBlock (numSamples, params, snapshotFXParams(), live0Lfo, focus);
 
     if (arp.enabled())
     {
@@ -1157,8 +1299,8 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         for (const auto metadata : midi)
         {
             const auto msg = metadata.getMessage();
-            if      (msg.isNoteOn())  { looper.recordNote (0, metadata.samplePosition, msg.getNoteNumber(), msg.getFloatVelocity(), true);  arp.noteOn (msg.getNoteNumber(), msg.getFloatVelocity()); }
-            else if (msg.isNoteOff()) { looper.recordNote (0, metadata.samplePosition, msg.getNoteNumber(), 0.0f, false);                    arp.noteOff (msg.getNoteNumber()); }
+            if      (msg.isNoteOn())  { looper.recordNote (focus, metadata.samplePosition, msg.getNoteNumber(), msg.getFloatVelocity(), true);  arp.noteOn (msg.getNoteNumber(), msg.getFloatVelocity()); }
+            else if (msg.isNoteOff()) { looper.recordNote (focus, metadata.samplePosition, msg.getNoteNumber(), 0.0f, false);                    arp.noteOff (msg.getNoteNumber()); }
             else                      handleControlMessage (msg);
         }
 
@@ -1174,7 +1316,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             const auto& ev = arpEv[(std::size_t) i];
             const int off = juce::jlimit (0, numSamples, ev.offset);
             if (off > upTo) { engine.renderParts (upTo, off - upTo, params); upTo = off; }
-            if (ev.on) engine.noteOn (ev.note, ev.vel, 0); else engine.noteOff (ev.note, 0);
+            if (ev.on) engine.noteOn (ev.note, ev.vel, focus); else engine.noteOff (ev.note, focus);
         }
         if (upTo < numSamples) engine.renderParts (upTo, numSamples - upTo, params);
         arpStepDisp.store (arp.currentStep(), std::memory_order_relaxed);   // playhead for the UI
@@ -1196,13 +1338,13 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
             if (msg.isNoteOn())                                 // host / QWERTY -> LIVE part 0
             {
-                looper.recordNote (0, pos, msg.getNoteNumber(), msg.getFloatVelocity(), true);
-                dispatchNoteOn (msg.getNoteNumber(), msg.getFloatVelocity(), 0, chordOn);
+                looper.recordNote (focus, pos, msg.getNoteNumber(), msg.getFloatVelocity(), true);
+                dispatchNoteOn (msg.getNoteNumber(), msg.getFloatVelocity(), focus, chordOn);
             }
             else if (msg.isNoteOff())
             {
-                looper.recordNote (0, pos, msg.getNoteNumber(), 0.0f, false);
-                dispatchNoteOff (msg.getNoteNumber(), 0, chordOn);
+                looper.recordNote (focus, pos, msg.getNoteNumber(), 0.0f, false);
+                dispatchNoteOff (msg.getNoteNumber(), focus, chordOn);
             }
             else
                 handleControlMessage (msg);                     // CC / pitch-bend / all-off
