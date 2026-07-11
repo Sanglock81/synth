@@ -8,6 +8,13 @@ JUCE-free; parameter IDs frozen (append, never reorder/rename); voices dumb; sto
 failed gates; nothing focusable on the main panel; do not claim "per your call" unless quoting
 the user.
 
+**NOISE-CLEANLINESS (permanent regression criterion, R3):** every change that generates
+notes or touches the audio path ships **in the same commit** with click-torture coverage of
+its specific behavior (`tests/plugin/test_click_torture.cpp` — scans the full processor output
+for sample-to-sample discontinuities, out-of-range peaks, non-finites). The `[click]` suite is
+part of **every** gate from now on. Noise cleanliness is not a bug-of-the-week — it is a
+standing acceptance test.
+
 ## Cross-cutting
 
 - **CPU gates are provisional until the ThinkPad `validate.sh` report lands.** The dev-box

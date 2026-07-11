@@ -367,6 +367,12 @@ Or manually: `cmake -B build-asan -DVASYNTH_ASAN=ON -DVASYNTH_BUILD_TESTS=ON`
 (also `-DVASYNTH_UBSAN=ON`). The soak (`tests/soak`) runs a MIDI storm through
 `processBlock` and checks memory stability; under ASan, LeakSanitizer gates leaks.
 
+**Noise-cleanliness is a permanent regression criterion.** Any change that generates
+notes or touches the audio path must ship, in the same commit, with click-torture
+coverage of its behavior in `tests/plugin/test_click_torture.cpp` — it drives the full
+processor and scans the stereo output for sample-to-sample discontinuities (clicks/pops),
+out-of-range peaks, and non-finite samples. The `[click]` suite runs in every gate.
+
 **Reporting a bug — please send:**
 1. `~/.config/synth/synth.log` (has the banner, health stats, any OVERRUN /
    CRASH markers, and the log-drop count).
