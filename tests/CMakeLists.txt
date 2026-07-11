@@ -41,6 +41,7 @@ add_executable(dsp_tests
     dsp/test_softclip.cpp
     dsp/test_eq.cpp
     dsp/test_arp.cpp
+    dsp/test_stepseq.cpp
     dsp/test_looper.cpp
     dsp/test_chord.cpp
     dsp/test_rt_safety.cpp

@@ -85,6 +85,48 @@ TEST_CASE ("looper off leaves the dispatch path bit-identical (goldens safe)", "
     REQUIRE_FALSE (p.loopLaneHasContent (0));
 }
 
+TEST_CASE ("sequencer: an enabled pattern drives its target part", "[plugin][seq]")
+{
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    auto s01 = [&] (const char* id, float v) { p.apvts.getParameter (id)->setValueNotifyingHost (v); };
+
+    p.setSeqCell (0, 0, 1);            // row 0, step 0 on
+    p.setSeqCell (0, 4, 2);            // step 4 accent
+    p.setSeqNote (0, 60);             // sound a synth note so it's audible on a synth part
+    s01 (ParamID::seqTarget, 0.0f);   // target P1 (the live synth)
+    s01 (ParamID::tempo, 0.9f);
+    s01 (ParamID::seqOn, 1.0f);
+
+    juce::AudioBuffer<float> buf (2, 128); juce::MidiBuffer m; double e = 0.0;
+    for (int b = 0; b < 60; ++b) { buf.clear(); p.processBlock (buf, m); e += buf.getRMSLevel (0, 0, 128); }
+    REQUIRE (e > 0.0);                 // the sequencer produced sound
+}
+
+TEST_CASE ("sequencer off is inert (goldens safe)", "[plugin][seq]")
+{
+    VASynthProcessor p;
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::seqOn)->load() < 0.5f);
+    for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
+        for (int s = 0; s < VASynthProcessor::kSeqSteps; ++s)
+            REQUIRE (p.getSeqCell (r, s) == 0);      // empty grid by default
+}
+
+TEST_CASE ("sequencer grid persists across a state round-trip", "[plugin][seq][state]")
+{
+    VASynthProcessor src;
+    src.setSeqCell (2, 5, 2);
+    src.setSeqNote (2, 41);
+    src.setSeqMute (3, true);
+
+    juce::MemoryBlock blob; src.getStateInformation (blob);
+    VASynthProcessor dst; dst.setStateInformation (blob.getData(), (int) blob.getSize());
+
+    REQUIRE (dst.getSeqCell (2, 5) == 2);
+    REQUIRE (dst.getSeqNote (2) == 41);
+    REQUIRE (dst.getSeqMute (3));
+}
+
 TEST_CASE ("Random leaves arp / sequencer / looper / tempo untouched", "[plugin][rhythm][random]")
 {
     VASynthProcessor p;

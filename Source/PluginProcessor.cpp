@@ -66,6 +66,7 @@ VASynthProcessor::VASynthProcessor()
     }
 
     applyArpStepsProperty();      // seed the 16-step pattern with its default (all on)
+    applySeqProperty();           // seed the sequencer grid (empty)
 
     // 1.3: mark a focused LOCKED part "(edited)" when the panel changes a sound param.
     for (auto& id : perPartSoundIds()) apvts.addParameterListener (id, this);
@@ -1151,6 +1152,34 @@ void VASynthProcessor::applyArpStepsProperty()
                                                         : 0.8f;   // sensible default: all steps on
 }
 
+void VASynthProcessor::writeSeqProperty()
+{
+    juce::String cells;
+    for (auto& row : seqCells) for (unsigned char c : row) cells << (int) c;   // 128 digits 0/1/2
+    apvts.state.setProperty ("seq_cells", cells, nullptr);
+    juce::StringArray notes; for (int n : seqNotes) notes.add (juce::String (n));
+    apvts.state.setProperty ("seq_notes", notes.joinIntoString (","), nullptr);
+    juce::String mutes; for (bool m : seqMutes) mutes << (m ? "1" : "0");
+    apvts.state.setProperty ("seq_mutes", mutes, nullptr);
+}
+
+void VASynthProcessor::applySeqProperty()
+{
+    const auto cells = apvts.state.getProperty ("seq_cells").toString();
+    for (int r = 0; r < kSeqRows; ++r)
+        for (int s = 0; s < kSeqSteps; ++s)
+        {
+            const int idx = r * kSeqSteps + s;
+            const int v = (idx < cells.length()) ? (cells[idx] - '0') : 0;
+            seqCells[(std::size_t) r][(std::size_t) s] = (unsigned char) juce::jlimit (0, 2, v);
+        }
+    auto notes = juce::StringArray::fromTokens (apvts.state.getProperty ("seq_notes").toString(), ",", "");
+    for (int r = 0; r < kSeqRows; ++r)
+        seqNotes[(std::size_t) r] = (r < notes.size()) ? juce::jlimit (0, 127, notes[r].getIntValue()) : (36 + r);
+    const auto mutes = apvts.state.getProperty ("seq_mutes").toString();
+    for (int r = 0; r < kSeqRows; ++r) seqMutes[(std::size_t) r] = (r < mutes.length()) && (mutes[r] == '1');
+}
+
 bool VASynthProcessor::exportLoopsToMidiFile (const juce::File& file) const
 {
     bool any = false;
@@ -1273,26 +1302,41 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // Feed QWERTY modifier edges (message thread) into the latest-wins forcer stack.
     applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
 
-    // --- arpeggiator (R3): configure from params + tempo. When ON, it captures the LIVE
-    //     part's played notes (in drainRoutedMidi + the host loop below) and re-emits them
-    //     on its internal clock. OFF => note dispatch is unchanged (bit-identical goldens).
+    // Shared rhythm clock: 16th-note length + swing, common to the arp and sequencer.
+    const double bpm = juce::jmax (20.0f, rp (apvts, ID::tempo));
+    const double sr  = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    const double samplesPerStep = juce::jmax (1.0, sr * 60.0 / bpm / 4.0);
+    const float  swing = rp (apvts, ID::arpSwing);
+
+    // --- arpeggiator (R3, Group 2 = decoupled from the step grid): a pure arpeggiator of
+    //     the held notes, playing every 16th at the gate length. HOLD sustains the chord
+    //     (arp_latch is retired). OFF => note dispatch is unchanged (bit-identical goldens).
     {
         Arpeggiator::Config ac;
         ac.enabled = rp (apvts, ID::arpOn) > 0.5f;
         ac.mode    = (int) rp (apvts, ID::arpMode);
         ac.octaves = (int) rp (apvts, ID::arpOctaves);
         ac.gate    = rp (apvts, ID::arpGate);
-        ac.swing   = rp (apvts, ID::arpSwing);
-        ac.latch   = (rp (apvts, ID::arpLatch) > 0.5f) || (rp (apvts, ID::arpHold) > 0.5f);
-        const double bpm = juce::jmax (20.0f, rp (apvts, ID::tempo));
-        const double sr  = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
-        ac.samplesPerStep = juce::jmax (1.0, sr * 60.0 / bpm / 4.0);        // 16th-note steps
-        for (int i = 0; i < kArpSteps; ++i) ac.steps[(std::size_t) i] = arpSteps[(std::size_t) i];
+        ac.swing   = swing;
+        ac.latch   = rp (apvts, ID::arpHold) > 0.5f;
+        ac.samplesPerStep = samplesPerStep;
+        ac.steps.fill (1.0f);                       // pure arp: every step plays (grid moved to the SEQ)
         arp.setConfig (ac);
-
-        // On an arp ON->OFF toggle, clear the arp and release any note it left sounding.
         if (arpWasOn && ! ac.enabled) { arp.reset(); engine.allNotesOff(); }
         arpWasOn = ac.enabled;
+    }
+
+    // --- step sequencer (R3 Group 2): 8-row drum grid on the target part, same clock ---
+    {
+        StepSequencer::Config sc;
+        sc.enabled = rp (apvts, ID::seqOn) > 0.5f;
+        sc.gate    = rp (apvts, ID::seqGate);
+        sc.swing   = swing;
+        sc.samplesPerStep = samplesPerStep;
+        sc.cells = seqCells;
+        sc.note  = seqNotes;
+        sc.mute  = seqMutes;
+        seq.setConfig (sc);
     }
 
     // --- looper (R3): loop length from tempo + bars; play this block's loop at block
@@ -1323,39 +1367,60 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // per event segment to keep host MIDI note timing tight.
     engine.beginMasterBlock (numSamples, params, snapshotFXParams(), live0Lfo, editF);
 
-    if (arp.enabled())
+    // Internal generators (arp on the live part + sequencer on its target part) are rendered
+    // segmented by their combined, offset-sorted note events. When the arp is on, host notes
+    // feed the arp; otherwise host notes are queued as dispatched events at their offsets.
+    if (arp.enabled() || seq.enabled())
     {
-        // Host/DAW notes feed the arp (block-granular input is fine — the arp re-times its
-        // output); control applies immediately. Then generate clock-timed arp events and
-        // render the block segmented by THOSE.
+        const int seqTarget = juce::jlimit (0, SynthEngine::maxParts - 1, (int) rp (apvts, ID::seqTarget));
+        genEvCount = 0;
+        auto push = [this] (int off, int note, float vel, bool on, int part, bool viaDispatch)
+        { if (genEvCount < (int) genEv.size()) genEv[(std::size_t) genEvCount++] = { off, note, vel, on, part, viaDispatch }; };
+
         for (const auto metadata : midi)
         {
             const auto msg = metadata.getMessage();
-            if      (msg.isNoteOn())  { looper.recordNote (playF, metadata.samplePosition, msg.getNoteNumber(), msg.getFloatVelocity(), true);  arp.noteOn (msg.getNoteNumber(), msg.getFloatVelocity()); }
-            else if (msg.isNoteOff()) { looper.recordNote (playF, metadata.samplePosition, msg.getNoteNumber(), 0.0f, false);                    arp.noteOff (msg.getNoteNumber()); }
-            else                      handleControlMessage (msg);
+            const int  pos = metadata.samplePosition;
+            if (msg.isNoteOn())
+            {
+                looper.recordNote (playF, pos, msg.getNoteNumber(), msg.getFloatVelocity(), true);
+                if (arp.enabled()) arp.noteOn (msg.getNoteNumber(), msg.getFloatVelocity());
+                else               push (pos, msg.getNoteNumber(), msg.getFloatVelocity(), true, playF, true);
+            }
+            else if (msg.isNoteOff())
+            {
+                looper.recordNote (playF, pos, msg.getNoteNumber(), 0.0f, false);
+                if (arp.enabled()) arp.noteOff (msg.getNoteNumber());
+                else               push (pos, msg.getNoteNumber(), 0.0f, false, playF, true);
+            }
+            else handleControlMessage (msg);
         }
 
-        arpEvCount = 0;
-        arp.process (numSamples, [this] (int off, int note, float vel, bool on)
-        {
-            if (arpEvCount < (int) arpEv.size()) arpEv[(std::size_t) arpEvCount++] = { off, note, vel, on };
-        });
+        if (arp.enabled()) arp.process (numSamples, [&] (int off, int note, float vel, bool on) { push (off, note, vel, on, playF, false); });
+        if (seq.enabled()) seq.process (numSamples, [&] (int off, int note, float vel, bool on) { push (off, note, vel, on, seqTarget, true); });
+
+        // Offset-sort (insertion sort — small, RT-safe, stable enough).
+        for (int i = 1; i < genEvCount; ++i)
+            for (int j = i; j > 0 && genEv[(std::size_t) (j - 1)].offset > genEv[(std::size_t) j].offset; --j)
+                std::swap (genEv[(std::size_t) (j - 1)], genEv[(std::size_t) j]);
 
         int upTo = 0;
-        for (int i = 0; i < arpEvCount; ++i)
+        for (int i = 0; i < genEvCount; ++i)
         {
-            const auto& ev = arpEv[(std::size_t) i];
+            const auto& ev = genEv[(std::size_t) i];
             const int off = juce::jlimit (0, numSamples, ev.offset);
             if (off > upTo) { engine.renderParts (upTo, off - upTo, params); upTo = off; }
-            if (ev.on) engine.noteOn (ev.note, ev.vel, playF); else engine.noteOff (ev.note, playF);
+            if (ev.viaDispatch) { if (ev.on) dispatchNoteOn (ev.note, ev.vel, ev.part, chordOn); else dispatchNoteOff (ev.note, ev.part, chordOn); }
+            else                { if (ev.on) engine.noteOn (ev.note, ev.vel, ev.part);           else engine.noteOff (ev.note, ev.part); }
         }
         if (upTo < numSamples) engine.renderParts (upTo, numSamples - upTo, params);
-        arpStepDisp.store (arp.currentStep(), std::memory_order_relaxed);   // playhead for the UI
+        arpStepDisp.store (arp.enabled() ? arp.currentStep() : -1, std::memory_order_relaxed);
+        seqStepDisp.store (seq.enabled() ? seq.currentStep() : -1, std::memory_order_relaxed);
     }
     else
     {
         arpStepDisp.store (-1, std::memory_order_relaxed);
+        seqStepDisp.store (-1, std::memory_order_relaxed);
         int renderedUpTo = 0;
         for (const auto metadata : midi)
         {
@@ -1504,6 +1569,7 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
         applyFxOrderProperty();
         applyMacroMapProperty();       // restore macro->param routing
         applyArpStepsProperty();       // restore the arp step pattern
+        applySeqProperty();            // restore the sequencer grid
 
         // Routing lifecycle rule 2: do NOT restore the multitimbral layout from ordinary
         // state — routing/zones reset to default on load. (Only an explicit MULTI load

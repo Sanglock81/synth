@@ -10,6 +10,7 @@
 #include "DSP/FXChain.h"
 #include "DSP/ParametricEQ.h"
 #include "DSP/Arpeggiator.h"
+#include "DSP/StepSequencer.h"
 #include "DSP/Looper.h"
 #include "Observability/AudioHealthLogger.h"
 #include <atomic>
@@ -295,6 +296,21 @@ public:
     // The arp's currently-playing step (-1 = idle) for the sequencer playhead. UI polls it.
     int arpDisplayStep() const { return arpStepDisp.load (std::memory_order_relaxed); }
 
+    // -- step sequencer (R3 Group 2): 8-row x 16-step drum grid ---------------
+    // Pattern (cells / per-row trigger note / mute) lives in the state tree so it saves
+    // with presets + MULTIs. The RHYTHM/SEQ panel edits it. Message thread + UI.
+    static constexpr int kSeqRows = StepSequencer::kRows, kSeqSteps = StepSequencer::kSteps;
+    unsigned char getSeqCell (int row, int step) const
+    { return (row >= 0 && row < kSeqRows && step >= 0 && step < kSeqSteps) ? seqCells[(std::size_t) row][(std::size_t) step] : 0; }
+    void setSeqCell (int row, int step, unsigned char v)
+    { if (row >= 0 && row < kSeqRows && step >= 0 && step < kSeqSteps) { seqCells[(std::size_t) row][(std::size_t) step] = v > 2 ? 2 : v; writeSeqProperty(); } }
+    int  getSeqNote (int row) const { return (row >= 0 && row < kSeqRows) ? seqNotes[(std::size_t) row] : 0; }
+    void setSeqNote (int row, int note)
+    { if (row >= 0 && row < kSeqRows) { seqNotes[(std::size_t) row] = juce::jlimit (0, 127, note); writeSeqProperty(); } }
+    bool getSeqMute (int row) const { return row >= 0 && row < kSeqRows && seqMutes[(std::size_t) row]; }
+    void setSeqMute (int row, bool m) { if (row >= 0 && row < kSeqRows) { seqMutes[(std::size_t) row] = m; writeSeqProperty(); } }
+    int  seqDisplayStep() const { return seqStepDisp.load (std::memory_order_relaxed); }
+
     // -- edit focus (1.3): which part the panel edits / the LIVE surface plays --------
     // The focused part is the APVTS-driven (live, smoothed) part; the other three play
     // from their baked states. Tapping a part swaps the whole panel to its state (the UI
@@ -410,6 +426,13 @@ private:
     void writeArpStepsProperty();
     void applyArpStepsProperty();
 
+    // Step sequencer grid <-> "seq_cells" / "seq_notes" / "seq_mutes" state properties.
+    std::array<std::array<unsigned char, kSeqSteps>, kSeqRows> seqCells { };
+    std::array<int, kSeqRows>  seqNotes { { 36, 37, 38, 39, 40, 41, 42, 43 } };
+    std::array<bool, kSeqRows> seqMutes { };
+    void writeSeqProperty();
+    void applySeqProperty();
+
     static juce::String orderToString (const int order[4])
     {
         return juce::String (order[0]) + "," + juce::String (order[1]) + ","
@@ -506,10 +529,15 @@ private:
     // and re-emits them on its internal clock. A fixed per-block event buffer keeps the
     // emit path alloc-free.
     Arpeggiator arp;
-    struct ArpEvent { int offset; int note; float vel; bool on; };
-    std::array<ArpEvent, 512> arpEv { };
-    int arpEvCount = 0;
+    StepSequencer seq;
+    // Internal note events for a block from the arp + step sequencer. `viaDispatch` picks
+    // the sink: true -> dispatchNoteOn/Off (kit-aware, for the sequencer's target part);
+    // false -> engine.noteOn/off directly (the arp on the live part).
+    struct GenEvent { int offset; int note; float vel; bool on; int part; bool viaDispatch; };
+    std::array<GenEvent, 1024> genEv { };
+    int genEvCount = 0;
     bool arpWasOn = false;
+    std::atomic<int> seqStepDisp { -1 };   // audio -> UI: sequencer playhead
     int  prevPlayFocus = 0;                // audio-thread mirror of play-focus, for hand-off
     std::atomic<int> arpStepDisp { -1 };   // audio -> UI: current arp step (playhead)
 

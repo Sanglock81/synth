@@ -151,6 +151,30 @@ TEST_CASE ("torture: looper overdub onto identical pitches while live-playing", 
     REQUIRE (pm.s.maxJump < kClick);
 }
 
+TEST_CASE ("torture: dense 8-row sequencer pattern at high tempo (Group 2)", "[plugin][click][seq]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+    // A dense pattern: every row on every step (some accents), sounding synth notes.
+    for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
+    {
+        p.setSeqNote (r, 48 + r * 2);
+        for (int s = 0; s < VASynthProcessor::kSeqSteps; ++s) p.setSeqCell (r, s, (s % 4 == 0) ? 2 : 1);
+    }
+    set01 (p, ParamID::seqTarget, 0.0f);           // target P1
+    setVal (p, ParamID::tempo, 260.0f);            // fast
+    set01 (p, ParamID::seqGate, 0.15f);            // short gates -> lots of on/off churn
+    set01 (p, ParamID::seqOn, 1.0f);
+
+    Pumper pm (p, 128);
+    pm.pump (3000);
+    INFO ("peak=" << pm.s.peak << " maxJump=" << pm.s.maxJump);
+    REQUIRE (pm.s.finite);
+    REQUIRE (pm.s.peak <= 1.0f);
+    REQUIRE (pm.s.maxJump < kClick);
+}
+
 TEST_CASE ("torture: chord modifier morph churn under held notes (1.4)", "[plugin][click][chord]")
 {
     juce::ScopedJuceInitialiser_GUI init;

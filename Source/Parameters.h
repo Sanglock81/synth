@@ -176,6 +176,11 @@ namespace ParamID
     inline constexpr auto loopRec     = "loop_rec";
     inline constexpr auto loopPlay    = "loop_play";
     inline constexpr auto loopBars    = "loop_bars";      // 1 / 2 / 4
+
+    // Step sequencer (R3 Group 2). 8-row drum grid; shares tempo/swing with the arp.
+    inline constexpr auto seqOn       = "seq_on";
+    inline constexpr auto seqGate     = "seq_gate";       // 0..1 of a step
+    inline constexpr auto seqTarget   = "seq_target";     // P1..P4 (the drum target part)
 }
 
 // Builds the full parameter layout. Called once in the processor constructor.
@@ -350,6 +355,11 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::loopRec, 1},  "Loop Rec", false));
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::loopPlay, 1}, "Loop Play", false));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::loopBars, 1}, "Loop Bars", juce::StringArray{ "1", "2", "4" }, 0));
+
+    // --- Step sequencer (R3 Group 2) -----------------------------------------
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::seqOn, 1},   "Seq", false));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::seqGate, 1}, "Seq Gate", juce::NormalisableRange<float>(0.05f, 1.0f), 0.5f));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::seqTarget, 1}, "Seq Target", juce::StringArray{ "P1", "P2", "P3", "P4" }, 1));
 
     return { params.begin(), params.end() };
 }
