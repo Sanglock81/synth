@@ -402,6 +402,17 @@ public:
             slider.setBounds (getLocalBounds().removeFromLeft (getHeight()));
         else
             slider.setBounds (getLocalBounds().withTrimmedTop (17).withTrimmedBottom (showValue ? 16 : 2));
+        if (overlay) { overlay->setBounds (slider.getBounds()); overlay->toFront (false); }
+    }
+
+    // Animate this knob with a live modulation offset (normalized param units) — a moving
+    // tick + span on the arc. Used to show LFO->cutoff / LFO->pw on the focused part.
+    void setModSource (std::function<float()> normOffsetFn)
+    {
+        if (overlay == nullptr) { overlay = std::make_unique<ModOverlay> (slider); addAndMakeVisible (*overlay); }
+        overlay->modFn = std::move (normOffsetFn);
+        overlay->begin();
+        resized();
     }
 
     // Update the displayed name (e.g. a macro showing its assigned target).
@@ -415,12 +426,47 @@ public:
     void setShowValue (bool b) { if (b != showValue) { showValue = b; resized(); repaint(); } }
 
 private:
+    // Moving tick + faint span showing the live LFO-modulated position on the knob arc.
+    // Mouse-transparent (never blocks dragging); geometry mirrors VASynthLookAndFeel's rotary.
+    struct ModOverlay : juce::Component, private juce::Timer
+    {
+        explicit ModOverlay (juce::Slider& sl) : s (sl) { setInterceptsMouseClicks (false, false); }
+        void begin() { startTimerHz (30); }
+        void timerCallback() override { const bool on = modFn && std::abs (modFn()) > 1.0e-4f; if (on || wasOn) repaint(); wasOn = on; }
+        void paint (juce::Graphics& g) override
+        {
+            if (! modFn) return;
+            const float mod = modFn();
+            if (std::abs (mod) < 1.0e-4f) return;
+            const auto rp = s.getRotaryParameters();
+            const float base    = (float) s.valueToProportionOfLength (s.getValue());
+            const float modNorm = juce::jlimit (0.0f, 1.0f, base + mod);
+            auto b = getLocalBounds().toFloat().reduced (3.0f);
+            const float radius = juce::jmin (b.getWidth(), b.getHeight()) * 0.5f;
+            const float cx = b.getCentreX(), cy = b.getCentreY();
+            const float lineW = juce::jmax (2.5f, radius * 0.16f);
+            const float arcR = radius - lineW * 0.5f;
+            const float a0 = rp.startAngleRadians + base    * (rp.endAngleRadians - rp.startAngleRadians);
+            const float a1 = rp.startAngleRadians + modNorm * (rp.endAngleRadians - rp.startAngleRadians);
+            juce::Path span; span.addCentredArc (cx, cy, arcR, arcR, 0.0f, a0, a1, true);
+            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.5f));
+            g.strokePath (span, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            const juce::Point<float> pt (cx + std::sin (a1) * arcR, cy - std::cos (a1) * arcR);
+            g.setColour (VASynthLookAndFeel::accentWarm());
+            g.fillEllipse (pt.x - 3.0f, pt.y - 3.0f, 6.0f, 6.0f);
+        }
+        juce::Slider& s;
+        std::function<float()> modFn;
+        bool wasOn = false;
+    };
+
     juce::String name;
     bool sideLabel = false;
     bool showValue = true;
     juce::Slider slider;
     juce::RangedAudioParameter* param = nullptr;
     std::unique_ptr<juce::SliderParameterAttachment> attachment;
+    std::unique_ptr<ModOverlay> overlay;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RotaryKnob)
 };

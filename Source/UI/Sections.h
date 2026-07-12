@@ -52,6 +52,9 @@ public:
             o.k[1] = std::make_unique<RotaryKnob> (p.apvts, detIds[i], "DETUNE", p.getMidiLearn());
             o.k[2] = std::make_unique<RotaryKnob> (p.apvts, pwIds[i],  "PW",     p.getMidiLearn());
             o.k[3] = std::make_unique<RotaryKnob> (p.apvts, lvlIds[i], "LEVEL",  p.getMidiLearn());
+            // LFO->PW: the pw mod is in pw units (0..1 linear), so it maps straight to the
+            // knob's normalized offset. Shown on every oscillator's PW knob.
+            o.k[2]->setModSource ([&p]() -> float { return p.lfoModForDest (3); });
             addAndMakeVisible (*o.on);   addAndMakeVisible (*o.wave);
             for (auto& k : o.k) addAndMakeVisible (*k);
         }
@@ -122,6 +125,19 @@ public:
         {
             auto* k = new RotaryKnob (p.apvts, d.pid, d.name, p.getMidiLearn(), /*sideLabel*/ true);
             knobs.add (k); addAndMakeVisible (k);
+            if (juce::String (d.pid) == ID::filterCutoff)
+            {
+                auto* cut = p.apvts.getParameter (ID::filterCutoff);
+                k->setModSource ([&p, cut]() -> float          // LFO->cutoff: octaves -> normalized offset
+                {
+                    const float oct = p.lfoModForDest (2);
+                    if (std::abs (oct) < 1.0e-5f) return 0.0f;
+                    const auto& r = cut->getNormalisableRange();
+                    const float base01 = cut->getValue();
+                    const float modHz  = r.convertFrom0to1 (base01) * std::pow (2.0f, oct);
+                    return r.convertTo0to1 (modHz) - base01;
+                });
+            }
         }
     }
 

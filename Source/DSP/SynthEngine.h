@@ -442,6 +442,12 @@ public:
                     }
                 }
             }
+            // Publish the FOCUSED (live) part's current LFO mod per destination for the UI
+            // knob animation (semitones / octaves / pw-units; 0 when that part is silent).
+            focusMod[1].store (pPitch[(std::size_t) liveIndex], std::memory_order_relaxed);
+            focusMod[2].store (pCut  [(std::size_t) liveIndex], std::memory_order_relaxed);
+            focusMod[3].store (pPw   [(std::size_t) liveIndex], std::memory_order_relaxed);
+
             // Shared performance mods (bend + mod-wheel vibrato) hit every part's pitch.
             const float vib = vibratoLFO.advance (chunk) * modWheel * kVibratoSemis;
             const float bendVib = pitchBendSemis + vib;
@@ -677,6 +683,14 @@ private:
     std::array<std::vector<float>, maxParts> partMono, partL, partR;
     std::vector<float> capL, capR;   // looper capture tap (one part's post-FX contribution)
     int capturePart = -1;
+    std::atomic<float> focusMod[4] { };   // focused part's LFO mod per dest (UI knob animation)
+
+public:
+    // Current LFO modulation on the focused part for a destination (0 off, 1 pitch semis,
+    // 2 cutoff octaves, 3 pw units). Audio thread writes; the UI reads for knob animation.
+    float focusModForDest (int d) const
+    { return (d >= 0 && d < 4) ? focusMod[(std::size_t) d].load (std::memory_order_relaxed) : 0.0f; }
+private:
     std::array<int, maxParts> fxSilentBlocks {};
     std::array<bool, maxParts> fxCleared {};          // FX state reset on skip-entry (no stale-resume pop)
     std::array<bool, maxParts> partHadVoice {};       // set across renderParts segments, read in mixParts

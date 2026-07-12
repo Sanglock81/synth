@@ -32,6 +32,30 @@ TEST_CASE ("arp on: a held note produces sound through the processor", "[plugin]
     REQUIRE (energyOverBlocks (p, 60, 60) > 0.0);
 }
 
+TEST_CASE ("LFO modulation is published for the focused part's knob animation", "[plugin][ui][modanim]")
+{
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    auto s01 = [&] (const char* id, float v) { p.apvts.getParameter (id)->setValueNotifyingHost (v); };
+    s01 (ParamID::lfoDest, 2.0f / 3.0f);    // dest = CUTOFF (choice off/pitch/cutoff/pw)
+    s01 (ParamID::lfoDepth, 0.8f);
+    s01 (ParamID::lfoRate, 0.5f);
+    p.routeNoteOn (60, 0.9f, 0);            // a held note -> the LFO runs
+
+    juce::AudioBuffer<float> buf (2, 128); juce::MidiBuffer m;
+    float maxCut = 0.0f;
+    for (int b = 0; b < 200; ++b) { buf.clear(); p.processBlock (buf, m); maxCut = std::max (maxCut, std::abs (p.lfoModForDest (2))); }
+    REQUIRE (maxCut > 0.0f);                // cutoff mod is published for the UI
+
+    // With no note (silent part) the published mod falls back to ~0.
+    VASynthProcessor q; q.prepareToPlay (48000.0, 128);
+    q.apvts.getParameter (ParamID::lfoDest)->setValueNotifyingHost (2.0f / 3.0f);
+    q.apvts.getParameter (ParamID::lfoDepth)->setValueNotifyingHost (0.8f);
+    juce::AudioBuffer<float> b2 (2, 128); juce::MidiBuffer m2;
+    for (int b = 0; b < 50; ++b) { b2.clear(); q.processBlock (b2, m2); }
+    REQUIRE (std::abs (q.lfoModForDest (2)) < 1.0e-4f);
+}
+
 TEST_CASE ("arp off: dispatch path unchanged (held note still sounds)", "[plugin][arp]")
 {
     VASynthProcessor p;   // arp defaults off

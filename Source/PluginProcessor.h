@@ -303,6 +303,10 @@ public:
         arpSteps[(std::size_t) i] = juce::jlimit (0.0f, 1.0f, v);
         writeArpStepsProperty();
     }
+
+    // Live LFO modulation on the focused part for a destination (1 pitch semis, 2 cutoff
+    // octaves, 3 pw units) — the UI animates the CUTOFF / PW knobs from this.
+    float lfoModForDest (int dest) const { return engine.focusModForDest (dest); }
     // The arp's currently-playing step (-1 = idle) for the sequencer playhead. UI polls it.
     int arpDisplayStep() const { return arpStepDisp.load (std::memory_order_relaxed); }
 
