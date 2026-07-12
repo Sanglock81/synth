@@ -547,6 +547,8 @@ private:
     std::array<GenEvent, 1024> genEv { };
     int genEvCount = 0;
     bool arpWasOn = false;
+    bool seqWasOn = false;                  // seq enable edge -> flush held notes on disable
+    bool chordWasOn = false;               // chord enable edge -> release held tones on disable
     std::atomic<int> seqStepDisp { -1 };   // audio -> UI: sequencer playhead
     int  prevPlayFocus = 0;                // audio-thread mirror of play-focus, for hand-off
     std::atomic<int> arpStepDisp { -1 };   // audio -> UI: current arp step (playhead)

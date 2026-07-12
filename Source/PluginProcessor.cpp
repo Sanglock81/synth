@@ -1329,6 +1329,10 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     // --- chord engine (7B): one played note -> a diatonic chord -------------
     const bool chordOn = rp (apvts, ID::chordEnabled) > 0.5f;
+    // Disabling the engine while a chord is held would strand the expanded tones (a later
+    // key-up only releases the root), so release the focused part's held tones on the edge.
+    if (chordWasOn && ! chordOn) { engine.releasePartNotes (playF); chordEngine.clearHeld(); }
+    chordWasOn = chordOn;
     chordEngine.setEnabled (chordOn);
     chordEngine.setRoot  ((int) rp (apvts, ID::chordRoot));
     chordEngine.setScale ((int) rp (apvts, ID::chordScale));
@@ -1375,6 +1379,14 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         sc.note  = seqNotes;
         sc.mute  = seqMutes;
         seq.setConfig (sc);
+        // Disabling the sequencer mid-gate must release its held note — the render path
+        // below won't call seq.process() once it's off, so flush it here or the voice hangs.
+        if (seqWasOn && ! sc.enabled)
+        {
+            const int seqT = juce::jlimit (0, SynthEngine::maxParts - 1, (int) rp (apvts, ID::seqTarget));
+            seq.flush ([this, seqT, chordOn] (int, int note, float, bool) { dispatchNoteOff (note, seqT, chordOn); });
+        }
+        seqWasOn = sc.enabled;
     }
 
     // --- looper (R3 Group 3): clock-linked, armed + measure-quantized, dual-lane.
