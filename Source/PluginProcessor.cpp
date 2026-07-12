@@ -273,6 +273,8 @@ static const juce::StringArray& perPartSoundIds()
     return ids;
 }
 
+const juce::StringArray& VASynthProcessor::soundDesignParamIDs() { return perPartSoundIds(); }
+
 void VASynthProcessor::applyChordModifiers (std::uint32_t combined)
 {
     const std::uint32_t changed = combined ^ lastFedModMask;

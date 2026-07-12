@@ -13,25 +13,32 @@ TEST_CASE ("randomize sets every parameter within its range and actually changes
     VASynthProcessor p;
     PresetManager pm (p.apvts);
 
+    const auto& soundIds = VASynthProcessor::soundDesignParamIDs();
     auto& params = p.getParameters();
     std::vector<float> before;
     for (auto* prm : params) before.push_back (prm->getValue());
 
     juce::Random rng (12345);
-    pm.randomize (rng);
+    pm.randomize (rng, soundIds);
 
-    int changed = 0;
+    int changedSound = 0, soundCount = 0, changedOther = 0;
     for (int i = 0; i < params.size(); ++i)
     {
         const float v = params[i]->getValue();
         REQUIRE (v >= 0.0f);            // normalized values are always in range
         REQUIRE (v <= 1.0f);
-        if (std::abs (v - before[(size_t) i]) > 1e-6f) ++changed;
+        auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (params[i]);
+        const juce::String id = withId != nullptr ? withId->paramID : juce::String();
+        const bool isSound = soundIds.contains (id) && ! PresetManager::randomizeExclusions().contains (id);
+        const bool moved = std::abs (v - before[(size_t) i]) > 1e-6f;
+        if (isSound) ++soundCount;
+        if (moved) { if (isSound) ++changedSound; else ++changedOther; }
     }
-    // The majority of SOUND-DESIGN params should move (a shuffle, not a no-op).
-    // Held: the performance/global exclusion list, osc1_on (forced on), and
-    // low-cardinality choice params that can randomly land on their default.
-    REQUIRE (changed >= params.size() / 2);
+    // ONLY sound-design params move — the mixer, EQ, macros and every global stay put.
+    REQUIRE (changedOther == 0);
+    // ...and the majority of the sound-design set actually shuffled (not a no-op). Held:
+    // osc1_on (forced on) + low-cardinality choice params that can land on their default.
+    REQUIRE (changedSound >= soundCount / 2);
 }
 
 TEST_CASE ("randomize never touches the performance/global exclusion list", "[plugin][preset][random][bug5]")
@@ -72,7 +79,7 @@ TEST_CASE ("randomize never touches the performance/global exclusion list", "[pl
     for (auto& kv : pinned) want.push_back (p.apvts.getParameter (kv.id)->getValue());
 
     // Hammer randomize many times — an exclusion leak would show up statistically.
-    for (int i = 0; i < 200; ++i) { juce::Random rng (i * 2654435761u + 1u); pm.randomize (rng); }
+    for (int i = 0; i < 200; ++i) { juce::Random rng (i * 2654435761u + 1u); pm.randomize (rng, VASynthProcessor::soundDesignParamIDs()); }
 
     for (size_t i = 0; i < pinned.size(); ++i)
         REQUIRE (p.apvts.getParameter (pinned[i].id)->getValue() == Catch::Approx (want[i]).margin (1e-6));
@@ -81,6 +88,38 @@ TEST_CASE ("randomize never touches the performance/global exclusion list", "[pl
     REQUIRE (PresetManager::randomizeExclusions().size() == (int) pinned.size());
     for (auto& kv : pinned)
         REQUIRE (PresetManager::randomizeExclusions().contains (kv.id));
+}
+
+TEST_CASE ("randomize touches ONLY the selected part's sound — mixer / EQ / macros stay put",
+           "[plugin][preset][random]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    PresetManager pm (p.apvts);
+
+    // Cross-part mix + master controls the player has dialled in — Random must not disturb
+    // these (they span every part, which is what "affects every part" was about).
+    struct KV { const char* id; float norm; };
+    const std::vector<KV> mix {
+        { ParamID::part0Level, 0.7f }, { ParamID::part0Pan, 0.3f },
+        { ParamID::part1Level, 0.4f }, { ParamID::part1Pan, 0.8f },
+        { ParamID::part2Level, 0.9f }, { ParamID::part3Pan, 0.2f },
+        { ParamID::eqLmGain,   0.75f }, { ParamID::eqHmFreq, 0.6f }, { ParamID::eqOn, 1.0f },
+        { ParamID::macro1, 0.25f }, { ParamID::macro4, 0.65f }, { ParamID::macro8, 0.5f },
+    };
+    for (auto& kv : mix) p.apvts.getParameter (kv.id)->setValueNotifyingHost (kv.norm);
+    std::vector<float> want;
+    for (auto& kv : mix) want.push_back (p.apvts.getParameter (kv.id)->getValue());
+    const float cutoffBefore = p.apvts.getParameter (ParamID::filterCutoff)->getValue();
+
+    for (int i = 0; i < 100; ++i)
+    { juce::Random rng (i * 40503u + 7u); pm.randomize (rng, VASynthProcessor::soundDesignParamIDs()); }
+
+    for (size_t i = 0; i < mix.size(); ++i)
+        REQUIRE (p.apvts.getParameter (mix[i].id)->getValue() == Catch::Approx (want[i]).margin (1e-6));
+
+    // ...but a sound-design param DID move (proves randomize actually ran).
+    REQUIRE (p.apvts.getParameter (ParamID::filterCutoff)->getValue() != Catch::Approx (cutoffBefore).margin (1e-6));
 }
 
 TEST_CASE ("master_gain is a performance control excluded from preset load/save", "[plugin][preset][master]")
@@ -134,7 +173,7 @@ TEST_CASE ("save then load round-trips the parameter state", "[plugin][preset][s
     REQUIRE (pm.getPresetNames().contains (name));
 
     // Change everything, then load the preset back.
-    juce::Random rng (7); pm.randomize (rng);
+    juce::Random rng (7); pm.randomize (rng, VASynthProcessor::soundDesignParamIDs());
     REQUIRE (pm.load (name));
 
     REQUIRE (p.apvts.getParameter ("filter_cutoff")->getValue() == Catch::Approx (0.42f).margin (1e-4));

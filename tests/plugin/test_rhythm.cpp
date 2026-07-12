@@ -164,7 +164,7 @@ TEST_CASE ("Random leaves arp / sequencer / looper / tempo untouched", "[plugin]
     const float cutoffBefore = p.apvts.getRawParameterValue (ParamID::filterCutoff)->load();
 
     juce::Random rng (12345);
-    pm.randomize (rng);
+    pm.randomize (rng, VASynthProcessor::soundDesignParamIDs());
 
     // Every rhythm param is unchanged...
     for (size_t i = 0; i < before.size(); ++i)

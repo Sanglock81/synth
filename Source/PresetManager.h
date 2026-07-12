@@ -90,10 +90,12 @@ public:
     }
 
     // Shuffle only the SOUND-DESIGN parameters (osc waves/levels/detune/PW, filter,
-    // envelopes, LFO, FX amounts), leaving every performance/global/routing control
-    // at its current value. A few ranges are bounded so the result stays musical
-    // rather than a wall of noise or a self-oscillating scream.
-    void randomize (juce::Random& rng)
+    // envelopes, LFO, FX amounts) named in `soundIds` — i.e. the SELECTED part's sound.
+    // Everything else (part mixer levels/pans, master EQ, macros, and every other
+    // performance/global/routing control) is left at its current value, so Random
+    // reshapes the current patch without disturbing the mix or the other parts. A few
+    // ranges are bounded so the result stays musical rather than a wall of noise.
+    void randomize (juce::Random& rng, const juce::StringArray& soundIds)
     {
         namespace ID = ParamID;
         for (auto* p : apvts.processor.getParameters())
@@ -101,7 +103,8 @@ public:
             auto* withId = dynamic_cast<juce::AudioProcessorParameterWithID*> (p);
             if (withId == nullptr) continue;
             const auto& id = withId->paramID;
-            if (randomizeExclusions().contains (id)) continue;             // keep current value
+            if (! soundIds.contains (id)) continue;                        // sound-design params only
+            if (randomizeExclusions().contains (id)) continue;             // ...minus playing-feel (vel/glide)
 
             float v = rng.nextFloat();                                     // default: full range
             if      (id == ID::osc1On)        v = 1.0f;                     // guarantee a live source

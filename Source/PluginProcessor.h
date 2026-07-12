@@ -281,6 +281,10 @@ public:
     void randomizeMacros (juce::Random& rng);
     // Curated musical parameters a macro may target.
     static juce::StringArray macroRoutableIDs();
+    // The per-part SOUND-design parameter IDs (osc/filter/env/LFO/FX). RANDOM shuffles
+    // ONLY these — of the selected part — leaving the mixer, EQ, macros and every other
+    // global/performance control alone.
+    static const juce::StringArray& soundDesignParamIDs();
 
     // -- arpeggiator 16-step pattern (R3) -------------------------------------
     // Per-step velocity 0..1 (0 = rest). Lives in the state tree ("arp_steps") so it

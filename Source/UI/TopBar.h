@@ -45,8 +45,9 @@ public:
         random.onClick = [this]
         {
             juce::Random rng;
-            presets.randomize (rng);
-            proc.randomizeMacros (rng);        // assign 1-4 macros to random params + values
+            // Randomize ONLY the selected part's synth sound; leave the mixer, EQ, macros
+            // and the other parts untouched (so Random reshapes the current patch, not the mix).
+            presets.randomize (rng, VASynthProcessor::soundDesignParamIDs());
             currentName = "Random"; refreshTitle(); refreshMacroLabels();
             if (restoreFocus) restoreFocus();
         };
