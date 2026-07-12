@@ -42,7 +42,7 @@ public:
         static const Row rows[] {
             { "A W S E D ...", "play notes (QWERTY musical keyboard)" },
             { "Z  /  X",       "octave down / up" },
-            { "C V B N M , .", "hold a chord modifier (Maj Min 7th Dom7 Sus4 Sus2 Dim)" },
+            { "C V B N M , .", "hold a chord modifier (Maj Min Sus4 Sus2 Dim Dom7 7th)" },
             { "right-click / long-press", "MIDI-learn a knob, fader or chord chip" },
             { "tap an FX name bar", "toggle that effect on / off" },
             { "drag an FX name bar", "reorder the FX chain" },

@@ -284,12 +284,14 @@ private:
     // The reserved bottom row -> a modifier bitmask (bit = ChordEngine::ModifierId).
     static std::uint32_t readChordModifierKeys()
     {
+        // Physical key order (c v b n m , .) maps left-to-right onto the CHORD bar's chip
+        // order (MAJ MIN SUS4 SUS2 DIM DOM7 7TH) so the key you press lights the chip above it.
         struct M { int key; int mod; };
         static constexpr M kMods[] {
             { 'c', ChordEngine::ModMaj  }, { 'v', ChordEngine::ModMin  },
-            { 'b', ChordEngine::Mod7th  }, { 'n', ChordEngine::ModDom7 },
-            { 'm', ChordEngine::ModSus4 }, { ',', ChordEngine::ModSus2 },
-            { '.', ChordEngine::ModDim  }                              // '/' is spare
+            { 'b', ChordEngine::ModSus4 }, { 'n', ChordEngine::ModSus2 },
+            { 'm', ChordEngine::ModDim  }, { ',', ChordEngine::ModDom7 },
+            { '.', ChordEngine::Mod7th  }                              // '/' is spare
         };
         std::uint32_t mask = 0;
         for (auto& m : kMods)

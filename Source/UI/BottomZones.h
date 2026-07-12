@@ -56,6 +56,13 @@ public:
             g.setFont (juce::Font (juce::FontOptions (14.5f, juce::Font::bold)));
             g.drawText (ChordEngine::modifierName (i), cell, juce::Justification::centred, false);
 
+            // QWERTY shortcut hint (standalone): the physical key that triggers this chip,
+            // in the same left-to-right order as the keys c v b n m , . (top-left keycap).
+            static const char* kModKeys[ChordEngine::kNumModifiers] { "C", "V", "B", "N", "M", ",", "." };
+            g.setColour (lit ? juce::Colours::black.withAlpha (0.55f) : VASynthLookAndFeel::dim());
+            g.setFont (juce::Font (juce::FontOptions (9.5f, juce::Font::bold)));
+            g.drawText (kModKeys[i], cell.reduced (5, 3).removeFromTop (11), juce::Justification::topLeft, false);
+
             const int cc = proc.getModifierLearn().getCCForModifier (i);
             const int nn = proc.getModifierLearn().getNoteForModifier (i);
             if (cc >= 0 || nn >= 0)
