@@ -127,18 +127,26 @@ public:
             if (! voices[i].isActive())
                 { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot); return; }
 
-        // ...or steal the oldest (global across parts). The voice keeps its
-        // oscillator phase and filter state (SynthVoice::noteOn only clears them for
-        // an idle voice) and the amp envelope retriggers from its current level, so
-        // the steal is click-free without a separate fade.
-        std::size_t oldest = 0;
-        for (std::size_t i = 1; i < activeVoiceLimit; ++i)
-            if (voices[i].getTimestamp() < voices[oldest].getTimestamp())
-                oldest = i;
+        // ...or steal a voice. PER-PART ISOLATION: steal the oldest voice OF THIS PART, so a
+        // barrage on one part (seq / arp / looper) never cuts another part's live notes. Only
+        // fall back to the global oldest when this part has no voice of its own to reuse (the
+        // pool is exhausted by other parts). The stolen voice keeps its oscillator/filter
+        // state and retriggers the amp env from its current level, so the steal is click-free.
+        int oldestOwn = -1;
+        std::size_t oldestAny = 0;
+        for (std::size_t i = 0; i < activeVoiceLimit; ++i)
+        {
+            if (voices[i].getPart() == part
+                && (oldestOwn < 0 || voices[i].getTimestamp() < voices[(std::size_t) oldestOwn].getTimestamp()))
+                oldestOwn = (int) i;
+            if (voices[i].getTimestamp() < voices[oldestAny].getTimestamp())
+                oldestAny = i;
+        }
+        const std::size_t steal = (oldestOwn >= 0) ? (std::size_t) oldestOwn : oldestAny;
 
-        sustained[oldest] = false;
+        sustained[steal] = false;
         ++stealCounter;
-        voices[oldest].noteOn (note, velocity, ++eventCounter, part, soundSlot);
+        voices[steal].noteOn (note, velocity, ++eventCounter, part, soundSlot);
     }
 
     // ---- observability accessors (const; for the processor's telemetry) ----

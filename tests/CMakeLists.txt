@@ -96,6 +96,7 @@ add_executable(plugin_tests
     plugin/test_seq_multitimbral.cpp
     plugin/test_looper_stuck.cpp
     plugin/test_kit_edit.cpp
+    plugin/test_voice_isolation.cpp
     plugin/test_click_torture.cpp
     plugin/test_editfocus.cpp
     dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests
