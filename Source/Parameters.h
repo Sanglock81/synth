@@ -176,6 +176,7 @@ namespace ParamID
     inline constexpr auto loopRec     = "loop_rec";
     inline constexpr auto loopPlay    = "loop_play";
     inline constexpr auto loopBars    = "loop_bars";      // 1 / 2 / 4
+    inline constexpr auto loopMode    = "loop_mode";      // playback lane: MIDI re-synth / AUDIO
 
     // Step sequencer (R3 Group 2). 8-row drum grid; shares tempo/swing with the arp.
     inline constexpr auto seqOn       = "seq_on";
@@ -355,6 +356,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::loopRec, 1},  "Loop Rec", false));
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::loopPlay, 1}, "Loop Play", false));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::loopBars, 1}, "Loop Bars", juce::StringArray{ "1", "2", "4" }, 0));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::loopMode, 1}, "Loop Mode", juce::StringArray{ "MIDI", "AUDIO" }, 0));
 
     // --- Step sequencer (R3 Group 2) -----------------------------------------
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::seqOn, 1},   "Seq", false));

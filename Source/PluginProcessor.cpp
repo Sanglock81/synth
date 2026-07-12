@@ -159,6 +159,11 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     // live in the engine now (Sub-phase 2).
     stereoScratch.setSize (2, juce::jmax (1, samplesPerBlock), false, false, true);
 
+    // Audio looper ring: size for the LONGEST loop the transport can ask for — 4 bars of
+    // 4 beats at the tempo floor (20 BPM) = 48 s. Allocated once here; the audio thread
+    // never resizes it (loop_bars/tempo only shorten the active length).
+    audioLoop.prepare (juce::jmax (1, (int) (sampleRate * 48.0)));
+
     masterGain.reset (sampleRate, 0.02);                       // ~20 ms ramp
     masterGain.setCurrentAndTargetValue (
         apvts.getRawParameterValue (ParamID::masterGain)->load());
@@ -1220,6 +1225,34 @@ bool VASynthProcessor::exportLoopsToMidiFile (const juce::File& file) const
     return os.openedOk() && mf.writeTo (os);
 }
 
+bool VASynthProcessor::exportLoopToWavFile (const juce::File& file) const
+{
+    const int n = audioLoop.contentLength();
+    if (n <= 0) return false;
+    const double sr = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+
+    // Copy the loop (first loopLen ring samples = one period from the downbeat), clamped to
+    // [-1,1] so overdub-summed peaks don't wrap in the file.
+    juce::AudioBuffer<float> buf (2, n);
+    const float* sL = audioLoop.dataL();
+    const float* sR = audioLoop.dataR();
+    for (int i = 0; i < n; ++i)
+    {
+        buf.setSample (0, i, juce::jlimit (-1.0f, 1.0f, sL[i]));
+        buf.setSample (1, i, juce::jlimit (-1.0f, 1.0f, sR[i]));
+    }
+
+    file.deleteFile();
+    auto os = file.createOutputStream();
+    if (os == nullptr) return false;
+    juce::WavAudioFormat wav;
+    std::unique_ptr<juce::AudioFormatWriter> writer (
+        wav.createWriterFor (os.get(), sr, 2, 24, {}, 0));
+    if (writer == nullptr) return false;
+    os.release();                                   // the writer owns the stream now
+    return writer->writeFromAudioSampleBuffer (buf, 0, n);
+}
+
 void VASynthProcessor::randomizeMacros (juce::Random& rng)
 {
     const auto routable = macroRoutableIDs();
@@ -1344,18 +1377,38 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         seq.setConfig (sc);
     }
 
-    // --- looper (R3): loop length from tempo + bars; play this block's loop at block
-    //     start (before input, so looped notes aren't re-recorded); record the live
-    //     performance in drainRoutedMidi + the host loop while REC is armed.
+    // --- looper (R3 Group 3): clock-linked, armed + measure-quantized, dual-lane.
+    //     Loop length = bars x bar-length from tempo. REC ARMS; capture engages at the
+    //     next loop boundary (a measure) and overdubs each pass while REC stays on. Both
+    //     the MIDI lane (note events) and the AUDIO lane (the play-focused part's post-FX,
+    //     captured in mixParts) record together; loop_mode picks which lane you HEAR.
     {
-        if (loopClear.exchange (false, std::memory_order_acq_rel)) looper.clear();
+        if (loopClear.exchange (false, std::memory_order_acq_rel)) { looper.clear(); audioLoop.clear(); }
         const double bpm = juce::jmax (20.0f, rp (apvts, ID::tempo));
         const double sr  = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
         const int barsSel = (int) rp (apvts, ID::loopBars);          // 0->1, 1->2, 2->4 bars
         const int bars = (barsSel == 2) ? 4 : (barsSel == 1) ? 2 : 1;
-        looper.setLoopLength (juce::jmax (1, (int) (sr * 60.0 / bpm * 4.0 * bars)));   // 4 beats/bar
-        looper.setRecording (rp (apvts, ID::loopRec)  > 0.5f);
-        looper.setPlaying   (rp (apvts, ID::loopPlay) > 0.5f);
+        const int loopLen = juce::jmax (1, (int) (sr * 60.0 / bpm * 4.0 * bars));   // 4 beats/bar
+        looper.setLoopLength (loopLen);
+        audioLoop.setLoopLength (loopLen);
+
+        const bool recReq   = rp (apvts, ID::loopRec)  > 0.5f;
+        const bool playReq  = rp (apvts, ID::loopPlay) > 0.5f;
+        const bool audioMode = rp (apvts, ID::loopMode) > 0.5f;      // 0 MIDI re-synth, 1 AUDIO
+
+        if (recReq && ! loopRecPrev) loopArmPending = true;          // REC turned on -> arm
+        if (! recReq)                { loopArmPending = false; loopRecording = false; }  // REC off -> stop
+        loopRecPrev = recReq;
+        // Engage at a loop boundary: at the very start (pos 0) or the block after a wrap.
+        if (loopArmPending && (looper.position() == 0 || loopWrappedLastBlock))
+        { loopArmPending = false; loopRecording = true; }
+
+        looper.setRecording    (loopRecording);
+        audioLoop.setRecording (loopRecording);
+        looper.setPlaying      (playReq && ! audioMode);            // MIDI lane audible
+        audioLoop.setPlaying   (playReq &&   audioMode);            // AUDIO lane audible
+        engine.setCapturePart  (playF);                            // tap the play-focused part
+        loopRecStateDisp.store (loopRecording ? 2 : (loopArmPending ? 1 : 0), std::memory_order_relaxed);
     }
     looper.playBlock (numSamples, [this, chordOn] (int part, int note, float vel, bool on)
     {
@@ -1456,8 +1509,14 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             engine.renderParts (renderedUpTo, numSamples - renderedUpTo, params);
     }
 
-    // Advance the loop clock + mirror its position for the UI.
-    looper.advance (numSamples);
+    // Advance the loop clock + mirror its position for the UI. Note whether it wrapped so
+    // next block's armed-record can engage on the boundary. The AUDIO lane advances later
+    // (after mixParts captures this block), so both lanes stay anchored to the same pos.
+    {
+        const int posBefore = looper.position();
+        looper.advance (numSamples);
+        loopWrappedLastBlock = looper.position() < posBefore;
+    }
     loopPosDisp.store (looper.position(), std::memory_order_relaxed);
     loopLenDisp.store (looper.loopLength(), std::memory_order_relaxed);
 
@@ -1473,6 +1532,16 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     engine.setMix ({ { rp (apvts, ID::part0Level), rp (apvts, ID::part1Level), rp (apvts, ID::part2Level), rp (apvts, ID::part3Level) } },
                    { { rp (apvts, ID::part0Pan),   rp (apvts, ID::part1Pan),   rp (apvts, ID::part2Pan),   rp (apvts, ID::part3Pan)   } });
     engine.mixParts (L, R, numSamples);                         // per-part FX + level/pan + sum
+
+    // --- AUDIO looper lane (Group 3): in AUDIO mode sum the loop back into the master,
+    //     then overdub this block's captured focused-part audio. PLAY *before* RECORD so a
+    //     block hears only PRIOR passes (no first-pass doubling) and overdubs layer onto
+    //     what was already there. The captured tap comes from mixParts (pre-playback), so
+    //     the loop records the live part, never its own playback (no feedback). The MIDI
+    //     lane already dispatched at block start. Advance once per block, anchored to pos.
+    audioLoop.playBlock (L, R, numSamples);
+    audioLoop.recordBlock (engine.captureL(), engine.captureR(), numSamples);
+    audioLoop.advance (numSamples);
 
     // --- master parametric EQ (end of chain: post-FX sum, pre master gain). Off/flat
     //     is a true bypass (skipped), so the output is bit-identical until it's used.

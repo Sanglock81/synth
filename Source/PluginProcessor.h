@@ -12,6 +12,7 @@
 #include "DSP/Arpeggiator.h"
 #include "DSP/StepSequencer.h"
 #include "DSP/Looper.h"
+#include "DSP/AudioLoop.h"
 #include "Observability/AudioHealthLogger.h"
 #include <atomic>
 
@@ -344,9 +345,14 @@ public:
         return len > 0 ? (float) loopPosDisp.load (std::memory_order_relaxed) / (float) len : 0.0f;
     }
     bool  loopLaneHasContent (int part) const { return looper.hasContent (part); }
-    // Write the recorded loops to a Standard MIDI File (one track per part). Audio-stem
-    // export is a follow-up. Returns false if there's nothing recorded or the write fails.
+    bool  loopAudioHasContent () const { return audioLoop.hasContent(); }
+    int   loopRecDisplayState () const { return loopRecStateDisp.load (std::memory_order_relaxed); }
+    // Write the recorded loops to a Standard MIDI File (one track per part). Returns false
+    // if there's nothing recorded or the write fails.
     bool  exportLoopsToMidiFile (const juce::File& file) const;
+    // Write the recorded AUDIO lane to a stereo WAV. Returns false if the audio lane is
+    // empty or the write fails.
+    bool  exportLoopToWavFile (const juce::File& file) const;
 
     // Test seam: build the plugin's binary state format from an XML tree (so the
     // osc_mix->levels migration can be tested with a synthetic pre-level state).
@@ -547,9 +553,18 @@ private:
 
     // Looper (audio thread). Playback dispatches at block start; recording captures the
     // performance input in drain/host. Display mirrors + a CLEAR request are atomics.
+    // Group 3: a parallel AUDIO lane records the play-focused part's post-FX (captured by
+    // the engine); loop_mode picks which lane you HEAR. Recording is armed + quantized to
+    // the loop boundary (a measure): REC arms, capture engages at the next wrap.
     Looper looper;
+    AudioLoop audioLoop;
     std::atomic<bool> loopClear { false };
     std::atomic<int>  loopPosDisp { 0 }, loopLenDisp { 48000 };
+    std::atomic<int>  loopRecStateDisp { 0 };   // 0 idle, 1 armed, 2 recording (for the UI)
+    bool  loopRecPrev = false;                  // REC param edge detect (message->audio safe: audio-thread only)
+    bool  loopArmPending = false;               // armed, waiting for the next loop boundary
+    bool  loopRecording  = false;               // capture engaged (both lanes)
+    bool  loopWrappedLastBlock = false;         // the loop clock wrapped on the previous block
 
     // Master scope tap ring (see pushScope/readScope).
     std::array<std::atomic<float>, kScopeSize> scopeRing {};

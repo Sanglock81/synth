@@ -78,7 +78,7 @@ public:
             // PERFORMANCE state, not sound design — Random must leave them alone.
             ID::tempo,
             ID::arpOn, ID::arpMode, ID::arpOctaves, ID::arpGate, ID::arpSwing, ID::arpLatch, ID::arpHold,
-            ID::loopRec, ID::loopPlay, ID::loopBars
+            ID::loopRec, ID::loopPlay, ID::loopBars, ID::loopMode
         };
         // The arp 16-step PATTERN is a state-tree property (not an APVTS parameter), so
         // randomize()'s getParameters() loop never reaches it — the pattern is safe too.

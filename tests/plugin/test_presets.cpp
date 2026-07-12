@@ -73,6 +73,7 @@ TEST_CASE ("randomize never touches the performance/global exclusion list", "[pl
         { ParamID::loopRec,     1.0f  },
         { ParamID::loopPlay,    1.0f  },
         { ParamID::loopBars,    0.5f  },
+        { ParamID::loopMode,    1.0f  },   // MIDI/AUDIO playback lane (Group 3) — performance state
     };
     for (auto& kv : pinned) p.apvts.getParameter (kv.id)->setValueNotifyingHost (kv.norm);
     std::vector<float> want;

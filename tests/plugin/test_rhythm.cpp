@@ -6,6 +6,7 @@
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <juce_audio_formats/juce_audio_formats.h>
 #include "PluginProcessor.h"
 #include "PresetManager.h"
 
@@ -102,6 +103,80 @@ TEST_CASE ("looper off leaves the dispatch path bit-identical (goldens safe)", "
     REQUIRE (p.apvts.getRawParameterValue (ParamID::loopRec)->load() < 0.5f);
     REQUIRE (p.apvts.getRawParameterValue (ParamID::loopPlay)->load() < 0.5f);
     REQUIRE_FALSE (p.loopLaneHasContent (0));
+    REQUIRE_FALSE (p.loopAudioHasContent());
+}
+
+TEST_CASE ("audio looper: AUDIO mode captures the focused part and loops it back", "[plugin][looper][audio]")
+{
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    auto s01 = [&] (const char* id, float v) { p.apvts.getParameter (id)->setValueNotifyingHost (v); };
+    s01 (ParamID::tempo, 1.0f);          // fast -> short loop
+    s01 (ParamID::loopMode, 1.0f);       // AUDIO playback lane
+    s01 (ParamID::loopRec, 1.0f);
+    s01 (ParamID::loopPlay, 1.0f);
+
+    juce::AudioBuffer<float> buf (2, 128); juce::MidiBuffer midi;
+    // Sound a note during the first pass, then release — only the AUDIO lane can carry it
+    // past the loop boundary (MIDI re-synth is suppressed in AUDIO mode).
+    p.routeNoteOn (60, 0.9f, 0);
+    for (int b = 0; b < 6; ++b) { buf.clear(); p.processBlock (buf, midi); }
+    p.routeNoteOff (60, 0);
+
+    double energyLater = 0.0;
+    for (int b = 0; b < 400; ++b) { buf.clear(); p.processBlock (buf, midi); if (b > 250) energyLater += buf.getRMSLevel (0, 0, 128); }
+    REQUIRE (p.loopAudioHasContent());
+    REQUIRE (energyLater > 0.0);         // the captured audio replayed after the loop wrapped
+}
+
+TEST_CASE ("audio looper: MIDI mode leaves the audio lane silent but still captures it", "[plugin][looper][audio]")
+{
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    auto s01 = [&] (const char* id, float v) { p.apvts.getParameter (id)->setValueNotifyingHost (v); };
+    s01 (ParamID::tempo, 1.0f);
+    s01 (ParamID::loopMode, 0.0f);       // MIDI playback lane (audio lane still records)
+    s01 (ParamID::loopRec, 1.0f);
+    s01 (ParamID::loopPlay, 0.0f);       // nothing plays back
+
+    juce::AudioBuffer<float> buf (2, 128); juce::MidiBuffer midi;
+    p.routeNoteOn (60, 0.9f, 0);
+    for (int b = 0; b < 8; ++b) { buf.clear(); p.processBlock (buf, midi); }
+    p.routeNoteOff (60, 0);
+    for (int b = 0; b < 20; ++b) { buf.clear(); p.processBlock (buf, midi); }
+    // Both lanes captured the performance (dual capture is independent of the mode switch).
+    REQUIRE (p.loopLaneHasContent (0));
+    REQUIRE (p.loopAudioHasContent());
+}
+
+TEST_CASE ("audio looper: WAV export writes when there's content, fails when empty", "[plugin][looper][audio][export]")
+{
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    auto tmp = juce::File::createTempFile (".wav");
+
+    REQUIRE_FALSE (p.exportLoopToWavFile (tmp));       // nothing recorded yet
+
+    auto s01 = [&] (const char* id, float v) { p.apvts.getParameter (id)->setValueNotifyingHost (v); };
+    s01 (ParamID::tempo, 1.0f);
+    s01 (ParamID::loopMode, 1.0f);
+    s01 (ParamID::loopRec, 1.0f);
+
+    juce::AudioBuffer<float> buf (2, 128); juce::MidiBuffer midi;
+    p.routeNoteOn (60, 0.9f, 0);
+    for (int b = 0; b < 40; ++b) { buf.clear(); p.processBlock (buf, midi); }
+    REQUIRE (p.loopAudioHasContent());
+
+    REQUIRE (p.exportLoopToWavFile (tmp));
+    REQUIRE (tmp.getSize() > 44);                       // more than a bare WAV header
+    // It reads back as a valid stereo WAV.
+    juce::AudioFormatManager fm; fm.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> rd (fm.createReaderFor (tmp));
+    REQUIRE (rd != nullptr);
+    REQUIRE (rd->numChannels == 2);
+    REQUIRE (rd->lengthInSamples > 0);
+    rd.reset();
+    tmp.deleteFile();
 }
 
 TEST_CASE ("sequencer: an enabled pattern drives its target part", "[plugin][seq]")

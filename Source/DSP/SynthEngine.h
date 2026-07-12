@@ -54,6 +54,8 @@ public:
             partR[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
             fxSilentBlocks[(std::size_t) p] = kFxHoldBlocks;   // start idle
         }
+        capL.assign ((std::size_t) maxBlock, 0.0f);            // looper capture tap (one part)
+        capR.assign ((std::size_t) maxBlock, 0.0f);
         lfo.prepare (sampleRate);
         for (auto& part : partLfo) for (auto& l : part) l.prepare (sampleRate);   // 3 LFOs x maxParts
         vibratoLFO.prepare (sampleRate);
@@ -472,11 +474,22 @@ public:
         { for (int p = 0; p < maxParts; ++p) { prevLg[(std::size_t) p] = targetLg (p); prevRg[(std::size_t) p] = targetRg (p); } mixPrimed = true; }
     }
 
+    // Looper tap: which part's post-FX/post-pan contribution mixParts copies out for the
+    // audio looper (-1 = none). captureL()/captureR() hold the last block's tap (zeros if
+    // the part was silent/skipped or out of range).
+    void setCapturePart (int p) { capturePart = (p >= 0 && p < maxParts) ? p : -1; }
+    const float* captureL() const { return capL.data(); }
+    const float* captureR() const { return capR.data(); }
+
     // Trim + per-part FX (partFxUse) + sum into the stereo master (once per block).
     void mixParts (float* L, float* R, int numSamples)
     {
         std::fill (L, L + numSamples, 0.0f);
         std::fill (R, R + numSamples, 0.0f);
+        // Looper capture tap: zeroed each block, filled below with the capture part's
+        // post-FX/post-pan contribution (silent if that part is skipped this block).
+        std::fill (capL.begin(), capL.begin() + numSamples, 0.0f);
+        std::fill (capR.begin(), capR.begin() + numSamples, 0.0f);
         partsProcessed = 0;
 
         for (int p = 0; p < maxParts; ++p)
@@ -515,7 +528,14 @@ public:
             const float lgT = targetLg (p), rgT = targetRg (p);
             float lg = prevLg[(std::size_t) p], rg = prevRg[(std::size_t) p];
             const float dlg = (lgT - lg) / (float) numSamples, drg = (rgT - rg) / (float) numSamples;
-            for (int i = 0; i < numSamples; ++i) { lg += dlg; rg += drg; L[i] += sL[i] * lg; R[i] += sR[i] * rg; }
+            const bool cap = (p == capturePart);              // looper: tap this part's contribution
+            for (int i = 0; i < numSamples; ++i)
+            {
+                lg += dlg; rg += drg;
+                const float cl = sL[i] * lg, cr = sR[i] * rg;
+                L[i] += cl; R[i] += cr;
+                if (cap) { capL[(std::size_t) i] = cl; capR[(std::size_t) i] = cr; }
+            }
             prevLg[(std::size_t) p] = lgT; prevRg[(std::size_t) p] = rgT;
 
             if (! partHadVoice[(std::size_t) p])
@@ -655,6 +675,8 @@ private:
     int maxBlockSize = 2048;
     std::array<FXChain, maxParts> partFx;
     std::array<std::vector<float>, maxParts> partMono, partL, partR;
+    std::vector<float> capL, capR;   // looper capture tap (one part's post-FX contribution)
+    int capturePart = -1;
     std::array<int, maxParts> fxSilentBlocks {};
     std::array<bool, maxParts> fxCleared {};          // FX state reset on skip-entry (no stale-resume pop)
     std::array<bool, maxParts> partHadVoice {};       // set across renderParts segments, read in mixParts

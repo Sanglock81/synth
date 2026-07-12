@@ -198,6 +198,32 @@ TEST_CASE ("torture: dense 8-row sequencer pattern at high tempo (Group 2)", "[p
     REQUIRE (pm.s.maxJump < kClick);
 }
 
+TEST_CASE ("torture: AUDIO looper capture + wrap + playback stays click-free (Group 3)", "[plugin][click][looper][audio]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+    setVal (p, ParamID::ampRelease, 0.05f);    // note decays to silence well inside the loop
+    setVal (p, ParamID::tempo, 160.0f);        // ~1.5 s loop, longer than the note
+    set01 (p, ParamID::loopMode, 1.0f);        // AUDIO playback
+    set01 (p, ParamID::loopPlay, 1.0f);
+    set01 (p, ParamID::loopRec, 1.0f);         // arms; engages at the boundary (pos 0)
+
+    Pumper pm (p, 128);
+    pm.pump (4);
+    // A note just after the boundary: the loop starts in silence (pre-note) and ends in
+    // silence (post-decay), so the wrap seam is silence->silence — the mechanism must not
+    // add a pop across many wraps.
+    p.routeNoteOn (60, 0.9f, 0); pm.pump (8); p.routeNoteOff (60, 0);
+    pm.pump (560);                             // finish recording one loop (note decays, wraps)
+    set01 (p, ParamID::loopRec, 0.0f);         // stop recording; keep looping
+    pm.pump (1800);                            // many wraps, playback only
+    INFO ("peak=" << pm.s.peak << " maxJump=" << pm.s.maxJump);
+    REQUIRE (pm.s.finite);
+    REQUIRE (pm.s.peak <= 1.0f);
+    REQUIRE (pm.s.maxJump < kClick);
+}
+
 TEST_CASE ("torture: chord modifier morph churn under held notes (1.4)", "[plugin][click][chord]")
 {
     juce::ScopedJuceInitialiser_GUI init;
