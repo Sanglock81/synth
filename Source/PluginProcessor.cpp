@@ -427,6 +427,14 @@ VoiceParams VASynthProcessor::bakePresetParams (const juce::String& name, bool& 
     return buildVoiceParams (scratch.apvts);
 }
 
+VoiceParams VASynthProcessor::bakeVoiceStateParams (const juce::ValueTree& state)
+{
+    BakeProcessor scratch;
+    if (state.isValid()) scratch.apvts.replaceState (state);          // an edited pad voice
+    else                 bakeInitBaseline (scratch);
+    return buildVoiceParams (scratch.apvts);
+}
+
 // Bake an arbitrary panel state tree into a part's engine slot (1.3): the part plays
 // this (possibly edited) sound while it's not the focused/live part.
 void VASynthProcessor::bakeStateToSlot (int part, const juce::ValueTree& state)
@@ -523,7 +531,10 @@ void VASynthProcessor::setPartKit (int part, const KitDefinition& def)
         if (pd.triggerNote < 0) { out.triggerNote = -1; continue; }   // empty pad
 
         bool ok = true;
-        auto vp = bakePresetParams (pd.source, ok);
+        // Edited pads (Group 4 kit editing) bake from their own voice state; otherwise from
+        // the source preset. Either way it's a full VoiceParams built the same kill-fold way.
+        auto vp = pd.voiceState.isValid() ? bakeVoiceStateParams (pd.voiceState)
+                                          : bakePresetParams (pd.source, ok);
         vp.gain *= juce::jlimit (0.0f, 4.0f, pd.level);               // fold pad level into the voice
         kd.params[(std::size_t) i] = vp;
         out.triggerNote = pd.triggerNote;
@@ -553,6 +564,7 @@ juce::ValueTree VASynthProcessor::kitToTree (const KitDefinition& def)
         p.setProperty ("level",   pd.level, nullptr);
         p.setProperty ("choke",   pd.chokeGroup, nullptr);
         for (int s = 0; s < 4; ++s) p.setProperty ("n" + juce::String (s), pd.soundNote[(std::size_t) s], nullptr);
+        if (pd.voiceState.isValid()) p.addChild (pd.voiceState.createCopy(), -1, nullptr);   // edited pad voice
         t.addChild (p, -1, nullptr);
     }
     return t;
@@ -574,6 +586,7 @@ VASynthProcessor::KitDefinition VASynthProcessor::kitFromTree (const juce::Value
         pd.level       = (float) p.getProperty ("level", 1.0);
         pd.chokeGroup  = (int) p.getProperty ("choke", 0);
         for (int s = 0; s < 4; ++s) pd.soundNote[(std::size_t) s] = (int) p.getProperty ("n" + juce::String (s), 60);
+        if (p.getNumChildren() > 0) pd.voiceState = p.getChild (0).createCopy();   // edited pad voice, if any
     }
     return def;
 }

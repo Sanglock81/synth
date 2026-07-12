@@ -127,12 +127,14 @@ public:
     // thread; setPartKit bakes each pad and publishes to the engine.
     struct KitPadDef
     {
-        int          triggerNote = -1;                       // -1 = empty pad
-        juce::String source;                                 // source preset name
-        int          soundNote[4] = { 60, 0, 0, 0 };
-        int          numSound = 1;
-        float        level = 1.0f;
-        int          chokeGroup = 0;
+        int            triggerNote = -1;                     // -1 = empty pad
+        juce::String   source;                               // source preset name (the seed)
+        int            soundNote[4] = { 60, 0, 0, 0 };
+        int            numSound = 1;
+        float          level = 1.0f;
+        int            chokeGroup = 0;
+        juce::ValueTree voiceState;                          // edited voice (Group 4 kit editing);
+                                                             // invalid = bake from `source` (default)
     };
     struct KitDefinition
     {
@@ -403,6 +405,10 @@ private:
     VoiceParams bakePresetParams (const juce::String& name, bool& ok,
                                   FXParams* fxOut = nullptr, PartLfos* lfoOut = nullptr,
                                   juce::ValueTree* stateOut = nullptr);
+    // Bake VoiceParams from an edited voice state tree (a kit pad's own sound). Same
+    // scratch-APVTS kill-fold as bakePresetParams, so an edited pad is bit-identical to
+    // loading that sound live.
+    VoiceParams bakeVoiceStateParams (const juce::ValueTree& state);
 
     // Feed the combined (QWERTY | MIDI) held-modifier mask into the chord engine's
     // latest-wins forcer stack as edges (audio thread).
