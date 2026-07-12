@@ -90,7 +90,7 @@ TEST_CASE ("randomize never touches the performance/global exclusion list", "[pl
         REQUIRE (PresetManager::randomizeExclusions().contains (kv.id));
 }
 
-TEST_CASE ("randomize touches ONLY the selected part's sound — mixer / EQ / macros stay put",
+TEST_CASE ("randomize touches ONLY the selected part sound - mixer / EQ / macros stay put",
            "[plugin][preset][random]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
