@@ -44,13 +44,21 @@ public:
         stepIndex = -1; sampleInStep = 0.0; started = false;
     }
 
-    // Release any held notes (note-offs) without advancing. The owner MUST call this when
-    // the sequencer is disabled while the render path won't call process() again, else the
-    // last gate's note hangs. emit(sampleOffset, note, 0, false).
+    // Release any held notes (note-offs), leaving the clock running. Call this when the
+    // TARGET part changes so the old part's gated note doesn't hang (its note-off would
+    // otherwise be dispatched to the new target). emit(sampleOffset, note, 0, false).
+    template <typename Emit>
+    void releaseActive (Emit&& emit)
+    {
+        for (int r = 0; r < kRows; ++r) if (activeNote[(std::size_t) r] >= 0) { emit (0, activeNote[(std::size_t) r], 0.0f, false); activeNote[(std::size_t) r] = -1; }
+    }
+
+    // Release held notes AND reset the clock. The owner MUST call this when the sequencer
+    // is disabled while the render path won't call process() again, else the last gate hangs.
     template <typename Emit>
     void flush (Emit&& emit)
     {
-        for (int r = 0; r < kRows; ++r) if (activeNote[(std::size_t) r] >= 0) { emit (0, activeNote[(std::size_t) r], 0.0f, false); activeNote[(std::size_t) r] = -1; }
+        releaseActive (emit);
         stepIndex = -1; sampleInStep = 0.0; started = false;
     }
 

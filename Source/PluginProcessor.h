@@ -557,6 +557,7 @@ private:
     int genEvCount = 0;
     bool arpWasOn = false;
     bool seqWasOn = false;                  // seq enable edge -> flush held notes on disable
+    int  prevSeqTarget = 1;                 // seq target-change edge -> release the old part's note
     bool chordWasOn = false;               // chord enable edge -> release held tones on disable
     std::atomic<int> seqStepDisp { -1 };   // audio -> UI: sequencer playhead
     int  prevPlayFocus = 0;                // audio-thread mirror of play-focus, for hand-off

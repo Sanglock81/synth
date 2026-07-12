@@ -1460,6 +1460,13 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (arp.enabled() || seq.enabled())
     {
         const int seqTarget = juce::jlimit (0, SynthEngine::maxParts - 1, (int) rp (apvts, ID::seqTarget));
+        // Target changed mid-sequence: release the OLD part's held gate first, else its
+        // note-off (dispatched below to the NEW target) never reaches it and the voice hangs.
+        if (seqTarget != prevSeqTarget)
+        {
+            seq.releaseActive ([this, chordOn] (int, int note, float, bool) { dispatchNoteOff (note, prevSeqTarget, chordOn); });
+            prevSeqTarget = seqTarget;
+        }
         genEvCount = 0;
         auto push = [this] (int off, int note, float vel, bool on, int part, bool viaDispatch)
         { if (genEvCount < (int) genEv.size()) genEv[(std::size_t) genEvCount++] = { off, note, vel, on, part, viaDispatch }; };
