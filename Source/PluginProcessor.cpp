@@ -106,6 +106,23 @@ void VASynthProcessor::loadInitPreset()
     setFxOrder (def);
 }
 
+void VASynthProcessor::clearFocusedPartToBlank()
+{
+    namespace ID = ParamID;
+    auto set01 = [this] (const char* id, float v) { if (auto* p = apvts.getParameter (id)) p->setValueNotifyingHost (v); };
+    // Reset only the SELECTED part's sound-design params to default (the APVTS holds the
+    // edit-focused part's sound; globals + other parts stay put), then force a clean sine.
+    for (auto* rp : getParameters())
+        if (auto* w = dynamic_cast<juce::AudioProcessorParameterWithID*> (rp))
+            if (soundDesignParamIDs().contains (w->paramID))
+                rp->setValueNotifyingHost (rp->getDefaultValue());
+    set01 (ID::osc1On, 1.0f); set01 (ID::osc1Wave, 1.0f);          // osc1 sine (last of saw/sqr/tri/sin)
+    set01 (ID::osc2On, 0.0f); set01 (ID::osc3On, 0.0f);            // single oscillator
+    set01 (ID::noiseLevel, 0.0f);
+    set01 (ID::fxChorusOn, 0.0f); set01 (ID::fxDelayOn, 0.0f);
+    set01 (ID::fxReverbOn, 0.0f); set01 (ID::fxWidthOn, 0.0f);     // dry
+}
+
 juce::File VASynthProcessor::userMidiProfileDir()
 {
     return AppInfo::midiProfileDir();

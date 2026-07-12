@@ -259,6 +259,11 @@ public:
     // Reset every parameter to its default and the FX order to 0,1,2,3 ("Init").
     void loadInitPreset();
 
+    // CLEAR (R3 Group 4): blank the SELECTED part to a clean single sine — resets its
+    // sound-design params to default, forces osc1=sine (osc2/3 + noise + FX off). Globals,
+    // the mixer and the other parts are untouched (same scope policy as RANDOM).
+    void clearFocusedPartToBlank();
+
     // -- macros (R2) ----------------------------------------------------------
     // Each macro (0..7) can route to one target parameter; the value knob then drives
     // that parameter (applied on the message thread by the editor). The map persists in

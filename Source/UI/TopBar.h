@@ -53,6 +53,15 @@ public:
         };
         addAndMakeVisible (random);
 
+        clear.setButtonText ("CLEAR"); styleBtn (clear);
+        clear.onClick = [this]
+        {
+            proc.clearFocusedPartToBlank();     // blank the selected part to a clean sine
+            currentName = "Blank"; refreshTitle(); refreshMacroLabels();
+            if (restoreFocus) restoreFocus();
+        };
+        addAndMakeVisible (clear);
+
         rec.setButtonText ("REC"); styleBtn (rec);
         rec.setColour (juce::TextButton::textColourOffId, juce::Colour (0xffd8443a));
         rec.onClick = [this] { proc.postToast ("Recording lands with the looper (R3)"); if (restoreFocus) restoreFocus(); };
@@ -109,11 +118,12 @@ public:
     {
         auto tb = getLocalBounds().reduced (10, 7);
 
-        auto preset = tb.removeFromLeft (250); tb.removeFromLeft (8);
+        auto preset = tb.removeFromLeft (300); tb.removeFromLeft (8);
         auto pTop = preset.removeFromTop (34);
-        presetBtn.setBounds (pTop.removeFromLeft (150).reduced (0, 1));
-        save.setBounds   (pTop.removeFromLeft (48).reduced (2, 1));
-        random.setBounds (pTop.reduced (2, 1));
+        presetBtn.setBounds (pTop.removeFromLeft (126).reduced (0, 1));
+        save.setBounds   (pTop.removeFromLeft (44).reduced (2, 1));
+        random.setBounds (pTop.removeFromLeft (66).reduced (2, 1));
+        clear.setBounds  (pTop.reduced (2, 1));
         statusArea = preset;
 
         auto help_ = tb.removeFromRight (34); tb.removeFromRight (4);
@@ -223,7 +233,7 @@ private:
     PresetManager& presets;
     std::function<void()> restoreFocus, toggleHelp, toggleFullscreen;
 
-    juce::TextButton presetBtn, save, random, rec, full, help;
+    juce::TextButton presetBtn, save, random, clear, rec, full, help;
     juce::OwnedArray<RotaryKnob> macros;
     juce::OwnedArray<juce::ParameterAttachment> macroAtt;
     std::unique_ptr<RotaryKnob> master, glide;

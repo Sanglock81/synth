@@ -123,6 +123,35 @@ TEST_CASE ("randomize touches ONLY the selected part sound - mixer / EQ / macros
     REQUIRE (p.apvts.getParameter (ParamID::filterCutoff)->getValue() != Catch::Approx (cutoffBefore).margin (1e-6));
 }
 
+TEST_CASE ("CLEAR blanks the selected part to a single sine, leaving globals put", "[plugin][clear]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    // A busy sound + dialled-in globals the player wants kept.
+    auto set = [&] (const char* id, float v) { p.apvts.getParameter (id)->setValueNotifyingHost (v); };
+    set (ParamID::osc2On, 1.0f); set (ParamID::osc3On, 1.0f); set (ParamID::noiseLevel, 0.4f);
+    set (ParamID::fxReverbOn, 1.0f); set (ParamID::fxDelayOn, 1.0f);
+    set (ParamID::masterGain, 0.42f); set (ParamID::part0Level, 0.7f); set (ParamID::macro3, 0.8f);
+    const float masterBefore = p.apvts.getParameter (ParamID::masterGain)->getValue();
+    const float levelBefore  = p.apvts.getParameter (ParamID::part0Level)->getValue();
+    const float macroBefore  = p.apvts.getParameter (ParamID::macro3)->getValue();
+
+    p.clearFocusedPartToBlank();
+
+    // A clean single sine: osc1 on + sine (last choice), everything else off.
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::osc1On)->load() > 0.5f);
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::osc2On)->load() < 0.5f);
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::osc3On)->load() < 0.5f);
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::noiseLevel)->load() < 1e-4f);
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::fxReverbOn)->load() < 0.5f);
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::fxDelayOn)->load() < 0.5f);
+    REQUIRE (p.apvts.getParameter (ParamID::osc1Wave)->getValue() == Catch::Approx (1.0f).margin (1e-4));
+    // Globals / mixer / macros untouched (same scope as RANDOM).
+    REQUIRE (p.apvts.getParameter (ParamID::masterGain)->getValue()  == Catch::Approx (masterBefore).margin (1e-6));
+    REQUIRE (p.apvts.getParameter (ParamID::part0Level)->getValue() == Catch::Approx (levelBefore).margin (1e-6));
+    REQUIRE (p.apvts.getParameter (ParamID::macro3)->getValue()     == Catch::Approx (macroBefore).margin (1e-6));
+}
+
 TEST_CASE ("master_gain is a performance control excluded from preset load/save", "[plugin][preset][master]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
