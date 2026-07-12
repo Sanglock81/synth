@@ -173,7 +173,8 @@ private:
                 else if (r >= 2000 && r < 2000 + kitNames.size())
                     proc.setPartKit (i, proc.loadKit (kitNames[r - 2000]));                 // drum kit
                 else if (r == 3)
-                    KitEditor::show (proc, getTopLevelComponent(), i, [this] { if (restoreFocus) restoreFocus(); });
+                    KitEditor::show (proc, getTopLevelComponent(), i, [this] { if (restoreFocus) restoreFocus(); },
+                                     [this] (int pt, int pd) { proc.beginKitPadEdit (pt, pd); });   // "Edit voice" -> main panel
                 else if (r == 4) proc.revertPartToPreset (i);
                 repaint(); if (restoreFocus) restoreFocus();
             });

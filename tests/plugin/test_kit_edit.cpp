@@ -67,3 +67,45 @@ TEST_CASE ("kit pad voice-state round-trips through kit serialization", "[plugin
     p.setPartKit (1, back);
     REQUIRE (padEnergy (p, 1, 60) < 1.0e-4);
 }
+
+TEST_CASE ("kit pad edit flow: begin -> edit -> commit bakes into the pad", "[plugin][kit][edit]")
+{
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.setPartKit (1, onePadKit (60, "Init", {}));
+    REQUIRE (padEnergy (p, 1, 60) > 0.0);          // control: the pad is audible
+
+    REQUIRE (p.beginKitPadEdit (1, 0));
+    REQUIRE (p.isEditingKitPad());
+    REQUIRE_FALSE (p.isPartKit (1));               // part is a live synth while editing
+    for (auto* id : { ParamID::osc1On, ParamID::osc2On, ParamID::osc3On, ParamID::noiseLevel })
+        p.apvts.getParameter (id)->setValueNotifyingHost (0.0f);   // edit the voice -> silent
+    p.endKitPadEdit (true);                        // commit
+    REQUIRE_FALSE (p.isEditingKitPad());
+    REQUIRE (p.isPartKit (1));                     // part is a kit again
+
+    // Verify the edit baked in on a FRESH processor (no residual voice from earlier triggers).
+    VASynthProcessor q; q.prepareToPlay (48000.0, 128);
+    q.setPartKit (1, p.getPartKit (1));            // the edited kit definition
+    REQUIRE (q.getPartKit (1).pads[0].voiceState.isValid());
+    REQUIRE (padEnergy (q, 1, 60) < 1.0e-4);       // the edited (silent) voice is what plays
+}
+
+TEST_CASE ("kit pad edit flow: cancel leaves the pad unchanged", "[plugin][kit][edit]")
+{
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.setPartKit (1, onePadKit (60, "Init", {}));
+    REQUIRE (p.beginKitPadEdit (1, 0));
+    for (auto* id : { ParamID::osc1On, ParamID::osc2On, ParamID::osc3On, ParamID::noiseLevel })
+        p.apvts.getParameter (id)->setValueNotifyingHost (0.0f);
+    p.endKitPadEdit (false);                        // cancel
+    REQUIRE (padEnergy (p, 1, 60) > 0.0);          // still audible (edit discarded)
+}
+
+TEST_CASE ("kit pad edit refuses an empty pad or a non-kit part", "[plugin][kit][edit]")
+{
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    REQUIRE_FALSE (p.beginKitPadEdit (1, 0));       // part 1 isn't a kit yet
+    p.setPartKit (1, onePadKit (60, "Init", {}));
+    REQUIRE_FALSE (p.beginKitPadEdit (1, 5));       // pad 5 is empty
+    REQUIRE_FALSE (p.beginKitPadEdit (0, 0));       // part 0 can't be a kit
+}

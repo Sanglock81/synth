@@ -499,6 +499,47 @@ void VASynthProcessor::revertPartToPreset (int part)
     setPartPreset (part, name);                        // re-bakes + repopulates the edit state, clears edited
 }
 
+bool VASynthProcessor::beginKitPadEdit (int part, int pad)
+{
+    if (part < 1 || part >= SynthEngine::maxParts || pad < 0 || pad >= kMaxKitPads) return false;
+    if (isEditingKitPad() || ! isPartKit (part)) return false;
+    auto& pd = partKits[(std::size_t) part].pads[(std::size_t) pad];
+    if (pd.triggerNote < 0) return false;              // empty pad has no voice to edit
+
+    // Seed the pad's voice from its source preset the first time it's edited.
+    if (! pd.voiceState.isValid())
+    { bool ok = true; juce::ValueTree st; bakePresetParams (pd.source, ok, nullptr, nullptr, &st); pd.voiceState = st; }
+
+    // Save the current focus + its sound, then make this part a LIVE synth showing the pad
+    // voice: the panel edits it and any played note auditions it.
+    kitPadEditPart = part; kitPadEditPad = pad;
+    kitPadEditSavedFocus = editFocusPart.load (std::memory_order_relaxed);
+    partEditState[(std::size_t) kitPadEditSavedFocus] = apvts.copyState();
+    engine.releasePartNotes (kitPadEditSavedFocus);
+    engine.clearPartKit (part);                        // part -> synth for the duration
+    applyPartSoundFromTree (pd.voiceState);            // panel shows the pad voice
+    editFocusPart.store (part, std::memory_order_release);
+    playFocusPart.store (part, std::memory_order_release);
+    kitPadEditActive.store (true, std::memory_order_release);
+    return true;
+}
+
+void VASynthProcessor::endKitPadEdit (bool commit)
+{
+    if (! isEditingKitPad()) return;
+    const int part = kitPadEditPart, pad = kitPadEditPad, saved = kitPadEditSavedFocus;
+    if (commit)
+        partKits[(std::size_t) part].pads[(std::size_t) pad].voiceState = apvts.copyState();
+
+    kitPadEditActive.store (false, std::memory_order_release);
+    engine.releasePartNotes (part);
+    setPartKit (part, partKits[(std::size_t) part]);   // part -> kit again (edited pad baked in)
+    // Restore the previously focused part + its sound.
+    applyPartSoundFromTree (partEditState[(std::size_t) saved]);
+    editFocusPart.store (saved, std::memory_order_release);
+    playFocusPart.store (saved, std::memory_order_release);
+}
+
 bool VASynthProcessor::setPartPreset (int part, const juce::String& name)
 {
     if (part < 1 || part >= SynthEngine::maxParts) return false;

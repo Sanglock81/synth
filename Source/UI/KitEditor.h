@@ -57,13 +57,23 @@ public:
         learnSound.onClick = [this] { if (learnSound.getToggleState()) { armSeq = proc.noteSeq(); pad().numSound = 0; } };
         addAndMakeVisible (learnSound);
 
-        for (auto* b : { &trigDown, &trigUp, &clearSound, &audition, &clearPad })
+        for (auto* b : { &trigDown, &trigUp, &clearSound, &audition, &clearPad, &editVoice })
         { b->setWantsKeyboardFocus (false); addAndMakeVisible (*b); }
         trigDown.setButtonText ("-"); trigDown.onClick = [this] { pad().triggerNote = juce::jlimit (0, 127, pad().triggerNote < 0 ? 36 : pad().triggerNote - 1); apply(); repaint(); };
         trigUp.setButtonText ("+");   trigUp.onClick   = [this] { pad().triggerNote = juce::jlimit (0, 127, pad().triggerNote < 0 ? 36 : pad().triggerNote + 1); apply(); repaint(); };
         clearSound.setButtonText ("Clear notes"); clearSound.onClick = [this] { pad().numSound = 1; pad().soundNote[0] = pad().triggerNote < 0 ? 60 : pad().triggerNote; apply(); repaint(); };
         audition.setButtonText ("Audition"); audition.onClick = [this] { auditionPad(); };
         clearPad.setButtonText ("Clear pad"); clearPad.onClick = [this] { def.pads[(std::size_t) selected] = {}; def.pads[(std::size_t) selected].triggerNote = -1; apply(); rebuildSelected(); };
+        // Open the FULL synth panel on this pad's voice (Group 4): persist the pad, ask the
+        // host to begin pad-edit, and close this dialog so the main panel shows the voice.
+        editVoice.setButtonText ("Edit voice"); editVoice.onClick = [this]
+        {
+            if (pad().triggerNote < 0) return;                 // nothing to edit on an empty pad
+            apply();
+            const int pt = part, s = selected;
+            if (onEditVoice) onEditVoice (pt, s);
+            if (auto* w = findParentComponentOfClass<juce::DialogWindow>()) w->exitModalState (0);
+        };
 
         level.setSliderStyle (juce::Slider::LinearHorizontal); level.setWantsKeyboardFocus (false);
         level.setSliderSnapsToMousePosition (false);   // R2 grab mode (no jump on touch)
@@ -83,9 +93,11 @@ public:
         startTimerHz (15);
     }
 
-    static void show (VASynthProcessor& proc, juce::Component* parent, int part, std::function<void()> onClose)
+    static void show (VASynthProcessor& proc, juce::Component* parent, int part, std::function<void()> onClose,
+                      std::function<void(int, int)> onEditVoice = {})
     {
         auto dlg = std::make_unique<KitEditor> (proc, part);
+        dlg->onEditVoice = std::move (onEditVoice);
         juce::DialogWindow::LaunchOptions o;
         o.content.setOwned (dlg.release());
         o.dialogTitle = "Kit Editor";
@@ -161,6 +173,7 @@ public:
         auto r4 = row (24); r4.removeFromLeft (70); level.setBounds (r4.removeFromLeft (200));
         r4.removeFromLeft (30); choke.setBounds (r4.removeFromLeft (80));
         auto r5 = row (26); audition.setBounds (r5.removeFromLeft (100)); r5.removeFromLeft (8); clearPad.setBounds (r5.removeFromLeft (100));
+        r5.removeFromLeft (8); editVoice.setBounds (r5.removeFromLeft (110));
     }
 
     void paintOverChildren (juce::Graphics& g) override
@@ -282,8 +295,12 @@ private:
     std::array<int, kMaxKitPads> flick {};
 
     juce::ComboBox partSel, kitLoad, source, choke;
-    juce::TextButton saveBtn, learnTrig, learnSound, trigDown, trigUp, clearSound, audition, clearPad;
+    juce::TextButton saveBtn, learnTrig, learnSound, trigDown, trigUp, clearSound, audition, clearPad, editVoice;
     juce::Slider level;
+
+public:
+    std::function<void(int part, int pad)> onEditVoice;   // "Edit voice" -> host begins pad edit
+private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KitEditor)
 };

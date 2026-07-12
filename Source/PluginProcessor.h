@@ -346,6 +346,16 @@ public:
     // the edit began. Message thread.
     void revertPartToPreset (int part);
 
+    // Kit per-pad voice editing (Group 4 increment B). beginKitPadEdit swaps the main panel
+    // to the pad's voice (the kit part becomes a live synth so you play + edit + hear it);
+    // endKitPadEdit(true) bakes the panel state back into the pad and restores the kit +
+    // previous focus. Message thread. Returns false if the pad is empty / not a kit part.
+    bool beginKitPadEdit (int part, int pad);
+    void endKitPadEdit   (bool commit);
+    bool isEditingKitPad () const { return kitPadEditActive.load (std::memory_order_acquire); }
+    int  editingKitPart  () const { return kitPadEditPart; }
+    int  editingKitPad   () const { return kitPadEditPad; }
+
     // -- looper (R3) ----------------------------------------------------------
     // Runtime loop content (recorded notes) is NOT preset material; it's exported to
     // MIDI. The UI reads the playhead + per-lane content for drawing. Message thread.
@@ -499,6 +509,11 @@ private:
     std::atomic<int> editFocusPart { 0 };   // panel + engine live-param slot (synth parts)
     std::atomic<int> playFocusPart { 0 };   // which part the LIVE keyboard routes to (any part)
     std::array<juce::ValueTree, SynthEngine::maxParts> partEditState {};
+
+    // Kit per-pad edit mode (Group 4 B): while active, kitPadEditPart is a live synth showing
+    // the pad's voice; on end it's re-baked into the kit and the saved focus restored.
+    std::atomic<bool> kitPadEditActive { false };
+    int kitPadEditPart = 1, kitPadEditPad = 0, kitPadEditSavedFocus = 0;
     std::array<bool, SynthEngine::maxParts> partEdited {};
     bool loadingPartState = false;   // guards the edited-flag listener during programmatic loads
     void parameterChanged (const juce::String& id, float newValue) override;   // marks a focused locked part edited

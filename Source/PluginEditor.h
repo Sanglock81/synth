@@ -48,6 +48,38 @@ inline bool qwertyShouldReclaimFocus (bool standalone, bool showing, bool window
     return true;
 }
 
+// A banner shown while a drum-kit pad's voice is loaded into the main panel (Group 4 kit
+// editing). DONE bakes the panel back into the pad and restores the previous focus.
+class KitPadEditBar : public juce::Component
+{
+public:
+    explicit KitPadEditBar (VASynthProcessor& p) : proc (p)
+    {
+        setWantsKeyboardFocus (false);
+        done.setButtonText ("DONE"); done.setWantsKeyboardFocus (false);
+        done.setColour (juce::TextButton::buttonColourId, VASynthLookAndFeel::accent());
+        done.setColour (juce::TextButton::textColourOffId, juce::Colours::black);
+        done.onClick = [this] { proc.endKitPadEdit (true); if (onDone) onDone(); };
+        addAndMakeVisible (done);
+    }
+    void paint (juce::Graphics& g) override
+    {
+        g.setColour (VASynthLookAndFeel::accentWarm());
+        g.fillRoundedRectangle (getLocalBounds().toFloat(), 6.0f);
+        g.setColour (juce::Colours::black);
+        g.setFont (juce::Font (juce::FontOptions (14.0f, juce::Font::bold)));
+        g.drawText ("EDITING KIT PAD " + juce::String (proc.editingKitPad() + 1)
+                        + "  (P" + juce::String (proc.editingKitPart() + 1) + ")  -  tweak the panel, then",
+                    getLocalBounds().withTrimmedLeft (14).withTrimmedRight (96), juce::Justification::centredLeft, false);
+    }
+    void resized() override { done.setBounds (getLocalBounds().removeFromRight (86).reduced (8, 6)); }
+    std::function<void()> onDone;
+private:
+    VASynthProcessor& proc;
+    juce::TextButton done;
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KitPadEditBar)
+};
+
 class VASynthEditor : public juce::AudioProcessorEditor,
                       private juce::Timer
 {
@@ -78,11 +110,11 @@ public:
         }
         setSize (w, h);
 
-        if (isStandalone())
-        {
-            setWantsKeyboardFocus (true);
-            startTimerHz (30);            // focus-loss watchdog
-        }
+        if (isStandalone()) setWantsKeyboardFocus (true);
+        startTimerHz (30);                // focus-loss watchdog (standalone) + kit-pad-edit banner poll
+
+        addChildComponent (kitBar);
+        kitBar.onDone = [this] { refreshAfterKitPadEdit(); };
 
         // R2 touch diagnosis: env-gated global mouse-event trace (VASYNTH_TOUCH_TRACE=1).
         if (std::getenv ("VASYNTH_TOUCH_TRACE") != nullptr)
@@ -113,10 +145,15 @@ public:
     // Restores QWERTY focus after a transient dialog (e.g. Save-preset) closes.
     void restoreQwertyFocus() { grabQwertyFocus(); }
 
+    // After a kit pad edit commits, hide the banner and repaint (the panel's attachments
+    // auto-reflect the restored focus params).
+    void refreshAfterKitPadEdit() { kitBar.setVisible (false); repaint(); restoreQwertyFocus(); }
+
     void resized() override
     {
         overlay.setBounds (getWidth() - 320, 92, 312, 78);
         toast.setBounds ((getWidth() - 460) / 2, 92, 460, 46);
+        kitBar.setBounds ((getWidth() - 620) / 2, 96, 620, 40);
         helpOverlay.setBounds (getLocalBounds());
 
         auto area = getLocalBounds().reduced (6);
@@ -268,6 +305,10 @@ private:
 
         const int seq = proc.toastSequence();
         if (seq != lastToastSeq) { lastToastSeq = seq; toast.show (proc.toastMessage()); }
+
+        // Kit pad-edit banner: shown while a pad's voice is loaded into the main panel.
+        const bool editing = proc.isEditingKitPad();
+        if (editing != kitBar.isVisible()) { kitBar.setVisible (editing); if (editing) { kitBar.toFront (false); kitBar.repaint(); } }
     }
 
     void emitNote (int note, bool on)
@@ -306,6 +347,7 @@ private:
     QwertyKeyboard qwerty;
     Toast toast;
     HelpOverlay helpOverlay;
+    KitPadEditBar kitBar { proc };
     int  lastToastSeq = 0;
     bool hadFocus = false;
 
