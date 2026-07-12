@@ -297,6 +297,14 @@ static const juce::StringArray& perPartSoundIds()
 
 const juce::StringArray& VASynthProcessor::soundDesignParamIDs() { return perPartSoundIds(); }
 
+void VASynthProcessor::flushLoopNotes (bool chordOn)
+{
+    for (int pt = 0; pt < SynthEngine::maxParts; ++pt)
+        for (int n = 0; n < 128; ++n)
+            if (loopNoteHeld[(std::size_t) pt][(std::size_t) n])
+            { dispatchNoteOff (n, pt, chordOn); loopNoteHeld[(std::size_t) pt][(std::size_t) n] = false; }
+}
+
 void VASynthProcessor::applyChordModifiers (std::uint32_t combined)
 {
     const std::uint32_t changed = combined ^ lastFedModMask;
@@ -1412,7 +1420,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     //     the MIDI lane (note events) and the AUDIO lane (the play-focused part's post-FX,
     //     captured in mixParts) record together; loop_mode picks which lane you HEAR.
     {
-        if (loopClear.exchange (false, std::memory_order_acq_rel)) { looper.clear(); audioLoop.clear(); }
+        if (loopClear.exchange (false, std::memory_order_acq_rel)) { looper.clear(); audioLoop.clear(); flushLoopNotes (chordOn); }
         const double bpm = juce::jmax (20.0f, rp (apvts, ID::tempo));
         const double sr  = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
         const int barsSel = (int) rp (apvts, ID::loopBars);          // 0->1, 1->2, 2->4 bars
@@ -1438,9 +1446,18 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         audioLoop.setPlaying   (playReq &&   audioMode);            // AUDIO lane audible
         engine.setCapturePart  (playF);                            // tap the play-focused part
         loopRecStateDisp.store (loopRecording ? 2 : (loopArmPending ? 1 : 0), std::memory_order_relaxed);
+
+        // MIDI-lane playback stopped (loop off / mode -> AUDIO): release any note the loop
+        // left sounding. A note recorded held-through-the-loop has an on but no off, so it
+        // would otherwise re-fire forever and hang when playback stops.
+        const bool loopPlayingNow = looper.playing();
+        if (loopPlayWasOn && ! loopPlayingNow) flushLoopNotes (chordOn);
+        loopPlayWasOn = loopPlayingNow;
     }
     looper.playBlock (numSamples, [this, chordOn] (int part, int note, float vel, bool on)
     {
+        if (part >= 0 && part < SynthEngine::maxParts && note >= 0 && note < 128)
+            loopNoteHeld[(std::size_t) part][(std::size_t) note] = on;     // track for the stop/clear flush
         if (on) dispatchNoteOn (note, vel, part, chordOn); else dispatchNoteOff (note, part, chordOn);
     });
 

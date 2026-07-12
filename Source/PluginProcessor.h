@@ -412,6 +412,7 @@ private:
     // part 0 goes through the chord engine; locked parts play the note directly.
     void dispatchNoteOn  (int note, float velocity, int part, bool chordOn);
     void dispatchNoteOff (int note, int part, bool chordOn);
+    void flushLoopNotes  (bool chordOn);              // release notes the MIDI loop left on
 
     // -- routed-MIDI FIFO (surfaces -> parts) ---------------------------------
     // Each event is a raw <=3-byte MIDI message + the routed part. Notes carry the
@@ -577,6 +578,8 @@ private:
     bool  loopArmPending = false;               // armed, waiting for the next loop boundary
     bool  loopRecording  = false;               // capture engaged (both lanes)
     bool  loopWrappedLastBlock = false;         // the loop clock wrapped on the previous block
+    bool  loopPlayWasOn = false;                // MIDI-lane playback edge, to flush on stop
+    std::array<std::array<bool, 128>, SynthEngine::maxParts> loopNoteHeld {};   // notes the loop turned on (release on stop/clear)
 
     // Master scope tap ring (see pushScope/readScope).
     std::array<std::atomic<float>, kScopeSize> scopeRing {};
