@@ -76,7 +76,7 @@ TEST_CASE ("kit pad edit flow: begin -> edit -> commit bakes into the pad", "[pl
 
     REQUIRE (p.beginKitPadEdit (1, 0));
     REQUIRE (p.isEditingKitPad());
-    REQUIRE_FALSE (p.isPartKit (1));               // part is a live synth while editing
+    REQUIRE (p.isPartKit (1));                     // the kit stays intact; only one pad is live
     for (auto* id : { ParamID::osc1On, ParamID::osc2On, ParamID::osc3On, ParamID::noiseLevel })
         p.apvts.getParameter (id)->setValueNotifyingHost (0.0f);   // edit the voice -> silent
     p.endKitPadEdit (true);                        // commit
@@ -108,4 +108,27 @@ TEST_CASE ("kit pad edit refuses an empty pad or a non-kit part", "[plugin][kit]
     p.setPartKit (1, onePadKit (60, "Init", {}));
     REQUIRE_FALSE (p.beginKitPadEdit (1, 5));       // pad 5 is empty
     REQUIRE_FALSE (p.beginKitPadEdit (0, 0));       // part 0 can't be a kit
+}
+
+TEST_CASE ("kit pad edit: the OTHER pads keep playing while one pad is edited", "[plugin][kit][edit]")
+{
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    VASynthProcessor::KitDefinition def; def.name = "Two";
+    for (int i = 0; i < 2; ++i)
+    {
+        auto& pd = def.pads[(std::size_t) i];
+        pd.triggerNote = 60 + i * 2; pd.source = "Init"; pd.soundNote[0] = 60 + i * 2; pd.numSound = 1; pd.level = 1.0f;
+    }
+    p.setPartKit (1, def);
+
+    REQUIRE (p.beginKitPadEdit (1, 0));            // edit pad 0
+    for (auto* id : { ParamID::osc1On, ParamID::osc2On, ParamID::osc3On, ParamID::noiseLevel })
+        p.apvts.getParameter (id)->setValueNotifyingHost (0.0f);   // pad 0's live voice -> silent
+
+    // Pad 0 (edited) reflects the live edit -> silent. Checked first so its (silent) voice
+    // can't mask the next measurement.
+    REQUIRE (padEnergy (p, 1, 60) < 1.0e-4);
+    // Pad 1 keeps its baked sound and plays normally while pad 0 is being edited.
+    REQUIRE (padEnergy (p, 1, 62) > 0.0);
+    p.endKitPadEdit (false);
 }

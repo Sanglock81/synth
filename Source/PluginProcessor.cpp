@@ -516,7 +516,10 @@ bool VASynthProcessor::beginKitPadEdit (int part, int pad)
     kitPadEditSavedFocus = editFocusPart.load (std::memory_order_relaxed);
     partEditState[(std::size_t) kitPadEditSavedFocus] = apvts.copyState();
     engine.releasePartNotes (kitPadEditSavedFocus);
-    engine.clearPartKit (part);                        // part -> synth for the duration
+    // Keep the kit intact and route ONLY this pad through the live panel params: the other
+    // pads keep their baked sound (the sequencer plays the full kit normally) while the
+    // panel edits + auditions just this one.
+    engine.setLiveKitPad (part, pad);
     applyPartSoundFromTree (pd.voiceState);            // panel shows the pad voice
     editFocusPart.store (part, std::memory_order_release);
     playFocusPart.store (part, std::memory_order_release);
@@ -532,8 +535,9 @@ void VASynthProcessor::endKitPadEdit (bool commit)
         partKits[(std::size_t) part].pads[(std::size_t) pad].voiceState = apvts.copyState();
 
     kitPadEditActive.store (false, std::memory_order_release);
+    engine.setLiveKitPad (-1, -1);                     // stop routing the pad through live params
     engine.releasePartNotes (part);
-    setPartKit (part, partKits[(std::size_t) part]);   // part -> kit again (edited pad baked in)
+    setPartKit (part, partKits[(std::size_t) part]);   // re-bake the kit with the edited pad
     // Restore the previously focused part + its sound.
     applyPartSoundFromTree (partEditState[(std::size_t) saved]);
     editFocusPart.store (saved, std::memory_order_release);

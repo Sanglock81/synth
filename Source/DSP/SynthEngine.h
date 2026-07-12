@@ -274,10 +274,17 @@ public:
     const VoiceParams& paramsFor (int part, int slot) const
     {
         const int p = (part >= 0 && part < maxParts) ? part : 0;
+        // Kit pad edit (Group 4): the ONE pad being edited plays the live panel params
+        // (partParams[liveIndex]) while every other pad keeps its baked sound, so the rest
+        // of the kit plays normally under the sequencer while you sculpt the one.
+        if (p == liveKitPart && slot == liveKitPad) return partParams[(std::size_t) liveIndex];
         const auto& kb = kitSlots[(std::size_t) p].buf[(std::size_t) kitReadIdx[(std::size_t) p]];
         if (kb.isKit) return kb.params[(std::size_t) ((slot >= 0 && slot < kMaxKitPads) ? slot : 0)];
         return partParams[(std::size_t) p];
     }
+
+    // Kit pad edit: route ONE kit pad's voice through the live panel params (‑1 = none).
+    void setLiveKitPad (int part, int pad) { liveKitPart = part; liveKitPad = pad; }
 
     // ---- rendering ---------------------------------------------------------
     // Renders MONO into `out`; the processor copies to both channels. `liveParams`
@@ -384,8 +391,11 @@ public:
         for (int pt = 0; pt < maxParts; ++pt)
             kitReadIdx[(std::size_t) pt] = kitSlots[(std::size_t) pt].idx.load (std::memory_order_acquire);
 
-        partFxUse[(std::size_t) focus]  = liveFx;
-        partLfoUse[(std::size_t) focus] = liveLfo;
+        // The focused part uses the panel's FX/LFO — unless it's a kit (kits are dry in v1,
+        // even while editing one of their pads), so a pad edit never FXes the other pads.
+        const bool focusIsKit = partIsKit (focus);
+        partFxUse[(std::size_t) focus]  = focusIsKit ? FXParams{} : liveFx;
+        partLfoUse[(std::size_t) focus] = focusIsKit ? PartLfos{} : liveLfo;
         for (int pt = 0; pt < maxParts; ++pt)
         {
             if (pt == focus) continue;                   // the live part is filled by renderParts
@@ -691,6 +701,7 @@ private:
     std::array<std::vector<float>, maxParts> partMono, partL, partR;
     std::vector<float> capL, capR;   // looper capture tap (one part's post-FX contribution)
     int capturePart = -1;
+    int liveKitPart = -1, liveKitPad = -1;   // kit pad routed through live panel params (edit mode)
     std::atomic<float> focusMod[4] { };   // focused part's LFO mod per dest (UI knob animation)
 
 public:
