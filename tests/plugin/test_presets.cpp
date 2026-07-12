@@ -123,6 +123,22 @@ TEST_CASE ("randomize touches ONLY the selected part sound - mixer / EQ / macros
     REQUIRE (p.apvts.getParameter (ParamID::filterCutoff)->getValue() != Catch::Approx (cutoffBefore).margin (1e-6));
 }
 
+TEST_CASE ("numeric entry: typed text parses back onto the parameter", "[plugin][ui][numeric]")
+{
+    // The double-click numeric entry sets a param via getValueForText(typed) — guard that
+    // the parse round-trips for a skewed (Hz) and a plain param.
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+
+    auto* cutoff = p.apvts.getParameter (ParamID::filterCutoff);
+    cutoff->setValueNotifyingHost (cutoff->getValueForText ("2000"));
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::filterCutoff)->load() == Catch::Approx (2000.0f).margin (60.0f));
+
+    auto* atk = p.apvts.getParameter (ParamID::ampAttack);
+    atk->setValueNotifyingHost (atk->getValueForText ("0.5"));
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::ampAttack)->load() == Catch::Approx (0.5f).margin (0.05f));
+}
+
 TEST_CASE ("CLEAR blanks the selected part to a single sine, leaving globals put", "[plugin][clear]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

@@ -97,7 +97,47 @@ public:
 
     const juce::String& parameterID() const { return paramID; }
 
+    // Double-click numeric entry (R3 Group 4): a transient TextEditor over the control,
+    // parsed via the parameter's own text<->value conversion. QWERTY note input is
+    // auto-suppressed while a TextEditor holds focus (the editor watchdog) and reclaimed
+    // when it closes. No-op unless a subclass called enableNumericEntry().
+    void mouseDoubleClick (const juce::MouseEvent&) override
+    {
+        if (numParam == nullptr || numEditor != nullptr) return;
+        longPressArmed = false;
+        numEditor = std::make_unique<juce::TextEditor>();
+        numEditor->setJustification (juce::Justification::centred);
+        numEditor->setText (numParam->getCurrentValueAsText(), false);
+        numEditor->setBounds (getLocalBounds().withSizeKeepingCentre (juce::jmin (getWidth(), 76), 20));
+        numEditor->onReturnKey = [this] { commitNumericEntry(); };
+        numEditor->onEscapeKey = [this] { closeNumericEntry(); };
+        numEditor->onFocusLost = [this] { commitNumericEntry(); };
+        addAndMakeVisible (*numEditor);
+        numEditor->selectAll();
+        numEditor->grabKeyboardFocus();
+    }
+
+protected:
+    void enableNumericEntry (juce::RangedAudioParameter* p) { numParam = p; }
+
 private:
+    void commitNumericEntry()
+    {
+        if (numEditor == nullptr) return;
+        if (numParam != nullptr)
+            numParam->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, numParam->getValueForText (numEditor->getText())));
+        closeNumericEntry();
+    }
+    void closeNumericEntry()
+    {
+        if (numEditor == nullptr) return;
+        numEditor->onReturnKey = nullptr; numEditor->onEscapeKey = nullptr; numEditor->onFocusLost = nullptr;
+        std::shared_ptr<juce::TextEditor> dead (numEditor.release());   // defer the delete so we
+        dead->setVisible (false);                                       // never free it inside its
+        juce::MessageManager::callAsync ([dead] {});                    // own callback (UAF-safe)
+        repaint();
+    }
+
     void timerCallback() override
     {
         if (longPressArmed && juce::Time::getMillisecondCounter() - pressStart > 500)
@@ -134,6 +174,8 @@ private:
     juce::String paramID;
     juce::uint32 pressStart = 0;
     bool longPressArmed = false;
+    juce::RangedAudioParameter* numParam = nullptr;   // double-click numeric entry target
+    std::unique_ptr<juce::TextEditor> numEditor;
 };
 
 // ---------------------------------------------------------------------------
@@ -189,6 +231,7 @@ public:
         attachment = std::make_unique<juce::SliderParameterAttachment> (*apvts.getParameter (pid), slider);
 
         param = apvts.getParameter (pid);
+        enableNumericEntry (param);
         listenForLearnGestures (slider);
     }
 
@@ -319,6 +362,7 @@ public:
         attachment = std::make_unique<juce::SliderParameterAttachment> (*apvts.getParameter (pid), slider);
 
         param = apvts.getParameter (pid);
+        enableNumericEntry (param);
         listenForLearnGestures (slider);
     }
 
