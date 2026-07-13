@@ -205,13 +205,14 @@ TEST_CASE ("locked part renders with its baked params, not the live part", "[eng
     REQUIRE (pitchOf (0) == Catch::Approx (261.63).margin (5.0));   // live param: C4
 }
 
-TEST_CASE ("voice-sum headroom trim scales with the voice cap (1/sqrt(N))", "[engine][bug4][headroom]")
+TEST_CASE ("voice-sum headroom trim is a fixed reference, independent of pool size", "[engine][bug4][headroom]")
 {
-    // The engine applies a fixed 1/sqrt(maxVoices) trim to the summed output so a
-    // summing polysynth stays well under full-scale (Bug 4: unmanaged voice sums
-    // clipped the DAC). The trim is voice-CAP based and fixed — never a dynamic
-    // per-active-voice scale (which would pump). Same note at cap 4 vs 16 must
-    // therefore differ by exactly sqrt(16)/sqrt(4) = 2x in level.
+    // The engine applies a fixed voice-sum trim (1/sqrt(kTrimVoices), kTrimVoices=16)
+    // so a summing polysynth stays well under full-scale (Bug 4: unmanaged voice sums
+    // clipped the DAC). The trim is a FIXED REFERENCE — deliberately DECOUPLED from the
+    // pool size so raising maxVoices (16 -> 24 for the multitimbral split) never shifts a
+    // single note's level or the render goldens. Same note at cap 4, 16, and 24 must
+    // therefore all produce the SAME peak.
     auto renderOneNote = [] (int cap)
     {
         SynthEngine e; e.prepare (kSR); e.setMaxVoices (cap);
@@ -222,10 +223,12 @@ TEST_CASE ("voice-sum headroom trim scales with the voice cap (1/sqrt(N))", "[en
         return tu::peak (out);
     };
 
-    const float peak16 = renderOneNote (16);   // trim 0.25
-    const float peak4  = renderOneNote (4);     // trim 0.5
+    const float peak16 = renderOneNote (16);
+    const float peak4  = renderOneNote (4);
+    const float peak24 = renderOneNote (24);   // the raised pool
     REQUIRE (peak16 > 0.0f);
-    REQUIRE (peak4 == Catch::Approx (peak16 * 2.0f).epsilon (0.01));   // exactly 2x
+    REQUIRE (peak4  == Catch::Approx (peak16).epsilon (0.001));   // pool size doesn't change level
+    REQUIRE (peak24 == Catch::Approx (peak16).epsilon (0.001));   // ...goldens stay bit-identical
 }
 
 TEST_CASE ("17 notes on 16 voices steals oldest without a click", "[engine][steal]")

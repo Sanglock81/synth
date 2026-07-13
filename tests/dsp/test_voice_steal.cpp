@@ -40,3 +40,23 @@ TEST_CASE ("voice steal: live notes are never stolen by a generator", "[engine][
     // The 6 live notes survive; the generator only ever stole generator voices.
     REQUIRE (eng.activeVoiceCountForPart (1) == 6);
 }
+
+TEST_CASE ("voice pool: default pool holds 24 simultaneous voices for multitimbral", "[engine][voices]")
+{
+    SynthEngine eng;
+    eng.prepare (48000.0, 128);
+    // No setMaxVoices call -> the default pool (raised 16 -> 24 for seq/kit/looper/lead split).
+
+    // Spread 24 live notes across four parts (6 each) -> all must sound, no early steal.
+    for (int part = 0; part < 4; ++part)
+        for (int i = 0; i < 6; ++i)
+            eng.noteOn (48 + part * 6 + i, 0.9f, part, /*slot*/ 0, /*generator*/ false);
+
+    REQUIRE (eng.activeVoiceCount() == 24);
+    for (int part = 0; part < 4; ++part)
+        REQUIRE (eng.activeVoiceCountForPart (part) == 6);
+
+    // The 25th live note steals the global-oldest (pool is full at 24, never grows).
+    eng.noteOn (84, 0.9f, /*part*/ 0, /*slot*/ 0, /*generator*/ false);
+    REQUIRE (eng.activeVoiceCount() == 24);
+}

@@ -156,14 +156,16 @@ void VASynthProcessor::applyDeviceProfile (const juce::String& deviceName)
  #define VASYNTH_OSC_QUALITY PolyBlepOscillator::Quality::Efficient
 #endif
 
-// Max simultaneous voices. 16 (the full pool) — chosen so a future keyboard
-// SPLIT can layer two independently-voiced 8-voice sounds. This exceeds the ~30%
-// ThinkPad comfort target in the pathological worst case (16 held x 3 saws + all
-// FX ~= 41% derated median, p99 ~65%), but stays well under the 100% real-time
-// limit (no dropouts); realistic split playing sits far lower. Reviewed and
-// accepted for the split-voicing roadmap. Drop back to 12 to reclaim headroom.
+// Max simultaneous voices. 24 (the full pool) — raised from 16 for the
+// multitimbral split (sequencer kit + looper patch + live lead + spare all
+// sounding at once). The voice-sum trim is DECOUPLED from the pool size
+// (SynthEngine kTrimVoices = 16), so this bump never changes single-note level
+// or the render goldens. CPU: the pathological worst case (all 24 held x 3 saws
+// + all FX) hits ~109% of the derated ThinkPad block budget (would glitch);
+// normal multitimbral use sits far lower. Reviewed and accepted (user, keep 24
+// / accept the risk). Drop to 20 + an active-voice cap if live glitching shows up.
 #ifndef VASYNTH_MAX_VOICES
- #define VASYNTH_MAX_VOICES 16
+ #define VASYNTH_MAX_VOICES 24
 #endif
 
 void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)

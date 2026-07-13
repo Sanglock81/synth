@@ -246,6 +246,12 @@ int main()
     std::printf ("\n6B full path (16 voices, 3 osc, Efficient + FX):\n");
     row ("16v engine only",     measureFull (16, 4000, 3, 0));
     row ("16v + ALL FX",        measureFull (16, 4000, 3, 15));
+
+    // Pool bump to 24 (multitimbral headroom: seq kit + looper patch + lead + spare).
+    // Worst case = all 24 voices sounding, saw+saw, per-sample cutoff mod, + ALL FX.
+    std::printf ("\n24-voice pool (raised for multitimbral, 3 osc, Efficient + FX):\n");
+    row ("24v engine only",     measureFull (24, 4000, 3, 0));
+    row ("24v + ALL FX",        measureFull (24, 4000, 3, 15));
     // A realistic heavy patch: fewer voices but lush FX (pad territory).
     std::printf ("\n6B realistic pad (6 voices, 3 osc, chorus+reverb):\n");
     row ("6 voice + cho+rev",   measureFull (6, 4000, 3, 1 | 4));

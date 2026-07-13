@@ -33,7 +33,9 @@ struct PartLfos  { LfoConfig lfo[3]; };
 class SynthEngine
 {
 public:
-    static constexpr int maxVoices = 16;
+    static constexpr int maxVoices  = 24;   // pool size (raised for multitimbral: seq + kit + lead + more)
+    static constexpr int kTrimVoices = 16;  // voice-sum trim reference (kept at 16 so the pool size
+                                            // doesn't change single-note level or the goldens)
 
     void prepare (double newSampleRate, int maxBlock = 2048)
     {
@@ -75,12 +77,13 @@ public:
     void setMaxVoices (int n)
     {
         activeVoiceLimit = (std::size_t) std::clamp (n, 1, maxVoices);
-        // Fixed voice-sum headroom trim: 1/sqrt(N), the equal-power sum rule for
-        // quasi-uncorrelated sources. Applied ONCE to the mono sum (never per
-        // active-voice count — dynamic scaling pumps as voices start/stop). This
-        // keeps typical playing well under full-scale so the output stays clean;
-        // pathological dense chords are caught by the processor's safety clipper.
-        voiceTrim = 1.0f / std::sqrt ((float) activeVoiceLimit);
+        // Fixed voice-sum headroom trim, decoupled from the POOL SIZE so raising maxVoices
+        // (for multitimbral polyphony) never quietens single notes or shifts goldens. The
+        // trim is 1/sqrt(kTrimVoices) — the equal-power sum rule at a fixed nominal
+        // simultaneous-voice count — applied ONCE to the mono sum (never per active-voice
+        // count, which pumps). Typical playing stays well under full-scale; denser-than-
+        // nominal chords are caught by the processor's safety clipper.
+        voiceTrim = 1.0f / std::sqrt ((float) kTrimVoices);
     }
 
     // Oscillator anti-aliasing quality. Re-prepares the voices if already
