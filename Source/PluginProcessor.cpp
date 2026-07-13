@@ -1042,7 +1042,7 @@ int VASynthProcessor::lastNoteForSurface (const juce::String& surface) const
     return -1;
 }
 
-void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chordOn)
+void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chordOn, bool generator)
 {
     if (part >= 0 && part < SynthEngine::maxParts)
         partHits[(std::size_t) part].fetch_add (1, std::memory_order_relaxed);   // PARTS strip flicker
@@ -1059,15 +1059,15 @@ void VASynthProcessor::dispatchNoteOn (int note, float vel, int part, bool chord
         int trig[ChordEngine::kMaxTones], rel[ChordEngine::kMaxTones]; int nt = 0, nr = 0;
         chordEngine.noteOn (note, vel, trig, nt, rel, nr);
         for (int i = 0; i < nr; ++i) engine.noteOff (rel[i], part);
-        for (int i = 0; i < nt; ++i) engine.noteOn (trig[i], vel, part);
+        for (int i = 0; i < nt; ++i) engine.noteOn (trig[i], vel, part, 0, generator);
     }
     else if (engine.partIsKit (part))
     {
         partLastTrig[(std::size_t) part].store (note, std::memory_order_relaxed);   // pad flicker
-        engine.kitNoteOn (part, note, vel);           // trigger -> pad (sounding notes + choke)
+        engine.kitNoteOn (part, note, vel, generator);   // trigger -> pad (sounding notes + choke)
     }
     else
-        engine.noteOn (note, vel, part);              // locked parts: chord is live-only
+        engine.noteOn (note, vel, part, 0, generator);   // locked parts: chord is live-only
 }
 
 void VASynthProcessor::dispatchNoteOff (int note, int part, bool chordOn)
@@ -1516,7 +1516,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     {
         if (part >= 0 && part < SynthEngine::maxParts && note >= 0 && note < 128)
             loopNoteHeld[(std::size_t) part][(std::size_t) note] = on;     // track for the stop/clear flush
-        if (on) dispatchNoteOn (note, vel, part, chordOn); else dispatchNoteOff (note, part, chordOn);
+        if (on) dispatchNoteOn (note, vel, part, chordOn, /*generator*/ true); else dispatchNoteOff (note, part, chordOn);
     });
 
     // Routed surfaces (per-input MIDI / QWERTY-to-part) — drained at block start, so
@@ -1543,8 +1543,10 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             prevSeqTarget = seqTarget;
         }
         genEvCount = 0;
-        auto push = [this] (int off, int note, float vel, bool on, int part, bool viaDispatch)
-        { if (genEvCount < (int) genEv.size()) genEv[(std::size_t) genEvCount++] = { off, note, vel, on, part, viaDispatch }; };
+        // generator = the note came from the seq/arp (yields to live playing when stealing);
+        // host notes routed through the gen path are LIVE.
+        auto push = [this] (int off, int note, float vel, bool on, int part, bool viaDispatch, bool generator)
+        { if (genEvCount < (int) genEv.size()) genEv[(std::size_t) genEvCount++] = { off, note, vel, on, part, viaDispatch, generator }; };
 
         for (const auto metadata : midi)
         {
@@ -1554,19 +1556,19 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             {
                 looper.recordNote (playF, pos, msg.getNoteNumber(), msg.getFloatVelocity(), true);
                 if (arp.enabled()) arp.noteOn (msg.getNoteNumber(), msg.getFloatVelocity());
-                else               push (pos, msg.getNoteNumber(), msg.getFloatVelocity(), true, playF, true);
+                else               push (pos, msg.getNoteNumber(), msg.getFloatVelocity(), true, playF, true, /*generator*/ false);
             }
             else if (msg.isNoteOff())
             {
                 looper.recordNote (playF, pos, msg.getNoteNumber(), 0.0f, false);
                 if (arp.enabled()) arp.noteOff (msg.getNoteNumber());
-                else               push (pos, msg.getNoteNumber(), 0.0f, false, playF, true);
+                else               push (pos, msg.getNoteNumber(), 0.0f, false, playF, true, /*generator*/ false);
             }
             else handleControlMessage (msg);
         }
 
-        if (arp.enabled()) arp.process (numSamples, [&] (int off, int note, float vel, bool on) { push (off, note, vel, on, playF, false); });
-        if (seq.enabled()) seq.process (numSamples, [&] (int off, int note, float vel, bool on) { push (off, note, vel, on, seqTarget, true); });
+        if (arp.enabled()) arp.process (numSamples, [&] (int off, int note, float vel, bool on) { push (off, note, vel, on, playF, false, /*generator*/ true); });
+        if (seq.enabled()) seq.process (numSamples, [&] (int off, int note, float vel, bool on) { push (off, note, vel, on, seqTarget, true, /*generator*/ true); });
 
         // Offset-sort (insertion sort — small, RT-safe, stable enough).
         for (int i = 1; i < genEvCount; ++i)
@@ -1579,8 +1581,8 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             const auto& ev = genEv[(std::size_t) i];
             const int off = juce::jlimit (0, numSamples, ev.offset);
             if (off > upTo) { engine.renderParts (upTo, off - upTo, params); upTo = off; }
-            if (ev.viaDispatch) { if (ev.on) dispatchNoteOn (ev.note, ev.vel, ev.part, chordOn); else dispatchNoteOff (ev.note, ev.part, chordOn); }
-            else                { if (ev.on) engine.noteOn (ev.note, ev.vel, ev.part);           else engine.noteOff (ev.note, ev.part); }
+            if (ev.viaDispatch) { if (ev.on) dispatchNoteOn (ev.note, ev.vel, ev.part, chordOn, ev.generator); else dispatchNoteOff (ev.note, ev.part, chordOn); }
+            else                { if (ev.on) engine.noteOn (ev.note, ev.vel, ev.part, 0, ev.generator);       else engine.noteOff (ev.note, ev.part); }
         }
         if (upTo < numSamples) engine.renderParts (upTo, numSamples - upTo, params);
         arpStepDisp.store (arp.enabled() ? arp.currentStep() : -1, std::memory_order_relaxed);

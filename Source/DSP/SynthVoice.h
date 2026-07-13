@@ -87,8 +87,9 @@ public:
         fltEnv.prepare (newSampleRate);
     }
 
-    void noteOn (int note, float vel, std::uint64_t stamp, int partIndex = 0, int slot = 0)
+    void noteOn (int note, float vel, std::uint64_t stamp, int partIndex = 0, int slot = 0, bool gen = false)
     {
+        generator = gen;      // seq/arp/looper voices yield to live-played notes when stealing
         // Only clear DSP state for a genuinely fresh voice. On a retrigger or a
         // steal (voice already sounding) we keep oscillator phase and filter
         // state continuous — a phase reset there is an audible click. The amp
@@ -135,6 +136,7 @@ public:
     int  getNote() const   { return midiNote; }
     int  getPart() const   { return part; }
     int  getSoundSlot() const { return soundSlot; }
+    bool isGenerator() const { return generator; }
     std::uint64_t getTimestamp() const { return timestamp; }
 
     // Render `numSamples` and ADD into the (mono) output buffer.
@@ -245,6 +247,7 @@ private:
     float glideNote = 60.0f;       // current (glide-slewed) note, fractional
     float velocity  = 0.0f;
     bool  active    = false;
+    bool  generator = false;       // note came from a generator (seq/arp/loop) -> steal-first
     int   part      = 0;           // part index (7C): selects which params to render with
     int   soundSlot = 0;           // Kit pad index within the part (0 for non-kit voices)
     std::uint64_t timestamp = 0;   // for oldest-note stealing

@@ -113,40 +113,46 @@ public:
     // pool is SHARED across parts with global oldest-note stealing (per-part
     // reservation is future work). Voice identity is (note, part) so two parts can
     // hold the same note number without over-releasing.
-    void noteOn (int note, float velocity, int part = 0, int soundSlot = 0)
+    void noteOn (int note, float velocity, int part = 0, int soundSlot = 0, bool generator = false)
     {
         if (polyMode != 0) { monoNoteOn (note, velocity, part, soundSlot); return; }
 
         // Reuse a voice already playing this (note, part) — retrigger.
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
             if (voices[i].isActive() && voices[i].getNote() == note && voices[i].getPart() == part)
-                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot); return; }
+                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator); return; }
 
         // Otherwise find a free voice...
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
             if (! voices[i].isActive())
-                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot); return; }
+                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator); return; }
 
-        // ...or steal a voice. PER-PART ISOLATION: steal the oldest voice OF THIS PART, so a
-        // barrage on one part (seq / arp / looper) never cuts another part's live notes. Only
-        // fall back to the global oldest when this part has no voice of its own to reuse (the
-        // pool is exhausted by other parts). The stolen voice keeps its oscillator/filter
-        // state and retriggers the amp env from its current level, so the steal is click-free.
-        int oldestOwn = -1;
+        // ...or steal a voice. PER-PART ISOLATION, in priority order:
+        //   1. the oldest GENERATOR voice (seq / arp / looper) — generators ALWAYS yield to
+        //      live playing, so a running sequencer can never cut a note you play.
+        //   2. else the oldest voice OF THIS part (live-vs-live stealing stays inside the part).
+        //   3. else the global oldest (last resort: the pool is exhausted by other live parts).
+        // The stolen voice keeps its oscillator/filter state and retriggers the amp env from
+        // its current level, so the steal is click-free.
+        int oldestGen = -1, oldestOwn = -1;
         std::size_t oldestAny = 0;
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
         {
+            if (voices[i].isGenerator()
+                && (oldestGen < 0 || voices[i].getTimestamp() < voices[(std::size_t) oldestGen].getTimestamp()))
+                oldestGen = (int) i;
             if (voices[i].getPart() == part
                 && (oldestOwn < 0 || voices[i].getTimestamp() < voices[(std::size_t) oldestOwn].getTimestamp()))
                 oldestOwn = (int) i;
             if (voices[i].getTimestamp() < voices[oldestAny].getTimestamp())
                 oldestAny = i;
         }
-        const std::size_t steal = (oldestOwn >= 0) ? (std::size_t) oldestOwn : oldestAny;
+        const std::size_t steal = (oldestGen >= 0) ? (std::size_t) oldestGen
+                                : (oldestOwn >= 0) ? (std::size_t) oldestOwn : oldestAny;
 
         sustained[steal] = false;
         ++stealCounter;
-        voices[steal].noteOn (note, velocity, ++eventCounter, part, soundSlot);
+        voices[steal].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator);
     }
 
     // ---- observability accessors (const; for the processor's telemetry) ----
@@ -154,6 +160,12 @@ public:
     {
         int c = 0;
         for (auto& v : voices) if (v.isActive()) ++c;
+        return c;
+    }
+    int activeVoiceCountForPart (int part) const
+    {
+        int c = 0;
+        for (auto& v : voices) if (v.isActive() && v.getPart() == part) ++c;
         return c;
     }
     std::uint64_t stealCount() const { return stealCounter; }
@@ -236,7 +248,7 @@ public:
     // Trigger a kit pad: expand to its sounding notes (each rendered with the pad's
     // baked params via soundSlot), applying choke. Unmapped trigger = silence. Called
     // on the audio thread (drain / host loop), like chord expansion.
-    void kitNoteOn (int part, int trigger, float velocity)
+    void kitNoteOn (int part, int trigger, float velocity, bool generator = false)
     {
         if (part < 1 || part >= maxParts) return;
         const KitData& k = kitSlots[(std::size_t) part].current();
@@ -255,7 +267,7 @@ public:
         const auto& pd = k.pads[(std::size_t) pad];
         for (int i = 0; i < pd.numSound && i < kMaxPadSoundNotes; ++i)
         {
-            noteOn (pd.soundNote[(std::size_t) i], velocity, part, pad);   // self-choke = retrigger same voice
+            noteOn (pd.soundNote[(std::size_t) i], velocity, part, pad, generator);   // self-choke = retrigger same voice
             if (e != nullptr && e->num < kMaxPadSoundNotes) e->notes[(std::size_t) e->num++] = pd.soundNote[(std::size_t) i];
         }
     }

@@ -309,6 +309,7 @@ public:
     // Live LFO modulation on the focused part for a destination (1 pitch semis, 2 cutoff
     // octaves, 3 pw units) — the UI animates the CUTOFF / PW knobs from this.
     float lfoModForDest (int dest) const { return engine.focusModForDest (dest); }
+    int   activeVoicesForPart (int part) const { return engine.activeVoiceCountForPart (part); }
     // The arp's currently-playing step (-1 = idle) for the sequencer playhead. UI polls it.
     int arpDisplayStep() const { return arpStepDisp.load (std::memory_order_relaxed); }
 
@@ -426,7 +427,7 @@ private:
 
     // Note dispatch shared by the host `midi` buffer (part 0) and the routed FIFO:
     // part 0 goes through the chord engine; locked parts play the note directly.
-    void dispatchNoteOn  (int note, float velocity, int part, bool chordOn);
+    void dispatchNoteOn  (int note, float velocity, int part, bool chordOn, bool generator = false);
     void dispatchNoteOff (int note, int part, bool chordOn);
     void flushLoopNotes  (bool chordOn);              // release notes the MIDI loop left on
 
@@ -574,7 +575,7 @@ private:
     // Internal note events for a block from the arp + step sequencer. `viaDispatch` picks
     // the sink: true -> dispatchNoteOn/Off (kit-aware, for the sequencer's target part);
     // false -> engine.noteOn/off directly (the arp on the live part).
-    struct GenEvent { int offset; int note; float vel; bool on; int part; bool viaDispatch; };
+    struct GenEvent { int offset; int note; float vel; bool on; int part; bool viaDispatch; bool generator; };
     std::array<GenEvent, 1024> genEv { };
     int genEvCount = 0;
     bool arpWasOn = false;
