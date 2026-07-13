@@ -22,10 +22,12 @@ a general-purpose synth that runs in any VST3 host or standalone.
 - **Two exponential ADSR envelopes** (amp + **mod env**), click-free retrigger and
   steal. The mod env drives the filter *and* **pitch** (`fltenv_to_pitch`, ±48 st) —
   the basis of the **drum** presets (808/punchy kicks, snare, hats, tom).
-- **Global LFO** (tri/sine/square/S&H) → pitch / cutoff / PW, plus pitch-bend,
+- **Three LFOs per part** (tri/sine/square/S&H) → pitch / cutoff / PW, plus pitch-bend,
   mod-wheel vibrato, and sustain-pedal handling.
-- **Reorderable stereo FX**: chorus, ping-pong delay, Freeverb-style reverb, mid/side
-  width — drag to reorder, click-free crossfade.
+- **Reorderable stereo FX** (per part): chorus, ping-pong delay, Freeverb-style reverb,
+  mid/side width — drag to reorder, click-free crossfade — plus a master **4-band
+  parametric EQ** at the end of the chain.
+- **8 macros**, routable to any parameter and Random-assigned; Launchkey pots drive them.
 - **Bulletproof output stage**: voice-sum headroom trim + transparent safety
   soft-clip, so the output never clips the DAC on dense chords.
 - **Diatonic chord engine**: one finger → an in-key chord (Major / Natural Minor,
@@ -35,12 +37,20 @@ a general-purpose synth that runs in any VST3 host or standalone.
   the tones a chord triggered no matter how the modifiers churn while it's held.
 - **Plug-and-play MIDI**: hot-plug auto-connect + JSON device profiles (Launchkey,
   Korg B2), MIDI-learn on every control (learned > user > factory precedence).
-- **Multi-surface parts (multitimbral-lite)**: up to 4 parts — part 0 is LIVE (what
-  the panel edits), parts 1–3 are LOCKED to a preset's voice character. Route each
-  input surface (QWERTY, each MIDI controller) to a part in the **INPUTS** dialog, so
-  a B2 can hold a bass part while a Launchkey plays the live patch. One shared 16-voice
-  pool; the FX chain + LFO are shared (v1 — "multiple synths into one pedalboard").
-- **16 factory presets + 6 drums** + user save/load + sound-design Randomize.
+- **Full 4-part multitimbral**: part 0 is LIVE (what the panel edits), parts 1–3 are
+  LOCKED — each with its **own** voice, FX chain, three LFOs, and mixer level/pan. Route
+  each input surface (QWERTY, each MIDI controller) to a part in the **INPUTS** dialog
+  (with key-range split zones), so a B2 can hold a bass part while a Launchkey plays the
+  live patch. One shared 24-voice pool with full per-part isolation — a running generator
+  never steals a note you play live. **MULTI** save/load recalls the whole layout.
+- **Drum kit parts**: per-pad synth voices, choke groups, learn-by-play, per-pad editing
+  (the full synth panel on any pad), factory kits + user `.kit` files.
+- **Groove tools**: a diatonic **arpeggiator**, an 8-row **step sequencer** (dedicated
+  drum grid), and a clock-linked **looper** (armed + measure-quantized, dual MIDI + AUDIO
+  lanes, WAV export).
+- **16 factory presets + 6 drums** + user save/load + sound-design Randomize. Loading a
+  patch is **sound-only** — it never disturbs the sequencer, looper, tempo, or other parts.
+  A default startup scene (lead / 808 kit / bass / spare) is playable out of the box.
 - **Standalone extras**: QWERTY computer-keyboard note input, curated audio-device
   default (PipeWire), F11 fullscreen, F12 live health overlay.
 - **Observability**: RT-safe ring logger, per-block CPU/xrun/saturation telemetry,
@@ -391,15 +401,13 @@ out-of-range peaks, and non-finite samples. The `[click]` suite runs in every ga
 
 ## Roadmap
 
-**v1 (make it sound good)**
-- [x] Verify PolyBLEP output — automated aliasing test (FFT, ≤−60 dB, naive fails).
-      Oscillator is now 4× oversampled with a configurable quality/CPU tradeoff
-      (`Efficient` audible-band-clean default, `HQ` full-band-clean for studio).
-- [ ] Pitch bend + mod wheel + sustain pedal handling (Korg B2 sends all)
-- [ ] Mono/legato modes + glide (slew note frequency in `SynthVoice`)
-- [ ] Smooth per-block parameter changes (one-pole smoothing on cutoff/gain
-      to kill zipper noise)
-- [x] Persist MIDI-learn mappings in APVTS state
+**v1.0.0 — shipped.** See [CHANGELOG.md](CHANGELOG.md) for the full feature list. Highlights:
+- [x] 4× oversampled PolyBLEP oscillators (Efficient/HQ), TPT filter, dual ADSRs, mod-env→pitch
+- [x] Pitch bend + mod wheel + sustain pedal; mono/legato + glide; per-block smoothing
+- [x] Full 4-part multitimbral (per-part FX + 3 LFOs + mixer) with per-part isolation; 24 voices
+- [x] Drum kit parts (per-pad editing, choke); chord engine; arp + step sequencer; looper
+- [x] Master parametric EQ; 8 routable macros; custom touch-reliable editor; default scene
+- [x] Persist MIDI-learn mappings in APVTS state; MULTI layout save/load; sound-only patch load
 
 **Deployment / validation (not yet done)**
 - [ ] ThinkPad X1 Carbon 3rd gen (2015, dual-core Broadwell) is the live Linux
