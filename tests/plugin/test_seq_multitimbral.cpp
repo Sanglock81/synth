@@ -48,6 +48,10 @@ TEST_CASE ("seq plays only its target part (muting the target silences it)", "[p
     for (int target = 0; target < 4; ++target)
     {
         VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+        // Make the target a plain synth so seq note 60 sounds on it regardless of the
+        // default scene (P2 defaults to a drum kit whose pads aren't on note 60).
+        if (target == 0) p.loadInitPreset();
+        else             p.setPartPreset (target, "Fat Saw Bass");
         armRow0 (p, 60);
         s01 (p, ParamID::seqTarget, (float) target / 3.0f);
         s01 (p, ParamID::tempo, 0.9f);

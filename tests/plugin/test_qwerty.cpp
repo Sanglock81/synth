@@ -145,6 +145,7 @@ TEST_CASE ("qwerty notes flow through processBlock to audio (merge path)", "[qwe
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
     p.prepareToPlay (48000.0, 256);
+    p.loadInitPreset();   // dry sine on the live part: this tests note FLOW + release, not the default lead's delay tail
 
     auto rmsOfBlocks = [&](int nBlocks)
     {

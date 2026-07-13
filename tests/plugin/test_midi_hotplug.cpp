@@ -63,6 +63,7 @@ TEST_CASE ("a no-CC-map profile still passes notes through (Korg B2)", "[plugin]
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
     p.prepareToPlay (kSR, kBlock);
+    p.loadInitPreset();   // dry sine on the live part: this checks note flow + release, not the default lead's delay tail
 
     // The Korg B2 factory profile is notes + damper only — its CC map is EMPTY.
     // Applying such a profile must never interfere with note handling (notes flow

@@ -18,6 +18,7 @@ TEST_CASE ("edit-focus: panel swaps to the part's sound; per-part edits persist"
 {
     VASynthProcessor p;
     p.prepareToPlay (48000.0, 128);
+    p.setPartPreset (1, "Init");   // part 1 = plain synth (the default scene makes it a kit, which the panel can't focus)
     REQUIRE (p.editFocus() == 0);
 
     // Part 0 (LIVE): dial in a distinctive cutoff, and a GLOBAL tempo.

@@ -530,6 +530,8 @@ private:
     void applyPartSoundFromTree (const juce::ValueTree& tree);       // copy sound params (+fx order) -> live APVTS
     void applyFocusedPartSound (const juce::ValueTree& soundTree);   // load a SOUND into the focused part; globals + other parts untouched
     void syncFocusedPartState();                                     // capture the focused part's live sound into its store
+    void applyDefaultScene();                                        // startup layout: P2=808 kit (seq target), P3=bass, P4=spare
+    bool defaultSceneApplied = false;                                // applyDefaultScene runs once, on the first prepareToPlay
 
     juce::CriticalSection routingLock;
     std::vector<std::pair<juce::String, std::uint32_t>> surfaceHits; // surface -> activity count

@@ -156,10 +156,11 @@ TEST_CASE ("ordinary state persists SOUND but RESETS routing/parts (lifecycle ru
     // SOUND persists.
     REQUIRE (dst.apvts.getRawParameterValue (ParamID::filterCutoff)->load() == Catch::Approx (wantCutoff));
 
-    // ROUTING resets: every surface back to LIVE (part 0), no locked parts.
+    // ROUTING resets: every surface back to LIVE (part 0). Locked parts reset to the
+    // DEFAULT SCENE (not src's custom "Kick 808"), proving the layout didn't persist.
     REQUIRE (dst.getSurfaceRouting ("Korg B2") == 0);
     REQUIRE (dst.getSurfaceRouting ("Launchkey Mini") == 0);
-    REQUIRE (dst.getPartPreset (1).isEmpty());       // Part 1 unassigned again
+    REQUIRE (dst.getPartPreset (1) == "808 Basics"); // reset to the default scene, not src's "Kick 808"
 }
 
 TEST_CASE ("missing locked-part preset falls back to Init without crashing", "[plugin][7c][parts][fallback]")
