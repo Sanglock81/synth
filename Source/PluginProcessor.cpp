@@ -28,6 +28,7 @@ static void vaSynthCrashHandler (void*)
 }
 
 static const juce::StringArray& perPartSoundIds();   // fwd (defined below) — the per-part sound params
+static PartLfos lfosFrom (const juce::AudioProcessorValueTreeState& src);   // fwd (defined below)
 
 VASynthProcessor::VASynthProcessor()
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
@@ -84,24 +85,51 @@ void VASynthProcessor::parameterChanged (const juce::String&, float)
     if (f > 0 && f < SynthEngine::maxParts) partEdited[(std::size_t) f] = true;
 }
 
+// Load a SOUND (a full scratch state tree) into the currently focused part WITHOUT
+// disturbing any global performance state or the other parts. applyPartSoundFromTree
+// copies only the per-part sound params (+ fx order) into the live APVTS — it never
+// calls replaceState, so the sequencer pattern/target, looper, tempo, arp, chord,
+// macros, mixer, EQ and master all stay exactly where the player left them. The
+// focused part's stored state + engine slot are kept coherent so a later focus swap
+// (or a MULTI save) sees the loaded sound.
+void VASynthProcessor::applyFocusedPartSound (const juce::ValueTree& soundTree)
+{
+    applyPartSoundFromTree (soundTree);                    // sound params + fx order -> live slot
+    const int f = editFocusPart.load (std::memory_order_relaxed);
+    if (f >= 0 && f < SynthEngine::maxParts)
+    {
+        partEditState[(std::size_t) f] = apvts.copyState();
+        partEdited[(std::size_t) f] = false;               // a freshly loaded preset is unedited
+        if (f > 0)                                         // a LOCKED part must re-publish to keep sounding
+            engine.setLockedPartParams (f, snapshotParams(), snapshotFXParams(), lfosFrom (apvts));
+    }
+}
+
 void VASynthProcessor::loadFactoryPreset (const juce::String& name)
 {
     const auto* p = factoryPresets.byName (name);
     if (p == nullptr) return;
-    const auto keep = PresetPolicy::capture (apvts);   // preset is a sound, not a level
-    p->applyParams (apvts);
-    PresetPolicy::restore (apvts, keep);
+    bool ok = true; juce::ValueTree st;
+    bakePresetParams (name, ok, nullptr, nullptr, &st);    // preset -> scratch SOUND state
+    applyFocusedPartSound (st);                            // sound-only: globals + other parts untouched
+    // Factory FX order lives in the JSON (not the param set), so apply it explicitly.
     if (p->fxOrder.size() == 4) { int o[4]; for (int i = 0; i < 4; ++i) o[i] = p->fxOrder[i]; setFxOrder (o); }
     else { const int def[4] { 0, 1, 2, 3 }; setFxOrder (def); }
 }
 
+void VASynthProcessor::loadUserPreset (const juce::String& name)
+{
+    bool ok = true; juce::ValueTree st;
+    bakePresetParams (name, ok, nullptr, nullptr, &st);    // user *.vasynth -> scratch SOUND state (with its fx order)
+    if (! ok) return;                                      // missing file -> leave everything as-is
+    applyFocusedPartSound (st);                            // sound-only: globals + other parts untouched
+}
+
 void VASynthProcessor::loadInitPreset()
 {
-    // Init resets the SOUND to defaults but keeps the player's global performance
-    // controls (master level) put — same policy as factory/user load.
-    const auto keep = PresetPolicy::capture (apvts);
-    for (auto* rp : getParameters()) rp->setValueNotifyingHost (rp->getDefaultValue());
-    PresetPolicy::restore (apvts, keep);
+    // Init resets the focused part's SOUND to defaults but keeps ALL global performance
+    // state (sequencer, looper, tempo, macros, mixer, master, ...) and the other parts put.
+    applyFocusedPartSound (juce::ValueTree());             // invalid tree -> Init baseline sound
     const int def[4] { 0, 1, 2, 3 };
     setFxOrder (def);
 }

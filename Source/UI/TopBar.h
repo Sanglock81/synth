@@ -203,7 +203,7 @@ private:
                     const auto n = order[r - 1];
                     if (n == "Init")                                           proc.loadInitPreset();
                     else if (proc.factoryPresetLibrary().byName (n) != nullptr) proc.loadFactoryPreset (n);
-                    else                                                        presets.load (n);
+                    else                                                        proc.loadUserPreset (n);
                     currentName = n; refreshTitle();
                 }
                 if (restoreFocus) restoreFocus();

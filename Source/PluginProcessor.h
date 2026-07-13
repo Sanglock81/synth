@@ -254,11 +254,19 @@ public:
     // -- factory presets (read-only, embedded) --------------------------------
     const FactoryPresetLibrary& factoryPresetLibrary() const { return factoryPresets; }
 
-    // Load a factory preset by name: reset to Init, apply its overrides, and set
-    // its FX order (default if unspecified). No-op if the name is unknown.
+    // Load a factory preset by name into the FOCUSED part's SOUND only (osc/filter/
+    // env/LFO/FX-enable + FX order). All global performance state — sequencer pattern
+    // + target, looper, tempo, arp, chord, macros, mixer, EQ, master — and every OTHER
+    // part are left untouched, so a patch load never interrupts what's playing. No-op if
+    // the name is unknown.
     void loadFactoryPreset (const juce::String& name);
 
-    // Reset every parameter to its default and the FX order to 0,1,2,3 ("Init").
+    // Load a USER preset (*.vasynth) into the focused part's SOUND only, same isolation
+    // policy as loadFactoryPreset. No-op if the file is missing.
+    void loadUserPreset (const juce::String& name);
+
+    // Reset the FOCUSED part's SOUND to Init defaults (FX order -> 0,1,2,3). Globals +
+    // other parts untouched (same sound-only isolation as a preset load).
     void loadInitPreset();
 
     // CLEAR (R3 Group 4): blank the SELECTED part to a clean single sine — resets its
@@ -520,6 +528,7 @@ private:
     void parameterChanged (const juce::String& id, float newValue) override;   // marks a focused locked part edited
     void bakeStateToSlot (int part, const juce::ValueTree& state);   // state tree -> VoiceParams/FX/LFO -> engine slot
     void applyPartSoundFromTree (const juce::ValueTree& tree);       // copy sound params (+fx order) -> live APVTS
+    void applyFocusedPartSound (const juce::ValueTree& soundTree);   // load a SOUND into the focused part; globals + other parts untouched
     void syncFocusedPartState();                                     // capture the focused part's live sound into its store
 
     juce::CriticalSection routingLock;
