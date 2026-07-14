@@ -4,6 +4,25 @@ All notable changes to **synth** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
+
+### Changed
+- **Stereo width now widens a dry mono source.** width > 1 synthesizes side content from
+  the mid via a Schroeder allpass cascade (phase-only, not a Haas delay), added purely
+  antisymmetrically so the mono fold-down is unchanged. width ≤ 1 and width == 1 unchanged.
+- **Default scene:** the drum kit moved to **P4** (the sequencer's default target); P3 stays
+  the bass, P2 is now the free spare.
+- **808 / Punchy kick voicing:** amp attack softened 1 ms → 2 ms for a defined transient.
+
+### Fixed / investigated
+- Investigated a reported width/EQ "does nothing": both work in the real processor topology
+  (added real-topology tests); width was a mono no-op (now fixed above), the master EQ works.
+- Investigated a reported 808 kick "HF click/pop": the kick is **engine-clean** (measured far
+  below the click standard, single hit and rapid retrigger; block-size-independent) — locked
+  in by a regression. Remaining transient character is preset voicing.
+
 ## [1.0.0] — 2026-07-13
 
 First public release: a JUCE 8 / C++17 virtual-analog polysynth (VST3 + Standalone,

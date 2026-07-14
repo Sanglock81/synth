@@ -2,4 +2,4 @@
   "params": { "osc1_wave":3, "osc1_octave":-1, "osc2_on":0, "osc2_level":0, "osc3_on":0, "osc3_level":0, "noise_level":0,
     "filter_type":0, "filter_cutoff":1200, "filter_reso":0.0, "filter_env_amt":0.0,
     "fltenv_to_pitch":18, "flt_attack":0.001, "flt_decay":0.028, "flt_sustain":0.0, "flt_release":0.03,
-    "amp_attack":0.001, "amp_decay":0.16, "amp_sustain":0.0, "amp_release":0.06, "vel_to_amp":0.5 } }
+    "amp_attack":0.002, "amp_decay":0.16, "amp_sustain":0.0, "amp_release":0.06, "vel_to_amp":0.5 } }
