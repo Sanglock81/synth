@@ -67,3 +67,44 @@ TEST_CASE ("scoping: two parts with different filter cutoffs render distinct (pe
     REQUIRE (dark > 0.0);
     REQUIRE (bright > dark * 3.0);   // each part used ITS OWN filter cutoff
 }
+
+namespace
+{
+    double noteRms (VASynthProcessor& p, int part, int note)
+    {
+        juce::AudioBuffer<float> buf (2, 256); juce::MidiBuffer m;
+        p.routeNoteOn (note, 0.9f, part);
+        double e = 0.0; int n = 0;
+        for (int b = 0; b < 20; ++b) { buf.clear(); m.clear(); p.processBlock (buf, m);
+            const float* L = buf.getReadPointer (0); for (int i = 0; i < 256; ++i) { e += (double) L[i]*L[i]; ++n; } }
+        p.routeNoteOff (note, part);
+        for (int b = 0; b < 8; ++b) { buf.clear(); m.clear(); p.processBlock (buf, m); }
+        return std::sqrt (e / n);
+    }
+}
+
+TEST_CASE ("scoping: per-part EQ boosts only its own part", "[plugin][scoping][eq][isolation]")
+{
+    namespace ID = ParamID;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+
+    // Both parts: same saw. Part 1 gets its per-part EQ ON with a big low-band boost;
+    // part 2's per-part EQ stays OFF (flat). A low note should then be LOUDER on part 1.
+    p.setEditFocus (1);
+    set01 (p, ID::osc1On, 1.0f); setVal (p, ID::osc1Wave, 0.0f);
+    set01 (p, ID::osc2On, 0.0f); set01 (p, ID::osc3On, 0.0f);
+    set01 (p, ID::peqOn, 1.0f);
+    setVal (p, ID::peqB1Freq, 120.0f); setVal (p, ID::peqB1Gain, 15.0f); setVal (p, ID::peqB1Q, 1.0f);
+
+    p.setEditFocus (2);
+    set01 (p, ID::osc1On, 1.0f); setVal (p, ID::osc1Wave, 0.0f);
+    set01 (p, ID::osc2On, 0.0f); set01 (p, ID::osc3On, 0.0f);
+    set01 (p, ID::peqOn, 0.0f);                    // part 2 EQ off (flat)
+
+    p.setEditFocus (0);
+
+    const double e1 = noteRms (p, 1, 36);          // low note (~65 Hz), in the boosted band
+    const double e2 = noteRms (p, 2, 36);
+    INFO ("part1(EQ+low boost) rms=" << e1 << "  part2(flat) rms=" << e2);
+    REQUIRE (e1 > e2 * 1.10);                       // part1's own EQ lifted it; part2 untouched
+}

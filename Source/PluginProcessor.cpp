@@ -120,8 +120,10 @@ void VASynthProcessor::loadFactoryPreset (const juce::String& name)
     bakePresetParams (name, ok, nullptr, nullptr, &st);    // preset -> scratch SOUND state
     applyFocusedPartSound (st);                            // sound-only: globals + other parts untouched
     // Factory FX order lives in the JSON (not the param set), so apply it explicitly.
-    if (p->fxOrder.size() == 4) { int o[4]; for (int i = 0; i < 4; ++i) o[i] = p->fxOrder[i]; setFxOrder (o); }
-    else { const int def[4] { 0, 1, 2, 3 }; setFxOrder (def); }
+    // Factory fxOrder is a 4-block permutation (pre-EQ); append EQ (4) as the last slot.
+    int o[kFxCount] { 0, 1, 2, 3, 4 };
+    if (p->fxOrder.size() == 4) for (int i = 0; i < 4; ++i) o[i] = p->fxOrder[i];
+    setFxOrder (o);
 }
 
 void VASynthProcessor::loadUserPreset (const juce::String& name)
@@ -137,7 +139,7 @@ void VASynthProcessor::loadInitPreset()
     // Init resets the focused part's SOUND to defaults but keeps ALL global performance
     // state (sequencer, looper, tempo, macros, mixer, master, ...) and the other parts put.
     applyFocusedPartSound (juce::ValueTree());             // invalid tree -> Init baseline sound
-    const int def[4] { 0, 1, 2, 3 };
+    const int def[kFxCount] { 0, 1, 2, 3, 4 };
     setFxOrder (def);
 }
 
@@ -350,7 +352,10 @@ static const juce::StringArray& perPartSoundIds()
         ID::chorusRate, ID::chorusDepth, ID::chorusMix, ID::fxChorusOn,
         ID::delayTime, ID::delayFeedback, ID::delayMix, ID::delaySpread, ID::fxDelayOn,
         ID::reverbSize, ID::reverbDamp, ID::reverbWidth, ID::reverbMix, ID::fxReverbOn,
-        ID::stereoWidth, ID::fxWidthOn
+        ID::stereoWidth, ID::fxWidthOn,
+        ID::peqOn, ID::peqB1Freq, ID::peqB1Gain, ID::peqB1Q,
+        ID::peqB2Freq, ID::peqB2Gain, ID::peqB2Q,
+        ID::peqB3Freq, ID::peqB3Gain, ID::peqB3Q
     };
     return ids;
 }
@@ -429,16 +434,27 @@ static FXParams fxParamsFrom (const juce::AudioProcessorValueTreeState& src)
     p.reverbSize = rp (src, ID::reverbSize); p.reverbDamp = rp (src, ID::reverbDamp);
     p.reverbWidth = rp (src, ID::reverbWidth); p.reverbMix = rp (src, ID::reverbMix);
     p.width = rp (src, ID::stereoWidth);
+    p.eqBand1 = { rp (src, ID::peqB1Freq), rp (src, ID::peqB1Gain), rp (src, ID::peqB1Q) };
+    p.eqBand2 = { rp (src, ID::peqB2Freq), rp (src, ID::peqB2Gain), rp (src, ID::peqB2Q) };
+    p.eqBand3 = { rp (src, ID::peqB3Freq), rp (src, ID::peqB3Gain), rp (src, ID::peqB3Q) };
     p.enabled[FXChain::Chorus_] = rp (src, ID::fxChorusOn) > 0.5f;
     p.enabled[FXChain::Delay_]  = rp (src, ID::fxDelayOn)  > 0.5f;
     p.enabled[FXChain::Reverb_] = rp (src, ID::fxReverbOn) > 0.5f;
     p.enabled[FXChain::Width_]  = rp (src, ID::fxWidthOn)  > 0.5f;
+    p.enabled[FXChain::EQ_]     = rp (src, ID::peqOn)      > 0.5f;
+    // Order (permutation of 0..kNumFX-1). Accept the current 5-slot form; if a legacy
+    // 4-slot order is read (pre-EQ presets), keep it and append EQ (4) last.
     auto toks = juce::StringArray::fromTokens (src.state.getProperty (ID::fxOrder).toString(), ",", "");
-    if (toks.size() == 4)
+    const int n = FXChain::kNumFX;
+    if (toks.size() >= 4 && toks.size() <= n)
     {
-        int o[4]; bool seen[4] = {}; bool okOrder = true;
-        for (int i = 0; i < 4; ++i) { o[i] = toks[i].getIntValue(); if (o[i] < 0 || o[i] > 3 || seen[o[i]]) okOrder = false; else seen[o[i]] = true; }
-        if (okOrder) for (int i = 0; i < 4; ++i) p.order[i] = o[i];
+        int o[FXChain::kNumFX]; bool seen[FXChain::kNumFX] = {}; bool okOrder = true;
+        for (int i = 0; i < toks.size(); ++i)
+        { o[i] = toks[i].getIntValue(); if (o[i] < 0 || o[i] >= n || seen[o[i]]) { okOrder = false; break; } seen[o[i]] = true; }
+        // Fill any slots the legacy order didn't mention (e.g. EQ) with the remaining ids.
+        for (int i = toks.size(); okOrder && i < n; ++i)
+            for (int v = 0; v < n; ++v) if (! seen[v]) { o[i] = v; seen[v] = true; break; }
+        if (okOrder) for (int i = 0; i < n; ++i) p.order[i] = o[i];
     }
     return p;
 }
@@ -1249,9 +1265,14 @@ void VASynthProcessor::applyFxOrderProperty()
     const auto str = apvts.state.getProperty (ParamID::fxOrder).toString();
     if (str.isEmpty()) return;
     auto tokens = juce::StringArray::fromTokens (str, ",", "");
-    if (tokens.size() != 4) return;
-    int order[4];
-    for (int i = 0; i < 4; ++i) order[i] = tokens[i].getIntValue();
+    // Accept the current 5-slot order, or a legacy 4-slot order (pre-EQ) which we pad by
+    // appending the missing ids (e.g. EQ=4) so an old session still loads.
+    if (tokens.size() < 4 || tokens.size() > kFxCount) return;
+    int order[kFxCount] { 0, 1, 2, 3, 4 };
+    bool seen[kFxCount] = {};
+    for (int i = 0; i < tokens.size(); ++i) { order[i] = tokens[i].getIntValue(); if (order[i] >= 0 && order[i] < kFxCount) seen[order[i]] = true; }
+    for (int i = tokens.size(); i < kFxCount; ++i)
+        for (int v = 0; v < kFxCount; ++v) if (! seen[v]) { order[i] = v; seen[v] = true; break; }
     setFxOrder (order);        // validates the permutation; ignores if malformed
 }
 

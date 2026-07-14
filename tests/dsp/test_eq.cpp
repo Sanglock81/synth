@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include "ParametricEQ.h"
+#include "PartEQ.h"
 #include <vector>
 #include <cmath>
 
@@ -12,6 +13,31 @@ namespace
 {
     constexpr double kSR = 48000.0;
     ParametricEQ::Band flat (float f) { return { f, 0.0f, 0.9f }; }
+    PartEQ::Band pflat (float f) { return { f, 0.0f, 0.9f }; }
+}
+
+TEST_CASE ("PartEQ flat (all 0 dB) is transparent", "[dsp][eq][parteq]")
+{
+    PartEQ eq; eq.prepare (kSR);
+    eq.setBands (pflat (180), pflat (1000), pflat (5000));
+    std::vector<float> L (512), R (512);
+    for (int i = 0; i < 512; ++i) { L[(size_t) i] = 0.3f * std::sin (i * 0.11f); R[(size_t) i] = 0.2f * std::sin (i * 0.05f); }
+    auto L0 = L, R0 = R;
+    eq.process (L.data(), R.data(), 512);
+    for (int i = 0; i < 512; ++i)
+    {
+        REQUIRE (L[(size_t) i] == Catch::Approx (L0[(size_t) i]).margin (1e-4));
+        REQUIRE (R[(size_t) i] == Catch::Approx (R0[(size_t) i]).margin (1e-4));
+    }
+}
+
+TEST_CASE ("PartEQ: each of the 3 bells lands on its target dB", "[dsp][eq][parteq]")
+{
+    PartEQ eq; eq.prepare (kSR);
+    eq.setBands ({ 200.0f, 9.0f, 2.0f }, { 1000.0f, -9.0f, 2.0f }, { 6000.0f, 6.0f, 2.0f });
+    REQUIRE (eq.magnitudeDb (200.0)  == Catch::Approx (9.0).margin (0.6));
+    REQUIRE (eq.magnitudeDb (1000.0) == Catch::Approx (-9.0).margin (0.6));
+    REQUIRE (eq.magnitudeDb (6000.0) == Catch::Approx (6.0).margin (0.6));
 }
 
 TEST_CASE ("EQ flat (all 0 dB) is transparent", "[dsp][eq]")

@@ -3,17 +3,18 @@
 #include "StereoDelay.h"
 #include "Reverb.h"
 #include "StereoWidth.h"
+#include "PartEQ.h"
 #include <vector>
 #include <cmath>
 #include <algorithm>
 
 // ============================================================================
-// Global reorderable stereo FX chain. Hand-rolled, JUCE-free, allocation-free
+// Per-part reorderable stereo FX chain. Hand-rolled, JUCE-free, allocation-free
 // after prepare().
 //
-// Four blocks — chorus, delay, reverb, stereo width — applied in a user-defined
-// order. A disabled block is skipped entirely (no CPU, like an oscillator kill
-// switch), so the cost scales with what's actually on.
+// Five blocks — chorus, delay, reverb, stereo width, per-part EQ — applied in a
+// user-defined order. A disabled block is skipped entirely (no CPU, like an
+// oscillator kill switch), so the cost scales with what's actually on.
 //
 // REORDERING / TOGGLING is click-free via a ~30 ms equal-power crossfade between
 // two internal chain copies: on any configuration change the standby copy inherits
@@ -22,7 +23,7 @@
 // for the fade, which happens on a user gesture — never in steady state.
 //
 // Effect indices (order[] is a permutation of these):
-//   0 = chorus, 1 = delay, 2 = reverb, 3 = width
+//   0 = chorus, 1 = delay, 2 = reverb, 3 = width, 4 = EQ (3-band per-part)
 // ============================================================================
 
 struct FXParams
@@ -32,16 +33,19 @@ struct FXParams
     float delayTimeMs = 300.0f, delayFeedback = 0.35f, delayMix = 0.35f, delaySpread = 1.0f;
     float reverbSize = 0.5f, reverbDamp = 0.5f, reverbWidth = 1.0f, reverbMix = 0.3f;
     float width = 1.4f;
+    PartEQ::Band eqBand1 { 180.0f,  0.0f, 0.9f };   // per-part EQ, 3 fully parametric bells
+    PartEQ::Band eqBand2 { 1000.0f, 0.0f, 0.9f };
+    PartEQ::Band eqBand3 { 5000.0f, 0.0f, 0.9f };
 
     // Structural config (a change here triggers the crossfade).
-    bool enabled[4] { false, false, false, false };
-    int  order[4]   { 0, 1, 2, 3 };
+    bool enabled[5] { false, false, false, false, false };
+    int  order[5]   { 0, 1, 2, 3, 4 };
 };
 
 class FXChain
 {
 public:
-    enum FX { Chorus_ = 0, Delay_ = 1, Reverb_ = 2, Width_ = 3, kNumFX = 4 };
+    enum FX { Chorus_ = 0, Delay_ = 1, Reverb_ = 2, Width_ = 3, EQ_ = 4, kNumFX = 5 };
 
     void prepare (double newSampleRate, int maxBlock)
     {
@@ -110,12 +114,12 @@ public:
     bool isCrossfading() const { return crossfading; }
 
 private:
-    // One full copy of the four effects plus its own order/enable config.
+    // One full copy of the five effects plus its own order/enable config.
     struct Chain
     {
-        Chorus chorus; StereoDelay delay; Reverb reverb; StereoWidth width;
-        int  order[4]   { 0, 1, 2, 3 };
-        bool enabled[4] { false, false, false, false };
+        Chorus chorus; StereoDelay delay; Reverb reverb; StereoWidth width; PartEQ eq;
+        int  order[kNumFX]   { 0, 1, 2, 3, 4 };
+        bool enabled[kNumFX] { false, false, false, false, false };
 
         void prepare (double sr, int maxBlock)
         {
@@ -123,8 +127,9 @@ private:
             delay.prepare (sr, maxBlock);
             reverb.prepare (sr);
             width.prepare (sr);
+            eq.prepare (sr);
         }
-        void reset() { chorus.reset(); delay.reset(); reverb.reset(); width.reset(); }
+        void reset() { chorus.reset(); delay.reset(); reverb.reset(); width.reset(); eq.reset(); }
 
         void setContinuous (const FXParams& p)
         {
@@ -132,10 +137,11 @@ private:
             delay.setParams  (p.delayTimeMs, p.delayFeedback, p.delayMix, p.delaySpread);
             reverb.setParams (p.reverbSize, p.reverbDamp, p.reverbWidth, p.reverbMix);
             width.setWidth   (p.width);
+            eq.setBands      (p.eqBand1, p.eqBand2, p.eqBand3);
         }
-        void setConfig (const int ord[4], const bool en[4])
+        void setConfig (const int ord[kNumFX], const bool en[kNumFX])
         {
-            for (int i = 0; i < 4; ++i) { order[i] = ord[i]; enabled[i] = en[i]; }
+            for (int i = 0; i < kNumFX; ++i) { order[i] = ord[i]; enabled[i] = en[i]; }
         }
         void copyStateFrom (const Chain& o)
         {
@@ -143,20 +149,22 @@ private:
             delay.copyStateFrom  (o.delay);
             reverb.copyStateFrom (o.reverb);
             width.copyStateFrom  (o.width);
+            eq.copyStateFrom     (o.eq);
         }
 
         void process (float* L, float* R, int n)
         {
-            for (int slot = 0; slot < 4; ++slot)
+            for (int slot = 0; slot < kNumFX; ++slot)
             {
                 const int fx = order[slot];
-                if (! enabled[fx]) continue;               // skipped -> free
+                if (fx < 0 || fx >= kNumFX || ! enabled[fx]) continue;   // skipped -> free
                 switch (fx)
                 {
                     case Chorus_: chorus.process (L, R, n); break;
                     case Delay_:  delay.process  (L, R, n); break;
                     case Reverb_: reverb.process (L, R, n); break;
                     case Width_:  width.process  (L, R, n); break;
+                    case EQ_:     eq.process     (L, R, n); break;
                     default: break;
                 }
             }
@@ -172,10 +180,10 @@ private:
         crossfading = true;
     }
 
-    static bool configDiffers (const int oA[4], const bool eA[4],
-                               const int oB[4], const bool eB[4])
+    static bool configDiffers (const int oA[kNumFX], const bool eA[kNumFX],
+                               const int oB[kNumFX], const bool eB[kNumFX])
     {
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < kNumFX; ++i)
             if (oA[i] != oB[i] || eA[i] != eB[i]) return true;
         return false;
     }

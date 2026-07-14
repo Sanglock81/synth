@@ -24,7 +24,7 @@ public:
     {
         proc.getFxOrder (order);
 
-        for (int fx = 0; fx < 4; ++fx)
+        for (int fx = 0; fx < 5; ++fx)
         {
             blocks[(size_t) fx] = std::make_unique<FXBlock> (proc, fx, defs()[(size_t) fx], *this);
             addAndMakeVisible (*blocks[(size_t) fx]);
@@ -41,19 +41,19 @@ private:
     void timerCallback() override
     {
         if (draggingFx >= 0) return;
-        int cur[4]; proc.getFxOrder (cur);
+        int cur[5]; proc.getFxOrder (cur);
         bool diff = false;
-        for (int i = 0; i < 4; ++i) diff = diff || (cur[i] != order[i]);
-        if (diff) { for (int i = 0; i < 4; ++i) order[i] = cur[i]; layoutBlocks(); repaint(); }
+        for (int i = 0; i < 5; ++i) diff = diff || (cur[i] != order[i]);
+        if (diff) { for (int i = 0; i < 5; ++i) order[i] = cur[i]; layoutBlocks(); repaint(); }
     }
 
     struct KnobDef  { const char* pid; const char* name; };
     struct BlockDef { const char* title; juce::Colour tint; const char* enablePid; std::vector<KnobDef> knobs; };
 
-    static const std::array<BlockDef, 4>& defs()
+    static const std::array<BlockDef, 5>& defs()
     {
         namespace ID = ParamID;
-        static const std::array<BlockDef, 4> d { {
+        static const std::array<BlockDef, 5> d { {
             { "CHORUS", juce::Colour (0xff46c9b0), ID::fxChorusOn,
               { { ID::chorusRate, "RATE" }, { ID::chorusDepth, "DEPTH" }, { ID::chorusMix, "MIX" } } },
             { "DELAY",  juce::Colour (0xff6ea8ff), ID::fxDelayOn,
@@ -62,6 +62,10 @@ private:
               { { ID::reverbSize, "SIZE" }, { ID::reverbDamp, "DAMP" }, { ID::reverbWidth, "WIDTH" }, { ID::reverbMix, "MIX" } } },
             { "WIDTH",  juce::Colour (0xfff0a04b), ID::fxWidthOn,
               { { ID::stereoWidth, "WIDTH" } } },
+            { "EQ",     juce::Colour (0xff67c0c8), ID::peqOn,
+              { { ID::peqB1Freq, "F1" }, { ID::peqB1Gain, "G1" }, { ID::peqB1Q, "Q1" },
+                { ID::peqB2Freq, "F2" }, { ID::peqB2Gain, "G2" }, { ID::peqB2Q, "Q2" },
+                { ID::peqB3Freq, "F3" }, { ID::peqB3Gain, "G3" }, { ID::peqB3Q, "Q3" } } },
         } };
         return d;
     }
@@ -177,8 +181,8 @@ private:
         if (draggingFx != fx) return;
         dragY = panelY;
         const auto content = contentBounds();
-        const int blockH = juce::jmax (1, content.getHeight() / 4);
-        const int targetSlot = juce::jlimit (0, 3, (int) ((panelY - content.getY()) / blockH));
+        const int blockH = juce::jmax (1, content.getHeight() / 5);
+        const int targetSlot = juce::jlimit (0, 4, (int) ((panelY - content.getY()) / blockH));
         const int curSlot = slotOf (fx);
         if (targetSlot != curSlot) moveInOrder (curSlot, targetSlot);
         layoutBlocks();
@@ -197,8 +201,8 @@ private:
     void layoutBlocks()
     {
         const auto content = contentBounds();
-        const int blockH = juce::jmax (1, (content.getHeight() - 3 * kGap) / 4);
-        for (int slot = 0; slot < 4; ++slot)
+        const int blockH = juce::jmax (1, (content.getHeight() - 4 * kGap) / 5);
+        for (int slot = 0; slot < 5; ++slot)
         {
             const int fx = order[slot];
             if (fx == draggingFx) continue;
@@ -218,7 +222,7 @@ private:
 
     int slotOf (int fx) const
     {
-        for (int i = 0; i < 4; ++i) if (order[i] == fx) return i;
+        for (int i = 0; i < 5; ++i) if (order[i] == fx) return i;
         return 0;
     }
     void moveInOrder (int from, int to)
@@ -234,8 +238,8 @@ private:
 
     VASynthProcessor& proc;
     juce::Colour tint { 0xff5ecb8a };
-    std::array<std::unique_ptr<FXBlock>, 4> blocks;
-    int order[4] { 0, 1, 2, 3 };
+    std::array<std::unique_ptr<FXBlock>, 5> blocks;
+    int order[5] { 0, 1, 2, 3, 4 };
     int draggingFx = -1;
     float dragY = 0.0f;
 

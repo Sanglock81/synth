@@ -86,27 +86,28 @@ public:
     // -- FX chain order (state-tree property, not an automatable param) --------
     // The editor's drag-reorder calls setFxOrder; it publishes an atomic mirror
     // for the audio thread AND writes the `fx_order` state property so the order
-    // saves/loads with presets. `order` must be a permutation of {0,1,2,3}
-    // (0=chorus, 1=delay, 2=reverb, 3=width); invalid input is ignored.
-    void setFxOrder (const int order[4])
+    // saves/loads with presets. `order` must be a permutation of {0,1,2,3,4}
+    // (0=chorus, 1=delay, 2=reverb, 3=width, 4=EQ); invalid input is ignored.
+    static constexpr int kFxCount = 5;
+    void setFxOrder (const int order[kFxCount])
     {
         std::uint32_t packed = 0;
-        bool seen[4] { false, false, false, false };
-        for (int i = 0; i < 4; ++i)
+        bool seen[kFxCount] { };
+        for (int i = 0; i < kFxCount; ++i)
         {
             const int v = order[i];
-            if (v < 0 || v > 3 || seen[v]) return;             // not a permutation -> ignore
+            if (v < 0 || v >= kFxCount || seen[v]) return;     // not a permutation -> ignore
             seen[v] = true;
-            packed |= (std::uint32_t) v << (i * 8);
+            packed |= (std::uint32_t) v << (i * 4);            // 4 bits/slot (values 0..4)
         }
         fxOrderPacked.store (packed, std::memory_order_relaxed);
         apvts.state.setProperty (ParamID::fxOrder, orderToString (order), nullptr);
     }
 
-    void getFxOrder (int out[4]) const
+    void getFxOrder (int out[kFxCount]) const
     {
         const std::uint32_t packed = fxOrderPacked.load (std::memory_order_relaxed);
-        for (int i = 0; i < 4; ++i) out[i] = (int) ((packed >> (i * 8)) & 0xFFu);
+        for (int i = 0; i < kFxCount; ++i) out[i] = (int) ((packed >> (i * 4)) & 0xFu);
     }
 
     // -- parts / multitimbral (7C) --------------------------------------------
@@ -478,14 +479,15 @@ private:
     void writeSeqProperty();
     void applySeqProperty();
 
-    static juce::String orderToString (const int order[4])
+    static juce::String orderToString (const int order[kFxCount])
     {
-        return juce::String (order[0]) + "," + juce::String (order[1]) + ","
-             + juce::String (order[2]) + "," + juce::String (order[3]);
+        juce::String s;
+        for (int i = 0; i < kFxCount; ++i) s += (i ? "," : "") + juce::String (order[i]);
+        return s;
     }
 
-    // Default order 0,1,2,3 packed one index per byte (byte i = slot i's effect).
-    static constexpr std::uint32_t kDefaultOrderPacked = 0x03020100u;
+    // Default order 0,1,2,3,4 packed 4 bits per slot (slot i in nibble i).
+    static constexpr std::uint32_t kDefaultOrderPacked = 0x43210u;
 
     SynthEngine        engine;          // owns the per-part voices + per-part FX (Sub-phase 2)
     ChordEngine        chordEngine;

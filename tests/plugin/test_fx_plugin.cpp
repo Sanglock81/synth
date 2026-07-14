@@ -53,30 +53,30 @@ TEST_CASE ("fx_order: setFxOrder round-trips a permutation and rejects invalid i
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
 
-    int def[4]; p.getFxOrder (def);
-    REQUIRE (def[0] == 0); REQUIRE (def[1] == 1); REQUIRE (def[2] == 2); REQUIRE (def[3] == 3);
+    int def[5]; p.getFxOrder (def);             // 5 blocks now (chorus/delay/reverb/width/EQ)
+    for (int i = 0; i < 5; ++i) REQUIRE (def[i] == i);
 
-    const int good[4] { 3, 2, 1, 0 };
+    const int good[5] { 4, 3, 2, 1, 0 };
     p.setFxOrder (good);
-    int got[4]; p.getFxOrder (got);
-    for (int i = 0; i < 4; ++i) REQUIRE (got[i] == good[i]);
+    int got[5]; p.getFxOrder (got);
+    for (int i = 0; i < 5; ++i) REQUIRE (got[i] == good[i]);
 
-    const int dup[4] { 0, 0, 1, 2 };            // not a permutation -> ignored
+    const int dup[5] { 0, 0, 1, 2, 3 };         // not a permutation -> ignored
     p.setFxOrder (dup);
     p.getFxOrder (got);
-    for (int i = 0; i < 4; ++i) REQUIRE (got[i] == good[i]);   // unchanged
+    for (int i = 0; i < 5; ++i) REQUIRE (got[i] == good[i]);   // unchanged
 
-    const int oor[4] { 0, 1, 2, 9 };            // out of range -> ignored
+    const int oor[5] { 0, 1, 2, 3, 9 };         // out of range -> ignored
     p.setFxOrder (oor);
     p.getFxOrder (got);
-    for (int i = 0; i < 4; ++i) REQUIRE (got[i] == good[i]);
+    for (int i = 0; i < 5; ++i) REQUIRE (got[i] == good[i]);
 }
 
 TEST_CASE ("fx_order persists through save/load", "[plugin][6b][fxorder][state]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor src;
-    const int ord[4] { 2, 0, 3, 1 };
+    const int ord[5] { 2, 0, 4, 3, 1 };
     src.setFxOrder (ord);
 
     juce::MemoryBlock blob;
@@ -84,8 +84,8 @@ TEST_CASE ("fx_order persists through save/load", "[plugin][6b][fxorder][state]"
 
     VASynthProcessor dst;
     dst.setStateInformation (blob.getData(), (int) blob.getSize());
-    int got[4]; dst.getFxOrder (got);
-    for (int i = 0; i < 4; ++i) REQUIRE (got[i] == ord[i]);
+    int got[5]; dst.getFxOrder (got);
+    for (int i = 0; i < 5; ++i) REQUIRE (got[i] == ord[i]);
 }
 
 TEST_CASE ("enabling reverb adds a tail that outlives the dry note", "[plugin][6b][fx][audio]")
