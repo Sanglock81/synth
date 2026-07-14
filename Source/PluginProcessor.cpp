@@ -329,7 +329,10 @@ VoiceParams VASynthProcessor::snapshotParams() const { return buildVoiceParams (
 // The per-part SOUND parameters — everything buildVoiceParams / fxParamsFrom / lfosFrom
 // read. Edit-focus swaps ONLY these between parts; global/performance params (master,
 // mixer, tempo, arp, chord, macros, poly mode) stay put. (fx ORDER travels via its state
-// property, handled alongside.)
+// property, handled alongside.) Scoping audit (task #50): this is the canonical per-part
+// set — osc/filter/env/glide/vel + the whole FX chain (chorus/delay/reverb/width) + all
+// three LFOs. The MASTER parametric EQ (eq_*) is the deliberate exception: it is a global
+// finisher on the summed output; a per-part EQ block lives in each part's FX chain (task #51).
 static const juce::StringArray& perPartSoundIds()
 {
     namespace ID = ParamID;
