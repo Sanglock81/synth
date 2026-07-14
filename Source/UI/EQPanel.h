@@ -46,14 +46,17 @@ public:
         const auto tViz = juce::Colour (0xff67c0c8);
         auto content = chrome::section (g, getLocalBounds(), "EQ  -  master", tViz);
 
-        // ON name-bar (backlit): tap toggles.
+        // ON name-bar (backlit, LOUD): tap toggles. A darkened-but-outlined bar with an
+        // explicit call-to-action so a disabled EQ never reads as broken.
         const bool on = eqOn != nullptr && eqOn->get();
-        barR = content.removeFromTop (22); content.removeFromTop (4);
+        barR = content.removeFromTop (26); content.removeFromTop (4);
         g.setColour (on ? tViz : VASynthLookAndFeel::track().darker (0.35f));
         g.fillRoundedRectangle (barR.toFloat(), 4.0f);
-        g.setColour (on ? chrome::onTint() : VASynthLookAndFeel::dim());
-        g.setFont (juce::Font (juce::FontOptions (12.0f, juce::Font::bold)));
-        g.drawText (on ? "  ON" : "  OFF (tap)", barR, juce::Justification::centredLeft, false);
+        g.setColour (on ? tViz.brighter (0.5f) : tViz.withAlpha (0.55f));       // always outline (reads as a toggle)
+        g.drawRoundedRectangle (barR.toFloat().reduced (0.8f), 4.0f, on ? 1.4f : 1.2f);
+        g.setColour (on ? chrome::onTint() : tViz.withAlpha (0.9f));
+        g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
+        g.drawText (on ? "  EQ  ON" : "  EQ  OFF  -  tap to enable", barR, juce::Justification::centredLeft, false);
 
         // response curve
         auto cv = content.removeFromTop (juce::jmax (40, content.getHeight() * 4 / 10));
@@ -85,7 +88,7 @@ public:
     void resized() override
     {
         auto content = chrome::sectionContent (getLocalBounds());
-        content.removeFromTop (22 + 4);                                     // ON bar
+        content.removeFromTop (26 + 4);                                     // ON bar
         content.removeFromTop (juce::jmax (40, content.getHeight() * 4 / 10) + 5);   // curve (approx; paint owns exact)
         // 4 band columns
         const int n = 4, gap = 4;
