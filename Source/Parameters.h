@@ -361,7 +361,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     // --- Step sequencer (R3 Group 2) -----------------------------------------
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::seqOn, 1},   "Seq", false));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::seqGate, 1}, "Seq Gate", juce::NormalisableRange<float>(0.05f, 1.0f), 0.5f));
-    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::seqTarget, 1}, "Seq Target", juce::StringArray{ "P1", "P2", "P3", "P4" }, 1));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::seqTarget, 1}, "Seq Target", juce::StringArray{ "P1", "P2", "P3", "P4" }, 3));   // default P4 = the drum-kit part (default scene)
 
     return { params.begin(), params.end() };
 }

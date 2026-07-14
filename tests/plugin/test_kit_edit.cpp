@@ -104,7 +104,7 @@ TEST_CASE ("kit pad edit flow: cancel leaves the pad unchanged", "[plugin][kit][
 TEST_CASE ("kit pad edit refuses an empty pad or a non-kit part", "[plugin][kit][edit]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
-    REQUIRE_FALSE (p.beginKitPadEdit (3, 0));       // part 3 (spare) isn't a kit
+    REQUIRE_FALSE (p.beginKitPadEdit (1, 0));       // part 1 (spare) isn't a kit yet
     p.setPartKit (1, onePadKit (60, "Init", {}));
     REQUIRE_FALSE (p.beginKitPadEdit (1, 5));       // pad 5 is empty
     REQUIRE_FALSE (p.beginKitPadEdit (0, 0));       // part 0 can't be a kit

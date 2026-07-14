@@ -50,7 +50,7 @@ a general-purpose synth that runs in any VST3 host or standalone.
   lanes, WAV export).
 - **16 factory presets + 6 drums** + user save/load + sound-design Randomize. Loading a
   patch is **sound-only** — it never disturbs the sequencer, looper, tempo, or other parts.
-  A default startup scene (lead / 808 kit / bass / spare) is playable out of the box.
+  A default startup scene (P1 lead / P2 spare / P3 bass / P4 808 kit) is playable out of the box.
 - **Standalone extras**: QWERTY computer-keyboard note input, curated audio-device
   default (PipeWire), F11 fullscreen, F12 live health overlay.
 - **Observability**: RT-safe ring logger, per-block CPU/xrun/saturation telemetry,

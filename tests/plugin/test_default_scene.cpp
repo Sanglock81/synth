@@ -18,19 +18,19 @@ namespace
     }
 }
 
-TEST_CASE ("default scene: P2 is the 808 kit (the sequencer's target), P3 is a bass", "[plugin][scene]")
+TEST_CASE ("default scene: P4 is the 808 kit (the sequencer's target), P3 is a bass", "[plugin][scene]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
 
-    // P2 (part 1) is a drum kit, and it is the sequencer's DEFAULT target (seq_target = P2).
-    REQUIRE (p.isPartKit (1));
-    REQUIRE (p.getPartPreset (1) == "808 Basics");
-    REQUIRE ((int) p.apvts.getRawParameterValue (ParamID::seqTarget)->load() == 1);
+    // P4 (part 3) is a drum kit, and it is the sequencer's DEFAULT target (seq_target = P4).
+    REQUIRE (p.isPartKit (3));
+    REQUIRE (p.getPartPreset (3) == "808 Basics");
+    REQUIRE ((int) p.apvts.getRawParameterValue (ParamID::seqTarget)->load() == 3);
 
-    // P3 (part 2) is a plain bass voice; P4 (part 3) is a free spare (not a kit).
+    // P3 (part 2) is a plain bass voice; P2 (part 1) is a free spare (not a kit).
     REQUIRE_FALSE (p.isPartKit (2));
     REQUIRE (p.getPartPreset (2) == "Fat Saw Bass");
-    REQUIRE_FALSE (p.isPartKit (3));
+    REQUIRE_FALSE (p.isPartKit (1));
 }
 
 TEST_CASE ("default scene: the sequencer plays the drum kit, distinct from the live part", "[plugin][scene]")
@@ -38,7 +38,7 @@ TEST_CASE ("default scene: the sequencer plays the drum kit, distinct from the l
     namespace ID = ParamID;
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
 
-    // Draw a beat on the rows that hit the 808 pads (36..41) and run the seq (default target P2).
+    // Draw a beat on the rows that hit the 808 pads (36..41) and run the seq (default target P4).
     for (int r = 0; r < 6; ++r)
     {
         p.setSeqNote (r, 36 + r);

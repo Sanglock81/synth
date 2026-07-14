@@ -250,16 +250,16 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 // Default scene (startup layout). P1 (live) is seeded in the constructor with a lead; here
 // the LOCKED parts get their dedicated sounds so the groove-box is playable out of the box
 // and each surface is audibly distinct:
-//   P2 (part 1) = 808 drum kit — the sequencer's DEFAULT target (seq_target = P2), so the
+//   P4 (part 3) = 808 drum kit — the sequencer's DEFAULT target (seq_target = P4), so the
 //                 sequencer plays drums, never the live lead.
 //   P3 (part 2) = a bass patch — a second distinct locked voice (e.g. for the looper).
-//   P4 (part 3) = left as Init (a spare part to split/assign freely).
+//   P2 (part 1) = left as Init (a spare part to split/assign freely).
 // Only the LAYOUT is set here; no global (tempo/seq grid/macros) is touched.
 void VASynthProcessor::applyDefaultScene()
 {
-    setPartKit (1, factoryKit ("808 Basics"));      // P2: sequencer's drum kit
+    setPartKit (3, factoryKit ("808 Basics"));      // P4: sequencer's drum kit
     setPartPreset (2, "Fat Saw Bass");              // P3: dedicated bass voice
-    // P4 (part 3) intentionally left at Init — a free spare part.
+    // P2 (part 1) intentionally left at Init — a free spare part.
 }
 
 // Helper: read a float parameter's current value from the APVTS.

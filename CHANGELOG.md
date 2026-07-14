@@ -53,8 +53,8 @@ test-first behind a full gate (`run-all-checks.sh` + `--sanitize` + bench).
   right oscilloscope + FFT (RT-safe SPSC tap), slim top bar, chord/rhythm/looper bottom
   zones, `?` help overlay, fullscreen (kiosk) mode. Touch-reliable (Surface-confirmed);
   nothing on the main panel steals keyboard focus.
-- **Default startup scene**: P1 lead · P2 808 kit (the sequencer's target) · P3 bass · P4
-  spare — playable and audibly distinct out of the box.
+- **Default startup scene**: P1 lead · P2 spare · P3 bass · P4 808 kit (the sequencer's
+  target) — playable and audibly distinct out of the box.
 - Edit-focus: tapping a part swaps the whole panel to its sound with per-part persistence,
   MULTI edit-capture, and revert. Double-tap numeric entry; LFO→knob modulation animation.
 - Factory preset library (16 patches across categories) + Init; **loading a patch is

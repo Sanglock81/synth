@@ -208,8 +208,8 @@ namespace
             auto rail = takeL (area, 176);
             {
                 auto rl = section (g, rail, "Parts", tParts);
-                const char* pn[]  { "P1  LIVE", "P2  808 Basics", "P3  Warm Pad", "P4  (empty)" };
-                const char* sub[] { "Fat Saw Bass", "kit  -  6 pads", "chorus + reverb", "tap to add" };
+                const char* pn[]  { "P1  LIVE", "P2  (spare)", "P3  Fat Saw Bass", "P4  808 Basics" };
+                const char* sub[] { "Bright Lead", "tap to add", "bass", "kit  -  6 pads" };
                 const int cellH = (rl.getHeight() - 3 * 5) / 4;      // ONE height -> even cells
                 for (int i = 0; i < 4; ++i)
                 {
