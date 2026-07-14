@@ -70,6 +70,79 @@ TEST_CASE ("StereoWidth: mono collapse, identity, and widening", "[6b][fx][width
 }
 
 // ---------------------------------------------------------------------------
+// width > 1 synthesizes side content from the MID via an allpass cascade, so a DRY
+// MONO source audibly widens — and folds back to mono cleanly (no comb notches),
+// because the synthesized content is purely antisymmetric (L += d, R -= d).
+namespace
+{
+    double correlation (const std::vector<float>& a, const std::vector<float>& b)
+    {
+        double sa = 0, sb = 0, sab = 0;
+        for (std::size_t i = 0; i < a.size(); ++i) { sa += a[i]*a[i]; sb += b[i]*b[i]; sab += a[i]*b[i]; }
+        return (sa > 1e-12 && sb > 1e-12) ? sab / std::sqrt (sa * sb) : 1.0;
+    }
+}
+
+TEST_CASE ("StereoWidth: width>1 widens a DRY MONO source, mono-safe", "[6b][fx][width]")
+{
+    const int N = 8192;
+    std::vector<float> mono (N);
+    for (int i = 0; i < N; ++i)                       // a mono chord-ish source (harmonically rich)
+        mono[(std::size_t) i] = 0.3f * (float) (std::sin (tu::kTwoPi * 180.0 * i / kSR)
+                                              + std::sin (tu::kTwoPi * 270.0 * i / kSR)
+                                              + std::sin (tu::kTwoPi * 410.0 * i / kSR));
+
+    auto run = [&] (float w)
+    {
+        StereoWidth fx; fx.prepare (kSR); fx.setWidth (w); fx.reset();
+        auto l = mono, r = mono;                     // L == R (dry mono)
+        // Warm the smoother/allpass so we measure steady state, then measure.
+        fx.process (l.data(), r.data(), N);
+        return std::pair<std::vector<float>, std::vector<float>> { l, r };
+    };
+
+    SECTION ("dry mono: width=2 decorrelates L/R; width=1 leaves it mono")
+    {
+        auto [l1, r1] = run (1.0f);
+        REQUIRE (correlation (l1, r1) > 0.999);       // still mono at unity
+        auto [l2, r2] = run (2.0f);
+        REQUIRE (correlation (l2, r2) < 0.9);         // now genuinely stereo
+    }
+
+    SECTION ("mono fold-down is unchanged (allpass, not Haas: no comb notches)")
+    {
+        auto [l2, r2] = run (2.0f);
+        std::vector<float> sumWide (N), sumDry (N);
+        for (int i = 0; i < N; ++i) { sumWide[(std::size_t) i] = l2[(std::size_t) i] + r2[(std::size_t) i];
+                                      sumDry [(std::size_t) i] = 2.0f * mono[(std::size_t) i]; }
+        REQUIRE (rmsDiff (sumWide, sumDry) < 1e-4);   // L+R == 2*mid: the widening cancels on mono
+    }
+}
+
+TEST_CASE ("StereoWidth: width sweeps are click-free and allocation-free", "[6b][fx][width][rt]")
+{
+    const int N = 8192, block = 64;
+    std::vector<float> L (N), R (N);
+    for (int i = 0; i < N; ++i) L[(std::size_t) i] = R[(std::size_t) i] = 0.4f * (float) std::sin (tu::kTwoPi * 200.0 * i / kSR);
+
+    StereoWidth fx; fx.prepare (kSR); fx.reset();
+    float maxJump = 0.0f; float prev = 0.0f;
+    {
+        alloc_hook::AllocGuard g;
+        for (int i = 0; i < N; i += block)
+        {
+            fx.setWidth (1.0f + (float) i / (float) N);   // sweep 1 -> 2 across the buffer
+            fx.process (L.data() + i, R.data() + i, block);
+        }
+        REQUIRE (g.count() == 0);                          // RT-safe
+    }
+    for (int i = 0; i < N; ++i) { maxJump = std::max (maxJump, std::abs (L[(std::size_t) i] - prev)); prev = L[(std::size_t) i]; }
+    REQUIRE (tu::allFinite (L));
+    REQUIRE (tu::allFinite (R));
+    REQUIRE (maxJump < 0.1f);                              // no discontinuity across the sweep
+}
+
+// ---------------------------------------------------------------------------
 TEST_CASE ("Chorus: decorrelates a mono source and mix=0 is identity", "[6b][fx][chorus]")
 {
     const int N = 8192;

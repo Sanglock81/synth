@@ -101,6 +101,7 @@ add_executable(plugin_tests
     plugin/test_load_isolation.cpp
     plugin/test_seq_drives_kit.cpp
     plugin/test_default_scene.cpp
+    plugin/test_fx_topology.cpp
     plugin/test_click_torture.cpp
     plugin/test_editfocus.cpp
     dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests
