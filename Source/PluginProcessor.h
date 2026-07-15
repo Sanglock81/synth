@@ -378,6 +378,17 @@ public:
     }
     bool  loopLaneHasContent (int part) const { return looper.hasContent (part); }
     int   loopLaneEventCount (int part) const { return looper.eventCount (part); }
+    // Honest audio cap: how many bars (1/2/4) the audio ring can hold at the current tempo.
+    // Below ~40 BPM a 4-bar loop exceeds the ring, so AUDIO mode is limited (shown in the UI).
+    int   maxAudioLoopBars() const
+    {
+        const double bpm = juce::jmax (20.0f, apvts.getRawParameterValue (ParamID::tempo)->load());
+        const double sr  = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+        const double barSamples = sr * 60.0 / bpm * 4.0;                 // 4 beats/bar
+        const double ring = sr * AudioLoop::kMaxLoopSeconds;
+        const int fit = (int) (ring / juce::jmax (1.0, barSamples));     // whole bars that fit
+        return fit >= 4 ? 4 : fit >= 2 ? 2 : 1;
+    }
     bool  loopAudioHasContent (int part) const { return part >= 0 && part < SynthEngine::maxParts && audioLoops[(std::size_t) part].hasContent(); }
     int   loopRecDisplayState (int lane) const { return (lane >= 0 && lane < SynthEngine::maxParts) ? loopRecStateDisp[(std::size_t) lane].load (std::memory_order_relaxed) : 0; }
     // Write the recorded loops to a Standard MIDI File (one track per part). Returns false

@@ -214,21 +214,22 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ArpBar)
 };
 
-// ---- LOOPER: functional per-part MIDI looper + MIDI export ------------------
+// ---- LOOPER: FOUR fixed lanes (lane N == part N), each with its OWN transport ----
+// Lane N records + plays part N regardless of the edit/play focus (#47). Each lane row:
+// part label, REC, PLAY, MIDI/AUDIO, CLEAR, and a content/playhead strip. loop_bars is the
+// shared grid; below ~40 BPM a lane's AUDIO mode is capped (honest, shown on the row).
 class LooperPanel : public juce::Component,
                     private juce::Timer
 {
 public:
+    static constexpr int kLanes = 4;
+
     explicit LooperPanel (VASynthProcessor& p) : proc (p)
     {
         setWantsKeyboardFocus (false);
-        rec  = std::make_unique<PowerToggle> (p.apvts, ParamID::loopRec,  "REC");
-        play = std::make_unique<PowerToggle> (p.apvts, ParamID::loopPlay, "PLAY");
-        mode = std::make_unique<HSelector> (p.apvts, ParamID::loopMode, p.getMidiLearn(),
-                                            juce::StringArray { "MIDI", "AUDIO" });
-        sync = std::make_unique<HSelector> (p.apvts, ParamID::loopBars, p.getMidiLearn(),
-                                            juce::StringArray { "1 BAR", "2 BAR", "4 BAR" });
-        addAndMakeVisible (*rec); addAndMakeVisible (*play); addAndMakeVisible (*mode); addAndMakeVisible (*sync);
+        const char* const recIds[]  { ParamID::loopRec,  ParamID::loopRec2,  ParamID::loopRec3,  ParamID::loopRec4 };
+        const char* const playIds[] { ParamID::loopPlay, ParamID::loopPlay2, ParamID::loopPlay3, ParamID::loopPlay4 };
+        const char* const modeIds[] { ParamID::loopMode, ParamID::loopMode2, ParamID::loopMode3, ParamID::loopMode4 };
 
         auto styleBtn = [] (juce::TextButton& b)
         {
@@ -236,15 +237,25 @@ public:
             b.setColour (juce::TextButton::buttonColourId, VASynthLookAndFeel::track());
             b.setColour (juce::TextButton::textColourOffId, VASynthLookAndFeel::ink());
         };
-        clear.setButtonText ("CLEAR"); styleBtn (clear);
-        clear.onClick = [this] { proc.clearLoops(); };
-        addAndMakeVisible (clear);
-        expo.setButtonText ("EXPORT MIDI"); styleBtn (expo);
-        expo.onClick = [this] { exportMidi(); };
-        addAndMakeVisible (expo);
-        expoWav.setButtonText ("EXPORT WAV"); styleBtn (expoWav);
-        expoWav.onClick = [this] { exportWav(); };
-        addAndMakeVisible (expoWav);
+
+        for (int i = 0; i < kLanes; ++i)
+        {
+            recBtn[(std::size_t) i]  = std::make_unique<PowerToggle> (p.apvts, recIds[(std::size_t) i],  "R");
+            playBtn[(std::size_t) i] = std::make_unique<PowerToggle> (p.apvts, playIds[(std::size_t) i], "P");
+            modeSel[(std::size_t) i] = std::make_unique<HSelector> (p.apvts, modeIds[(std::size_t) i], p.getMidiLearn(),
+                                                                    juce::StringArray { "MIDI", "AUD" });
+            addAndMakeVisible (*recBtn[(std::size_t) i]); addAndMakeVisible (*playBtn[(std::size_t) i]); addAndMakeVisible (*modeSel[(std::size_t) i]);
+            auto& cb = clearBtn[(std::size_t) i];
+            cb.setButtonText ("x"); styleBtn (cb);
+            cb.onClick = [this, i] { proc.clearLoopLane (i); };
+            addAndMakeVisible (cb);
+        }
+
+        sync = std::make_unique<HSelector> (p.apvts, ParamID::loopBars, p.getMidiLearn(),
+                                            juce::StringArray { "1 BAR", "2 BAR", "4 BAR" });
+        addAndMakeVisible (*sync);
+        expo.setButtonText ("MIDI"); styleBtn (expo);   expo.onClick    = [this] { exportMidi(); }; addAndMakeVisible (expo);
+        expoWav.setButtonText ("WAV"); styleBtn (expoWav); expoWav.onClick = [this] { exportWav(); }; addAndMakeVisible (expoWav);
 
         startTimerHz (20);   // playhead + armed-record blink
     }
@@ -252,46 +263,47 @@ public:
     void paint (juce::Graphics& g) override
     {
         const auto tLoop = juce::Colour (0xffca6bd0);
-        chrome::section (g, getLocalBounds(), "Looper  -  MIDI + audio loops, session export", tLoop);
-
-        // Armed / recording status pip (top-right of the header content).
-        const int rs = proc.loopRecDisplayState (0);    // lane 1 (P1); full 4-lane UI is increment B
-        if (! statusArea.isEmpty() && rs > 0)
-        {
-            const bool recOn = rs == 2;
-            const float blink = 0.5f + 0.5f * (float) std::sin (juce::Time::getMillisecondCounter() * 0.008);
-            const auto red = juce::Colour (0xffd8443a);
-            g.setColour (recOn ? red : red.withAlpha (0.35f + 0.5f * blink));
-            auto dot = statusArea.removeFromLeft (12).withSizeKeepingCentre (9, 9).toFloat();
-            g.fillEllipse (dot);
-            g.setColour (recOn ? red : VASynthLookAndFeel::dim());
-            g.setFont (juce::Font (juce::FontOptions (10.0f, juce::Font::bold)));
-            g.drawText (recOn ? "REC" : "ARMED", statusArea, juce::Justification::centredLeft, false);
-        }
+        chrome::section (g, getLocalBounds(), "Looper  -  4 lanes (P1-P4), MIDI + audio", tLoop);
 
         const float ph = proc.loopPlayhead();
-        const bool audioMode = proc.apvts.getRawParameterValue (ParamID::loopMode)->load() > 0.5f;
-        for (int i = 0; i < 5; ++i)                       // 4 MIDI part lanes + 1 AUDIO lane
+        const int maxAudioBars = proc.maxAudioLoopBars();   // honest audio cap at this tempo
+        for (int i = 0; i < kLanes; ++i)
         {
-            auto lane = laneRects[(std::size_t) i];
+            auto lane = laneStrip[(std::size_t) i];
             if (lane.isEmpty()) continue;
-            const bool isAudio = (i == 4);
-            const bool hasContent = isAudio ? proc.loopAudioHasContent (i < 4 ? i : 0)   // increment B: real per-lane UI
-                                            : proc.loopLaneHasContent (i);
-            const bool laneActive = isAudio ? audioMode : ! audioMode;   // which lane the mode plays
+
+            const bool audioMode = proc.apvts.getRawParameterValue (laneModeId (i))->load() > 0.5f;
+            const bool hasMidi   = proc.loopLaneHasContent (i);
+            const bool hasAudio  = proc.loopAudioHasContent (i);
+            const int  rs        = proc.loopRecDisplayState (i);   // 0 idle,1 armed,2 rec
 
             g.setColour (VASynthLookAndFeel::track());
-            g.fillRoundedRectangle (lane.toFloat(), 4.0f);
-            g.setColour (laneActive ? VASynthLookAndFeel::ink() : VASynthLookAndFeel::dim());
-            g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold)));
-            g.drawText (isAudio ? "AUD" : ("P" + juce::String (i + 1)),
-                        lane.removeFromLeft (44).withTrimmedLeft (8), juce::Justification::centredLeft, false);
+            g.fillRoundedRectangle (lane.toFloat(), 3.0f);
 
-            if (hasContent)
+            // content fill (MIDI hue vs audio hue), for the lane the mode HEARS.
+            const bool has = audioMode ? hasAudio : hasMidi;
+            if (has)
             {
-                const auto fill = isAudio ? juce::Colour (0xff58c0a8) : tLoop;   // audio lane a distinct hue
-                g.setColour (fill.withAlpha (laneActive ? 0.4f : 0.18f));
-                g.fillRoundedRectangle (lane.reduced (2, 3).toFloat(), 3.0f);
+                const auto fill = audioMode ? juce::Colour (0xff58c0a8) : tLoop;
+                g.setColour (fill.withAlpha (0.34f));
+                g.fillRoundedRectangle (lane.reduced (2, 2).toFloat(), 3.0f);
+            }
+            // armed/recording pip
+            if (rs > 0)
+            {
+                const bool recOn = rs == 2;
+                const float blink = 0.5f + 0.5f * (float) std::sin (juce::Time::getMillisecondCounter() * 0.008);
+                g.setColour (juce::Colour (0xffd8443a).withAlpha (recOn ? 1.0f : 0.35f + 0.5f * blink));
+                g.fillEllipse (juce::Rectangle<float> ((float) lane.getX() + 4.0f, (float) lane.getCentreY() - 3.5f, 7.0f, 7.0f));
+            }
+            // honest audio-cap note (this lane is AUDIO but the grid can't fit in the ring).
+            const int barsSel = (int) proc.apvts.getRawParameterValue (ParamID::loopBars)->load();   // 0/1/2 -> 1/2/4
+            const int selBars = (barsSel == 2) ? 4 : (barsSel == 1) ? 2 : 1;
+            if (audioMode && selBars > maxAudioBars)
+            {
+                g.setColour (juce::Colour (0xffe0b050));
+                g.setFont (juce::Font (juce::FontOptions (9.0f, juce::Font::bold)));
+                g.drawText ("aud " + juce::String (maxAudioBars) + "b", lane.reduced (14, 0), juce::Justification::centredLeft, false);
             }
             const int px = lane.getX() + juce::roundToInt (ph * lane.getWidth());
             g.setColour (tLoop.brighter (0.3f));
@@ -302,27 +314,45 @@ public:
     void resized() override
     {
         auto c = chrome::sectionContent (getLocalBounds());
-        // Two control rows so REC/PLAY/CLEAR/MODE and BARS + the two exports all fit.
-        auto rowA = c.removeFromTop (30); c.removeFromTop (5);
-        rec->setBounds  (rowA.removeFromLeft (58).reduced (2, 2));
-        play->setBounds (rowA.removeFromLeft (58).reduced (2, 2));
-        clear.setBounds (rowA.removeFromLeft (58).reduced (2, 2)); rowA.removeFromLeft (8);
-        mode->setBounds (rowA.removeFromLeft (juce::jmin (150, rowA.getWidth())).reduced (2, 2));
+        // Top bar: shared BARS + the two exports.
+        auto top = c.removeFromTop (26); c.removeFromTop (5);
+        sync->setBounds (top.removeFromLeft (160).reduced (2, 2));
+        expoWav.setBounds (top.removeFromRight (54).reduced (2, 2)); top.removeFromRight (3);
+        expo.setBounds    (top.removeFromRight (54).reduced (2, 2));
 
-        auto rowB = c.removeFromTop (28); c.removeFromTop (6);
-        sync->setBounds (rowB.removeFromLeft (170).reduced (2, 2)); rowB.removeFromLeft (8);
-        expoWav.setBounds (rowB.removeFromRight (110).reduced (2, 2)); rowB.removeFromRight (4);
-        expo.setBounds    (rowB.removeFromRight (110).reduced (2, 2));
+        // Four lane rows: [P# label] [R][P] [MIDI/AUD] [x] [content strip].
+        const int rh = juce::jmax (22, (c.getHeight() - (kLanes - 1) * 4) / kLanes);
+        for (int i = 0; i < kLanes; ++i)
+        {
+            auto row = c.removeFromTop (rh); c.removeFromTop (4);
+            labelRect[(std::size_t) i] = row.removeFromLeft (34);
+            recBtn[(std::size_t) i]->setBounds  (row.removeFromLeft (26).reduced (1, 2));
+            playBtn[(std::size_t) i]->setBounds (row.removeFromLeft (26).reduced (1, 2));
+            modeSel[(std::size_t) i]->setBounds (row.removeFromLeft (juce::jmin (78, row.getWidth() - 40)).reduced (1, 2));
+            clearBtn[(std::size_t) i].setBounds (row.removeFromLeft (20).reduced (1, 3));
+            row.removeFromLeft (3);
+            laneStrip[(std::size_t) i] = row;
+        }
+    }
 
-        // Status pip lives in the header bar (drawn in paint), right-aligned.
-        statusArea = juce::Rectangle<int> (getWidth() - 84, 4, 74, chrome::kHeaderH - 6);
-
-        const int n = 5;
-        const int lh = juce::jmax (1, (c.getHeight() - (n - 1) * 4) / n);
-        for (int i = 0; i < n; ++i) { laneRects[(std::size_t) i] = c.removeFromTop (lh); c.removeFromTop (4); }
+    // Part labels are painted over their reserved rects (after children, so they read on top).
+    void paintOverChildren (juce::Graphics& g) override
+    {
+        for (int i = 0; i < kLanes; ++i)
+        {
+            g.setColour (VASynthLookAndFeel::ink());
+            g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
+            g.drawText ("P" + juce::String (i + 1), labelRect[(std::size_t) i].withTrimmedLeft (3),
+                        juce::Justification::centredLeft, false);
+        }
     }
 
 private:
+    static const char* laneModeId (int i)
+    {
+        switch (i) { case 1: return ParamID::loopMode2; case 2: return ParamID::loopMode3; case 3: return ParamID::loopMode4; default: return ParamID::loopMode; }
+    }
+
     void exportMidi()
     {
         chooser = std::make_unique<juce::FileChooser> ("Export loops to MIDI",
@@ -354,11 +384,12 @@ private:
     void timerCallback() override { repaint(); }
 
     VASynthProcessor& proc;
-    std::unique_ptr<PowerToggle> rec, play;
-    std::unique_ptr<HSelector> mode, sync;
-    juce::TextButton clear, expo, expoWav;
-    juce::Rectangle<int> statusArea;
-    std::array<juce::Rectangle<int>, 5> laneRects { };   // 4 MIDI + 1 AUDIO
+    std::array<std::unique_ptr<PowerToggle>, kLanes> recBtn, playBtn;
+    std::array<std::unique_ptr<HSelector>, kLanes> modeSel;
+    std::array<juce::TextButton, kLanes> clearBtn;
+    std::unique_ptr<HSelector> sync;
+    juce::TextButton expo, expoWav;
+    std::array<juce::Rectangle<int>, kLanes> labelRect { }, laneStrip { };
     std::unique_ptr<juce::FileChooser> chooser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LooperPanel)
