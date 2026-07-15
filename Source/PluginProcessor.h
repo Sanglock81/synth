@@ -369,15 +369,17 @@ public:
     // -- looper (R3) ----------------------------------------------------------
     // Runtime loop content (recorded notes) is NOT preset material; it's exported to
     // MIDI. The UI reads the playhead + per-lane content for drawing. Message thread.
-    void  clearLoops() { loopClear.store (true, std::memory_order_release); }   // RT-safe request
+    void  clearLoops() { loopClearMask.store ((1 << SynthEngine::maxParts) - 1, std::memory_order_release); }        // all lanes
+    void  clearLoopLane (int part) { if (part >= 0 && part < SynthEngine::maxParts) loopClearMask.fetch_or (1 << part, std::memory_order_release); }
     float loopPlayhead() const                                                 // 0..1 through the loop
     {
         const int len = loopLenDisp.load (std::memory_order_relaxed);
         return len > 0 ? (float) loopPosDisp.load (std::memory_order_relaxed) / (float) len : 0.0f;
     }
     bool  loopLaneHasContent (int part) const { return looper.hasContent (part); }
-    bool  loopAudioHasContent () const { return audioLoop.hasContent(); }
-    int   loopRecDisplayState () const { return loopRecStateDisp.load (std::memory_order_relaxed); }
+    int   loopLaneEventCount (int part) const { return looper.eventCount (part); }
+    bool  loopAudioHasContent (int part) const { return part >= 0 && part < SynthEngine::maxParts && audioLoops[(std::size_t) part].hasContent(); }
+    int   loopRecDisplayState (int lane) const { return (lane >= 0 && lane < SynthEngine::maxParts) ? loopRecStateDisp[(std::size_t) lane].load (std::memory_order_relaxed) : 0; }
     // Write the recorded loops to a Standard MIDI File (one track per part). Returns false
     // if there's nothing recorded or the write fails.
     bool  exportLoopsToMidiFile (const juce::File& file) const;
@@ -438,7 +440,8 @@ private:
     // part 0 goes through the chord engine; locked parts play the note directly.
     void dispatchNoteOn  (int note, float velocity, int part, bool chordOn, bool generator = false);
     void dispatchNoteOff (int note, int part, bool chordOn);
-    void flushLoopNotes  (bool chordOn);              // release notes the MIDI loop left on
+    void flushLoopNotes  (bool chordOn);              // release notes the MIDI loop left on (all lanes)
+    void flushLoopNotesForPart (int part, bool chordOn);   // ...one lane (#47)
 
     // -- routed-MIDI FIFO (surfaces -> parts) ---------------------------------
     // Each event is a raw <=3-byte MIDI message + the routed part. Notes carry the
@@ -605,15 +608,16 @@ private:
     // the engine); loop_mode picks which lane you HEAR. Recording is armed + quantized to
     // the loop boundary (a measure): REC arms, capture engages at the next wrap.
     Looper looper;
-    AudioLoop audioLoop;
-    std::atomic<bool> loopClear { false };
+    std::array<AudioLoop, SynthEngine::maxParts> audioLoops;   // one AUDIO lane per part (#47)
+    std::atomic<int>  loopClearMask { 0 };      // bit per lane: RT-safe per-lane CLEAR request
     std::atomic<int>  loopPosDisp { 0 }, loopLenDisp { 48000 };
-    std::atomic<int>  loopRecStateDisp { 0 };   // 0 idle, 1 armed, 2 recording (for the UI)
-    bool  loopRecPrev = false;                  // REC param edge detect (message->audio safe: audio-thread only)
-    bool  loopArmPending = false;               // armed, waiting for the next loop boundary
-    bool  loopRecording  = false;               // capture engaged (both lanes)
-    bool  loopWrappedLastBlock = false;         // the loop clock wrapped on the previous block
-    bool  loopPlayWasOn = false;                // MIDI-lane playback edge, to flush on stop
+    std::array<std::atomic<int>, SynthEngine::maxParts> loopRecStateDisp {};   // per lane: 0 idle,1 armed,2 rec
+    // Per-lane transport edge/state (audio-thread only).
+    std::array<bool, SynthEngine::maxParts> loopRecPrev {};      // REC param edge detect
+    std::array<bool, SynthEngine::maxParts> loopArmPending {};   // armed, waiting for the loop boundary
+    std::array<bool, SynthEngine::maxParts> loopRecording {};    // capture engaged (both lanes of this part)
+    std::array<bool, SynthEngine::maxParts> loopPlayWasOn {};    // MIDI-lane playback edge, to flush on stop
+    bool  loopWrappedLastBlock = false;         // the shared loop clock wrapped on the previous block
     std::array<std::array<bool, 128>, SynthEngine::maxParts> loopNoteHeld {};   // notes the loop turned on (release on stop/clear)
 
     // Master scope tap ring (see pushScope/readScope).

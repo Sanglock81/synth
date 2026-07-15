@@ -20,6 +20,14 @@
 class AudioLoop
 {
 public:
+    // Ring-size ceiling for ONE audio lane. Sized for 4 bars of 4 beats at a 40 BPM
+    // practical floor:  4 bars * 4 beats * (60 s / 40 BPM) = 24 s. Below 40 BPM the audio
+    // lane's selectable bar count is reduced (the processor's honest clamp) so the UI never
+    // promises a length the ring can't hold; MIDI lanes keep full length at ANY tempo.
+    // Total resident audio memory = kMaxLoopSeconds * sampleRate * 2 ch * 4 B * 4 lanes
+    // (~37 MB @ 48 kHz). Raise this one constant for a studio build.
+    static constexpr double kMaxLoopSeconds = 24.0;
+
     // Allocate the ring for the largest loop the transport can ask for. Call from
     // prepareToPlay (allocation is fine there, never on the audio thread).
     void prepare (int maxSamples)

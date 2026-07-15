@@ -31,36 +31,41 @@ public:
     int  loopLength() const { return loopLen; }
     int  position() const   { return loopPos; }
 
-    void setRecording (bool b) { recording_ = b; }
-    void setPlaying   (bool b) { playing_ = b; }
-    bool recording() const { return recording_; }
-    bool playing()   const { return playing_; }
+    // Per-lane transport: lane N (== part N) has its OWN REC/PLAY, so each part records and
+    // plays independently and NOTHING here depends on the edit/play focus (task #47).
+    void setRecording (int part, bool b) { if (part >= 0 && part < kParts) recording_[(std::size_t) part] = b; }
+    void setPlaying   (int part, bool b) { if (part >= 0 && part < kParts) playing_[(std::size_t) part]   = b; }
+    bool recording (int part) const { return part >= 0 && part < kParts && recording_[(std::size_t) part]; }
+    bool playing   (int part) const { return part >= 0 && part < kParts && playing_[(std::size_t) part]; }
+    bool anyPlaying() const { for (bool b : playing_) if (b) return true; return false; }
 
-    void clear() { for (auto& p : parts) p.count = 0; loopPos = 0; }   // wipe events
-    void reset() { clear(); recording_ = playing_ = false; }
+    void clear (int part) { if (part >= 0 && part < kParts) parts[(std::size_t) part].count = 0; }   // wipe ONE lane
+    void clearAll() { for (auto& p : parts) p.count = 0; loopPos = 0; }
+    void reset() { clearAll(); for (int i = 0; i < kParts; ++i) { recording_[(std::size_t) i] = false; playing_[(std::size_t) i] = false; } }
 
     bool hasContent (int part) const { return part >= 0 && part < kParts && parts[(std::size_t) part].count > 0; }
     int  eventCount (int part) const { return (part >= 0 && part < kParts) ? parts[(std::size_t) part].count : 0; }
     const Event& event (int part, int i) const { return parts[(std::size_t) part].ev[(std::size_t) i]; }
 
-    // Record an incoming performance note at (loop position + block offset). REC only.
+    // Record an incoming performance note at (loop position + block offset). Lane N records
+    // only while ITS OWN REC is armed (part is the note's routed part — fixed, not focus).
     void recordNote (int part, int offsetInBlock, int note, float vel, bool on)
     {
-        if (! recording_ || part < 0 || part >= kParts) return;
+        if (part < 0 || part >= kParts || ! recording_[(std::size_t) part]) return;
         auto& p = parts[(std::size_t) part];
         if (p.count >= kMaxEvents) return;
         const int t = (loopPos + (offsetInBlock < 0 ? 0 : offsetInBlock)) % loopLen;
         p.ev[(std::size_t) p.count++] = { t, note, vel, on, false };
     }
 
-    // Emit this block's armed playback events. emit(part, note, vel, on). Block start.
+    // Emit this block's armed playback events for every PLAYING lane. emit(part, note, vel, on).
     template <typename Emit>
     void playBlock (int numSamples, Emit&& emit) const
     {
-        if (! playing_) return;
         const int start = loopPos, end = loopPos + numSamples;
         for (int part = 0; part < kParts; ++part)
         {
+            if (! playing_[(std::size_t) part]) continue;   // this lane is stopped
             const auto& p = parts[(std::size_t) part];
             for (int i = 0; i < p.count; ++i)
             {
@@ -87,5 +92,6 @@ private:
     std::array<Lane, kParts> parts { };
     int  loopLen = 48000;
     int  loopPos = 0;
-    bool recording_ = false, playing_ = false;
+    std::array<bool, kParts> recording_ { };
+    std::array<bool, kParts> playing_ { };
 };

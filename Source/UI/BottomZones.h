@@ -255,7 +255,7 @@ public:
         chrome::section (g, getLocalBounds(), "Looper  -  MIDI + audio loops, session export", tLoop);
 
         // Armed / recording status pip (top-right of the header content).
-        const int rs = proc.loopRecDisplayState();      // 0 idle, 1 armed, 2 recording
+        const int rs = proc.loopRecDisplayState (0);    // lane 1 (P1); full 4-lane UI is increment B
         if (! statusArea.isEmpty() && rs > 0)
         {
             const bool recOn = rs == 2;
@@ -276,7 +276,8 @@ public:
             auto lane = laneRects[(std::size_t) i];
             if (lane.isEmpty()) continue;
             const bool isAudio = (i == 4);
-            const bool hasContent = isAudio ? proc.loopAudioHasContent() : proc.loopLaneHasContent (i);
+            const bool hasContent = isAudio ? proc.loopAudioHasContent (i < 4 ? i : 0)   // increment B: real per-lane UI
+                                            : proc.loopLaneHasContent (i);
             const bool laneActive = isAudio ? audioMode : ! audioMode;   // which lane the mode plays
 
             g.setColour (VASynthLookAndFeel::track());

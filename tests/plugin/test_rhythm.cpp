@@ -127,7 +127,7 @@ TEST_CASE ("looper off leaves the dispatch path bit-identical (goldens safe)", "
     REQUIRE (p.apvts.getRawParameterValue (ParamID::loopRec)->load() < 0.5f);
     REQUIRE (p.apvts.getRawParameterValue (ParamID::loopPlay)->load() < 0.5f);
     REQUIRE_FALSE (p.loopLaneHasContent (0));
-    REQUIRE_FALSE (p.loopAudioHasContent());
+    REQUIRE_FALSE (p.loopAudioHasContent (0));
 }
 
 TEST_CASE ("audio looper: AUDIO mode captures the focused part and loops it back", "[plugin][looper][audio]")
@@ -149,7 +149,7 @@ TEST_CASE ("audio looper: AUDIO mode captures the focused part and loops it back
 
     double energyLater = 0.0;
     for (int b = 0; b < 400; ++b) { buf.clear(); p.processBlock (buf, midi); if (b > 250) energyLater += buf.getRMSLevel (0, 0, 128); }
-    REQUIRE (p.loopAudioHasContent());
+    REQUIRE (p.loopAudioHasContent (0));
     REQUIRE (energyLater > 0.0);         // the captured audio replayed after the loop wrapped
 }
 
@@ -170,7 +170,7 @@ TEST_CASE ("audio looper: MIDI mode leaves the audio lane silent but still captu
     for (int b = 0; b < 20; ++b) { buf.clear(); p.processBlock (buf, midi); }
     // Both lanes captured the performance (dual capture is independent of the mode switch).
     REQUIRE (p.loopLaneHasContent (0));
-    REQUIRE (p.loopAudioHasContent());
+    REQUIRE (p.loopAudioHasContent (0));
 }
 
 TEST_CASE ("audio looper: WAV export writes when there's content, fails when empty", "[plugin][looper][audio][export]")
@@ -189,7 +189,7 @@ TEST_CASE ("audio looper: WAV export writes when there's content, fails when emp
     juce::AudioBuffer<float> buf (2, 128); juce::MidiBuffer midi;
     p.routeNoteOn (60, 0.9f, 0);
     for (int b = 0; b < 40; ++b) { buf.clear(); p.processBlock (buf, midi); }
-    REQUIRE (p.loopAudioHasContent());
+    REQUIRE (p.loopAudioHasContent (0));
 
     REQUIRE (p.exportLoopToWavFile (tmp));
     REQUIRE (tmp.getSize() > 44);                       // more than a bare WAV header

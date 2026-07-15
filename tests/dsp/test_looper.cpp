@@ -28,8 +28,8 @@ namespace
 
 TEST_CASE ("looper: recorded note plays next cycle, not the recording pass", "[dsp][looper]")
 {
-    Looper lp; lp.setLoopLength (1000); lp.setPlaying (true); lp.setRecording (true);
-    lp.recordNote (0, 100, 60, 0.8f, true);      // part 0, at t=100
+    Looper lp; lp.setLoopLength (1000); lp.setPlaying (0, true); lp.setRecording (0, true);
+    lp.recordNote (0, 100, 60, 0.8f, true);      // part 0 (lane 0), at t=100
 
     REQUIRE (cycle (lp, 100).empty());           // recording pass: the live note already sounded
     auto next = cycle (lp, 100);                 // next cycle: it plays back
@@ -42,7 +42,8 @@ TEST_CASE ("looper: recorded note plays next cycle, not the recording pass", "[d
 
 TEST_CASE ("looper: per-part lanes are independent", "[dsp][looper]")
 {
-    Looper lp; lp.setLoopLength (800); lp.setPlaying (true); lp.setRecording (true);
+    Looper lp; lp.setLoopLength (800);
+    for (int pt : { 0, 2 }) { lp.setRecording (pt, true); lp.setPlaying (pt, true); }
     lp.recordNote (0, 50,  60, 0.8f, true);
     lp.recordNote (2, 200, 67, 0.8f, true);
     cycle (lp, 64);                              // arm
@@ -56,16 +57,16 @@ TEST_CASE ("looper: per-part lanes are independent", "[dsp][looper]")
 
 TEST_CASE ("looper: PLAY off is silent; CLEAR wipes", "[dsp][looper]")
 {
-    Looper lp; lp.setLoopLength (500); lp.setRecording (true); lp.setPlaying (true);
+    Looper lp; lp.setLoopLength (500); lp.setRecording (0, true); lp.setPlaying (0, true);
     lp.recordNote (0, 10, 60, 0.8f, true);
     cycle (lp, 50);                              // arm
 
-    lp.setPlaying (false);
+    lp.setPlaying (0, false);
     REQUIRE (cycle (lp, 50).empty());
 
-    lp.setPlaying (true);
+    lp.setPlaying (0, true);
     REQUIRE (cycle (lp, 50).size() == 1);
-    lp.clear();
+    lp.clear (0);
     REQUIRE_FALSE (lp.hasContent (0));
     REQUIRE (cycle (lp, 50).empty());
 }

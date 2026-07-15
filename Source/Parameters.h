@@ -180,10 +180,16 @@ namespace ParamID
 
     // Per-part MIDI looper (R3). Transport bools + loop length in bars. Default off /
     // 1 bar; the recorded loop content is runtime-only (exported to MIDI, not preset).
-    inline constexpr auto loopRec     = "loop_rec";
-    inline constexpr auto loopPlay    = "loop_play";
-    inline constexpr auto loopBars    = "loop_bars";      // 1 / 2 / 4
-    inline constexpr auto loopMode    = "loop_mode";      // playback lane: MIDI re-synth / AUDIO
+    // Looper (task #47): FOUR fixed lanes, lane N == part N, each with its OWN transport.
+    // The original loop_rec/play/mode are lane 1 (P1/part 0); _2/_3/_4 are P2/P3/P4. loop_bars
+    // is the shared loop-grid length (global). IDs frozen; old global state maps to lane 1.
+    inline constexpr auto loopRec     = "loop_rec";       // lane 1 (P1) REC
+    inline constexpr auto loopPlay    = "loop_play";      // lane 1 (P1) PLAY
+    inline constexpr auto loopBars    = "loop_bars";      // 1 / 2 / 4 — SHARED loop length
+    inline constexpr auto loopMode    = "loop_mode";      // lane 1 (P1) playback lane: MIDI re-synth / AUDIO
+    inline constexpr auto loopRec2 = "loop_rec2", loopRec3 = "loop_rec3", loopRec4 = "loop_rec4";
+    inline constexpr auto loopPlay2 = "loop_play2", loopPlay3 = "loop_play3", loopPlay4 = "loop_play4";
+    inline constexpr auto loopMode2 = "loop_mode2", loopMode3 = "loop_mode3", loopMode4 = "loop_mode4";
 
     // Step sequencer (R3 Group 2). 8-row drum grid; shares tempo/swing with the arp.
     inline constexpr auto seqOn       = "seq_on";
@@ -376,6 +382,13 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::loopPlay, 1}, "Loop Play", false));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::loopBars, 1}, "Loop Bars", juce::StringArray{ "1", "2", "4" }, 0));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::loopMode, 1}, "Loop Mode", juce::StringArray{ "MIDI", "AUDIO" }, 0));
+    // Lanes 2-4 (P2/P3/P4): per-lane REC / PLAY / MODE (loop_bars is shared, above).
+    for (auto* r : { ID::loopRec2, ID::loopRec3, ID::loopRec4 })
+        params.push_back(std::make_unique<Pb>(juce::ParameterID{r, 1}, juce::String (r), false));
+    for (auto* pl : { ID::loopPlay2, ID::loopPlay3, ID::loopPlay4 })
+        params.push_back(std::make_unique<Pb>(juce::ParameterID{pl, 1}, juce::String (pl), false));
+    for (auto* mo : { ID::loopMode2, ID::loopMode3, ID::loopMode4 })
+        params.push_back(std::make_unique<Pc>(juce::ParameterID{mo, 1}, juce::String (mo), juce::StringArray{ "MIDI", "AUDIO" }, 0));
 
     // --- Step sequencer (R3 Group 2) -----------------------------------------
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::seqOn, 1},   "Seq", false));

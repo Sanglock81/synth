@@ -56,8 +56,11 @@ public:
             partR[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
             fxSilentBlocks[(std::size_t) p] = kFxHoldBlocks;   // start idle
         }
-        capL.assign ((std::size_t) maxBlock, 0.0f);            // looper capture tap (one part)
-        capR.assign ((std::size_t) maxBlock, 0.0f);
+        for (std::size_t p = 0; p < (std::size_t) maxParts; ++p)   // per-part looper capture taps
+        {
+            capPartL[p].assign ((std::size_t) maxBlock, 0.0f);
+            capPartR[p].assign ((std::size_t) maxBlock, 0.0f);
+        }
         lfo.prepare (sampleRate);
         for (auto& part : partLfo) for (auto& l : part) l.prepare (sampleRate);   // 3 LFOs x maxParts
         vibratoLFO.prepare (sampleRate);
@@ -532,19 +535,23 @@ public:
     // Looper tap: which part's post-FX/post-pan contribution mixParts copies out for the
     // audio looper (-1 = none). captureL()/captureR() hold the last block's tap (zeros if
     // the part was silent/skipped or out of range).
-    void setCapturePart (int p) { capturePart = (p >= 0 && p < maxParts) ? p : -1; }
-    const float* captureL() const { return capL.data(); }
-    const float* captureR() const { return capR.data(); }
+    // Per-part looper capture: each part's post-FX/post-pan stereo contribution from the
+    // last mixParts (zeros if that part was skipped). The 4-lane audio looper taps these.
+    const float* capturePartL (int p) const { return (p >= 0 && p < maxParts) ? capPartL[(std::size_t) p].data() : nullptr; }
+    const float* capturePartR (int p) const { return (p >= 0 && p < maxParts) ? capPartR[(std::size_t) p].data() : nullptr; }
 
     // Trim + per-part FX (partFxUse) + sum into the stereo master (once per block).
     void mixParts (float* L, float* R, int numSamples)
     {
         std::fill (L, L + numSamples, 0.0f);
         std::fill (R, R + numSamples, 0.0f);
-        // Looper capture tap: zeroed each block, filled below with the capture part's
-        // post-FX/post-pan contribution (silent if that part is skipped this block).
-        std::fill (capL.begin(), capL.begin() + numSamples, 0.0f);
-        std::fill (capR.begin(), capR.begin() + numSamples, 0.0f);
+        // Per-part looper capture taps: zeroed each block, each filled below with that part's
+        // post-FX/post-pan contribution (a skipped part stays silent -> its lane records silence).
+        for (std::size_t p = 0; p < (std::size_t) maxParts; ++p)
+        {
+            std::fill (capPartL[p].begin(), capPartL[p].begin() + numSamples, 0.0f);
+            std::fill (capPartR[p].begin(), capPartR[p].begin() + numSamples, 0.0f);
+        }
         partsProcessed = 0;
 
         for (int p = 0; p < maxParts; ++p)
@@ -583,13 +590,14 @@ public:
             const float lgT = targetLg (p), rgT = targetRg (p);
             float lg = prevLg[(std::size_t) p], rg = prevRg[(std::size_t) p];
             const float dlg = (lgT - lg) / (float) numSamples, drg = (rgT - rg) / (float) numSamples;
-            const bool cap = (p == capturePart);              // looper: tap this part's contribution
+            float* cpL = capPartL[(std::size_t) p].data();    // looper: tap THIS part's contribution
+            float* cpR = capPartR[(std::size_t) p].data();
             for (int i = 0; i < numSamples; ++i)
             {
                 lg += dlg; rg += drg;
                 const float cl = sL[i] * lg, cr = sR[i] * rg;
                 L[i] += cl; R[i] += cr;
-                if (cap) { capL[(std::size_t) i] = cl; capR[(std::size_t) i] = cr; }
+                cpL[i] = cl; cpR[i] = cr;
             }
             prevLg[(std::size_t) p] = lgT; prevRg[(std::size_t) p] = rgT;
 
@@ -759,8 +767,7 @@ private:
     int maxBlockSize = 2048;
     std::array<FXChain, maxParts> partFx;
     std::array<std::vector<float>, maxParts> partMono, partL, partR;
-    std::vector<float> capL, capR;   // looper capture tap (one part's post-FX contribution)
-    int capturePart = -1;
+    std::array<std::vector<float>, maxParts> capPartL, capPartR;   // per-part looper capture taps
     int liveKitPart = -1, liveKitPad = -1;   // kit pad routed through live panel params (edit mode)
     std::atomic<float> focusMod[4] { };   // focused part's LFO mod per dest (UI knob animation)
 
