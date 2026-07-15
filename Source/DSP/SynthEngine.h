@@ -99,16 +99,27 @@ public:
             }
     }
 
-    // Poly (0) / Mono (1) / Legato (2). Switching mode releases everything so no
-    // note gets stranded in the note stack.
-    void setPolyMode (int mode)
+    // Poly (0) / Mono (1) / Legato (2) — PER PART. Switching a part's mode releases only
+    // THAT part's voices + clears its note stack, so no note is stranded and other parts
+    // are untouched. Kit parts are forced poly (see modeForPart()).
+    void setPartPolyMode (int part, int mode)
     {
-        if (mode != polyMode)
+        if (part < 0 || part >= maxParts) return;
+        if (mode != partPolyMode[(std::size_t) part])
         {
-            numHeld = 0;
-            for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i) { voices[i].noteOff(); sustained[i] = false; }
+            numMonoHeld[(std::size_t) part] = 0;
+            monoVoice[(std::size_t) part] = -1;
+            for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i)
+                if (voices[i].isActive() && voices[i].getPart() == part) { voices[i].noteOff(); sustained[i] = false; }
         }
-        polyMode = mode;
+        partPolyMode[(std::size_t) part] = mode;
+    }
+
+    // The effective mode for a part: kits are ALWAYS poly (drums are polyphonic).
+    int modeForPart (int part) const
+    {
+        if (part < 0 || part >= maxParts || partIsKit (part)) return 0;
+        return partPolyMode[(std::size_t) part];
     }
 
     // ---- MIDI (called from processBlock with sample-accurate offsets) -----
@@ -118,7 +129,7 @@ public:
     // hold the same note number without over-releasing.
     void noteOn (int note, float velocity, int part = 0, int soundSlot = 0, bool generator = false)
     {
-        if (polyMode != 0) { monoNoteOn (note, velocity, part, soundSlot); return; }
+        if (modeForPart (part) != 0) { monoNoteOn (note, velocity, part, soundSlot, generator); return; }
 
         // Reuse a voice already playing this (note, part) — retrigger.
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
@@ -175,7 +186,7 @@ public:
 
     void noteOff (int note, int part = 0)
     {
-        if (polyMode != 0) { monoNoteOff (note); return; }
+        if (modeForPart (part) != 0) { monoNoteOff (note, part); return; }
 
         for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i)
             if (voices[i].isActive() && voices[i].getNote() == note && voices[i].getPart() == part)
@@ -189,7 +200,7 @@ public:
     {
         for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i) { voices[i].noteOff(); sustained[i] = false; }
         sustainPedal = false;
-        numHeld = 0;
+        for (std::size_t p = 0; p < (std::size_t) maxParts; ++p) { numMonoHeld[p] = 0; monoVoice[p] = -1; }
         for (auto& e : kitLedger) { e.part = -1; e.trigger = -1; e.num = 0; }
     }
 
@@ -201,6 +212,7 @@ public:
         for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i)
             if (voices[i].isActive() && voices[i].getPart() == part) { voices[i].noteOff(); sustained[i] = false; }
         for (auto& e : kitLedger) if (e.part == part) { e.part = -1; e.trigger = -1; e.num = 0; }
+        if (part >= 0 && part < maxParts) { numMonoHeld[(std::size_t) part] = 0; monoVoice[(std::size_t) part] = -1; }
     }
 
     // ---- performance controllers (from any device) -------------------------
@@ -229,7 +241,11 @@ public:
     {
         // part 0 is publishable too now: when the edit focus moves OFF part 0, its last
         // state is baked into slot 0 like any other locked part (1.3 edit-focus).
-        if (part >= 0 && part < maxParts) lockedSlots[(std::size_t) part].publish ({ vp, fx, lfo });
+        if (part >= 0 && part < maxParts)
+        {
+            lockedSlots[(std::size_t) part].publish ({ vp, fx, lfo });
+            setPartPolyMode (part, vp.polyMode);   // a locked part bakes its own poly/mono/legato
+        }
     }
 
     // ---- kit parts ---------------------------------------------------------
@@ -608,46 +624,75 @@ public:
     }
 
 private:
-    // ---- mono / legato (last-note priority, voice 0) -----------------------
-    // Mono/legato is single-timbre in v1 (voice 0). `part` is carried through so a
-    // routed surface in mono still selects its params; multitimbral play uses poly.
-    void monoNoteOn (int note, float velocity, int part = 0, int soundSlot = 0)
+    // ---- mono / legato (last-note priority) — PER PART ---------------------
+    // Each part has its OWN mono voice + note stack, so a mono lead on part 1 glides and
+    // holds independently of a kit hammering on part 4. The part's mono voice is picked
+    // via the normal free-or-steal path (generators yield first), so a running sequencer
+    // can never steal a live mono lead.
+    void monoNoteOn (int note, float velocity, int part, int soundSlot, bool generator)
     {
-        const bool hadNote = numHeld > 0;
-        pushHeld (note);
-        sustained[0] = false;
+        const std::size_t pt = (std::size_t) part;
+        const bool hadNote = numMonoHeld[pt] > 0;
+        pushHeld (part, note);
 
-        // Legato: while a note is already sounding, glide to the new pitch
-        // without retriggering the envelope. Mono (and the first note): retrigger.
-        if (polyMode == 2 && hadNote && voices[0].isActive())
-            voices[0].changeNote (note, ++eventCounter);
+        int v = monoVoice[pt];
+        const bool reuse = (v >= 0 && voices[(std::size_t) v].isActive() && voices[(std::size_t) v].getPart() == part);
+        if (! reuse) { v = (int) pickVoice (part); monoVoice[pt] = v; }
+        sustained[(std::size_t) v] = false;
+
+        // Legato: glide to the new pitch without retriggering the amp env (only if the
+        // part's own voice is already sounding). Mono / first note: retrigger.
+        if (partPolyMode[pt] == 2 && hadNote && reuse)
+            voices[(std::size_t) v].changeNote (note, ++eventCounter);
         else
-            voices[0].noteOn (note, velocity, ++eventCounter, part, soundSlot);
+            voices[(std::size_t) v].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator);
     }
 
-    void monoNoteOff (int note)
+    void monoNoteOff (int note, int part)
     {
-        removeHeld (note);
-        if (numHeld > 0)
-            voices[0].changeNote (heldNotes[(std::size_t) (numHeld - 1)], ++eventCounter);  // fall back
+        const std::size_t pt = (std::size_t) part;
+        removeHeld (part, note);
+        const int v = monoVoice[pt];
+        if (v < 0 || ! voices[(std::size_t) v].isActive() || voices[(std::size_t) v].getPart() != part) return;
+        if (numMonoHeld[pt] > 0)
+            voices[(std::size_t) v].changeNote (monoHeld[pt][(std::size_t) (numMonoHeld[pt] - 1)], ++eventCounter);  // fall back
         else if (sustainPedal)
-            sustained[0] = true;
+            sustained[(std::size_t) v] = true;
         else
-            voices[0].noteOff();
+            voices[(std::size_t) v].noteOff();
     }
 
-    void pushHeld (int note)
+    // Pick a voice for `part`: a free voice, else steal by the isolation priority
+    // (oldest generator -> oldest own-part -> global oldest), same as the poly path.
+    std::size_t pickVoice (int part)
     {
-        removeHeld (note);                          // move to top if already held
-        if (numHeld < 128) heldNotes[(std::size_t) numHeld++] = note;
+        for (std::size_t i = 0; i < activeVoiceLimit; ++i)
+            if (! voices[i].isActive()) return i;
+        int oldestGen = -1, oldestOwn = -1; std::size_t oldestAny = 0;
+        for (std::size_t i = 0; i < activeVoiceLimit; ++i)
+        {
+            if (voices[i].isGenerator() && (oldestGen < 0 || voices[i].getTimestamp() < voices[(std::size_t) oldestGen].getTimestamp())) oldestGen = (int) i;
+            if (voices[i].getPart() == part && (oldestOwn < 0 || voices[i].getTimestamp() < voices[(std::size_t) oldestOwn].getTimestamp())) oldestOwn = (int) i;
+            if (voices[i].getTimestamp() < voices[oldestAny].getTimestamp()) oldestAny = i;
+        }
+        ++stealCounter;
+        return (oldestGen >= 0) ? (std::size_t) oldestGen : (oldestOwn >= 0) ? (std::size_t) oldestOwn : oldestAny;
     }
-    void removeHeld (int note)
+
+    void pushHeld (int part, int note)
     {
-        for (int i = 0; i < numHeld; ++i)
-            if (heldNotes[(std::size_t) i] == note)
+        const std::size_t pt = (std::size_t) part;
+        removeHeld (part, note);                    // move to top if already held
+        if (numMonoHeld[pt] < 128) monoHeld[pt][(std::size_t) numMonoHeld[pt]++] = note;
+    }
+    void removeHeld (int part, int note)
+    {
+        const std::size_t pt = (std::size_t) part;
+        for (int i = 0; i < numMonoHeld[pt]; ++i)
+            if (monoHeld[pt][(std::size_t) i] == note)
             {
-                for (int j = i; j < numHeld - 1; ++j) heldNotes[(std::size_t) j] = heldNotes[(std::size_t)(j + 1)];
-                --numHeld;
+                for (int j = i; j < numMonoHeld[pt] - 1; ++j) monoHeld[pt][(std::size_t) j] = monoHeld[pt][(std::size_t)(j + 1)];
+                --numMonoHeld[pt];
                 return;
             }
     }
@@ -753,10 +798,11 @@ private:
     float pitchBendSemis = 0.0f, modWheel = 0.0f;
     bool  sustainPedal = false;
 
-    // Mono/legato state.
-    int   polyMode = 0;                        // 0 poly, 1 mono, 2 legato
-    std::array<int, 128> heldNotes {};         // held-note stack (last = priority)
-    int   numHeld = 0;
+    // Mono/legato state — PER PART (each part has its own mode, note stack, and mono voice).
+    std::array<int, maxParts> partPolyMode {};                  // per part: 0 poly, 1 mono, 2 legato
+    std::array<std::array<int, 128>, maxParts> monoHeld {};     // per-part held-note stack (last = priority)
+    std::array<int, maxParts> numMonoHeld {};
+    std::array<int, maxParts> monoVoice { { -1, -1, -1, -1 } }; // per-part mono voice index (-1 = none)
 
     // Zipper smoothing state (global params).
     float smoothCoef = 0.05f, smCutoff = 0.0f, smReso = 0.0f;

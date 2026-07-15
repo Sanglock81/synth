@@ -104,6 +104,7 @@ add_executable(plugin_tests
     plugin/test_fx_topology.cpp
     plugin/test_kick_clean.cpp
     plugin/test_scoping_audit.cpp
+    plugin/test_perpart_mono.cpp
     plugin/test_click_torture.cpp
     plugin/test_editfocus.cpp
     dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests

@@ -322,6 +322,7 @@ static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& a
     p.fltEnvToPitch = rp (apvts, ID::fltEnvToPitch);
 
     p.glideTime = rp (apvts, ID::glideTime);
+    p.polyMode  = (int) rp (apvts, ID::polyMode);   // per-part now: bakes with a locked part
 
     return p;
 }
@@ -355,7 +356,8 @@ static const juce::StringArray& perPartSoundIds()
         ID::stereoWidth, ID::fxWidthOn,
         ID::peqOn, ID::peqB1Freq, ID::peqB1Gain, ID::peqB1Q,
         ID::peqB2Freq, ID::peqB2Gain, ID::peqB2Q,
-        ID::peqB3Freq, ID::peqB3Gain, ID::peqB3Q
+        ID::peqB3Freq, ID::peqB3Gain, ID::peqB3Q,
+        ID::polyMode        // per-part Poly/Mono/Legato (edited via focus like the rest of the sound)
     };
     return ids;
 }
@@ -1500,8 +1502,14 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     chordEngine.setEnabled (chordOn);
     chordEngine.setRoot  ((int) rp (apvts, ID::chordRoot));
     chordEngine.setScale ((int) rp (apvts, ID::chordScale));
-    // Chord mode FORCES poly — a chord in mono/legato would sound only one note.
-    engine.setPolyMode (chordOn ? 0 : (int) rp (apvts, ID::polyMode));
+    // Poly/Mono/Legato is PER-PART. The focused part's mode rides in the live apvts;
+    // locked parts bake their own (setLockedPartParams), kits are forced poly (engine).
+    // Chord mode FORCES the played part poly — a chord in mono would sound only one note.
+    // Compute each part's mode ONCE per block (setting it twice would oscillate the mode
+    // and re-release the voices every block).
+    const int focusMode = (int) rp (apvts, ID::polyMode);
+    engine.setPartPolyMode (editF, (chordOn && playF == editF) ? 0 : focusMode);
+    if (chordOn && playF != editF) engine.setPartPolyMode (playF, 0);
     // Feed QWERTY modifier edges (message thread) into the latest-wins forcer stack.
     applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
 

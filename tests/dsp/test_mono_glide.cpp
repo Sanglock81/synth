@@ -35,7 +35,7 @@ namespace
 
 TEST_CASE ("mono mode: last-note priority with fallback", "[mono][priority]")
 {
-    SynthEngine e; e.prepare (kSR); e.setPolyMode (1);
+    SynthEngine e; e.prepare (kSR); e.setPartPolyMode (0, 1);
     VoiceParams p = sineP();
 
     e.noteOn (60, 0.8f);
@@ -63,7 +63,7 @@ TEST_CASE ("legato does not retrigger the envelope; mono does", "[mono][legato]"
     // (attacks upward from the current level), so level rises.
     auto levelAfterSecondNote = [](int mode)
     {
-        SynthEngine e; e.prepare (kSR); e.setPolyMode (mode);
+        SynthEngine e; e.prepare (kSR); e.setPartPolyMode (0, mode);
         VoiceParams p = sineP();
         p.ampA = 0.2f; p.ampD = 0.001f; p.ampS = 0.3f;      // slow attack, sustain 0.3
 
@@ -86,7 +86,7 @@ TEST_CASE ("legato does not retrigger the envelope; mono does", "[mono][legato]"
 
 TEST_CASE ("glide slews pitch from old note to new over glide time", "[mono][glide]")
 {
-    SynthEngine e; e.prepare (kSR); e.setPolyMode (1);
+    SynthEngine e; e.prepare (kSR); e.setPartPolyMode (0, 1);
     VoiceParams p = sineP (0.1f);                            // 100 ms glide
 
     e.noteOn (48, 0.9f);                                     // ~130 Hz
@@ -109,7 +109,7 @@ TEST_CASE ("glide slews pitch from old note to new over glide time", "[mono][gli
 
 TEST_CASE ("glide time 0 = instant pitch (no portamento)", "[mono][glide]")
 {
-    SynthEngine e; e.prepare (kSR); e.setPolyMode (1);
+    SynthEngine e; e.prepare (kSR); e.setPartPolyMode (0, 1);
     VoiceParams p = sineP (0.0f);
 
     e.noteOn (48, 0.9f);

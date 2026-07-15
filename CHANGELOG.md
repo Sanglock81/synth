@@ -9,6 +9,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Changed
+- **Poly/Mono/Legato is now per-part** (edited via focus like the rest of the sound). Each
+  part has its own mode, mono voice, note stack and glide; kit parts are always poly. Fixes a
+  real isolation break — a mono lead on part 1 was cut whenever the sequencer ran on part 4
+  (global single-voice mono). The master EQ / per-part EQ, filter, FX and LFOs are all per-part.
+- **Per-part 3-band parametric EQ** as a 5th reorderable FX block; the master EQ stays a global
+  finisher. Every FX/EQ on/off header is a loud lit toggle.
 - **Stereo width now widens a dry mono source.** width > 1 synthesizes side content from
   the mid via a Schroeder allpass cascade (phase-only, not a Haas delay), added purely
   antisymmetrically so the mono fold-down is unchanged. width ≤ 1 and width == 1 unchanged.

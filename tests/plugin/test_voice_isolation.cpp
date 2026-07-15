@@ -36,8 +36,18 @@ namespace
 TEST_CASE ("voice isolation: a live lead gets all its voices while a sequencer runs on another part", "[plugin][voices][isolation]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
-    p.setPartPreset (1, "Fat Saw Bass");
-    p.setPartPreset (2, "Fat Saw Bass");
+    // Fat Saw Bass is a MONO patch; this test is about POLY voice isolation, so force both
+    // parts poly (edit-focus each, set Poly, focus away to bake). Part 2 must be poly so the
+    // sequencer actually fills the pool with generator voices.
+    auto makePoly = [&] (int part)
+    {
+        p.setPartPreset (part, "Fat Saw Bass");
+        p.setEditFocus (part);
+        p.apvts.getParameter (ParamID::polyMode)->setValueNotifyingHost (0.0f);   // Poly
+        p.setEditFocus (0);
+    };
+    makePoly (1);
+    makePoly (2);
     setSeqDense (p, 2);                             // dense sequencer hammering part 2 (P3)
     energy (p, 80);                                // let the generator fill the pool
 

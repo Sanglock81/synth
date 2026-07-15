@@ -59,6 +59,9 @@ struct VoiceParams
 
     // performance
     float  glideTime     = 0.0f;               // portamento seconds (0 = off)
+    int    polyMode      = 0;                  // 0 poly / 1 mono / 2 legato — PER PART (carried
+                                               // here so a locked part bakes its own mode; the
+                                               // ENGINE reads it for note allocation, not the voice)
 
     // per-voice output trim (Kit parts fold each pad's level here; 1.0 = unity, so a
     // non-kit voice is bit-identical). Applied at the VCA in render().

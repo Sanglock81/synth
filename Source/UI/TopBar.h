@@ -153,6 +153,16 @@ private:
         auto line = "CPU " + juce::String (juce::jlimit (0, 999, cpu)) + "%";
         if (line != statusLine) { statusLine = line; repaint (statusArea); }
         refreshMacroLabels();     // map can change on Random / preset load
+
+        // Poly/Mono/Legato + glide are per-part VOICE controls; a kit part is always poly
+        // and its pads don't glide, so grey them out (disabled) when a kit is the active part.
+        const bool kitActive = proc.isPartKit (proc.playFocus());
+        if (kitActive != voiceCtrlsDisabled)
+        {
+            voiceCtrlsDisabled = kitActive;
+            if (mode)  { mode->setEnabled  (! kitActive); mode->setAlpha  (kitActive ? 0.35f : 1.0f); }
+            if (glide) { glide->setEnabled (! kitActive); glide->setAlpha (kitActive ? 0.35f : 1.0f); }
+        }
     }
 
     void applyMacro (int idx, float value)
@@ -238,6 +248,7 @@ private:
     juce::OwnedArray<juce::ParameterAttachment> macroAtt;
     std::unique_ptr<RotaryKnob> master, glide;
     std::unique_ptr<HSelector> mode;
+    bool voiceCtrlsDisabled = false;   // mode/glide greyed while a kit part is active
     juce::Rectangle<int> statusArea;
     juce::String statusLine { "CPU 0%" }, currentName { "Init" };
 
