@@ -1594,10 +1594,14 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         const int loopLen = juce::jmax (1, (int) (sr * 60.0 / bpm * 4.0 * bars));   // 4 beats/bar
         looper.setLoopLength (loopLen);                              // MIDI grid: full length at any tempo
 
+        // 1/32-note quantize grid (shared, from tempo): half a 16th step.
+        looper.setQuantizeGrid ((int) juce::jmax (1.0, samplesPerStep * 0.5));
+
         // Per-lane transport param IDs (lane N == part N; lane 1 keeps the original IDs).
         static const char* const recIds[]  { ParamID::loopRec,  ParamID::loopRec2,  ParamID::loopRec3,  ParamID::loopRec4 };
         static const char* const playIds[] { ParamID::loopPlay, ParamID::loopPlay2, ParamID::loopPlay3, ParamID::loopPlay4 };
         static const char* const modeIds[] { ParamID::loopMode, ParamID::loopMode2, ParamID::loopMode3, ParamID::loopMode4 };
+        static const char* const quantIds[]{ ParamID::loopQuant, ParamID::loopQuant2, ParamID::loopQuant3, ParamID::loopQuant4 };
 
         for (int lane = 0; lane < SynthEngine::maxParts; ++lane)
         {
@@ -1628,6 +1632,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             }
             loopRecJustEngaged[L] = false;
 
+            looper.setQuantize  (lane, rp (apvts, quantIds[L]) > 0.5f);   // per-lane 1/32 quantize
             looper.setRecording (lane, loopRecording[L]);           // this lane records its own part
             al.setRecording     (loopRecording[L]);
             looper.setPlaying   (lane, playReq && ! audioMode);     // MIDI lane audible for this part

@@ -230,6 +230,7 @@ public:
         const char* const recIds[]  { ParamID::loopRec,  ParamID::loopRec2,  ParamID::loopRec3,  ParamID::loopRec4 };
         const char* const playIds[] { ParamID::loopPlay, ParamID::loopPlay2, ParamID::loopPlay3, ParamID::loopPlay4 };
         const char* const modeIds[] { ParamID::loopMode, ParamID::loopMode2, ParamID::loopMode3, ParamID::loopMode4 };
+        const char* const quantIds[]{ ParamID::loopQuant, ParamID::loopQuant2, ParamID::loopQuant3, ParamID::loopQuant4 };
 
         auto styleBtn = [] (juce::TextButton& b)
         {
@@ -244,7 +245,9 @@ public:
             playBtn[(std::size_t) i] = std::make_unique<PowerToggle> (p.apvts, playIds[(std::size_t) i], "P");
             modeSel[(std::size_t) i] = std::make_unique<HSelector> (p.apvts, modeIds[(std::size_t) i], p.getMidiLearn(),
                                                                     juce::StringArray { "MIDI", "AUD" });
-            addAndMakeVisible (*recBtn[(std::size_t) i]); addAndMakeVisible (*playBtn[(std::size_t) i]); addAndMakeVisible (*modeSel[(std::size_t) i]);
+            quantBtn[(std::size_t) i] = std::make_unique<PowerToggle> (p.apvts, quantIds[(std::size_t) i], "Q");   // 1/32 quantize
+            addAndMakeVisible (*recBtn[(std::size_t) i]); addAndMakeVisible (*playBtn[(std::size_t) i]);
+            addAndMakeVisible (*modeSel[(std::size_t) i]); addAndMakeVisible (*quantBtn[(std::size_t) i]);
             auto& cb = clearBtn[(std::size_t) i];
             cb.setButtonText ("x"); styleBtn (cb);
             cb.onClick = [this, i] { proc.clearLoopLane (i); };
@@ -326,10 +329,11 @@ public:
         {
             auto row = c.removeFromTop (rh); c.removeFromTop (4);
             labelRect[(std::size_t) i] = row.removeFromLeft (34);
-            recBtn[(std::size_t) i]->setBounds  (row.removeFromLeft (26).reduced (1, 2));
-            playBtn[(std::size_t) i]->setBounds (row.removeFromLeft (26).reduced (1, 2));
-            modeSel[(std::size_t) i]->setBounds (row.removeFromLeft (juce::jmin (78, row.getWidth() - 40)).reduced (1, 2));
-            clearBtn[(std::size_t) i].setBounds (row.removeFromLeft (20).reduced (1, 3));
+            recBtn[(std::size_t) i]->setBounds  (row.removeFromLeft (24).reduced (1, 2));
+            playBtn[(std::size_t) i]->setBounds (row.removeFromLeft (24).reduced (1, 2));
+            modeSel[(std::size_t) i]->setBounds (row.removeFromLeft (juce::jmin (64, row.getWidth() - 60)).reduced (1, 2));
+            quantBtn[(std::size_t) i]->setBounds (row.removeFromLeft (22).reduced (1, 2));
+            clearBtn[(std::size_t) i].setBounds (row.removeFromLeft (18).reduced (1, 3));
             row.removeFromLeft (3);
             laneStrip[(std::size_t) i] = row;
         }
@@ -384,7 +388,7 @@ private:
     void timerCallback() override { repaint(); }
 
     VASynthProcessor& proc;
-    std::array<std::unique_ptr<PowerToggle>, kLanes> recBtn, playBtn;
+    std::array<std::unique_ptr<PowerToggle>, kLanes> recBtn, playBtn, quantBtn;
     std::array<std::unique_ptr<HSelector>, kLanes> modeSel;
     std::array<juce::TextButton, kLanes> clearBtn;
     std::unique_ptr<HSelector> sync;

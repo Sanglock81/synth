@@ -9,6 +9,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Changed
+- **Clock alignment:** the sequencer, arpeggiator and looper now share one transport origin
+  (the loop clock), re-anchoring to the bar downbeat every bar — the seq no longer leads the
+  arp/looper. Swing self-accumulates within the bar. Looper MIDI recording is quantized to a
+  1/32 grid (per-lane toggle, default on) with note-pairing protection.
 - **Looper is now 4 fixed per-part lanes** (lane N ↔ part N), each with its own
   REC/PLAY/CLEAR/MIDI-AUDIO transport and its own audio ring. Capture is by lane (part N),
   fully decoupled from the edit/play focus (switching focus no longer disturbs the looper).

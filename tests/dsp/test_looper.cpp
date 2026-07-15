@@ -70,3 +70,23 @@ TEST_CASE ("looper: PLAY off is silent; CLEAR wipes", "[dsp][looper]")
     REQUIRE_FALSE (lp.hasContent (0));
     REQUIRE (cycle (lp, 50).empty());
 }
+
+TEST_CASE ("looper: 1/32 quantize snaps sloppy input to the grid, keeps note pairing", "[dsp][looper][quant]")
+{
+    Looper lp; lp.setLoopLength (1600); lp.setRecording (0, true);
+    lp.setQuantizeGrid (100);            // 1/32 == 100 samples
+    lp.setQuantize (0, true);
+
+    lp.recordNote (0, 137, 60, 0.8f, true);   // sloppy on: 137 -> nearest grid 100
+    REQUIRE (lp.event (0, 0).t == 100);
+    lp.recordNote (0, 137, 60, 0.0f, false);  // off snaps onto the on -> +1 grid (no zero-length)
+    REQUIRE (lp.event (0, 1).t == 200);
+    lp.recordNote (0, 260, 62, 0.8f, true);   // 260 -> nearest grid 300
+    REQUIRE (lp.event (0, 2).t == 300);
+
+    // Quantize off: the timestamp is left exactly where it was played.
+    Looper raw; raw.setLoopLength (1600); raw.setRecording (0, true);
+    raw.setQuantizeGrid (100); raw.setQuantize (0, false);
+    raw.recordNote (0, 137, 60, 0.8f, true);
+    REQUIRE (raw.event (0, 0).t == 137);
+}

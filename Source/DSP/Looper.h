@@ -47,6 +47,12 @@ public:
     int  eventCount (int part) const { return (part >= 0 && part < kParts) ? parts[(std::size_t) part].count : 0; }
     const Event& event (int part, int i) const { return parts[(std::size_t) part].ev[(std::size_t) i]; }
 
+    // Quantize (task #53): snap recorded note timestamps to a grid (1/32 = samplesPerStep/2).
+    // Per-lane on/off; the grid is shared (from tempo). Default on.
+    void setQuantizeGrid (int gridSamples) { quantGrid = gridSamples > 0 ? gridSamples : 0; }
+    void setQuantize (int part, bool on) { if (part >= 0 && part < kParts) quantize_[(std::size_t) part] = on; }
+    bool quantize (int part) const { return part >= 0 && part < kParts && quantize_[(std::size_t) part]; }
+
     // Record an incoming performance note at (loop position + block offset). Lane N records
     // only while ITS OWN REC is armed (part is the note's routed part — fixed, not focus).
     void recordNote (int part, int offsetInBlock, int note, float vel, bool on)
@@ -54,7 +60,15 @@ public:
         if (part < 0 || part >= kParts || ! recording_[(std::size_t) part]) return;
         auto& p = parts[(std::size_t) part];
         if (p.count >= kMaxEvents) return;
-        const int t = (loopPos + (offsetInBlock < 0 ? 0 : offsetInBlock)) % loopLen;
+        int t = (loopPos + (offsetInBlock < 0 ? 0 : offsetInBlock)) % loopLen;
+        if (quantize_[(std::size_t) part] && quantGrid > 0 && note >= 0 && note < 128)
+        {
+            const int g = quantGrid;
+            t = (((t + g / 2) / g) * g) % loopLen;                      // snap to the nearest grid line
+            if (on) lastOnT[(std::size_t) part][(std::size_t) note] = t;
+            else if (lastOnT[(std::size_t) part][(std::size_t) note] == t)
+                t = (t + g) % loopLen;                                  // note-off snapped onto its on -> +1 grid (no zero-length)
+        }
         p.ev[(std::size_t) p.count++] = { t, note, vel, on, false };
     }
 
@@ -94,4 +108,7 @@ private:
     int  loopPos = 0;
     std::array<bool, kParts> recording_ { };
     std::array<bool, kParts> playing_ { };
+    std::array<bool, kParts> quantize_ { { true, true, true, true } };   // per-lane 1/32 quantize (default on)
+    int quantGrid = 0;                                                   // grid in samples (0 = off; set from tempo)
+    std::array<std::array<int, 128>, kParts> lastOnT {};                 // snapped pos of last note-on (pairing guard)
 };
