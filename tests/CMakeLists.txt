@@ -42,6 +42,7 @@ add_executable(dsp_tests
     dsp/test_eq.cpp
     dsp/test_arp.cpp
     dsp/test_stepseq.cpp
+    dsp/test_clock_align.cpp
     dsp/test_looper.cpp
     dsp/test_voice_steal.cpp
     dsp/test_audioloop.cpp

@@ -62,6 +62,13 @@ public:
         stepIndex = -1; sampleInStep = 0.0; started = false;
     }
 
+    // Re-anchor to the shared transport downbeat (task #53): the next process() restarts
+    // from step 0 at offset 0. Swing self-accumulates WITHIN a bar; the owner calls this at
+    // each bar boundary so bar-1 always snaps to the transport (bounded per-bar float drift)
+    // and the sequencer's step-1 coincides with the arp downbeat + looper boundary. The DSP
+    // process()/swing/gate logic is untouched — this is a phase reset the owner drives.
+    void realign() { started = false; }
+
     // Emit this block's note events. emit(sampleOffset, note, velocity, isOn).
     template <typename Emit>
     void process (int numSamples, Emit&& emit)

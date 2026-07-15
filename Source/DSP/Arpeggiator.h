@@ -62,6 +62,12 @@ public:
         if (! cfg.latch) removeHeld (note);
     }
 
+    // Re-anchor to the shared transport downbeat (task #53): the next process() fires the
+    // next pattern note at offset 0 (phase reset; seqCursor/pattern position preserved).
+    // The owner calls this at each bar boundary so the arp downbeat coincides with the
+    // sequencer step-1 + the looper boundary. process()/swing/gate logic untouched.
+    void realign() { started = false; sampleInStep = 0.0; }
+
     // Emit clock-accurate events for this block. emit(sampleOffset, note, velocity, isOn).
     template <typename Emit>
     void process (int numSamples, Emit&& emit)

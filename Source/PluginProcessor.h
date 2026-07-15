@@ -608,6 +608,7 @@ private:
     bool arpWasOn = false;
     bool seqWasOn = false;                  // seq enable edge -> flush held notes on disable
     int  prevSeqTarget = 3;                 // seq target-change edge -> release the old part's note (default P4 = kit)
+    int  prevBarIdx = -1;                   // shared-transport bar index (#53): re-anchor arp/seq at each bar
     bool chordWasOn = false;               // chord enable edge -> release held tones on disable
     std::atomic<int> seqStepDisp { -1 };   // audio -> UI: sequencer playhead
     int  prevPlayFocus = 0;                // audio-thread mirror of play-focus, for hand-off

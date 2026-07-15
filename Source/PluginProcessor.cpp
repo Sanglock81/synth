@@ -1695,6 +1695,22 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             else handleControlMessage (msg);
         }
 
+        // Shared transport (task #53): the looper's loop clock is the ONE origin. When this
+        // block enters a new BAR (16 sixteenths), re-anchor the arp + sequencer to the
+        // downbeat so seq step-1, the arp downbeat, and the looper's boundary coincide (within
+        // block tolerance) at every bar — swing still self-accumulates within the bar. This is
+        // block-granular and bounds per-bar float drift over a long session.
+        {
+            const double barLen = 16.0 * samplesPerStep;
+            const int barIdxNow = (barLen > 0.0) ? (int) ((double) looper.position() / barLen) : 0;
+            if (barIdxNow != prevBarIdx)
+            {
+                if (arp.enabled()) arp.realign();
+                if (seq.enabled()) seq.realign();
+                prevBarIdx = barIdxNow;
+            }
+        }
+
         if (arp.enabled()) arp.process (numSamples, [&] (int off, int note, float vel, bool on) { push (off, note, vel, on, playF, false, /*generator*/ true); });
         if (seq.enabled()) seq.process (numSamples, [&] (int off, int note, float vel, bool on) { push (off, note, vel, on, seqTarget, true, /*generator*/ true); });
 
