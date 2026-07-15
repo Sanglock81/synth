@@ -1610,11 +1610,23 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             const bool audioMode = rp (apvts, modeIds[L]) > 0.5f;    // 0 MIDI re-synth, 1 AUDIO
 
             if (recReq && ! loopRecPrev[L]) loopArmPending[L] = true;             // REC on -> arm
-            if (! recReq)                 { loopArmPending[L] = false; loopRecording[L] = false; }   // REC off -> stop
+            if (! recReq)                 { loopArmPending[L] = false; loopRecording[L] = false; }   // REC off -> cancel
             loopRecPrev[L] = recReq;
-            // Engage at a loop boundary: at the very start (pos 0) or the block after a wrap.
+            // Engage at the loop downbeat: the very start (pos 0) or the block after a wrap.
             if (loopArmPending[L] && (looper.position() == 0 || loopWrappedLastBlock))
-            { loopArmPending[L] = false; loopRecording[L] = true; }
+            { loopArmPending[L] = false; loopRecording[L] = true; loopRecJustEngaged[L] = true; }
+
+            // ONE-SHOT fixed length (#47 correction): record exactly one loop (the set 1/2/4
+            // bars), then auto-stop at the next downbeat and switch this lane to PLAY. The
+            // engage block's own wrap is skipped via loopRecJustEngaged so we get one FULL pass.
+            if (loopRecording[L] && loopWrappedLastBlock && ! loopRecJustEngaged[L])
+            {
+                loopRecording[L] = false;
+                if (auto* pr = apvts.getParameter (recIds[L]))  pr->setValueNotifyingHost (0.0f);   // REC off (one-shot)
+                if (auto* pp = apvts.getParameter (playIds[L])) pp->setValueNotifyingHost (1.0f);   // auto-play the loop
+                loopRecPrev[L] = false;
+            }
+            loopRecJustEngaged[L] = false;
 
             looper.setRecording (lane, loopRecording[L]);           // this lane records its own part
             al.setRecording     (loopRecording[L]);

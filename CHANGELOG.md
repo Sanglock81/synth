@@ -12,7 +12,9 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
 - **Looper is now 4 fixed per-part lanes** (lane N ↔ part N), each with its own
   REC/PLAY/CLEAR/MIDI-AUDIO transport and its own audio ring. Capture is by lane (part N),
   fully decoupled from the edit/play focus (switching focus no longer disturbs the looper).
-  Shared loop-grid; honest audio-bar cap at low tempo; per-lane UI rows.
+  Shared loop-grid; honest audio-bar cap at low tempo; per-lane UI rows. REC is one-shot:
+  arm, engage at the loop downbeat, record exactly the set bars (1/2/4), then auto-stop and
+  play.
 - **Poly/Mono/Legato is now per-part** (edited via focus like the rest of the sound). Each
   part has its own mode, mono voice, note stack and glide; kit parts are always poly. Fixes a
   real isolation break — a mono lead on part 1 was cut whenever the sequencer ran on part 4

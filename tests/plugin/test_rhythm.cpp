@@ -121,6 +121,22 @@ TEST_CASE ("looper records a performance and plays it back next cycle", "[plugin
     REQUIRE (energyLater > 0.0);           // the recorded note looped back around
 }
 
+TEST_CASE ("looper REC is one-shot: records the set bars then auto-stops and plays", "[plugin][looper]")
+{
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.apvts.getParameter (ParamID::tempo)->setValueNotifyingHost (1.0f);   // 300 BPM -> ~1 bar in ~300 blocks
+    p.apvts.getParameter (ParamID::loopBars)->setValueNotifyingHost (0.0f);// 1 bar
+    p.apvts.getParameter (ParamID::loopRec)->setValueNotifyingHost (1.0f); // arm lane 1 (P1)
+
+    juce::AudioBuffer<float> buf (2, 128); juce::MidiBuffer m;
+    p.routeNoteOn (60, 0.9f, 0);
+    for (int b = 0; b < 500; ++b) { buf.clear(); m.clear(); p.processBlock (buf, m); }   // > one loop
+
+    REQUIRE (p.loopLaneHasContent (0));                                             // captured the pass
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::loopRec)->load()  < 0.5f);      // one-shot: REC auto-off
+    REQUIRE (p.apvts.getRawParameterValue (ParamID::loopPlay)->load() > 0.5f);      // ...and auto-play engaged
+}
+
 TEST_CASE ("looper off leaves the dispatch path bit-identical (goldens safe)", "[plugin][looper]")
 {
     VASynthProcessor p;   // loop_rec + loop_play default off

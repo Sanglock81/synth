@@ -627,6 +627,7 @@ private:
     std::array<bool, SynthEngine::maxParts> loopRecPrev {};      // REC param edge detect
     std::array<bool, SynthEngine::maxParts> loopArmPending {};   // armed, waiting for the loop boundary
     std::array<bool, SynthEngine::maxParts> loopRecording {};    // capture engaged (both lanes of this part)
+    std::array<bool, SynthEngine::maxParts> loopRecJustEngaged {};   // engage block (don't count its wrap)
     std::array<bool, SynthEngine::maxParts> loopPlayWasOn {};    // MIDI-lane playback edge, to flush on stop
     bool  loopWrappedLastBlock = false;         // the shared loop clock wrapped on the previous block
     std::array<std::array<bool, 128>, SynthEngine::maxParts> loopNoteHeld {};   // notes the loop turned on (release on stop/clear)
