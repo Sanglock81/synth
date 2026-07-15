@@ -175,6 +175,7 @@ namespace ParamID
     inline constexpr auto arpOctaves  = "arp_octaves";   // 1..4
     inline constexpr auto arpGate     = "arp_gate";      // 0..1 of a step
     inline constexpr auto arpSwing    = "arp_swing";     // 0..0.7
+    inline constexpr auto arpVel      = "arp_vel";       // velocity % scaling played velocity (10..200, default 100)
     inline constexpr auto arpLatch    = "arp_latch";
     inline constexpr auto arpHold     = "arp_hold";
 
@@ -375,6 +376,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::arpOctaves, 1}, "Arp Octaves", juce::NormalisableRange<float>(1.0f, 4.0f, 1.0f), 1.0f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::arpGate, 1}, "Arp Gate", juce::NormalisableRange<float>(0.05f, 1.0f), 0.5f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::arpSwing, 1}, "Arp Swing", juce::NormalisableRange<float>(0.0f, 0.7f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::arpVel, 1}, "Arp Velocity", juce::NormalisableRange<float>(10.0f, 200.0f, 1.0f), 100.0f, juce::AudioParameterFloatAttributes().withLabel ("%")));
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::arpLatch, 1}, "Arp Latch", false));
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::arpHold, 1}, "Arp Hold", false));
 

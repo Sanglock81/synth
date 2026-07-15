@@ -48,3 +48,50 @@ TEST_CASE ("APVTS state round-trips every parameter", "[plugin][state]")
         REQUIRE (dstParams[i]->getValue() == Catch::Approx (expected[(size_t) i]).margin (1e-5));
     }
 }
+
+TEST_CASE ("sequencer grid + per-step velocities round-trip through state (#54)", "[plugin][state][seq]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    VASynthProcessor src;
+    src.setSeqCell (0, 0, 1);  src.setSeqStepVel (0, 0, 100);   // full
+    src.setSeqCell (0, 4, 1);  src.setSeqStepVel (0, 4, 30);    // quiet grace note
+    src.setSeqCell (2, 8, 1);  src.setSeqStepVel (2, 8, 175);   // accent (>100%)
+    src.setSeqNote (2, 40);
+
+    juce::MemoryBlock blob;
+    src.getStateInformation (blob);
+
+    VASynthProcessor dst;
+    dst.setStateInformation (blob.getData(), (int) blob.getSize());
+
+    REQUIRE (dst.getSeqCell (0, 0) != 0);
+    REQUIRE (dst.getSeqStepVel (0, 0) == 100);
+    REQUIRE (dst.getSeqStepVel (0, 4) == 30);
+    REQUIRE (dst.getSeqStepVel (2, 8) == 175);
+    REQUIRE (dst.getSeqCell (2, 8) == 2);          // >100% still reads back as legacy "accent"
+    REQUIRE (dst.getSeqNote (2) == 40);
+    REQUIRE (dst.getSeqCell (0, 1) == 0);          // untouched step stays off
+}
+
+TEST_CASE ("legacy accent cells (no seq_vel) migrate to high velocity (#54)", "[plugin][state][seq]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    // Hand-build an OLD-format state directly on the APVTS tree: seq_cells is a contiguous
+    // digit string (one char/step) with a legacy accent '2' at row 0 step 0, and NO seq_vel
+    // property at all — so applySeqProperty must take the migrate-from-accent path.
+    VASynthProcessor src;
+    juce::String cells; for (int i = 0; i < VASynthProcessor::kSeqRows * VASynthProcessor::kSeqSteps; ++i) cells << (i == 0 ? '2' : '0');
+    src.apvts.state.setProperty ("seq_cells", cells, nullptr);
+    src.apvts.state.removeProperty ("seq_vel", nullptr);
+
+    juce::MemoryBlock blob;
+    src.getStateInformation (blob);
+
+    VASynthProcessor dst;
+    dst.setStateInformation (blob.getData(), (int) blob.getSize());
+
+    REQUIRE (dst.getSeqCell (0, 0) != 0);              // the accented step is ON
+    REQUIRE (dst.getSeqStepVel (0, 0) > 100);          // migrated to a high (accent) velocity
+}

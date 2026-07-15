@@ -326,10 +326,26 @@ public:
     // Pattern (cells / per-row trigger note / mute) lives in the state tree so it saves
     // with presets + MULTIs. The RHYTHM/SEQ panel edits it. Message thread + UI.
     static constexpr int kSeqRows = StepSequencer::kRows, kSeqSteps = StepSequencer::kSteps;
+    // Cell on/off (0 = off, 1 = on). Legacy value 2 (accent) is accepted -> on + velocity 127
+    // (the accent is now a per-step velocity, task #54). getSeqCell still returns 2 for an
+    // accented (vel > 100) step so older callers/UX read the same.
     unsigned char getSeqCell (int row, int step) const
-    { return (row >= 0 && row < kSeqRows && step >= 0 && step < kSeqSteps) ? seqCells[(std::size_t) row][(std::size_t) step] : 0; }
+    {
+        if (row < 0 || row >= kSeqRows || step < 0 || step >= kSeqSteps || seqCells[(std::size_t) row][(std::size_t) step] == 0) return 0;
+        return seqVel[(std::size_t) row][(std::size_t) step] > 100 ? 2 : 1;
+    }
     void setSeqCell (int row, int step, unsigned char v)
-    { if (row >= 0 && row < kSeqRows && step >= 0 && step < kSeqSteps) { seqCells[(std::size_t) row][(std::size_t) step] = v > 2 ? 2 : v; writeSeqProperty(); } }
+    {
+        if (row < 0 || row >= kSeqRows || step < 0 || step >= kSeqSteps) return;
+        seqCells[(std::size_t) row][(std::size_t) step] = (v == 0) ? 0 : 1;
+        if (v == 2) seqVel[(std::size_t) row][(std::size_t) step] = 127;   // legacy accent -> high velocity
+        writeSeqProperty();
+    }
+    // Per-step velocity PERCENT (10..200; 0 or 100 = default). Emitted vel = min(1, %/100).
+    int  getSeqStepVel (int row, int step) const
+    { const int v = (row >= 0 && row < kSeqRows && step >= 0 && step < kSeqSteps) ? seqVel[(std::size_t) row][(std::size_t) step] : 0; return v == 0 ? 100 : v; }
+    void setSeqStepVel (int row, int step, int velPercent)
+    { if (row >= 0 && row < kSeqRows && step >= 0 && step < kSeqSteps) { seqVel[(std::size_t) row][(std::size_t) step] = (unsigned char) juce::jlimit (0, 200, velPercent); writeSeqProperty(); } }
     int  getSeqNote (int row) const { return (row >= 0 && row < kSeqRows) ? seqNotes[(std::size_t) row] : 0; }
     void setSeqNote (int row, int note)
     { if (row >= 0 && row < kSeqRows) { seqNotes[(std::size_t) row] = juce::jlimit (0, 127, note); writeSeqProperty(); } }
@@ -488,6 +504,7 @@ private:
 
     // Step sequencer grid <-> "seq_cells" / "seq_notes" / "seq_mutes" state properties.
     std::array<std::array<unsigned char, kSeqSteps>, kSeqRows> seqCells { };
+    std::array<std::array<unsigned char, kSeqSteps>, kSeqRows> seqVel { };   // per-step velocity % (0 = default 100)
     std::array<int, kSeqRows>  seqNotes { { 36, 37, 38, 39, 40, 41, 42, 43 } };
     std::array<bool, kSeqRows> seqMutes { };
     void writeSeqProperty();

@@ -3,6 +3,7 @@
 // rest steps, and latch. JUCE-free (DSP-only).
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include "Arpeggiator.h"
 #include <vector>
 
@@ -123,4 +124,17 @@ TEST_CASE ("arp without latch stops when keys released", "[dsp][arp]")
     run (a, 200, 50);
     a.noteOff (60);
     REQUIRE (onNotes (run (a, 400, 50)).empty());
+}
+
+TEST_CASE ("arp velocity % scales the played velocity", "[dsp][arp][vel]")
+{
+    auto firstVel = [] (float velScale)
+    {
+        Arpeggiator a; auto c = baseCfg(); c.velScale = velScale; a.setConfig (c);
+        a.noteOn (60, 0.8f);                       // played velocity 0.8
+        for (auto& e : run (a, 300, 50)) if (e.on) return e.vel;
+        return -1.0f;
+    };
+    REQUIRE (firstVel (1.0f) == Catch::Approx (0.8f).margin (0.02));   // 100% -> played vel unchanged
+    REQUIRE (firstVel (0.5f) == Catch::Approx (0.4f).margin (0.02));   // 50%  -> halved
 }

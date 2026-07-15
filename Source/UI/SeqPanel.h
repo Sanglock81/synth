@@ -56,12 +56,27 @@ public:
             for (int s = 0; s < VASynthProcessor::kSeqSteps; ++s)
             {
                 auto cell = juce::Rectangle<int> (row.getX() + s * cw, row.getY(), cw, row.getHeight()).reduced (1);
-                const unsigned char v = proc.getSeqCell (r, s);
-                juce::Colour c = (v == 2) ? tRhy.brighter (0.35f) : (v == 1) ? tRhy : VASynthLookAndFeel::track();
-                if (s % 4 == 0 && v == 0) c = VASynthLookAndFeel::track().brighter (0.06f);   // beat guides
-                g.setColour (muted && v > 0 ? c.withAlpha (0.4f) : c);
+                const bool cellOn = proc.getSeqCell (r, s) != 0;
+                const int  vel = proc.getSeqStepVel (r, s);   // 10..200
+                juce::Colour base = (s % 4 == 0) ? VASynthLookAndFeel::track().brighter (0.06f) : VASynthLookAndFeel::track();   // beat guides
+                g.setColour (base);
                 g.fillRoundedRectangle (cell.toFloat(), 2.5f);
+                if (cellOn)
+                {
+                    // Velocity as a bottom-up FILL (height ∝ velocity, accent = >100% brightens).
+                    const float frac = juce::jlimit (0.12f, 1.0f, vel / 150.0f);
+                    auto fill = cell.toFloat().removeFromBottom (cell.getHeight() * frac);
+                    juce::Colour c = vel > 100 ? tRhy.brighter ((vel - 100) / 120.0f) : tRhy;
+                    g.setColour (muted ? c.withAlpha (0.4f) : c);
+                    g.fillRoundedRectangle (fill, 2.5f);
+                }
                 if (s == play) { g.setColour (VASynthLookAndFeel::ink().withAlpha (0.7f)); g.drawRoundedRectangle (cell.toFloat(), 2.5f, 1.2f); }
+                if (r == velR && s == velS)   // numeric readout while dragging velocity
+                {
+                    g.setColour (VASynthLookAndFeel::ink());
+                    g.setFont (juce::Font (juce::FontOptions ((float) juce::jmin (12, cell.getHeight() - 2), juce::Font::bold)));
+                    g.drawText (juce::String (vel), cell, juce::Justification::centred, false);
+                }
             }
         }
     }
@@ -80,42 +95,75 @@ public:
         for (int r = 0; r < n; ++r) { rowRects[(std::size_t) r] = c.removeFromTop (rh); c.removeFromTop (gap); }
     }
 
-    void mouseDown (const juce::MouseEvent& e) override { hit (e); }
-    void mouseDrag (const juce::MouseEvent& e) override { if (dragPaint) paintDrag (e); }
-
-private:
-    void hit (const juce::MouseEvent& e)
+    // Gesture: TAP a step toggles it on/off; HOLD an on-step and drag up/down sets its
+    // velocity % (numeric readout while dragging); a horizontal drag paints on/off across
+    // cells (draw a pattern). Which gesture wins is decided on the first drag delta (#54).
+    void mouseDown (const juce::MouseEvent& e) override
     {
+        dragR = dragS = -1; dragMode = None;
         for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
         {
             auto row = rowRects[(std::size_t) r];
             if (! row.contains (e.getPosition())) continue;
-            auto lab = row.removeFromLeft (kLabelW);
-            if (lab.removeFromRight (18).contains (e.getPosition())) { proc.setSeqMute (r, ! proc.getSeqMute (r)); repaint(); return; }
+            auto lab = row.withWidth (kLabelW);
+            if (lab.withTrimmedLeft (kLabelW - 18).contains (e.getPosition())) { proc.setSeqMute (r, ! proc.getSeqMute (r)); repaint(); return; }
             if (lab.contains (e.getPosition())) { showNoteMenu (r); return; }
-            const int cw = juce::jmax (1, row.getWidth() / VASynthProcessor::kSeqSteps);
-            const int s = juce::jlimit (0, VASynthProcessor::kSeqSteps - 1, (e.getPosition().x - row.getX()) / cw);
-            const unsigned char v = proc.getSeqCell (r, s);
-            proc.setSeqCell (r, s, (unsigned char) ((v + 1) % 3));   // off -> on -> accent -> off
-            dragPaint = true; dragVal = (unsigned char) ((v + 1) % 3);
-            repaint(); return;
-        }
-    }
-    void paintDrag (const juce::MouseEvent& e)
-    {
-        for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
-        {
-            auto row = rowRects[(std::size_t) r];
-            if (! row.contains (e.getPosition())) continue;
-            row.removeFromLeft (kLabelW);
-            if (! row.contains (e.getPosition())) return;
-            const int cw = juce::jmax (1, row.getWidth() / VASynthProcessor::kSeqSteps);
-            const int s = juce::jlimit (0, VASynthProcessor::kSeqSteps - 1, (e.getPosition().x - row.getX()) / cw);
-            if (proc.getSeqCell (r, s) != dragVal) { proc.setSeqCell (r, s, dragVal); repaint(); }
+            dragR = r; dragS = colAt (row, e); dragStartY = e.getPosition().y;
+            dragStartVel = proc.getSeqStepVel (r, dragS);
+            dragWasOn = proc.getSeqCell (r, dragS) != 0;
             return;
         }
     }
-    void mouseUp (const juce::MouseEvent&) override { dragPaint = false; }
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (dragR < 0) return;
+        const int dy = dragStartY - e.getPosition().y;   // up = increase
+        if (dragMode == None)
+        {
+            if (dragWasOn && std::abs (dy) > 5) { dragMode = Velocity; velR = dragR; velS = dragS; }
+            else                                                                          // fall to paint
+            {
+                dragMode = Paint;
+                dragVal = (unsigned char) (dragWasOn ? 0 : 1);                             // tap-through starts the stroke
+                proc.setSeqCell (dragR, dragS, dragVal);
+                repaint();
+            }
+        }
+        if (dragMode == Velocity)
+        {
+            const int nv = juce::jlimit (10, 200, dragStartVel + (int) std::lround (dy * 1.4));
+            proc.setSeqStepVel (dragR, dragS, nv);
+            repaint();
+        }
+        else if (dragMode == Paint)
+        {
+            for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
+            {
+                auto row = rowRects[(std::size_t) r];
+                if (! row.contains (e.getPosition())) continue;
+                if (! row.withTrimmedLeft (kLabelW).contains (e.getPosition())) return;
+                const int s = colAt (row, e);
+                if (proc.getSeqCell (r, s) != dragVal) { proc.setSeqCell (r, s, dragVal); repaint(); }
+                return;
+            }
+        }
+    }
+    void mouseUp (const juce::MouseEvent&) override
+    {
+        if (dragMode == None && dragR >= 0)                                                // a plain tap toggles on/off
+            proc.setSeqCell (dragR, dragS, (unsigned char) (dragWasOn ? 0 : 1));
+        dragMode = None; dragR = dragS = -1; velR = velS = -1;
+        repaint();
+    }
+
+private:
+    // step column under the cursor for a row rect whose label has already been trimmed off
+    static int colAt (juce::Rectangle<int> row, const juce::MouseEvent& e)
+    {
+        auto steps = row.withTrimmedLeft (kLabelW);
+        const int cw = juce::jmax (1, steps.getWidth() / VASynthProcessor::kSeqSteps);
+        return juce::jlimit (0, VASynthProcessor::kSeqSteps - 1, (e.getPosition().x - steps.getX()) / cw);
+    }
 
     void showNoteMenu (int row)
     {
@@ -144,8 +192,12 @@ private:
     std::unique_ptr<HSelector> target;
     std::unique_ptr<RotaryKnob> gate;
     std::array<juce::Rectangle<int>, VASynthProcessor::kSeqRows> rowRects { };
-    bool dragPaint = false;
+    enum DragMode { None = 0, Velocity, Paint };
+    int dragMode = None;
+    int dragR = -1, dragS = -1, dragStartY = 0, dragStartVel = 100;
+    bool dragWasOn = false;
     unsigned char dragVal = 0;
+    int velR = -1, velS = -1;              // step currently showing its numeric velocity
     static constexpr int kLabelW = 74;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SeqPanel)

@@ -20,7 +20,7 @@ class StepSequencer
 public:
     static constexpr int kRows  = 8;
     static constexpr int kSteps = 16;
-    enum Cell : unsigned char { Off = 0, On = 1, Accent = 2 };
+    enum Cell : unsigned char { Off = 0, On = 1 };   // (accent absorbed into per-step velocity)
 
     struct Config
     {
@@ -29,6 +29,9 @@ public:
         float  gate  = 0.5f;            // 0..1 of a step
         float  swing = 0.0f;            // 0..~0.7 (delays odd 16ths)
         std::array<std::array<unsigned char, kSteps>, kRows> cells { };
+        // Per-step velocity PERCENT (task #54): 0 uses the default (100%); 10..200 sets it
+        // explicitly (accent = >100). Emitted velocity = clamp(vel% / 100, 0..1).
+        std::array<std::array<unsigned char, kSteps>, kRows> vel { };
         std::array<int, kRows>  note { { 36, 37, 38, 39, 40, 41, 42, 43 } };   // 808 Basics 36..43
         std::array<bool, kRows> mute { };
     };
@@ -110,7 +113,9 @@ private:
             if (c == Off) continue;
             if (activeNote[(std::size_t) r] >= 0) { emit (pos, activeNote[(std::size_t) r], 0.0f, false); activeNote[(std::size_t) r] = -1; }
             const int note = std::min (127, std::max (0, cfg.note[(std::size_t) r]));
-            emit (pos, note, (c == Accent) ? 1.0f : 0.72f, true);
+            const unsigned char vp = cfg.vel[(std::size_t) r][(std::size_t) stepIndex];   // per-step velocity %
+            const float velF = std::min (1.0f, (vp == 0 ? 100 : (int) vp) / 100.0f);       // 0 => default 100%
+            emit (pos, note, velF, true);
             activeNote[(std::size_t) r] = note;
             gateRemaining[(std::size_t) r] = std::max (1.0, (double) cfg.gate * cfg.samplesPerStep);
         }

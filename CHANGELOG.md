@@ -9,6 +9,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Changed
+- **Per-step sequencer velocity + arp velocity.** Each sequencer step carries a velocity
+  percentage (10–200 %): tap a step to toggle it, hold and drag up/down to set its velocity —
+  shown as a numeric read-out while adjusting and a bottom-up fill (accented, > 100 %,
+  brightens) at rest. This replaces the old binary accent (legacy accented steps migrate to a
+  high velocity on load). The arpeggiator gains a single VEL knob (10–200 %, default 100 %)
+  that scales the played-note velocity.
 - **Clock alignment:** the sequencer, arpeggiator and looper now share one transport origin
   (the loop clock), re-anchoring to the bar downbeat every bar — the seq no longer leads the
   arp/looper. Swing self-accumulates within the bar. Looper MIDI recording is quantized to a

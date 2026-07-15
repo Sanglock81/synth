@@ -1335,8 +1335,10 @@ void VASynthProcessor::applyArpStepsProperty()
 void VASynthProcessor::writeSeqProperty()
 {
     juce::String cells;
-    for (auto& row : seqCells) for (unsigned char c : row) cells << (int) c;   // 128 digits 0/1/2
+    for (auto& row : seqCells) for (unsigned char c : row) cells << (int) (c ? 1 : 0);   // 128 digits 0/1
     apvts.state.setProperty ("seq_cells", cells, nullptr);
+    juce::StringArray vels; for (auto& row : seqVel) for (unsigned char v : row) vels.add (juce::String ((int) v));   // per-step vel %
+    apvts.state.setProperty ("seq_vel", vels.joinIntoString (","), nullptr);
     juce::StringArray notes; for (int n : seqNotes) notes.add (juce::String (n));
     apvts.state.setProperty ("seq_notes", notes.joinIntoString (","), nullptr);
     juce::String mutes; for (bool m : seqMutes) mutes << (m ? "1" : "0");
@@ -1346,12 +1348,18 @@ void VASynthProcessor::writeSeqProperty()
 void VASynthProcessor::applySeqProperty()
 {
     const auto cells = apvts.state.getProperty ("seq_cells").toString();
+    // seq_vel is a per-step velocity list (task #54). If absent (older state), migrate from
+    // the legacy 3-state cells: accent (2) -> velocity 127, else default (0 => 100%).
+    auto vels = juce::StringArray::fromTokens (apvts.state.getProperty ("seq_vel").toString(), ",", "");
+    const bool hasVel = vels.size() >= kSeqRows * kSeqSteps;
     for (int r = 0; r < kSeqRows; ++r)
         for (int s = 0; s < kSeqSteps; ++s)
         {
             const int idx = r * kSeqSteps + s;
-            const int v = (idx < cells.length()) ? (cells[idx] - '0') : 0;
-            seqCells[(std::size_t) r][(std::size_t) s] = (unsigned char) juce::jlimit (0, 2, v);
+            const int v = (idx < cells.length()) ? (cells[idx] - '0') : 0;   // legacy 0/1/2
+            seqCells[(std::size_t) r][(std::size_t) s] = (unsigned char) (v == 0 ? 0 : 1);
+            seqVel[(std::size_t) r][(std::size_t) s] = (unsigned char) (hasVel ? juce::jlimit (0, 200, vels[idx].getIntValue())
+                                                                               : (v == 2 ? 127 : 0));   // migrate accent
         }
     auto notes = juce::StringArray::fromTokens (apvts.state.getProperty ("seq_notes").toString(), ",", "");
     for (int r = 0; r < kSeqRows; ++r)
@@ -1543,6 +1551,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         ac.mode    = (int) rp (apvts, ID::arpMode);
         ac.octaves = (int) rp (apvts, ID::arpOctaves);
         ac.gate    = rp (apvts, ID::arpGate);
+        ac.velScale = rp (apvts, ID::arpVel) / 100.0f;   // arp velocity % (task #54)
         ac.swing   = swing;
         ac.latch   = rp (apvts, ID::arpHold) > 0.5f;
         ac.samplesPerStep = samplesPerStep;
@@ -1563,6 +1572,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         sc.swing   = swing;
         sc.samplesPerStep = samplesPerStep;
         sc.cells = seqCells;
+        sc.vel   = seqVel;
         sc.note  = seqNotes;
         sc.mute  = seqMutes;
         seq.setConfig (sc);

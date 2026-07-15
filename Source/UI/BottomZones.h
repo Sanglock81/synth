@@ -144,12 +144,13 @@ public:
         oct   = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpOctaves, "OCT",   p.getMidiLearn());
         gate  = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpGate,    "GATE",  p.getMidiLearn());
         swing = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpSwing,   "SWING", p.getMidiLearn());
+        vel   = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpVel,     "VEL",   p.getMidiLearn());
         tempo = std::make_unique<RotaryKnob> (p.apvts, ParamID::tempo,      "TEMPO", p.getMidiLearn());
         hold  = std::make_unique<PowerToggle> (p.apvts, ParamID::arpHold,  "HOLD");
         addAndMakeVisible (*arpOn); addAndMakeVisible (*mode);
         addAndMakeVisible (*oct);   addAndMakeVisible (*gate);
-        addAndMakeVisible (*swing); addAndMakeVisible (*tempo);
-        addAndMakeVisible (*hold);
+        addAndMakeVisible (*swing); addAndMakeVisible (*vel);
+        addAndMakeVisible (*tempo); addAndMakeVisible (*hold);
         startTimerHz (20);   // playhead on the gate grid
     }
 
@@ -182,8 +183,8 @@ public:
         arpOn->setBounds (row.removeFromLeft (58).reduced (2, 6)); row.removeFromLeft (8);
         mode->setBounds  (row.removeFromLeft (juce::jmin (210, row.getWidth() / 3)).reduced (0, 8)); row.removeFromLeft (12);
         hold->setBounds  (row.removeFromRight (62).reduced (2, 6)); row.removeFromRight (10);
-        for (RotaryKnob* k : { oct.get(), gate.get(), swing.get(), tempo.get() })
-            { k->setBounds (row.removeFromLeft (juce::jmin (72, row.getWidth() / 5))); row.removeFromLeft (4); }
+        for (RotaryKnob* k : { oct.get(), gate.get(), swing.get(), vel.get(), tempo.get() })
+            { k->setBounds (row.removeFromLeft (juce::jmin (72, row.getWidth() / 6))); row.removeFromLeft (4); }
         row.removeFromLeft (10);
         gridArea = row;                                   // the remaining middle-right span
     }
@@ -207,7 +208,7 @@ private:
     VASynthProcessor& proc;
     std::unique_ptr<PowerToggle> arpOn, hold;
     std::unique_ptr<HSelector> mode;
-    std::unique_ptr<RotaryKnob> oct, gate, swing, tempo;
+    std::unique_ptr<RotaryKnob> oct, gate, swing, vel, tempo;
     juce::Rectangle<int> gridArea;
     float dragVal = 1.0f;
 

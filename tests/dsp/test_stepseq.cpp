@@ -74,12 +74,27 @@ TEST_CASE ("stepseq mute silences a row", "[dsp][stepseq]")
 TEST_CASE ("stepseq accent raises velocity", "[dsp][stepseq]")
 {
     StepSequencer s; auto c = baseCfg();
-    c.cells[0][0] = StepSequencer::On; c.cells[0][4] = StepSequencer::Accent;
+    c.cells[0][0] = StepSequencer::On; c.vel[0][0] = 80;    // normal
+    c.cells[0][4] = StepSequencer::On; c.vel[0][4] = 150;   // accent = higher per-step velocity (#54)
     s.setConfig (c);
     auto e = run (s, 600, 300);
     float normal = 0, accent = 0;
     for (auto& x : e) if (x.on) { if (x.t < 50) normal = x.vel; else accent = std::max (accent, x.vel); }
     REQUIRE (accent > normal);
+}
+
+TEST_CASE ("stepseq per-step velocity %: 100 = full, 30 = quiet grace note", "[dsp][stepseq][vel]")
+{
+    StepSequencer s; auto c = baseCfg();
+    c.cells[0][0] = StepSequencer::On; c.vel[0][0] = 100;   // full
+    c.cells[0][4] = StepSequencer::On; c.vel[0][4] = 30;    // grace note
+    s.setConfig (c);
+    auto e = run (s, 600, 300);
+    float full = 0, grace = -1;
+    for (auto& x : e) if (x.on) { if (x.t < 50) full = x.vel; else if (grace < 0) grace = x.vel; }
+    REQUIRE (full  == Catch::Approx (1.0f).margin (0.02));   // 100% -> 1.0
+    REQUIRE (grace == Catch::Approx (0.3f).margin (0.02));   // 30%  -> 0.3
+    REQUIRE (grace < full * 0.5f);                           // audibly quieter
 }
 
 TEST_CASE ("stepseq gate releases before the next step", "[dsp][stepseq]")
