@@ -159,11 +159,12 @@ TEST_CASE ("arp velocity belongs to the STEP, not the note, across all modes", "
     }
 }
 
-TEST_CASE ("arp step velocity > 100% clamps to full MIDI at emit", "[dsp][arp][vel]")
+TEST_CASE ("arp step velocity > 100% accents past the played velocity (not clamped)", "[dsp][arp][vel]")
 {
-    Arpeggiator a; auto c = baseCfg(); c.steps[0] = 2.0f;   // 200 %
+    Arpeggiator a; auto c = baseCfg(); c.steps[0] = 2.0f;   // 200 % accent
     a.setConfig (c);
-    a.noteOn (60, 0.8f);
+    a.noteOn (60, 0.8f);                                    // played velocity 0.8
     float first = -1.0f; for (auto& e : run (a, 120, 40)) if (e.on) { first = e.vel; break; }
-    REQUIRE (first == Catch::Approx (1.0f).margin (0.001));   // 0.8 * 2.0 = 1.6 -> clamped to 1.0
+    REQUIRE (first == Catch::Approx (1.6f).margin (0.001));   // 0.8 * 2.0 = 1.6 -> over-unity scalar, NOT clamped
+    REQUIRE (first > 1.0f);                                   // the accent range is live (the old clamp is gone)
 }

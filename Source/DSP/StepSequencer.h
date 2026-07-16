@@ -114,7 +114,11 @@ private:
             if (activeNote[(std::size_t) r] >= 0) { emit (pos, activeNote[(std::size_t) r], 0.0f, false); activeNote[(std::size_t) r] = -1; }
             const int note = std::min (127, std::max (0, cfg.note[(std::size_t) r]));
             const unsigned char vp = cfg.vel[(std::size_t) r][(std::size_t) stepIndex];   // per-step velocity %
-            const float velF = std::min (1.0f, (vp == 0 ? 100 : (int) vp) / 100.0f);       // 0 => default 100%
+            // 10..200 % -> a 0.1..2.0 velocity SCALAR (0 => default 100 % = 1.0). NOT clamped
+            // to 1.0: 100 % keeps the old behaviour, > 100 % accents (the voice's vel->amp and
+            // vel->cutoff push louder AND brighter), < 100 % ghosts. The output safety clipper
+            // guards the bus, so an over-unity accent can't breach +/-1.0.
+            const float velF = (vp == 0 ? 100 : (int) vp) / 100.0f;
             emit (pos, note, velF, true);
             activeNote[(std::size_t) r] = note;
             gateRemaining[(std::size_t) r] = std::max (1.0, (double) cfg.gate * cfg.samplesPerStep);

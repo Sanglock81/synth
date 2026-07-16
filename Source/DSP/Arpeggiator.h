@@ -127,7 +127,10 @@ private:
         {
             int note; float vel;
             pickNote (note, vel);
-            emit (pos, note, std::min (1.0f, vel * sv), true);   // sv = this step's velocity fraction (10..200 %)
+            // sv = this step's velocity fraction (0.1..2.0 = 10..200 %). NOT clamped to 1.0 —
+            // a > 100 % step accents the played note past its own velocity (louder + brighter
+            // via the voice's vel->amp / vel->cutoff); the output safety clipper guards the bus.
+            emit (pos, note, vel * sv, true);
             activeNote = note;
             gateRemaining = std::max (1.0, (double) cfg.gate * cfg.samplesPerStep);
         }

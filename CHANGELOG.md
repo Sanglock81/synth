@@ -43,6 +43,13 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
 - **808 / Punchy kick voicing:** amp attack softened 1 ms → 2 ms for a defined transient.
 
 ### Fixed / investigated
+- **Per-step velocity now audibly shapes the note.** The seq/arp emit was clamping velocity
+  to `min(1.0, …)`, so a step at 100 % already emitted the maximum and the whole 100–200 %
+  "accent" range was inert. Velocity is now a real `0.1–2.0` scalar (100 % unchanged; > 100 %
+  boosts, < 100 % ghosts). It reaches the voice and drives BOTH the VCA (`vel→amp`) and the
+  filter (`vel→cutoff`) — louder *and* brighter on a harder step — verified end-to-end. The
+  output safety clipper still guarantees the bus never exceeds ±1.0 on an over-unity accent.
+  (Brightness response is per-preset via `vel_to_cutoff`; amplitude response is on by default.)
 - Investigated a reported width/EQ "does nothing": both work in the real processor topology
   (added real-topology tests); width was a mono no-op (now fixed above), the master EQ works.
 - Investigated a reported 808 kick "HF click/pop": the kick is **engine-clean** (measured far
