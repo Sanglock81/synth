@@ -144,35 +144,48 @@ public:
         oct   = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpOctaves, "OCT",   p.getMidiLearn());
         gate  = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpGate,    "GATE",  p.getMidiLearn());
         swing = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpSwing,   "SWING", p.getMidiLearn());
-        vel   = std::make_unique<RotaryKnob> (p.apvts, ParamID::arpVel,     "VEL",   p.getMidiLearn());
         tempo = std::make_unique<RotaryKnob> (p.apvts, ParamID::tempo,      "TEMPO", p.getMidiLearn());
         hold  = std::make_unique<PowerToggle> (p.apvts, ParamID::arpHold,  "HOLD");
         addAndMakeVisible (*arpOn); addAndMakeVisible (*mode);
         addAndMakeVisible (*oct);   addAndMakeVisible (*gate);
-        addAndMakeVisible (*swing); addAndMakeVisible (*vel);
-        addAndMakeVisible (*tempo); addAndMakeVisible (*hold);
+        addAndMakeVisible (*swing); addAndMakeVisible (*tempo);
+        addAndMakeVisible (*hold);
         startTimerHz (20);   // playhead on the gate grid
     }
 
     void paint (juce::Graphics& g) override
     {
         const auto tRhy = juce::Colour (0xffe0b13a);
-        chrome::section (g, getLocalBounds(), "Arpeggiator  -  gate pattern", tRhy);
+        chrome::section (g, getLocalBounds(), "Arpeggiator  -  step velocity", tRhy);
 
-        // 16-square single-level ON/OFF gate grid (middle-right).
+        // 16-step grid (middle-right): on/off + per-step velocity, same read-out as the seq —
+        // a bottom-up fill (height ∝ velocity; > 100 % brightens) and a numeric % while dragging.
         const int play = proc.arpDisplayStep();
         const int n = VASynthProcessor::kArpSteps;
         const int cw = juce::jmax (1, gridArea.getWidth() / n);
         for (int s = 0; s < n; ++s)
         {
             auto cell = juce::Rectangle<int> (gridArea.getX() + s * cw, gridArea.getY(), cw, gridArea.getHeight()).reduced (2);
-            const bool on = proc.getArpStep (s) > 0.5f;
-            juce::Colour c = on ? tRhy : VASynthLookAndFeel::track();
-            if (! on && s % 4 == 0) c = VASynthLookAndFeel::track().brighter (0.07f);   // beat guides
-            g.setColour (c);
+            const bool on  = proc.getArpStep (s) > 0.5f;
+            const int  vel = proc.getArpStepVel (s);
+            juce::Colour base = (s % 4 == 0) ? VASynthLookAndFeel::track().brighter (0.07f) : VASynthLookAndFeel::track();
+            g.setColour (base);
             g.fillRoundedRectangle (cell.toFloat(), 3.0f);
+            if (on)
+            {
+                const float frac = juce::jlimit (0.12f, 1.0f, vel / 150.0f);
+                auto fill = cell.toFloat().removeFromBottom (cell.getHeight() * frac);
+                g.setColour (vel > 100 ? tRhy.brighter ((vel - 100) / 120.0f) : tRhy);
+                g.fillRoundedRectangle (fill, 3.0f);
+            }
             if (s == play && proc.apvts.getRawParameterValue (ParamID::arpOn)->load() > 0.5f)
             { g.setColour (VASynthLookAndFeel::ink().withAlpha (0.8f)); g.drawRoundedRectangle (cell.toFloat(), 3.0f, 1.5f); }
+            if (s == velStep)   // numeric read-out while dragging velocity
+            {
+                g.setColour (VASynthLookAndFeel::ink());
+                g.setFont (juce::Font (juce::FontOptions ((float) juce::jmin (12, cell.getHeight() - 2), juce::Font::bold)));
+                g.drawText (juce::String (vel), cell, juce::Justification::centred, false);
+            }
         }
     }
 
@@ -183,33 +196,68 @@ public:
         arpOn->setBounds (row.removeFromLeft (58).reduced (2, 6)); row.removeFromLeft (8);
         mode->setBounds  (row.removeFromLeft (juce::jmin (210, row.getWidth() / 3)).reduced (0, 8)); row.removeFromLeft (12);
         hold->setBounds  (row.removeFromRight (62).reduced (2, 6)); row.removeFromRight (10);
-        for (RotaryKnob* k : { oct.get(), gate.get(), swing.get(), vel.get(), tempo.get() })
-            { k->setBounds (row.removeFromLeft (juce::jmin (72, row.getWidth() / 6))); row.removeFromLeft (4); }
+        for (RotaryKnob* k : { oct.get(), gate.get(), swing.get(), tempo.get() })
+            { k->setBounds (row.removeFromLeft (juce::jmin (72, row.getWidth() / 5))); row.removeFromLeft (4); }
         row.removeFromLeft (10);
         gridArea = row;                                   // the remaining middle-right span
     }
 
-    void mouseDown (const juce::MouseEvent& e) override { paintStep (e, true); }
-    void mouseDrag (const juce::MouseEvent& e) override { paintStep (e, false); }
+    // Identical grammar to the step sequencer (#54): TAP a step toggles on/off; HOLD an
+    // on-step and drag up/down sets its velocity % (numeric read-out while dragging); a
+    // horizontal drag paints on/off across steps. The gesture is chosen on the first delta.
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        dragMode = None; dragStep = -1; velStep = -1;
+        if (! gridArea.contains (e.getPosition())) return;
+        dragStep = colAt (e); dragStartY = e.getPosition().y;
+        dragStartVel = proc.getArpStepVel (dragStep);
+        dragWasOn = proc.getArpStep (dragStep) > 0.5f;
+    }
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (dragStep < 0) return;
+        const int dy = dragStartY - e.getPosition().y;   // up = increase
+        if (dragMode == None)
+        {
+            if (dragWasOn && std::abs (dy) > 5) { dragMode = Velocity; velStep = dragStep; }
+            else { dragMode = Paint; dragVal = dragWasOn ? 0.0f : 1.0f; proc.setArpStep (dragStep, dragVal); repaint(); }
+        }
+        if (dragMode == Velocity)
+        {
+            proc.setArpStepVel (dragStep, juce::jlimit (10, 200, dragStartVel + (int) std::lround (dy * 1.4)));
+            repaint();
+        }
+        else if (dragMode == Paint && gridArea.contains (e.getPosition()))
+        {
+            const int s = colAt (e);
+            if ((proc.getArpStep (s) > 0.5f) != (dragVal > 0.5f)) { proc.setArpStep (s, dragVal); repaint(); }
+        }
+    }
+    void mouseUp (const juce::MouseEvent&) override
+    {
+        if (dragMode == None && dragStep >= 0) proc.setArpStep (dragStep, dragWasOn ? 0.0f : 1.0f);   // plain tap
+        dragMode = None; dragStep = -1; velStep = -1; repaint();
+    }
+
+    // Read-only geometry of the 16-step grid (for tests + external hit-testing).
+    juce::Rectangle<int> stepGridBounds() const { return gridArea; }
 
 private:
-    // Tap toggles a step; drag paints the value set by the initial tap.
-    void paintStep (const juce::MouseEvent& e, bool isDown)
+    int colAt (const juce::MouseEvent& e) const
     {
-        if (! gridArea.contains (e.getPosition())) return;
-        const int n = VASynthProcessor::kArpSteps;
-        const int cw = juce::jmax (1, gridArea.getWidth() / n);
-        const int s = juce::jlimit (0, n - 1, (e.getPosition().x - gridArea.getX()) / cw);
-        if (isDown) dragVal = (proc.getArpStep (s) > 0.5f) ? 0.0f : 1.0f;   // toggle vs the tapped cell
-        if ((proc.getArpStep (s) > 0.5f) != (dragVal > 0.5f)) { proc.setArpStep (s, dragVal); repaint(); }
+        const int cw = juce::jmax (1, gridArea.getWidth() / VASynthProcessor::kArpSteps);
+        return juce::jlimit (0, VASynthProcessor::kArpSteps - 1, (e.getPosition().x - gridArea.getX()) / cw);
     }
     void timerCallback() override { repaint(); }
 
     VASynthProcessor& proc;
     std::unique_ptr<PowerToggle> arpOn, hold;
     std::unique_ptr<HSelector> mode;
-    std::unique_ptr<RotaryKnob> oct, gate, swing, vel, tempo;
+    std::unique_ptr<RotaryKnob> oct, gate, swing, tempo;
     juce::Rectangle<int> gridArea;
+    enum DragMode { None = 0, Velocity, Paint };
+    int dragMode = None, dragStep = -1, dragStartY = 0, dragStartVel = 100, velStep = -1;
+    bool dragWasOn = false;
     float dragVal = 1.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ArpBar)

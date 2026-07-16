@@ -303,17 +303,24 @@ public:
     // global/performance control alone.
     static const juce::StringArray& soundDesignParamIDs();
 
-    // -- arpeggiator 16-step pattern (R3) -------------------------------------
-    // Per-step velocity 0..1 (0 = rest). Lives in the state tree ("arp_steps") so it
-    // saves/loads with presets; the RHYTHM panel edits it. Message thread + UI only.
+    // -- arpeggiator 16-step pattern (R3; per-step velocity #54) ----------------
+    // Each step has an on/off ("arp_steps") AND a velocity percent ("arp_vel", 10..200,
+    // 0/100 = default). Identical model + interaction to the step sequencer's cells/vel:
+    // tap toggles the step, hold-drag sets its velocity. Both live in the state tree so
+    // they save/load with presets/MULTIs; the RHYTHM panel edits them. Message + UI thread.
     static constexpr int kArpSteps = Arpeggiator::kNumSteps;
     float getArpStep (int i) const { return (i >= 0 && i < kArpSteps) ? arpSteps[(std::size_t) i] : 0.0f; }
     void  setArpStep (int i, float v)
     {
         if (i < 0 || i >= kArpSteps) return;
-        arpSteps[(std::size_t) i] = juce::jlimit (0.0f, 1.0f, v);
+        arpSteps[(std::size_t) i] = (v > 0.5f) ? 1.0f : 0.0f;
         writeArpStepsProperty();
     }
+    // Per-step velocity PERCENT (10..200; 0 or 100 = default). Emitted vel = min(1, played*%/100).
+    int  getArpStepVel (int i) const
+    { const int v = (i >= 0 && i < kArpSteps) ? arpStepVel[(std::size_t) i] : 0; return v == 0 ? 100 : v; }
+    void setArpStepVel (int i, int velPercent)
+    { if (i >= 0 && i < kArpSteps) { arpStepVel[(std::size_t) i] = (unsigned char) juce::jlimit (0, 200, velPercent); writeArpStepsProperty(); } }
 
     // Live LFO modulation on the focused part for a destination (1 pitch semis, 2 cutoff
     // octaves, 3 pw units) — the UI animates the CUTOFF / PW knobs from this.
@@ -497,8 +504,9 @@ private:
     void writeMacroMapProperty();
     void applyMacroMapProperty();
 
-    // Arpeggiator step pattern <-> "arp_steps" state property.
+    // Arpeggiator step pattern <-> "arp_steps" (on/off) + "arp_vel" (per-step %) state props.
     std::array<float, kArpSteps> arpSteps { };
+    std::array<unsigned char, kArpSteps> arpStepVel { };   // per-step velocity % (0 = default 100)
     void writeArpStepsProperty();
     void applyArpStepsProperty();
 

@@ -31,9 +31,12 @@ public:
         int    octaves  = 1;          // 1..4
         float  gate     = 0.5f;       // 0..1 of a step
         float  swing    = 0.0f;       // 0..~0.7 (delays odd 16ths)
-        float  velScale = 1.0f;       // arp velocity % / 100 (task #54): scales the played velocity
         double samplesPerStep = 6000; // 16th-note length in samples (from tempo)
-        std::array<float, kNumSteps> steps { };   // per-step velocity 0..1 (0 = rest)
+        // Per-step multiplier applied to the played-note velocity (task #54): 0 = rest (step
+        // off), else the step's velocity fraction (0.1..2.0 = 10..200 %). The emit clamps the
+        // product to 1.0 so >100 % still tops out at full MIDI. The velocity belongs to the
+        // STEP, not the note — the same box scales whatever note the pattern lands on it.
+        std::array<float, kNumSteps> steps { };
     };
 
     void setConfig (const Config& c) { cfg = c; }
@@ -124,7 +127,7 @@ private:
         {
             int note; float vel;
             pickNote (note, vel);
-            emit (pos, note, std::min (1.0f, vel * sv * cfg.velScale), true);   // arp velocity % scales the played vel
+            emit (pos, note, std::min (1.0f, vel * sv), true);   // sv = this step's velocity fraction (10..200 %)
             activeNote = note;
             gateRemaining = std::max (1.0, (double) cfg.gate * cfg.samplesPerStep);
         }

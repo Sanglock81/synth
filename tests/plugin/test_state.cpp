@@ -95,3 +95,50 @@ TEST_CASE ("legacy accent cells (no seq_vel) migrate to high velocity (#54)", "[
     REQUIRE (dst.getSeqCell (0, 0) != 0);              // the accented step is ON
     REQUIRE (dst.getSeqStepVel (0, 0) > 100);          // migrated to a high (accent) velocity
 }
+
+TEST_CASE ("arp grid + per-step velocities round-trip through state (#54)", "[plugin][state][arp]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    VASynthProcessor src;
+    src.setArpStep (0, 1.0f); src.setArpStepVel (0, 100);   // on, full
+    src.setArpStep (1, 0.0f);                               // off
+    src.setArpStep (3, 1.0f); src.setArpStepVel (3, 45);    // on, quiet
+    src.setArpStep (7, 1.0f); src.setArpStepVel (7, 175);   // on, accent
+
+    juce::MemoryBlock blob;
+    src.getStateInformation (blob);
+
+    VASynthProcessor dst;
+    dst.setStateInformation (blob.getData(), (int) blob.getSize());
+
+    REQUIRE (dst.getArpStep (0) > 0.5f);
+    REQUIRE (dst.getArpStepVel (0) == 100);
+    REQUIRE (dst.getArpStep (1) < 0.5f);
+    REQUIRE (dst.getArpStepVel (3) == 45);
+    REQUIRE (dst.getArpStepVel (7) == 175);
+    REQUIRE (dst.getArpStep (7) > 0.5f);
+}
+
+TEST_CASE ("legacy arp state (float steps, no arp_vel) migrates to all-100% (#54)", "[plugin][state][arp]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    // Old format: arp_steps is a comma list of floats (default level 0.8 = on) and there is NO
+    // arp_vel property (the retired single-knob build likewise left no per-step arp_vel).
+    VASynthProcessor src;
+    juce::StringArray steps; for (int i = 0; i < VASynthProcessor::kArpSteps; ++i) steps.add (i == 2 ? "0.000" : "0.800");
+    src.apvts.state.setProperty ("arp_steps", steps.joinIntoString (","), nullptr);
+    src.apvts.state.removeProperty ("arp_vel", nullptr);
+
+    juce::MemoryBlock blob;
+    src.getStateInformation (blob);
+
+    VASynthProcessor dst;
+    dst.setStateInformation (blob.getData(), (int) blob.getSize());
+
+    REQUIRE (dst.getArpStep (0) > 0.5f);        // 0.8 -> on
+    REQUIRE (dst.getArpStep (2) < 0.5f);        // 0.0 -> off
+    REQUIRE (dst.getArpStepVel (0) == 100);     // no arp_vel -> default 100 %
+    REQUIRE (dst.getArpStepVel (5) == 100);
+}

@@ -75,6 +75,7 @@ add_executable(plugin_tests
     plugin/test_device_curation.cpp
     plugin/test_input_reliability.cpp
     plugin/test_touch.cpp
+    plugin/test_arp_ui.cpp
     plugin/test_layout_mockup.cpp
     plugin/test_drums.cpp
     plugin/test_chord_plugin.cpp

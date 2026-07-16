@@ -126,15 +126,44 @@ TEST_CASE ("arp without latch stops when keys released", "[dsp][arp]")
     REQUIRE (onNotes (run (a, 400, 50)).empty());
 }
 
-TEST_CASE ("arp velocity % scales the played velocity", "[dsp][arp][vel]")
+TEST_CASE ("arp per-step velocity scales the played velocity", "[dsp][arp][vel]")
 {
-    auto firstVel = [] (float velScale)
+    Arpeggiator a; auto c = baseCfg();
+    c.steps[0] = 1.0f;   // step 0 = 100 %
+    c.steps[1] = 0.3f;   // step 1 = 30 %  (a quiet grace step)
+    a.setConfig (c);
+    a.noteOn (60, 0.8f);                         // played velocity 0.8
+    std::vector<float> ons; for (auto& e : run (a, 250, 50)) if (e.on) ons.push_back (e.vel);
+    REQUIRE (ons.size() >= 2);
+    REQUIRE (ons[0] == Catch::Approx (0.80f).margin (0.02));   // 0.8 * 1.0
+    REQUIRE (ons[1] == Catch::Approx (0.24f).margin (0.02));   // 0.8 * 0.3
+}
+
+TEST_CASE ("arp velocity belongs to the STEP, not the note, across all modes", "[dsp][arp][vel]")
+{
+    for (int mode : { Arpeggiator::Up, Arpeggiator::Down, Arpeggiator::UpDown, Arpeggiator::Random, Arpeggiator::AsPlayed })
     {
-        Arpeggiator a; auto c = baseCfg(); c.velScale = velScale; a.setConfig (c);
-        a.noteOn (60, 0.8f);                       // played velocity 0.8
-        for (auto& e : run (a, 300, 50)) if (e.on) return e.vel;
-        return -1.0f;
-    };
-    REQUIRE (firstVel (1.0f) == Catch::Approx (0.8f).margin (0.02));   // 100% -> played vel unchanged
-    REQUIRE (firstVel (0.5f) == Catch::Approx (0.4f).margin (0.02));   // 50%  -> halved
+        Arpeggiator a; auto c = baseCfg (mode);
+        for (int i = 0; i < Arpeggiator::kNumSteps; ++i) c.steps[(std::size_t) i] = (i % 2 == 0) ? 1.0f : 0.4f;  // loud/quiet alternation
+        a.setConfig (c);
+        a.noteOn (60, 1.0f); a.noteOn (64, 1.0f); a.noteOn (67, 1.0f);   // a 3-note chord
+
+        for (auto& e : run (a, 800, 40))
+            if (e.on)
+            {
+                const int step = (e.t / 100) % Arpeggiator::kNumSteps;     // samplesPerStep = 100, no swing
+                const float want = (step % 2 == 0) ? 1.0f : 0.4f;          // whatever note lands here
+                INFO ("mode " << mode << " step " << step << " note " << e.note);
+                REQUIRE (e.vel == Catch::Approx (want).margin (0.02));
+            }
+    }
+}
+
+TEST_CASE ("arp step velocity > 100% clamps to full MIDI at emit", "[dsp][arp][vel]")
+{
+    Arpeggiator a; auto c = baseCfg(); c.steps[0] = 2.0f;   // 200 %
+    a.setConfig (c);
+    a.noteOn (60, 0.8f);
+    float first = -1.0f; for (auto& e : run (a, 120, 40)) if (e.on) { first = e.vel; break; }
+    REQUIRE (first == Catch::Approx (1.0f).margin (0.001));   // 0.8 * 2.0 = 1.6 -> clamped to 1.0
 }

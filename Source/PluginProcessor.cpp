@@ -1318,18 +1318,27 @@ void VASynthProcessor::applyMacroMapProperty()
 
 void VASynthProcessor::writeArpStepsProperty()
 {
-    juce::StringArray v;
-    for (float s : arpSteps) v.add (juce::String (s, 3));
-    apvts.state.setProperty ("arp_steps", v.joinIntoString (","), nullptr);
+    juce::StringArray on;  for (float s : arpSteps)          on.add  (s > 0.5f ? "1" : "0");
+    apvts.state.setProperty ("arp_steps", on.joinIntoString (","), nullptr);
+    juce::StringArray vel; for (unsigned char v : arpStepVel) vel.add (juce::String ((int) v));   // per-step vel %
+    apvts.state.setProperty ("arp_vel", vel.joinIntoString (","), nullptr);
 }
 
 void VASynthProcessor::applyArpStepsProperty()
 {
-    const auto str = apvts.state.getProperty ("arp_steps").toString();
-    auto tokens = juce::StringArray::fromTokens (str, ",", "");
+    auto tokens = juce::StringArray::fromTokens (apvts.state.getProperty ("arp_steps").toString(), ",", "");
+    // arp_vel is the per-step velocity list (task #54). If absent (older state, or a state
+    // saved during the brief single-VEL-knob build), every on-step loads at the default 100 %
+    // — the retired knob's global scale is intentionally NOT migrated (documented reset).
+    auto vels = juce::StringArray::fromTokens (apvts.state.getProperty ("arp_vel").toString(), ",", "");
+    const bool hasVel = vels.size() >= kArpSteps;
     for (int i = 0; i < kArpSteps; ++i)
-        arpSteps[(std::size_t) i] = (i < tokens.size()) ? juce::jlimit (0.0f, 1.0f, tokens[i].getFloatValue())
-                                                        : 0.8f;   // sensible default: all steps on
+    {
+        // Old states stored a float level (0..1, default 0.8 = on); anything > 0.5 is "on".
+        arpSteps[(std::size_t) i]   = (i < tokens.size()) ? (tokens[i].getFloatValue() > 0.5f ? 1.0f : 0.0f)
+                                                          : 1.0f;   // default: all steps on
+        arpStepVel[(std::size_t) i] = (unsigned char) (hasVel ? juce::jlimit (0, 200, vels[i].getIntValue()) : 0);
+    }
 }
 
 void VASynthProcessor::writeSeqProperty()
@@ -1551,14 +1560,13 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         ac.mode    = (int) rp (apvts, ID::arpMode);
         ac.octaves = (int) rp (apvts, ID::arpOctaves);
         ac.gate    = rp (apvts, ID::arpGate);
-        ac.velScale = rp (apvts, ID::arpVel) / 100.0f;   // arp velocity % (task #54)
         ac.swing   = swing;
         ac.latch   = rp (apvts, ID::arpHold) > 0.5f;
         ac.samplesPerStep = samplesPerStep;
-        // The arp's OWN 16-step on/off gate (independent of the SEQ drum grid): a step
-        // at 0 is a rest, >0 plays. Default pattern is all-on, so a fresh arp runs 16ths.
+        // The arp's OWN 16-step grid (independent of the SEQ drum grid): each step is a rest
+        // when off, else its own velocity fraction (10..200 %, task #54). Default = all-on 100 %.
         for (int i = 0; i < Arpeggiator::kNumSteps; ++i)
-            ac.steps[(std::size_t) i] = arpSteps[(std::size_t) i];
+            ac.steps[(std::size_t) i] = (arpSteps[(std::size_t) i] > 0.5f) ? getArpStepVel (i) / 100.0f : 0.0f;
         arp.setConfig (ac);
         if (arpWasOn && ! ac.enabled) { arp.reset(); engine.allNotesOff(); }
         arpWasOn = ac.enabled;

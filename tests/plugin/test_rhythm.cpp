@@ -85,14 +85,16 @@ TEST_CASE ("arp gate pattern: all-rest steps silence the arp; a pattern sounds",
 TEST_CASE ("arp step pattern persists across a state round-trip", "[plugin][arp][state]")
 {
     VASynthProcessor src;
-    src.setArpStep (0, 0.25f);
-    src.setArpStep (7, 0.9f);
+    // #54: steps are on/off; velocity is a separate per-step percent.
+    src.setArpStep (0, 0.0f);                          // off
+    src.setArpStep (7, 1.0f); src.setArpStepVel (7, 60);  // on, 60 %
 
     juce::MemoryBlock blob; src.getStateInformation (blob);
     VASynthProcessor dst; dst.setStateInformation (blob.getData(), (int) blob.getSize());
 
-    REQUIRE (dst.getArpStep (0) == Catch::Approx (0.25f).margin (0.01));
-    REQUIRE (dst.getArpStep (7) == Catch::Approx (0.9f).margin (0.01));
+    REQUIRE (dst.getArpStep (0) < 0.5f);
+    REQUIRE (dst.getArpStep (7) > 0.5f);
+    REQUIRE (dst.getArpStepVel (7) == 60);
 }
 
 TEST_CASE ("looper records a performance and plays it back next cycle", "[plugin][looper]")
@@ -272,7 +274,7 @@ TEST_CASE ("Random leaves arp / sequencer / looper / tempo untouched", "[plugin]
                               ParamID::arpGate, ParamID::arpSwing, ParamID::arpLatch, ParamID::arpHold,
                               ParamID::loopRec, ParamID::loopPlay, ParamID::loopBars };
     for (auto* id : rhythmIds) set01 (id, 0.42f);
-    p.setArpStep (3, 0.15f);                            // and a distinctive step-pattern value
+    p.setArpStep (3, 1.0f); p.setArpStepVel (3, 137);   // a distinctive on-step + velocity (#54)
 
     std::vector<float> before;
     for (auto* id : rhythmIds) before.push_back (p.apvts.getRawParameterValue (id)->load());
@@ -284,7 +286,8 @@ TEST_CASE ("Random leaves arp / sequencer / looper / tempo untouched", "[plugin]
     // Every rhythm param is unchanged...
     for (size_t i = 0; i < before.size(); ++i)
         REQUIRE (p.apvts.getRawParameterValue (rhythmIds[i])->load() == Catch::Approx (before[i]).margin (1e-6));
-    REQUIRE (p.getArpStep (3) == Catch::Approx (0.15f).margin (1e-4));   // pattern untouched
+    REQUIRE (p.getArpStep (3) > 0.5f);                                   // pattern untouched
+    REQUIRE (p.getArpStepVel (3) == 137);                               // per-step velocity untouched
     // ...while a sound-design param DID move (proves randomize actually ran).
     REQUIRE (p.apvts.getRawParameterValue (ParamID::filterCutoff)->load() != Catch::Approx (cutoffBefore));
 }
