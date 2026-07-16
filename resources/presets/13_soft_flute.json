@@ -1,6 +1,6 @@
 { "name":"Soft Flute", "category":"Winds",
   "params": { "osc1_wave":3, "osc2_wave":2, "osc2_detune":2, "osc2_level":0.4, "noise_level":0.06,
-    "filter_cutoff":3000, "filter_reso":0.05,
+    "filter_cutoff":3000, "filter_reso":0.05, "vel_to_cutoff":0.3,
     "amp_attack":0.08, "amp_decay":0.2, "amp_sustain":0.9, "amp_release":0.2,
     "lfo_dest":1, "lfo_rate":5.0, "lfo_depth":0.12, "vel_to_amp":0.6,
     "fx_reverb_on":1, "reverb_mix":0.25, "master_gain":0.7 } }

@@ -127,3 +127,27 @@ pads (trigger, source preset, sounding notes, level, choke); each pad's source i
 to `VoiceParams` on assignment, exactly like a locked part, so a pad sounds identical to
 loading that patch live. The per-note `paramsFor(part, note)` engine seam selects the
 right pad's params per voice.
+
+## Velocity → filter (per-category convention)
+
+Velocity always drives the VCA (`vel_to_amp`, level). Whether it *also* opens the
+filter (`vel_to_cutoff`, brightness) is a **per-preset** choice — the global default
+stays `0`, so user patches are never surprised. Factory patches follow one convention so
+harder playing reads as more expressive, category by category:
+
+| Category            | `vel_to_cutoff` | Why |
+|---------------------|-----------------|-----|
+| Keys / EP           | ~0.5            | Rhodes-style bark on hard hits is the defining EP behaviour |
+| Leads / Basses / Plucks | ~0.4        | Bright, articulate attack that tracks how hard you play |
+| Sub bass            | ~0.25           | Gentler — keep the low end solid under accents |
+| Brass / Strings / Winds | ~0.3        | Moderate; brass especially brightens with force |
+| Pads                | ~0.1–0.15       | Subtle shimmer, not a filter sweep |
+| Organs              | 0               | Real organs have no velocity response — flat is authentic |
+| Drums               | 0               | Velocity → level only; per-step sequencer velocity covers accent dynamics |
+| Init / blank        | 0               | The blank slate stays predictable; opt in per patch |
+
+**Sine-only voices are the exception.** A pure-sine patch (e.g. *Digital Bell*) has no
+harmonics for the filter to reveal, so `vel_to_cutoff` is inert there — those patches use
+`vel_to_amp` alone. `tests/plugin/test_preset_velocity.cpp` renders every factory patch at
+a soft vs hard velocity and asserts the spectral centroid rises where the patch routes
+velocity to the filter (and stays flat where it deliberately doesn't).

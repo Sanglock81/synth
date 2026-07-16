@@ -10,6 +10,7 @@
     "filter_cutoff": 3000,
     "filter_reso": 0.25,
     "filter_env_amt": 0.3,
+    "vel_to_cutoff": 0.4,
     "lfo_dest": 3,
     "lfo_rate": 4.0,
     "lfo_depth": 0.3,

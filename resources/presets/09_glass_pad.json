@@ -1,7 +1,7 @@
 { "name":"Glass Pad", "category":"Pad",
   "params": { "osc1_wave":2, "osc2_wave":3, "osc2_octave":1, "osc2_detune":4, "osc2_level":0.6,
     "osc3_on":1, "osc3_wave":0, "osc3_level":0.3,
-    "filter_cutoff":5000, "filter_reso":0.1, "filter_env_amt":0.3,
+    "filter_cutoff":5000, "filter_reso":0.1, "filter_env_amt":0.3, "vel_to_cutoff":0.15,
     "amp_attack":1.2, "amp_decay":0.6, "amp_sustain":0.7, "amp_release":1.5,
     "lfo_dest":2, "lfo_rate":0.2, "lfo_depth":0.15,
     "fx_reverb_on":1, "reverb_mix":0.45, "reverb_size":0.85, "reverb_damp":0.3,

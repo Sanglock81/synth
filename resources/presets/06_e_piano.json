@@ -1,6 +1,6 @@
 { "name":"E-Piano", "category":"Keys",
   "params": { "osc1_wave":3, "osc2_wave":2, "osc2_detune":3, "osc2_level":0.6,
-    "filter_cutoff":3500, "filter_reso":0.05, "filter_env_amt":0.3,
+    "filter_cutoff":3500, "filter_reso":0.05, "filter_env_amt":0.3, "vel_to_cutoff":0.5,
     "amp_attack":0.004, "amp_decay":0.6, "amp_sustain":0.3, "amp_release":0.3,
     "vel_to_amp":0.9,
     "fx_chorus_on":1, "chorus_mix":0.35, "chorus_depth":0.5, "master_gain":0.7 } }

@@ -3,4 +3,4 @@
     "filter_type":0, "filter_cutoff":600, "filter_reso":0.3, "filter_env_amt":0.6, "filter_keytrack":0.3,
     "amp_attack":0.003, "amp_decay":0.25, "amp_sustain":0.6, "amp_release":0.12,
     "flt_attack":0.003, "flt_decay":0.22, "flt_sustain":0.15, "flt_release":0.12,
-    "vel_to_cutoff":0.2, "poly_mode":1, "master_gain":0.7 } }
+    "vel_to_cutoff":0.4, "poly_mode":1, "master_gain":0.7 } }

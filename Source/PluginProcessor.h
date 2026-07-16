@@ -453,6 +453,10 @@ public:
             dst[i] = scopeRing[(std::size_t) ((w - n + i) & (kScopeSize - 1))].load (std::memory_order_relaxed);
     }
 
+    // The LIVE (focused-part) baked voice params — read-only, for tests/diagnostics that
+    // need the resolved DSP parameters (e.g. verifying a preset routes velocity to cutoff).
+    VoiceParams currentVoiceParams() const { return snapshotParams(); }
+
 private:
     VoiceParams snapshotParams() const;
     FXParams    snapshotFXParams() const;

@@ -13,6 +13,7 @@
     "filter_cutoff": 500,
     "filter_reso": 0.35,
     "filter_env_amt": 0.4,
+    "vel_to_cutoff": 0.4,
     "lfo_dest": 2,
     "lfo_rate": 0.3,
     "lfo_depth": 0.2,
