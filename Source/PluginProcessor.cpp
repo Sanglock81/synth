@@ -68,6 +68,8 @@ VASynthProcessor::VASynthProcessor()
 
     applyArpStepsProperty();      // seed the 16-step pattern with its default (all on)
     applySeqProperty();           // seed the sequencer grid (empty)
+    macroTargetId = defaultMacroTargets();   // #55: factory macro assignments (M1..M8)
+    writeMacroMapProperty();
 
     // Default scene, P1: the live part starts on a playable LEAD instead of a bare sine
     // so it is clearly distinct from the sequencer's drum part (P2). This is only the
@@ -1305,14 +1307,20 @@ void VASynthProcessor::writeMacroMapProperty()
     apvts.state.setProperty ("macro_map", ids.joinIntoString (","), nullptr);
 }
 
+std::array<juce::String, 8> VASynthProcessor::defaultMacroTargets()
+{
+    return { ParamID::filterCutoff, ParamID::filterReso, ParamID::filterEnvAmt, ParamID::ampRelease,
+             ParamID::lfoRate, ParamID::lfoDepth, ParamID::reverbMix, juce::String (kFocusLevelTarget) };
+}
+
 void VASynthProcessor::applyMacroMapProperty()
 {
     for (auto& t : macroTargetId) t.clear();
     const auto str = apvts.state.getProperty ("macro_map").toString();
-    if (str.isEmpty()) return;
+    if (str.isEmpty()) { macroTargetId = defaultMacroTargets(); return; }   // pre-#55 state -> factory map
     auto tokens = juce::StringArray::fromTokens (str, ",", "");
     for (int i = 0; i < juce::jmin (8, tokens.size()); ++i)
-        if (tokens[i] != "-" && apvts.getParameter (tokens[i]) != nullptr)
+        if (tokens[i] == kFocusLevelTarget || (tokens[i] != "-" && apvts.getParameter (tokens[i]) != nullptr))
             macroTargetId[(std::size_t) i] = tokens[i];
 }
 

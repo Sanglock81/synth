@@ -27,7 +27,8 @@ a general-purpose synth that runs in any VST3 host or standalone.
 - **Reorderable stereo FX** (per part): chorus, ping-pong delay, Freeverb-style reverb,
   mid/side width — drag to reorder, click-free crossfade — plus a master **4-band
   parametric EQ** at the end of the chain.
-- **8 macros**, routable to any parameter and Random-assigned; Launchkey pots drive them.
+- **8 macros**, pre-assigned to musical defaults (cutoff, reso, filter-env, release, LFO
+  rate/depth, reverb, focused-part level), routable to any parameter; Launchkey pots drive them.
 - **Bulletproof output stage**: voice-sum headroom trim + transparent safety
   soft-clip, so the output never clips the DAC on dense chords.
 - **Diatonic chord engine**: one finger → an in-key chord (Major / Natural Minor,
@@ -340,7 +341,9 @@ LookAndFeel; layout scales with the window.
 - **MIDI-learn**: right-click (mouse) or long-press (touch) any control → arms it
   (amber pulse); the next CC binds it and a `CCnn` badge appears. Same gesture
   clears a mapping. The 8 Launchkey Mini pots (CC 21–28) map to **the 8 macros**
-  (M1–M8) by default — assign each macro to a destination, or hit **Random**.
+  (M1–M8) by default, and the macros ship pre-assigned (M1 cutoff, M2 reso, M3 filter-env,
+  M4 amp release, M5 LFO rate, M6 LFO depth, M7 reverb, M8 focused-part level) — reassign
+  any macro to a destination, or hit **Random**.
 - **Random** shuffles the **sound-design** parameters only (oscillators, filter,
   envelopes, LFO, FX amounts) and leaves your **performance** controls put — master
   gain, velocity routing, poly mode, glide, MIDI mappings, and the whole **rhythm

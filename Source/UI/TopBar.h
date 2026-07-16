@@ -167,8 +167,11 @@ private:
 
     void applyMacro (int idx, float value)
     {
-        const auto id = proc.getMacroTargetId (idx);
+        auto id = proc.getMacroTargetId (idx);
         if (id.isEmpty()) return;
+        // The "focused part level" macro (#55) resolves live to the edit-focused part's level.
+        if (id == VASynthProcessor::kFocusLevelTarget)
+            id = "part" + juce::String (juce::jlimit (0, 3, proc.editFocus())) + "_level";
         if (auto* target = proc.apvts.getParameter (id))
             if (! juce::approximatelyEqual (target->getValue(), value))
                 target->setValueNotifyingHost (value);

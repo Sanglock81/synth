@@ -9,6 +9,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Changed
+- **Macros ship pre-assigned.** The 8 macros now default to musical targets — M1 filter
+  cutoff, M2 resonance, M3 filter-env amount, M4 amp release, M5 LFO1 rate, M6 LFO1 depth,
+  M7 reverb mix, and M8 the **focused part's level** (follows the edit focus). Older sessions
+  with no saved macro map inherit these defaults; an explicitly-cleared map is respected. The
+  Launchkey Mini pots (CC 21–28) already drive M1–M8, so the controller is expressive out of
+  the box.
 - **Per-step velocity on both rhythm surfaces.** Every sequencer step AND every arpeggiator
   step carries its own velocity percentage (10–200 %), edited with one grammar on both grids:
   **single-tap a dark box turns it on; double-tap a lit box turns it off** (a stray tap never

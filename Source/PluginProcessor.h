@@ -279,11 +279,19 @@ public:
     // Each macro (0..7) can route to one target parameter; the value knob then drives
     // that parameter (applied on the message thread by the editor). The map persists in
     // the apvts state ("macro_map" property), so it saves/loads with presets/sessions.
+    // A macro may target the special "focused part level" instead of a fixed param ID: this
+    // sentinel resolves at apply-time to the edit-focused part's partN_level (see TopBar).
+    static constexpr const char* kFocusLevelTarget = "__focus_level__";
+    // Factory macro map (#55): M1 cutoff, M2 reso, M3 filter-env amt, M4 amp release,
+    // M5 LFO1 rate, M6 LFO1 depth, M7 reverb mix, M8 focused-part level.
+    static std::array<juce::String, 8> defaultMacroTargets();
+
     juce::String getMacroTargetId (int i) const
     { return (i >= 0 && i < 8) ? macroTargetId[(std::size_t) i] : juce::String(); }
     juce::String getMacroTargetName (int i) const
     {
         const auto id = getMacroTargetId (i);
+        if (id == kFocusLevelTarget) return "Focus Level";
         if (auto* p = id.isNotEmpty() ? apvts.getParameter (id) : nullptr) return p->getName (16);
         return {};
     }
