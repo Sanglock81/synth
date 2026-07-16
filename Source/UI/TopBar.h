@@ -85,6 +85,7 @@ public:
             auto* k = new RotaryKnob (proc.apvts, ids[m], "M" + juce::String (m + 1), proc.getMidiLearn());
             k->setShowValue (false);                             // no number -> compact
             k->setDragPixels ((kDragPixelsForFullRange * 10) / 27);   // ~2.7x responsive
+            k->setBothAxisDrag();   // top-of-window: allow horizontal drag so touch needn't go up into the title bar
             macros.add (k); addAndMakeVisible (k);
             const int idx = m;
             macroAtt.add (new juce::ParameterAttachment (*proc.apvts.getParameter (ids[m]),

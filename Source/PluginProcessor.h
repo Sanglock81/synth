@@ -73,6 +73,10 @@ public:
 
     // Exposed for the (v2) right-click MIDI-learn GUI and for tests.
     MidiLearnManager& getMidiLearn() { return midiLearn; }
+    // Reset all CC bindings to the factory baseline (clears learned/user/profile overrides and
+    // restores CC 21-28 -> macro1-8). Recovers the Launchkey macro pots if a stale learn or an
+    // old session pointed those CCs elsewhere. Message thread (UI action).
+    void resetMidiMappings() { midiLearn.resetToFactoryDefaults(); }
 
     // -- chord engine (7B) -----------------------------------------------------
     // The editor publishes which QWERTY chord-modifier keys are down as a bitmask

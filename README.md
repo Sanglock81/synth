@@ -343,7 +343,9 @@ LookAndFeel; layout scales with the window.
   clears a mapping. The 8 Launchkey Mini pots (CC 21–28) map to **the 8 macros**
   (M1–M8) by default, and the macros ship pre-assigned (M1 cutoff, M2 reso, M3 filter-env,
   M4 amp release, M5 LFO rate, M6 LFO depth, M7 reverb, M8 focused-part level) — reassign
-  any macro to a destination, or hit **Random**.
+  any macro to a destination, or hit **Random**. If a controller's knobs end up driving the
+  wrong things (a stale learn from a past session), **Reset MIDI** in the INPUTS dialog
+  restores the factory map (CC 21–28 → the macros).
 - **Random** shuffles the **sound-design** parameters only (oscillators, filter,
   envelopes, LFO, FX amounts) and leaves your **performance** controls put — master
   gain, velocity routing, poly mode, glide, MIDI mappings, and the whole **rhythm

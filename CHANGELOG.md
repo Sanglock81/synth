@@ -49,6 +49,12 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
 - **808 / Punchy kick voicing:** amp attack softened 1 ms → 2 ms for a defined transient.
 
 ### Fixed / investigated
+- **Reset MIDI + touch-friendly macro knobs.** Added a **Reset MIDI** button (INPUTS dialog)
+  that clears learned/stale CC bindings and restores the factory map (CC 21–28 → the 8 macros)
+  — recovers the Launchkey pots when a past session had learned them elsewhere. The top-bar
+  macro knobs now also accept **horizontal** drag (not just vertical), so on a windowed touch
+  screen you can adjust them sideways instead of dragging up into the OS title bar (which would
+  grab the drag and move the window); fullscreen remains the fully title-bar-free live mode.
 - **Per-step velocity now audibly shapes the note.** The seq/arp emit was clamping velocity
   to `min(1.0, …)`, so a step at 100 % already emitted the maximum and the whole 100–200 %
   "accent" range was inert. Velocity is now a real `0.1–2.0` scalar (100 % unchanged; > 100 %

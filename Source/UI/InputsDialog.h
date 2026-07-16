@@ -39,6 +39,13 @@ public:
         resetAll.onClick = [this] { proc.resetAllRouting(); for (auto& r : rows) r->refresh(); relayout(); };
         addAndMakeVisible (resetAll);
 
+        // Restore CC bindings to factory (esp. the Launchkey pots CC 21-28 -> the 8 macros),
+        // clearing any learned/stale mapping that sent those knobs elsewhere.
+        midiReset.setButtonText ("Reset MIDI");
+        midiReset.setWantsKeyboardFocus (false);
+        midiReset.onClick = [this] { proc.resetMidiMappings(); };
+        addAndMakeVisible (midiReset);
+
         saveMulti.setButtonText ("Save MULTI");
         saveMulti.setWantsKeyboardFocus (false);
         saveMulti.onClick = [this] { showSaveMulti(); };
@@ -84,6 +91,8 @@ public:
         bottom.removeFromTop (18);
         auto bar = bottom.reduced (14, 0);
         resetAll.setBounds (bar.removeFromLeft (150).reduced (0, 4));
+        bar.removeFromLeft (8);
+        midiReset.setBounds (bar.removeFromLeft (110).reduced (0, 4));
         loadMulti.setBounds (bar.removeFromRight (150).reduced (0, 4));
         bar.removeFromRight (8);
         saveMulti.setBounds (bar.removeFromRight (110).reduced (0, 4));
@@ -438,7 +447,7 @@ private:
     juce::Viewport scroll;
     std::unique_ptr<ListContent> list;
     std::vector<std::unique_ptr<SurfaceRow>> rows;
-    juce::TextButton resetAll, saveMulti;
+    juce::TextButton resetAll, midiReset, saveMulti;
     juce::ComboBox loadMulti;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InputsDialog)

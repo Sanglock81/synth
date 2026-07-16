@@ -105,6 +105,20 @@ public:
             }
     }
 
+    // Reset every CC binding to the factory baseline (message thread): drop all learned /
+    // user / profile mappings and restore the Launchkey macro map (CC 21-28 -> macro1-8).
+    // The standalone re-layers any matched device profile on the next enumerate/hot-plug.
+    void resetToFactoryDefaults()
+    {
+        for (int cc = 0; cc < numCCs; ++cc)
+        {
+            ccToParam[(std::size_t) cc].store (-1, std::memory_order_release);
+            ccSource[(std::size_t) cc].store ((int) Source::None, std::memory_order_release);
+        }
+        setDefault (21, "macro1"); setDefault (22, "macro2"); setDefault (23, "macro3"); setDefault (24, "macro4");
+        setDefault (25, "macro5"); setDefault (26, "macro6"); setDefault (27, "macro7"); setDefault (28, "macro8");
+    }
+
     // ---- device profiles (message thread) -----------------------------------
     // Apply one profile mapping, respecting precedence: it only takes effect if
     // the CC's current mapping is the same source or lower (learned > user >

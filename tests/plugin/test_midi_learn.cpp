@@ -41,6 +41,26 @@ TEST_CASE ("mapped CC (Launchkey default) moves its target parameter", "[plugin]
     REQUIRE (paramValue (p, "macro1") == Catch::Approx (0.0f).margin (1e-3));
 }
 
+TEST_CASE ("Reset MIDI restores the Launchkey macro pots after a stale learn", "[plugin][midilearn]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 64);
+
+    // Reproduce the reported problem: a Launchkey pot (CC 21) got learned onto a synth param,
+    // so the physical knob drives THAT param and no longer the macro.
+    p.getMidiLearn().armLearn (ParamID::filterCutoff);
+    sendCC (p, 21, 100);
+    REQUIRE (paramValue (p, ParamID::filterCutoff) == Catch::Approx (100.0f / 127.0f).margin (1e-3));
+
+    // Reset MIDI -> CC 21 drives macro1 again, and no longer touches the cutoff.
+    p.resetMidiMappings();
+    const float cutoffBefore = paramValue (p, ParamID::filterCutoff);
+    sendCC (p, 21, 127);
+    REQUIRE (paramValue (p, "macro1") == Catch::Approx (1.0f).margin (1e-3));
+    REQUIRE (paramValue (p, ParamID::filterCutoff) == Catch::Approx (cutoffBefore).margin (1e-3));   // pot no longer hits cutoff
+}
+
 TEST_CASE ("learn mode binds a new CC to a parameter", "[plugin][midilearn]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

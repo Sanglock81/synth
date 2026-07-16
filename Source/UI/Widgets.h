@@ -422,6 +422,12 @@ public:
     // fewer px = more responsive). Default is kDragPixelsForFullRange for all controls.
     void setDragPixels (int px) { slider.setMouseDragSensitivity (juce::jmax (1, px)); }
 
+    // Accept BOTH horizontal and vertical drag (default is vertical only). For knobs high in
+    // the window (the top-bar macros) this lets a touch drag sideways to adjust instead of
+    // being forced upward into the OS title bar, which on a windowed touch screen would grab
+    // the drag and move the window. The mouse cursor is pinned during any rotary drag anyway.
+    void setBothAxisDrag() { slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag); }
+
     // Hide the numeric value readout (macros — keeps the top bar compact).
     void setShowValue (bool b) { if (b != showValue) { showValue = b; resized(); repaint(); } }
 
