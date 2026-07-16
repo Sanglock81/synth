@@ -8,9 +8,10 @@
 // ============================================================================
 // STEP SEQUENCER panel (R3 Group 2): an 8-row x 16-step drum grid. Header carries the
 // SEQ on/off, the target part (P1-P4) and gate. Each row shows its trigger note (tap to
-// pick) + a mute; each step is tap-cycled off -> on -> ACCENT -> off. A playhead column
-// tracks the running step. The pattern lives in the processor state (saved with presets/
-// MULTIs). Refuses keyboard focus.
+// pick) + a mute. Step grammar (shared with the arp, #54): single tap a dark cell turns it
+// on; double-tap a lit cell turns it off; touch-and-hold + vertical drag sets its velocity.
+// A playhead column tracks the running step. The pattern lives in the processor state
+// (saved with presets/MULTIs). Refuses keyboard focus.
 // ============================================================================
 
 class SeqPanel : public juce::Component,
@@ -71,10 +72,11 @@ public:
                     g.fillRoundedRectangle (fill, 2.5f);
                 }
                 if (s == play) { g.setColour (VASynthLookAndFeel::ink().withAlpha (0.7f)); g.drawRoundedRectangle (cell.toFloat(), 2.5f, 1.2f); }
-                if (r == velR && s == velS)   // numeric readout while dragging velocity
+                if (r == velR && s == velS)   // bright numeric read-out on the step being adjusted
                 {
-                    g.setColour (VASynthLookAndFeel::ink());
-                    g.setFont (juce::Font (juce::FontOptions ((float) juce::jmin (12, cell.getHeight() - 2), juce::Font::bold)));
+                    g.setColour (juce::Colours::black.withAlpha (0.6f)); g.fillRoundedRectangle (cell.toFloat(), 2.5f);
+                    g.setColour (juce::Colours::white);
+                    g.setFont (juce::Font (juce::FontOptions ((float) juce::jmin (14, cell.getHeight() - 1), juce::Font::bold)));
                     g.drawText (juce::String (vel), cell, juce::Justification::centred, false);
                 }
             }
@@ -95,12 +97,15 @@ public:
         for (int r = 0; r < n; ++r) { rowRects[(std::size_t) r] = c.removeFromTop (rh); c.removeFromTop (gap); }
     }
 
-    // Gesture: TAP a step toggles it on/off; HOLD an on-step and drag up/down sets its
-    // velocity % (numeric readout while dragging); a horizontal drag paints on/off across
-    // cells (draw a pattern). Which gesture wins is decided on the first drag delta (#54).
+    // One grammar for the step cells (shared with the arp):
+    //   - single TAP a DARK cell -> turn it ON
+    //   - double-tap a LIT cell   -> turn it OFF   (a stray single tap never silences a step)
+    //   - touch-and-HOLD a cell   -> velocity mode, then drag UP louder / DOWN quieter
+    // The label column keeps its mute toggle + note-picker. Hold is detected by time
+    // (kLongPressMs) OR a clear vertical drag; releasing a hold never toggles the cell.
     void mouseDown (const juce::MouseEvent& e) override
     {
-        dragR = dragS = -1; dragMode = None;
+        pressMode = Idle; dragR = dragS = -1; velR = velS = -1;
         for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
         {
             auto row = rowRects[(std::size_t) r];
@@ -111,49 +116,48 @@ public:
             dragR = r; dragS = colAt (row, e); dragStartY = e.getPosition().y;
             dragStartVel = proc.getSeqStepVel (r, dragS);
             dragWasOn = proc.getSeqCell (r, dragS) != 0;
+            pressMode = Pressed; pressDownMs = juce::Time::getMillisecondCounter();
             return;
         }
     }
     void mouseDrag (const juce::MouseEvent& e) override
     {
         if (dragR < 0) return;
-        const int dy = dragStartY - e.getPosition().y;   // up = increase
-        if (dragMode == None)
+        const int dy = dragStartY - e.getPosition().y;   // up = louder
+        if (pressMode == Pressed && dragWasOn && std::abs (dy) > 8) { pressMode = Velocity; velR = dragR; velS = dragS; }
+        if (pressMode == Velocity)
         {
-            if (dragWasOn && std::abs (dy) > 5) { dragMode = Velocity; velR = dragR; velS = dragS; }
-            else                                                                          // fall to paint
-            {
-                dragMode = Paint;
-                dragVal = (unsigned char) (dragWasOn ? 0 : 1);                             // tap-through starts the stroke
-                proc.setSeqCell (dragR, dragS, dragVal);
-                repaint();
-            }
-        }
-        if (dragMode == Velocity)
-        {
-            const int nv = juce::jlimit (10, 200, dragStartVel + (int) std::lround (dy * 1.4));
-            proc.setSeqStepVel (dragR, dragS, nv);
+            proc.setSeqStepVel (dragR, dragS, juce::jlimit (10, 200, dragStartVel + (int) std::lround (dy * 1.4)));
             repaint();
-        }
-        else if (dragMode == Paint)
-        {
-            for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
-            {
-                auto row = rowRects[(std::size_t) r];
-                if (! row.contains (e.getPosition())) continue;
-                if (! row.withTrimmedLeft (kLabelW).contains (e.getPosition())) return;
-                const int s = colAt (row, e);
-                if (proc.getSeqCell (r, s) != dragVal) { proc.setSeqCell (r, s, dragVal); repaint(); }
-                return;
-            }
         }
     }
     void mouseUp (const juce::MouseEvent&) override
     {
-        if (dragMode == None && dragR >= 0)                                                // a plain tap toggles on/off
-            proc.setSeqCell (dragR, dragS, (unsigned char) (dragWasOn ? 0 : 1));
-        dragMode = None; dragR = dragS = -1; velR = velS = -1;
-        repaint();
+        if (pressMode == Pressed && dragR >= 0 && ! dragWasOn)         // a plain tap on a dark cell
+            proc.setSeqCell (dragR, dragS, 1);                         // -> turn it ON (never off)
+        pressMode = Idle; dragR = dragS = -1; velR = velS = -1; repaint();
+    }
+    void mouseDoubleClick (const juce::MouseEvent& e) override
+    {
+        for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
+        {
+            auto row = rowRects[(std::size_t) r];
+            if (! row.contains (e.getPosition())) continue;
+            if (! row.withTrimmedLeft (kLabelW).contains (e.getPosition())) break;   // label column: ignore
+            const int s = colAt (row, e);
+            if (proc.getSeqCell (r, s) != 0) proc.setSeqCell (r, s, 0);              // double-tap a lit cell -> OFF
+            break;
+        }
+        pressMode = Idle; dragR = dragS = -1; velR = velS = -1; repaint();
+    }
+
+    // Centre of cell (row r, step s) in panel-local coords (for tests + external hit-testing).
+    juce::Point<int> stepCellCentre (int r, int s) const
+    {
+        if (r < 0 || r >= VASynthProcessor::kSeqRows) return {};
+        auto steps = rowRects[(std::size_t) r].withTrimmedLeft (kLabelW);
+        const int cw = juce::jmax (1, steps.getWidth() / VASynthProcessor::kSeqSteps);
+        return { steps.getX() + s * cw + cw / 2, rowRects[(std::size_t) r].getCentreY() };
     }
 
 private:
@@ -185,18 +189,26 @@ private:
             default: return juce::String (note);
         }
     }
-    void timerCallback() override { repaint(); }
+    void timerCallback() override
+    {
+        // Motionless finger-hold on a lit cell: promote to velocity mode after kLongPressMs.
+        if (pressMode == Pressed && dragWasOn && dragR >= 0
+            && juce::Time::getMillisecondCounter() - pressDownMs > (juce::uint32) kLongPressMs)
+            { pressMode = Velocity; velR = dragR; velS = dragS; }
+        repaint();
+    }
 
     VASynthProcessor& proc;
     std::unique_ptr<PowerToggle> on;
     std::unique_ptr<HSelector> target;
     std::unique_ptr<RotaryKnob> gate;
     std::array<juce::Rectangle<int>, VASynthProcessor::kSeqRows> rowRects { };
-    enum DragMode { None = 0, Velocity, Paint };
-    int dragMode = None;
+    static constexpr int kLongPressMs = 300;
+    enum PressMode { Idle = 0, Pressed, Velocity };
+    int pressMode = Idle;
     int dragR = -1, dragS = -1, dragStartY = 0, dragStartVel = 100;
     bool dragWasOn = false;
-    unsigned char dragVal = 0;
+    juce::uint32 pressDownMs = 0;
     int velR = -1, velS = -1;              // step currently showing its numeric velocity
     static constexpr int kLabelW = 74;
 

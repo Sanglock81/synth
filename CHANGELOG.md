@@ -10,14 +10,15 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
 
 ### Changed
 - **Per-step velocity on both rhythm surfaces.** Every sequencer step AND every arpeggiator
-  step carries its own velocity percentage (10–200 %), edited with one grammar: tap a box to
-  toggle it on/off, hold and drag up/down to set its velocity — numeric read-out while
-  adjusting, a bottom-up fill (accented, > 100 %, brightens) at rest, horizontal drag paints
-  on/off across boxes. On the arp the velocity belongs to the STEP, not the note — the same
-  box scales whatever note the pattern lands on it. Replaces the old binary sequencer accent
-  (legacy accented steps migrate to a high velocity). Persists with patterns/presets/MULTIs;
-  states without per-step velocities load at 100 %. (The brief single arp-velocity knob added
-  earlier in this cycle is retired in favour of per-step control.)
+  step carries its own velocity percentage (10–200 %), edited with one grammar on both grids:
+  **single-tap a dark box turns it on; double-tap a lit box turns it off** (a stray tap never
+  silences a step); **touch-and-hold a box then drag up/down sets its velocity** — shown as a
+  number in the box while adjusting and a bottom-up fill (accented, > 100 %, brightens) at
+  rest. On the arp the velocity belongs to the STEP, not the note — the same box scales
+  whatever note the pattern lands on it. Replaces the old binary sequencer accent (legacy
+  accented steps migrate to a high velocity). Persists with patterns/presets/MULTIs; states
+  without per-step velocities load at 100 %. (The brief single arp-velocity knob added earlier
+  in this cycle is retired in favour of per-step control.)
 - **Clock alignment:** the sequencer, arpeggiator and looper now share one transport origin
   (the loop clock), re-anchoring to the bar downbeat every bar — the seq no longer leads the
   arp/looper. Swing self-accumulates within the bar. Looper MIDI recording is quantized to a

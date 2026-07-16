@@ -156,10 +156,11 @@ public:
     void paint (juce::Graphics& g) override
     {
         const auto tRhy = juce::Colour (0xffe0b13a);
-        chrome::section (g, getLocalBounds(), "Arpeggiator  -  step velocity", tRhy);
+        chrome::section (g, getLocalBounds(), "Arpeggiator", tRhy);
 
-        // 16-step grid (middle-right): on/off + per-step velocity, same read-out as the seq —
-        // a bottom-up fill (height ∝ velocity; > 100 % brightens) and a numeric % while dragging.
+        // 16-step grid (middle-right): on/off + per-step velocity. A lit box plays that 16th;
+        // its velocity shows as a bottom-up fill (height ∝ velocity; > 100 % brightens) AND as a
+        // number in the box. Tap dark = on; double-tap lit = off; hold + drag = set velocity.
         const int play = proc.arpDisplayStep();
         const int n = VASynthProcessor::kArpSteps;
         const int cw = juce::jmax (1, gridArea.getWidth() / n);
@@ -180,10 +181,12 @@ public:
             }
             if (s == play && proc.apvts.getRawParameterValue (ParamID::arpOn)->load() > 0.5f)
             { g.setColour (VASynthLookAndFeel::ink().withAlpha (0.8f)); g.drawRoundedRectangle (cell.toFloat(), 3.0f, 1.5f); }
-            if (s == velStep)   // numeric read-out while dragging velocity
+            const bool adjusting = (s == velStep);
+            if (on || adjusting)   // velocity number: bright while adjusting, dim at rest
             {
-                g.setColour (VASynthLookAndFeel::ink());
-                g.setFont (juce::Font (juce::FontOptions ((float) juce::jmin (12, cell.getHeight() - 2), juce::Font::bold)));
+                if (adjusting) { g.setColour (juce::Colours::black.withAlpha (0.55f)); g.fillRoundedRectangle (cell.toFloat(), 3.0f); }
+                g.setColour (adjusting ? juce::Colours::white : VASynthLookAndFeel::ink().withAlpha (0.85f));
+                g.setFont (juce::Font (juce::FontOptions ((float) juce::jmin (adjusting ? 15 : 11, cell.getHeight() - 2), juce::Font::bold)));
                 g.drawText (juce::String (vel), cell, juce::Justification::centred, false);
             }
         }
@@ -202,41 +205,48 @@ public:
         gridArea = row;                                   // the remaining middle-right span
     }
 
-    // Identical grammar to the step sequencer (#54): TAP a step toggles on/off; HOLD an
-    // on-step and drag up/down sets its velocity % (numeric read-out while dragging); a
-    // horizontal drag paints on/off across steps. The gesture is chosen on the first delta.
+    // One grammar for the step boxes (shared with the sequencer):
+    //   - single TAP a DARK box  -> turn it ON
+    //   - double-tap a LIT box    -> turn it OFF   (a stray single tap never silences a step)
+    //   - touch-and-HOLD a box    -> enter velocity mode, then drag UP louder / DOWN quieter
+    // The hold is detected by time (kLongPressMs) OR by a clear vertical drag, so a motionless
+    // finger-hold still engages — releasing a hold does NOT toggle the step.
     void mouseDown (const juce::MouseEvent& e) override
     {
-        dragMode = None; dragStep = -1; velStep = -1;
+        pressMode = Idle; pressStep = -1; velStep = -1;
         if (! gridArea.contains (e.getPosition())) return;
-        dragStep = colAt (e); dragStartY = e.getPosition().y;
-        dragStartVel = proc.getArpStepVel (dragStep);
-        dragWasOn = proc.getArpStep (dragStep) > 0.5f;
+        pressStep = colAt (e);
+        pressStartY = e.getPosition().y;
+        pressStartVel = proc.getArpStepVel (pressStep);
+        pressWasOn = proc.getArpStep (pressStep) > 0.5f;
+        pressMode = Pressed;
+        pressDownMs = juce::Time::getMillisecondCounter();
     }
     void mouseDrag (const juce::MouseEvent& e) override
     {
-        if (dragStep < 0) return;
-        const int dy = dragStartY - e.getPosition().y;   // up = increase
-        if (dragMode == None)
+        if (pressStep < 0) return;
+        const int dy = pressStartY - e.getPosition().y;                 // up = louder
+        if (pressMode == Pressed && pressWasOn && std::abs (dy) > 8) { pressMode = Velocity; velStep = pressStep; }
+        if (pressMode == Velocity)
         {
-            if (dragWasOn && std::abs (dy) > 5) { dragMode = Velocity; velStep = dragStep; }
-            else { dragMode = Paint; dragVal = dragWasOn ? 0.0f : 1.0f; proc.setArpStep (dragStep, dragVal); repaint(); }
-        }
-        if (dragMode == Velocity)
-        {
-            proc.setArpStepVel (dragStep, juce::jlimit (10, 200, dragStartVel + (int) std::lround (dy * 1.4)));
+            proc.setArpStepVel (pressStep, juce::jlimit (10, 200, pressStartVel + (int) std::lround (dy * 1.4)));
             repaint();
-        }
-        else if (dragMode == Paint && gridArea.contains (e.getPosition()))
-        {
-            const int s = colAt (e);
-            if ((proc.getArpStep (s) > 0.5f) != (dragVal > 0.5f)) { proc.setArpStep (s, dragVal); repaint(); }
         }
     }
     void mouseUp (const juce::MouseEvent&) override
     {
-        if (dragMode == None && dragStep >= 0) proc.setArpStep (dragStep, dragWasOn ? 0.0f : 1.0f);   // plain tap
-        dragMode = None; dragStep = -1; velStep = -1; repaint();
+        if (pressMode == Pressed && pressStep >= 0 && ! pressWasOn)     // a plain tap on a dark box
+            proc.setArpStep (pressStep, 1.0f);                          // -> turn it ON (never off)
+        pressMode = Idle; pressStep = -1; velStep = -1; repaint();
+    }
+    void mouseDoubleClick (const juce::MouseEvent& e) override
+    {
+        if (gridArea.contains (e.getPosition()))
+        {
+            const int s = colAt (e);
+            if (proc.getArpStep (s) > 0.5f) proc.setArpStep (s, 0.0f);  // double-tap a lit box -> OFF
+        }
+        pressMode = Idle; pressStep = -1; velStep = -1; repaint();
     }
 
     // Read-only geometry of the 16-step grid (for tests + external hit-testing).
@@ -248,17 +258,25 @@ private:
         const int cw = juce::jmax (1, gridArea.getWidth() / VASynthProcessor::kArpSteps);
         return juce::jlimit (0, VASynthProcessor::kArpSteps - 1, (e.getPosition().x - gridArea.getX()) / cw);
     }
-    void timerCallback() override { repaint(); }
+    void timerCallback() override
+    {
+        // Motionless finger-hold: promote to velocity mode after kLongPressMs (20 Hz tick).
+        if (pressMode == Pressed && pressWasOn
+            && juce::Time::getMillisecondCounter() - pressDownMs > (juce::uint32) kLongPressMs)
+            { pressMode = Velocity; velStep = pressStep; }
+        repaint();
+    }
 
     VASynthProcessor& proc;
     std::unique_ptr<PowerToggle> arpOn, hold;
     std::unique_ptr<HSelector> mode;
     std::unique_ptr<RotaryKnob> oct, gate, swing, tempo;
     juce::Rectangle<int> gridArea;
-    enum DragMode { None = 0, Velocity, Paint };
-    int dragMode = None, dragStep = -1, dragStartY = 0, dragStartVel = 100, velStep = -1;
-    bool dragWasOn = false;
-    float dragVal = 1.0f;
+    static constexpr int kLongPressMs = 300;
+    enum PressMode { Idle = 0, Pressed, Velocity };
+    int pressMode = Idle, pressStep = -1, pressStartY = 0, pressStartVel = 100, velStep = -1;
+    bool pressWasOn = false;
+    juce::uint32 pressDownMs = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ArpBar)
 };

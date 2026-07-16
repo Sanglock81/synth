@@ -1,8 +1,8 @@
 // ============================================================================
-// ArpBar UI interaction (#54): the arp's 16 step boxes use the SAME grammar as the
-// step sequencer — tap toggles a step on/off, hold + vertical drag sets that step's
-// velocity %, and a horizontal drag paints on/off across steps. Driven through the
-// real mouse handlers (synthetic MouseEvents), asserting the processor state.
+// ArpBar UI interaction (#54): the arp's 16 step boxes use ONE grammar (shared with
+// the step sequencer) — single tap a DARK box turns it on; double-tap a LIT box turns
+// it off (a stray single tap never silences a step); touch-and-hold + vertical drag
+// sets that step's velocity %. Driven through the real mouse handlers.
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
@@ -20,16 +20,22 @@ namespace
         return juce::MouseEvent (src, pos, mods, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c, t, downPos, t, 1, dragged);
     }
 
-    // Centre of step `s`'s cell in the arp grid, in ArpBar-local coordinates.
     juce::Point<float> cellCentre (const ArpBar& bar, int s)
     {
         auto g = bar.stepGridBounds();
         const int cw = juce::jmax (1, g.getWidth() / VASynthProcessor::kArpSteps);
         return { (float) (g.getX() + s * cw + cw / 2), (float) g.getCentreY() };
     }
+
+    void tap (ArpBar& bar, int s)         // single tap = down then up, no drag
+    {
+        const auto p = cellCentre (bar, s);
+        bar.mouseDown (evt (bar, p, p, false));
+        bar.mouseUp   (evt (bar, p, p, false));
+    }
 }
 
-TEST_CASE ("arp UI: tap toggles a step on/off", "[plugin][arp][ui]")
+TEST_CASE ("arp UI: single tap turns a DARK box on; a tap on a lit box leaves it on", "[plugin][arp][ui]")
 {
     juce::ScopedJuceInitialiser_GUI init;
     VASynthProcessor proc;
@@ -38,17 +44,30 @@ TEST_CASE ("arp UI: tap toggles a step on/off", "[plugin][arp][ui]")
     REQUIRE (bar.stepGridBounds().getWidth() > 0);
 
     REQUIRE (proc.getArpStep (3) > 0.5f);          // fresh default: all steps on
-    const auto p = cellCentre (bar, 3);
-    bar.mouseDown (evt (bar, p, p, false));
-    bar.mouseUp   (evt (bar, p, p, false));        // tap (no drag) -> toggle OFF
-    REQUIRE (proc.getArpStep (3) < 0.5f);
+    tap (bar, 3);
+    REQUIRE (proc.getArpStep (3) > 0.5f);          // a single tap on a LIT box must NOT turn it off
 
-    bar.mouseDown (evt (bar, p, p, false));
-    bar.mouseUp   (evt (bar, p, p, false));        // tap again -> back ON
-    REQUIRE (proc.getArpStep (3) > 0.5f);
+    const auto p = cellCentre (bar, 3);            // turn it off (double-tap) then tap it back on
+    bar.mouseDoubleClick (evt (bar, p, p, false));
+    REQUIRE (proc.getArpStep (3) < 0.5f);
+    tap (bar, 3);
+    REQUIRE (proc.getArpStep (3) > 0.5f);          // single tap on a DARK box -> ON
 }
 
-TEST_CASE ("arp UI: hold + vertical drag sets the step's velocity", "[plugin][arp][ui]")
+TEST_CASE ("arp UI: double-tap a lit box turns it off", "[plugin][arp][ui]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor proc;
+    ArpBar bar (proc);
+    bar.setSize (1200, 120);
+
+    REQUIRE (proc.getArpStep (5) > 0.5f);
+    const auto p = cellCentre (bar, 5);
+    bar.mouseDoubleClick (evt (bar, p, p, false));
+    REQUIRE (proc.getArpStep (5) < 0.5f);
+}
+
+TEST_CASE ("arp UI: hold + vertical drag sets the step's velocity, never toggling it", "[plugin][arp][ui]")
 {
     juce::ScopedJuceInitialiser_GUI init;
     VASynthProcessor proc;
@@ -60,36 +79,28 @@ TEST_CASE ("arp UI: hold + vertical drag sets the step's velocity", "[plugin][ar
 
     const auto down = cellCentre (bar, 2);
     bar.mouseDown (evt (bar, down, down, false));
-    bar.mouseDrag (evt (bar, { down.x, down.y - 40.0f }, down, true));   // drag UP -> louder
+    bar.mouseDrag (evt (bar, { down.x, down.y - 40.0f }, down, true));   // hold + drag UP -> louder
     const int up = proc.getArpStepVel (2);
     bar.mouseUp   (evt (bar, { down.x, down.y - 40.0f }, down, true));
     REQUIRE (up > 100);
+    REQUIRE (proc.getArpStep (2) > 0.5f);          // still ON — the vertical gesture never toggles
 
     // A fresh hold-drag DOWN takes it below 100.
     bar.mouseDown (evt (bar, down, down, false));
     bar.mouseDrag (evt (bar, { down.x, down.y + 45.0f }, down, true));   // drag DOWN -> quieter
     bar.mouseUp   (evt (bar, { down.x, down.y + 45.0f }, down, true));
     REQUIRE (proc.getArpStepVel (2) < 100);
-
-    // The vertical velocity gesture must NOT flip the step off.
     REQUIRE (proc.getArpStep (2) > 0.5f);
 }
 
-TEST_CASE ("arp UI: horizontal drag paints on/off across steps", "[plugin][arp][ui]")
+TEST_CASE ("arp UI: a plain tap never edits velocity", "[plugin][arp][ui]")
 {
     juce::ScopedJuceInitialiser_GUI init;
     VASynthProcessor proc;
     ArpBar bar (proc);
     bar.setSize (1200, 120);
 
-    REQUIRE (proc.getArpStep (4) > 0.5f);
-    REQUIRE (proc.getArpStep (6) > 0.5f);
-
-    const auto down = cellCentre (bar, 4);
-    bar.mouseDown (evt (bar, down, down, false));
-    bar.mouseDrag (evt (bar, cellCentre (bar, 6), down, true));   // same y -> paint (turn off)
-    bar.mouseUp   (evt (bar, cellCentre (bar, 6), down, true));
-
-    REQUIRE (proc.getArpStep (4) < 0.5f);          // the down cell painted off
-    REQUIRE (proc.getArpStep (6) < 0.5f);          // and the dragged-to cell too
+    proc.setArpStepVel (6, 120);
+    tap (bar, 6);
+    REQUIRE (proc.getArpStepVel (6) == 120);       // untouched by a tap
 }
