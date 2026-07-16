@@ -8,6 +8,7 @@
 #include "test_util.h"
 #include <vector>
 #include <chrono>
+#include <ctime>
 #include <cstring>
 
 namespace
@@ -65,16 +66,17 @@ TEST_CASE ("kill switch: off == level 0, and skips oscillator work (cheaper)", "
         for (int i = 0; i < 12; ++i) e.noteOn (40 + i, 0.8f);
         std::vector<float> out (256, 0.0f);
         for (int i = 0; i < 50; ++i) e.render (out.data(), 256, p, 2.0f, 0, 0.0f, 0);   // warm
-        // MIN over several trials: wall-clock is contention-sensitive (this test can
-        // run under `ctest -jN` alongside other CPU-heavy tests), and the minimum
-        // reflects the least-starved run ~ the true cost. A single trial can be
-        // starved to a meaningless value.
+        // Measure CPU time (std::clock), not wall-clock: this test runs under `ctest -jN`
+        // alongside ~20 CPU-heavy tests, so wall-clock inflates unevenly when the scheduler
+        // de-schedules this thread. CPU time counts only cycles actually executed here, so
+        // the 1-osc vs 3-osc ratio is stable regardless of contention. MIN over trials still
+        // guards against a coarse-tick trial.
         double best = 1.0e300;
         for (int trial = 0; trial < 5; ++trial)
         {
-            const auto t0 = std::chrono::steady_clock::now();
+            const std::clock_t c0 = std::clock();
             for (int i = 0; i < 2000; ++i) e.render (out.data(), 256, p, 2.0f, 0, 0.0f, 0);
-            best = std::min (best, std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count());
+            best = std::min (best, double (std::clock() - c0) / (double) CLOCKS_PER_SEC);
         }
         return best;
     };

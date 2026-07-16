@@ -39,11 +39,12 @@ public:
         resetAll.onClick = [this] { proc.resetAllRouting(); for (auto& r : rows) r->refresh(); relayout(); };
         addAndMakeVisible (resetAll);
 
-        // Restore CC bindings to factory (esp. the Launchkey pots CC 21-28 -> the 8 macros),
-        // clearing any learned/stale mapping that sent those knobs elsewhere.
-        midiReset.setButtonText ("Reset MIDI");
+        // Put the controllers back to factory: CC 21-28 -> the 8 macros (clearing any learned/
+        // stale binding), AND the 8 macro -> target assignments (M1 cutoff .. M8 focused level).
+        // Fixes both "the pots drive the wrong thing" and "the macros point at the wrong thing".
+        midiReset.setButtonText ("Reset MIDI + macros");
         midiReset.setWantsKeyboardFocus (false);
-        midiReset.onClick = [this] { proc.resetMidiMappings(); };
+        midiReset.onClick = [this] { proc.resetMidiMappings(); proc.resetMacroAssignments(); };
         addAndMakeVisible (midiReset);
 
         saveMulti.setButtonText ("Save MULTI");
@@ -90,10 +91,10 @@ public:
 
         bottom.removeFromTop (18);
         auto bar = bottom.reduced (14, 0);
-        resetAll.setBounds (bar.removeFromLeft (150).reduced (0, 4));
+        resetAll.setBounds (bar.removeFromLeft (140).reduced (0, 4));
         bar.removeFromLeft (8);
-        midiReset.setBounds (bar.removeFromLeft (110).reduced (0, 4));
-        loadMulti.setBounds (bar.removeFromRight (150).reduced (0, 4));
+        midiReset.setBounds (bar.removeFromLeft (150).reduced (0, 4));
+        loadMulti.setBounds (bar.removeFromRight (140).reduced (0, 4));
         bar.removeFromRight (8);
         saveMulti.setBounds (bar.removeFromRight (110).reduced (0, 4));
     }

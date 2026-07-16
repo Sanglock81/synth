@@ -65,6 +65,18 @@ TEST_CASE ("default macro map assigns M1..M8 to the factory targets (#55)", "[pl
     REQUIRE (p.getMacroTargetName (0) == "Cutoff");    // resolves through the target param's name
 }
 
+TEST_CASE ("resetMacroAssignments restores the factory macro targets (#55)", "[plugin][macros]")
+{
+    VASynthProcessor p;
+    for (int i = 0; i < 8; ++i) p.setMacroTarget (i, ParamID::glideTime);   // an old/scrambled map
+    REQUIRE (p.getMacroTargetId (0) == ParamID::glideTime);
+
+    p.resetMacroAssignments();
+    REQUIRE (p.getMacroTargetId (0) == ParamID::filterCutoff);
+    REQUIRE (p.getMacroTargetId (6) == ParamID::reverbMix);
+    REQUIRE (p.getMacroTargetId (7) == VASynthProcessor::kFocusLevelTarget);
+}
+
 TEST_CASE ("pre-#55 state without a macro_map loads the factory macro defaults", "[plugin][macros][state]")
 {
     VASynthProcessor src;

@@ -258,6 +258,10 @@ public:
             false);
 
         mainWindow->setVisible (true);
+        // Default to full-screen (the recommended live mode): no OS title bar to fight, so a
+        // touch drag on a knob near the top edge can't be grabbed as a window move. The
+        // maximise button still toggles back to a window.
+        mainWindow->setFullScreen (true);
 
         // Holder + processor now exist; start logging device / MIDI state, and
         // start the plug-and-play MIDI watcher.

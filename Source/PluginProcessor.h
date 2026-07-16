@@ -77,6 +77,10 @@ public:
     // restores CC 21-28 -> macro1-8). Recovers the Launchkey macro pots if a stale learn or an
     // old session pointed those CCs elsewhere. Message thread (UI action).
     void resetMidiMappings() { midiLearn.resetToFactoryDefaults(); }
+    // Reset the 8 macro -> target assignments to the factory map (M1 cutoff .. M8 focused-part
+    // level). Recovers the macros if an old session (or a stray Random) reassigned them. Message
+    // thread. Does not move any parameter — only the routing map changes.
+    void resetMacroAssignments() { macroTargetId = defaultMacroTargets(); writeMacroMapProperty(); }
 
     // -- chord engine (7B) -----------------------------------------------------
     // The editor publishes which QWERTY chord-modifier keys are down as a bitmask
