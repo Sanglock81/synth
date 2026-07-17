@@ -92,6 +92,15 @@ public:
         setLookAndFeel (&lnf);
 
         buildUI();
+        // G6 intake trace: F12 overlay shows the live pitch-bend / mod-wheel value and a running
+        // count of how many of each has arrived — so a dead strip is instantly diagnosable
+        // (0 events => the controller isn't sending; events but no sound => downstream).
+        overlay.setExtraLinesProvider ([this]
+        {
+            return juce::StringArray {
+                "bend  " + juce::String (proc.currentPitchBendSemis(), 2) + " st   (" + juce::String ((int) proc.pitchBendEventCount()) + " ev)",
+                "mod   " + juce::String (proc.currentModWheel(), 2)       + "      (" + juce::String ((int) proc.modWheelEventCount())  + " ev)" };
+        });
         addChildComponent (overlay);
         addChildComponent (toast);
         addChildComponent (helpOverlay);

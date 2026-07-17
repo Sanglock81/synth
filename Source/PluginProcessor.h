@@ -328,6 +328,14 @@ public:
     }
     void  setModRouteDepth (int slot, float depth) override { setModDepth (-1, slot, depth); }
     float modRouteDepth (int slot) const override { return getModSlot (-1, slot).depth; }
+
+    // Performance-controller read-back (F12 diagnostic + tests): the live pitch-bend (semitones)
+    // and mod-wheel (0..1) currently applied by the engine, plus per-surface intake counters so
+    // one can SEE whether a controller's pitch/mod strips are actually arriving.
+    float currentPitchBendSemis() const { return engine.pitchBendSemitones(); }
+    float currentModWheel()       const { return engine.modWheelAmount(); }
+    std::uint32_t pitchBendEventCount() const { return pitchBendEvents.load (std::memory_order_relaxed); }
+    std::uint32_t modWheelEventCount()  const { return modWheelEvents.load (std::memory_order_relaxed); }
     // LINK: bind `source`->`dest` in the first free slot (or reuse a slot already on this pair).
     // Returns the slot index, or -1 if all 8 are full. Default depth +50%.
     int linkModRoute (int part, int source, int dest, float depth = 0.5f)
@@ -588,6 +596,11 @@ private:
     void writeModMatrixProperty();
     void applyModMatrixProperty();
     std::atomic<int> modLinkSource { -1 };   // LINK gesture: armed source (-1 = disarmed)
+
+    // Performance-controller intake counters (G6 diagnostic): bumped whenever a pitch-bend or a
+    // CC1 (mod wheel) message reaches handleControlMessage, so the F12 overlay can prove arrival.
+    std::atomic<std::uint32_t> pitchBendEvents { 0 };
+    std::atomic<std::uint32_t> modWheelEvents  { 0 };
 
     // Arpeggiator step pattern <-> "arp_steps" (on/off) + "arp_vel" (per-step %) state props.
     std::array<float, kArpSteps> arpSteps { };

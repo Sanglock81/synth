@@ -221,6 +221,8 @@ public:
     // ---- performance controllers (from any device) -------------------------
     void setPitchBend (float semitones) { pitchBendSemis = semitones; }
     void setModWheel   (float amount01) { modWheel = amount01; }        // -> vibrato depth
+    float pitchBendSemitones() const { return pitchBendSemis; }         // (test/diagnostic read-back)
+    float modWheelAmount()     const { return modWheel; }
 
     // Mod matrix (#56): the FOCUSED part's live routing table + the current 8 macro values
     // (matrix sources). Called by the processor before beginMasterBlock each block.

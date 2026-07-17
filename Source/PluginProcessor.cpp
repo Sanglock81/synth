@@ -1193,6 +1193,7 @@ void VASynthProcessor::handleControlMessage (const juce::MidiMessage& msg)
     }
     if (msg.isPitchWheel())
     {
+        pitchBendEvents.fetch_add (1, std::memory_order_relaxed);       // G6 intake trace
         const float norm = (msg.getPitchWheelValue() - 8192) / 8192.0f;
         engine.setPitchBend (norm * pitchBendRangeSemis.load (std::memory_order_acquire));
         return;
@@ -1212,7 +1213,7 @@ void VASynthProcessor::handleControlMessage (const juce::MidiMessage& msg)
         }
         else
         {
-            if (cc == 1) engine.setModWheel (val / 127.0f);            // mod wheel -> vibrato
+            if (cc == 1) { engine.setModWheel (val / 127.0f); modWheelEvents.fetch_add (1, std::memory_order_relaxed); }   // mod wheel -> vibrato (+ G6 trace)
             midiLearn.handleCC (msg.getChannel(), cc, val);
         }
     }

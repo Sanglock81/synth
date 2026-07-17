@@ -26,6 +26,10 @@ public:
         else             stopTimer();
     }
 
+    // Optional extra diagnostic lines (G6: the live pitch-bend/mod-wheel intake trace).
+    // Kept decoupled from the processor — the editor supplies a provider.
+    void setExtraLinesProvider (std::function<juce::StringArray()> fn) { extraLines = std::move (fn); }
+
     void paint (juce::Graphics& g) override
     {
         const auto s = health.snapshot();
@@ -53,12 +57,20 @@ public:
         g.drawText (s.clipActive ? ("SAT  " + juce::String ((juce::int64) s.clipSamples) + " smpl")
                                  : juce::String ("SAT  --"),
                     8, y, getWidth() - 16, 16, juce::Justification::left);
+        y += 17;
+
+        if (extraLines)
+        {
+            g.setColour (juce::Colours::aqua);
+            for (auto& l : extraLines()) { g.drawText (l, 8, y, getWidth() - 16, 16, juce::Justification::left); y += 17; }
+        }
     }
 
 private:
     void timerCallback() override { repaint(); }   // only runs while visible
 
     AudioHealthLogger& health;
+    std::function<juce::StringArray()> extraLines;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DebugOverlay)
 };
