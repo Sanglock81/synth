@@ -4,8 +4,6 @@
 #include "PanelChrome.h"
 #include "Widgets.h"
 #include "KitEditor.h"
-#include "InputsDialog.h"
-#include "ModMatrixPanel.h"
 #include "../PluginProcessor.h"
 #include "../DSP/SynthEngine.h"
 
@@ -37,29 +35,8 @@ public:
             addAndMakeVisible (*pan[(std::size_t) i]);
         }
 
-        inputs.setButtonText ("INPUTS");
-        inputs.setWantsKeyboardFocus (false);
-        inputs.setColour (juce::TextButton::buttonColourId, VASynthLookAndFeel::track());
-        inputs.setColour (juce::TextButton::textColourOffId, VASynthLookAndFeel::ink());
-        inputs.onClick = [this] { InputsDialog::show (proc, getTopLevelComponent(), [this] { if (restoreFocus) restoreFocus(); }); };
-        addAndMakeVisible (inputs);
-
-        modBtn.setButtonText ("MOD");
-        modBtn.setWantsKeyboardFocus (false);
-        modBtn.setColour (juce::TextButton::buttonColourId, VASynthLookAndFeel::track());
-        modBtn.setColour (juce::TextButton::textColourOffId, VASynthLookAndFeel::accent());
-        modBtn.onClick = [this] { ModMatrixPanel::show (proc, getTopLevelComponent(), [this] { if (restoreFocus) restoreFocus(); }); };
-        addAndMakeVisible (modBtn);
-
-        // LINK: arm a mod source, then tap any ringed destination knob to route it.
-        // Clicking while armed disarms; the source picker is ModMatrix's own source list.
-        linkBtn.setButtonText ("LINK");
-        linkBtn.setWantsKeyboardFocus (false);
-        linkBtn.setColour (juce::TextButton::buttonColourId, VASynthLookAndFeel::track());
-        linkBtn.setColour (juce::TextButton::textColourOffId, kLinkRing);
-        linkBtn.onClick = [this] { onLinkClicked(); };
-        addAndMakeVisible (linkBtn);
-
+        // LINK / MOD / INPUTS moved to the top bar (they are global actions, not part-rail
+        // furniture) — see TopBar. The Parts rail header is now just the section title.
         startTimerHz (15);
     }
 
@@ -123,14 +100,6 @@ public:
 
     void resized() override
     {
-        {
-            auto hdr = getLocalBounds().removeFromTop (chrome::kHeaderH);
-            inputs.setBounds (hdr.removeFromRight (92).reduced (3, 3));
-            hdr.removeFromRight (2);
-            modBtn.setBounds (hdr.removeFromRight (52).reduced (3, 3));
-            hdr.removeFromRight (2);
-            linkBtn.setBounds (hdr.removeFromRight (52).reduced (3, 3));
-        }
         auto rl = chrome::sectionContent (getLocalBounds());
         auto cells = cellRects (rl);
         for (int i = 0; i < SynthEngine::maxParts; ++i)
@@ -204,32 +173,6 @@ private:
             });
     }
 
-    // Armed? disarm. Otherwise pop the source list; picking one arms it and lights every
-    // destination knob's ring (via a top-level repaint) so the next knob tap makes the route.
-    void onLinkClicked()
-    {
-        if (proc.modLinkArmedSource() >= 0) { proc.disarmModLink(); refreshLinkButton(); repaintTop(); return; }
-
-        const auto names = ModMatrixPanel::sourceNames();   // index 0 = "None" (skip)
-        juce::PopupMenu m;
-        for (int s = 1; s < names.size(); ++s) m.addItem (s, names[s]);
-        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&linkBtn),
-            [this] (int r) { if (r > 0) { proc.armModLink (r); refreshLinkButton(); repaintTop(); }
-                             if (restoreFocus) restoreFocus(); });
-    }
-
-    void refreshLinkButton()
-    {
-        const bool armed = proc.modLinkArmedSource() >= 0;
-        linkBtn.setColour (juce::TextButton::buttonColourId, armed ? kLinkRing : VASynthLookAndFeel::track());
-        linkBtn.setColour (juce::TextButton::textColourOffId, armed ? VASynthLookAndFeel::panel() : kLinkRing);
-        const auto names = ModMatrixPanel::sourceNames();
-        const int s = proc.modLinkArmedSource();
-        linkBtn.setButtonText (armed && s < names.size() ? names[s].toUpperCase() : juce::String ("LINK"));
-    }
-
-    void repaintTop() { if (auto* t = getTopLevelComponent()) t->repaint(); }
-
     std::array<juce::Rectangle<int>, SynthEngine::maxParts> cellRects (juce::Rectangle<int> rl) const
     {
         const int n = SynthEngine::maxParts, gap = 5;
@@ -252,10 +195,6 @@ private:
         if (pressCell >= 1 && juce::Time::getMillisecondCounter() - pressStart > 500)
         { const int i = pressCell; pressCell = -1; showCellMenu (i); }
 
-        // A completed knob-tap auto-disarms the source; keep the button label in sync.
-        if ((proc.modLinkArmedSource() >= 0) != linkWasArmed)
-        { linkWasArmed = proc.modLinkArmedSource() >= 0; refreshLinkButton(); repaintTop(); }
-
         for (int i = 0; i < SynthEngine::maxParts; ++i)
         {
             const auto now = proc.partActivity (i);
@@ -266,12 +205,9 @@ private:
     }
 
     static constexpr int kKnobCol = 100;   // per-cell level+pan knob column width
-    inline static const juce::Colour kLinkRing { 0xff4bb3c4 };   // LINK cyan (matches knob armed ring)
 
     VASynthProcessor& proc;
     std::function<void()> restoreFocus;
-    juce::TextButton inputs, modBtn, linkBtn;
-    bool linkWasArmed = false;
     std::array<std::unique_ptr<RotaryKnob>, SynthEngine::maxParts> lvl, pan;
     std::array<std::uint32_t, SynthEngine::maxParts> lastHits {};
     std::array<int, SynthEngine::maxParts> blink {};

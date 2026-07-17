@@ -2,6 +2,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "VASynthLookAndFeel.h"
 #include "Widgets.h"
+#include "ModMatrixPanel.h"
+#include "InputsDialog.h"
 #include "../PluginProcessor.h"
 #include "../PresetManager.h"
 
@@ -75,6 +77,23 @@ public:
         help.onClick = [this] { if (toggleHelp) toggleHelp(); };
         addAndMakeVisible (help);
 
+        // Global-action row (below SAVE/RANDOM/CLEAR, beside the CPU readout): LINK arms a mod
+        // source, MOD opens the routing overlay, INPUTS opens the surface-routing dialog. These
+        // are global actions, not part-rail furniture (moved here from the Parts rail header).
+        link.setButtonText ("LINK"); styleBtn (link);
+        link.setColour (juce::TextButton::textColourOffId, kLinkRing);
+        link.onClick = [this] { onLinkClicked(); };
+        addAndMakeVisible (link);
+
+        mod.setButtonText ("MOD"); styleBtn (mod);
+        mod.setColour (juce::TextButton::textColourOffId, VASynthLookAndFeel::accent());
+        mod.onClick = [this] { ModMatrixPanel::show (proc, getTopLevelComponent(), [this] { if (restoreFocus) restoreFocus(); }); };
+        addAndMakeVisible (mod);
+
+        inputs.setButtonText ("INPUTS"); styleBtn (inputs);
+        inputs.onClick = [this] { InputsDialog::show (proc, getTopLevelComponent(), [this] { if (restoreFocus) restoreFocus(); }); };
+        addAndMakeVisible (inputs);
+
         // The 8 macros live in the top bar (compact, with the preset + master). The
         // native title-bar gesture issue is handled by running fullscreen/kiosk (no title
         // bar) — see toggleFullscreen / the README live-mode note.
@@ -125,7 +144,12 @@ public:
         save.setBounds   (pTop.removeFromLeft (44).reduced (2, 1));
         random.setBounds (pTop.removeFromLeft (66).reduced (2, 1));
         clear.setBounds  (pTop.reduced (2, 1));
-        statusArea = preset;
+        // Global-action row below the preset row: LINK | MOD | INPUTS on the right, CPU text left.
+        auto grow = preset.removeFromTop (26);
+        inputs.setBounds (grow.removeFromRight (68).reduced (2, 1));
+        mod.setBounds    (grow.removeFromRight (52).reduced (2, 1));
+        link.setBounds   (grow.removeFromRight (52).reduced (2, 1));
+        statusArea = grow;
 
         auto help_ = tb.removeFromRight (34); tb.removeFromRight (4);
         help.setBounds (help_.reduced (0, 16));
@@ -155,6 +179,10 @@ private:
         if (line != statusLine) { statusLine = line; repaint (statusArea); }
         refreshMacroLabels();     // map can change on Random / preset load
 
+        // A completed knob-tap auto-disarms the source; keep the LINK button label in sync.
+        if ((proc.modLinkArmedSource() >= 0) != linkWasArmed)
+        { linkWasArmed = proc.modLinkArmedSource() >= 0; refreshLinkButton(); repaintTop(); }
+
         // Poly/Mono/Legato + glide are per-part VOICE controls; a kit part is always poly
         // and its pads don't glide, so grey them out (disabled) when a kit is the active part.
         const bool kitActive = proc.isPartKit (proc.playFocus());
@@ -165,6 +193,29 @@ private:
             if (glide) { glide->setEnabled (! kitActive); glide->setAlpha (kitActive ? 0.35f : 1.0f); }
         }
     }
+
+    // LINK: armed? disarm. Otherwise pop the source list; picking one arms it and lights every
+    // destination knob's ring (a top-level repaint) so the next knob tap makes the route.
+    void onLinkClicked()
+    {
+        if (proc.modLinkArmedSource() >= 0) { proc.disarmModLink(); refreshLinkButton(); repaintTop(); return; }
+        const auto names = ModMatrixPanel::sourceNames();     // index 0 = "None" (skip)
+        juce::PopupMenu m;
+        for (int s = 1; s < names.size(); ++s) m.addItem (s, names[s]);
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&link),
+            [this] (int r) { if (r > 0) { proc.armModLink (r); refreshLinkButton(); repaintTop(); }
+                             if (restoreFocus) restoreFocus(); });
+    }
+    void refreshLinkButton()
+    {
+        const bool armed = proc.modLinkArmedSource() >= 0;
+        link.setColour (juce::TextButton::buttonColourId, armed ? kLinkRing : VASynthLookAndFeel::track());
+        link.setColour (juce::TextButton::textColourOffId, armed ? VASynthLookAndFeel::panel() : kLinkRing);
+        const auto names = ModMatrixPanel::sourceNames();
+        const int s = proc.modLinkArmedSource();
+        link.setButtonText (armed && s < names.size() ? names[s].toUpperCase() : juce::String ("LINK"));
+    }
+    void repaintTop() { if (auto* t = getTopLevelComponent()) t->repaint(); }
 
     void applyMacro (int idx, float value)
     {
@@ -248,6 +299,9 @@ private:
     std::function<void()> restoreFocus, toggleHelp, toggleFullscreen;
 
     juce::TextButton presetBtn, save, random, clear, rec, full, help;
+    juce::TextButton link, mod, inputs;                 // global-action row
+    bool linkWasArmed = false;
+    inline static const juce::Colour kLinkRing { 0xff4bb3c4 };   // LINK cyan (matches the knob armed ring)
     juce::OwnedArray<RotaryKnob> macros;
     juce::OwnedArray<juce::ParameterAttachment> macroAtt;
     std::unique_ptr<RotaryKnob> master, glide;
