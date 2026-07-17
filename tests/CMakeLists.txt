@@ -31,6 +31,7 @@ add_executable(dsp_tests
     dsp/test_lfo.cpp
     dsp/test_engine.cpp
     dsp/test_velocity.cpp
+    dsp/test_modmatrix.cpp
     dsp/test_kit.cpp
     dsp/test_multitimbral.cpp
     dsp/test_smoothing.cpp

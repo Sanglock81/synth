@@ -222,6 +222,11 @@ public:
     void setPitchBend (float semitones) { pitchBendSemis = semitones; }
     void setModWheel   (float amount01) { modWheel = amount01; }        // -> vibrato depth
 
+    // Mod matrix (#56): the FOCUSED part's live routing table + the current 8 macro values
+    // (matrix sources). Called by the processor before beginMasterBlock each block.
+    void setLiveModMatrix (const ModMatrix& m)        { liveMatrixStore = m; }
+    void setMacroValues   (const std::array<float, 8>& m) { macroVals = m; }
+
     // Sustain pedal (CC64). While down, note-offs are deferred; on release the
     // held notes are let go. The Korg B2's damper is the primary expression.
     void setSustainPedal (bool on)
@@ -246,7 +251,7 @@ public:
         // state is baked into slot 0 like any other locked part (1.3 edit-focus).
         if (part >= 0 && part < maxParts)
         {
-            lockedSlots[(std::size_t) part].publish ({ vp, fx, lfo });
+            lockedSlots[(std::size_t) part].publish ({ vp, fx, lfo, ModMatrix{} });
             setPartPolyMode (part, vp.polyMode);   // a locked part bakes its own poly/mono/legato
         }
     }
@@ -430,6 +435,7 @@ public:
         const bool focusIsKit = partIsKit (focus);
         partFxUse[(std::size_t) focus]  = focusIsKit ? FXParams{} : liveFx;
         partLfoUse[(std::size_t) focus] = focusIsKit ? PartLfos{} : liveLfo;
+        partMatrixUse[(std::size_t) focus] = focusIsKit ? ModMatrix{} : liveMatrixStore;
         for (int pt = 0; pt < maxParts; ++pt)
         {
             if (pt == focus) continue;                   // the live part is filled by renderParts
@@ -437,6 +443,7 @@ public:
             partParams[(std::size_t) pt] = cur.vp;
             if (partIsKit (pt)) { partFxUse[(std::size_t) pt] = FXParams{}; partLfoUse[(std::size_t) pt] = PartLfos{}; }
             else                { partFxUse[(std::size_t) pt] = cur.fx;     partLfoUse[(std::size_t) pt] = cur.lfo; }
+            partMatrixUse[(std::size_t) pt] = cur.mtx;   // baked per-part matrix (empty until a part bakes one)
         }
         if (! smoothPrimed)
         {
@@ -474,8 +481,11 @@ public:
             partParams[(std::size_t) liveIndex].cutoffHz  = smCutoff; partParams[(std::size_t) liveIndex].resonance = smReso;
             partParams[(std::size_t) liveIndex].osc1Level = smL1; partParams[(std::size_t) liveIndex].osc2Level = smL2; partParams[(std::size_t) liveIndex].osc3Level = smL3;
 
-            // Per-part LFO modulation this chunk (three LFOs, summed per destination).
+            // Per-part LFO modulation this chunk (three LFOs, summed per destination). The
+            // RAW bipolar LFO output is also captured for the mod matrix (a matrix slot's own
+            // depth scales it, independent of the LFO's fixed-dest depth).
             std::array<float, maxParts> pPitch {}, pCut {}, pPw {};
+            std::array<std::array<float, 3>, maxParts> lfoRaw {};
             for (int p = 0; p < maxParts; ++p)
             {
                 if (! partHadVoice[(std::size_t) p]) continue;
@@ -484,7 +494,9 @@ public:
                     const LfoConfig& c = partLfoUse[(std::size_t) p].lfo[k];
                     LFO& l = partLfo[(std::size_t) p][(std::size_t) k];
                     l.setRate (c.rate); l.setShape (static_cast<LFO::Shape> (c.shape));
-                    const float v = l.advance (chunk) * c.depth;
+                    const float raw = l.advance (chunk);
+                    lfoRaw[(std::size_t) p][(std::size_t) k] = raw;
+                    const float v = raw * c.depth;
                     switch (c.dest)
                     {
                         case 1: pPitch[(std::size_t) p] += v * 2.0f;  break;
@@ -504,6 +516,19 @@ public:
             const float vib = vibratoLFO.advance (chunk) * modWheel * kVibratoSemis;
             const float bendVib = pitchBendSemis + vib;
 
+            // Per-part mod-matrix source snapshot (per-part fields only; the voice fills its
+            // own velocity/env/note/random). Built only for parts whose matrix is live.
+            std::array<ModSources, maxParts> partSrc {};
+            for (int p = 0; p < maxParts; ++p)
+            {
+                if (! partMatrixUse[(std::size_t) p].active()) continue;
+                ModSources& ps = partSrc[(std::size_t) p];
+                ps.lfo[0] = lfoRaw[(std::size_t) p][0]; ps.lfo[1] = lfoRaw[(std::size_t) p][1]; ps.lfo[2] = lfoRaw[(std::size_t) p][2];
+                ps.modWheel  = modWheel;
+                ps.pitchBend = pitchBendSemis / 12.0f;     // approximate normalized bend for the matrix
+                for (int mi = 0; mi < 8; ++mi) ps.macro[(std::size_t) mi] = macroVals[(std::size_t) mi];
+            }
+
             const int off = startSample + done;
             for (auto& v : voices)
             {
@@ -513,7 +538,10 @@ public:
                 p.pitchModSemis += pPitch[(std::size_t) pt] + bendVib;
                 p.cutoffModOct   = pCut[(std::size_t) pt];
                 p.pwMod          = pPw[(std::size_t) pt];
-                v.render (partMono[(std::size_t) pt].data() + off, chunk, p);
+                const bool mtxOn = partMatrixUse[(std::size_t) pt].active();
+                v.render (partMono[(std::size_t) pt].data() + off, chunk, p,
+                          mtxOn ? &partMatrixUse[(std::size_t) pt] : nullptr,
+                          mtxOn ? &partSrc[(std::size_t) pt]       : nullptr);
             }
             done += chunk;
         }
@@ -717,7 +745,7 @@ private:
     // Parts (7C): part 0 = LIVE (smoothed per chunk), parts 1-3 = LOCKED (baked,
     // published lock-free via a double buffer). A locked part publishes its voice params
     // + FX + LFOs together, so the audio thread reads a consistent snapshot with no race.
-    struct LockedPub { VoiceParams vp; FXParams fx; PartLfos lfo; };
+    struct LockedPub { VoiceParams vp; FXParams fx; PartLfos lfo; ModMatrix mtx; };
     struct LockedSlot
     {
         LockedPub buf[2];
@@ -734,6 +762,9 @@ private:
     std::array<LockedSlot,  maxParts> lockedSlots {};
     std::array<FXParams, maxParts> partFxUse {};      // per-part FX in effect this block (part 0 live, 1-3 baked)
     std::array<PartLfos, maxParts> partLfoUse {};     // per-part LFOs in effect this block
+    std::array<ModMatrix, maxParts> partMatrixUse {}; // per-part mod matrix in effect this block (#56)
+    ModMatrix liveMatrixStore {};                     // the focused part's live matrix (set by the processor)
+    std::array<float, 8> macroVals {};                // current macro knob values 0..1 (matrix sources)
     std::array<float, maxParts> partLevelUse { { 1.0f, 1.0f, 1.0f, 1.0f } };   // mixer level (unity default)
     std::array<float, maxParts> partPanUse   {};      // mixer pan (centre default = 0)
     std::array<float, maxParts> prevLg { { 1.0f, 1.0f, 1.0f, 1.0f } };         // per-block-ramped mixer L gain

@@ -2,6 +2,7 @@
 #include "PolyBlepOscillator.h"
 #include "SVFilter.h"
 #include "ADSREnvelope.h"
+#include "ModMatrix.h"
 #include <random>
 #include <algorithm>
 #include <cstdint>
@@ -116,6 +117,8 @@ public:
         }
         ampEnv.noteOn();
         fltEnv.noteOn();
+        rndState ^= rndState << 13; rndState ^= rndState >> 17; rndState ^= rndState << 5;   // fresh S&H per note
+        voiceRandom = (float) (std::int32_t) rndState / 2147483648.0f;
         active = true;
     }
 
@@ -142,8 +145,11 @@ public:
     bool isGenerator() const { return generator; }
     std::uint64_t getTimestamp() const { return timestamp; }
 
-    // Render `numSamples` and ADD into the (mono) output buffer.
-    void render (float* out, int numSamples, const VoiceParams& p)
+    // Render `numSamples` and ADD into the (mono) output buffer. `mtx`/`partSrc` are the
+    // optional mod matrix (#56) + its per-part source snapshot; when null/inert the render
+    // is bit-identical to the pre-matrix path.
+    void render (float* out, int numSamples, const VoiceParams& p,
+                 const ModMatrix* mtx = nullptr, const ModSources* partSrc = nullptr)
     {
         if (! active)
             return;
@@ -161,11 +167,28 @@ public:
         // the LFO). Sampled here so we don't advance the env twice; 16-sample chunks
         // give ~0.33 ms granularity — smooth for a kick's pitch drop. Default 0 -> 0.
         const float envPitchSemis = p.fltEnvToPitch * fltEnv.getLevel();
-        applyParams (p, envPitchSemis);
+
+        // Mod matrix (#56): an ADDITIVE layer over the fixed LFO/env/velocity routes.
+        // Evaluated once per control chunk (this render call is <= kSmoothChunk samples).
+        // Per-part sources come from `partSrc`; per-voice ones are filled here. An inert
+        // matrix yields zero offsets -> bit-identical render.
+        ModMatrix::Offsets mm;
+        if (mtx != nullptr && partSrc != nullptr && mtx->active())
+        {
+            ModSources src = *partSrc;
+            src.modEnv   = fltEnv.getLevel();
+            src.ampEnv   = ampEnv.getLevel();
+            src.velocity = velocity;
+            src.noteNorm = (float) (midiNote - 60) / 60.0f;
+            src.random   = voiceRandom;
+            mm = mtx->evaluate (src);
+        }
+        applyParams (p, envPitchSemis + mm.pitchSemis, mm.pw);
 
         const float trackOct = p.keytrack * (midiNote - 60) / 12.0f;
         const float velOct   = p.velToCutoff * velocity * 3.0f;              // vel -> cutoff
         const float ampScale = (1.0f - p.velToAmp) + p.velToAmp * velocity;  // vel -> amp
+        const float ampMul   = std::clamp (1.0f + mm.amp, 0.0f, 2.0f);       // matrix -> amp
 
         // Kill-skip: an oscillator whose (smoothed, on/off-folded) level is ~0 is
         // NOT rendered at all — the CPU saving the kill switch exists for, and
@@ -194,8 +217,8 @@ public:
             if ((i & (kCutoffInterval - 1)) == 0)
             {
                 const float envOct = p.filterEnvAmt * fltLevel * 5.0f;       // +/-5 oct sweep
-                const float fc = p.cutoffHz * std::exp2 (envOct + trackOct + velOct + p.cutoffModOct);
-                filter.setCutoff (fc, p.resonance);
+                const float fc = p.cutoffHz * std::exp2 (envOct + trackOct + velOct + p.cutoffModOct + mm.cutoffOct);
+                filter.setCutoff (fc, std::clamp (p.resonance + mm.reso, 0.0f, 1.0f));
             }
 
             // --- oscillators (per-source level; skip silent/off sources) ---
@@ -206,7 +229,7 @@ public:
             if (useNoise) s += noise() * p.noiseLevel;
 
             s = filter.process (s);
-            out[i] += s * ampLevel * ampScale * p.gain;   // p.gain == 1.0 for non-kit voices
+            out[i] += s * ampLevel * ampScale * ampMul * p.gain;   // p.gain == 1.0 for non-kit voices
         }
     }
 
@@ -214,7 +237,7 @@ private:
     // Filter-coefficient update interval (power of two for the bit mask).
     static constexpr int kCutoffInterval = 16;
 
-    void applyParams (const VoiceParams& p, float extraPitchSemis = 0.0f)
+    void applyParams (const VoiceParams& p, float extraPitchSemis = 0.0f, float extraPwMod = 0.0f)
     {
         // Pitch from the (glide-slewed) note plus pitch modulation (LFO + env->pitch).
         const double f0 = 440.0 * std::exp2 ((glideNote - 69.0f + p.pitchModSemis + extraPitchSemis) / 12.0);
@@ -225,9 +248,9 @@ private:
         osc1.setFrequency (f0 * std::exp2 (p.osc1Octave + p.osc1Detune / 1200.0f));
         osc2.setFrequency (f0 * std::exp2 (p.osc2Octave + p.osc2Detune / 1200.0f));
         osc3.setFrequency (f0 * std::exp2 (p.osc3Octave + p.osc3Detune / 1200.0f));
-        osc1.setPulseWidth (std::clamp (p.osc1PW + p.pwMod, 0.05f, 0.95f));
-        osc2.setPulseWidth (std::clamp (p.osc2PW + p.pwMod, 0.05f, 0.95f));
-        osc3.setPulseWidth (std::clamp (p.osc3PW + p.pwMod, 0.05f, 0.95f));
+        osc1.setPulseWidth (std::clamp (p.osc1PW + p.pwMod + extraPwMod, 0.05f, 0.95f));
+        osc2.setPulseWidth (std::clamp (p.osc2PW + p.pwMod + extraPwMod, 0.05f, 0.95f));
+        osc3.setPulseWidth (std::clamp (p.osc3PW + p.pwMod + extraPwMod, 0.05f, 0.95f));
 
         filter.setType (static_cast<SVFilter::Type> (p.filterType));
         ampEnv.setParameters (p.ampA, p.ampD, p.ampS, p.ampR);
@@ -255,4 +278,6 @@ private:
     int   soundSlot = 0;           // Kit pad index within the part (0 for non-kit voices)
     std::uint64_t timestamp = 0;   // for oldest-note stealing
     std::uint32_t nz = 0x12345678;
+    float voiceRandom = 0.0f;      // per-note sample&hold (-1..1) — a mod-matrix source
+    std::uint32_t rndState = 0x2545f491u;
 };
