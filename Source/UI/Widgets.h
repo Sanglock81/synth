@@ -470,6 +470,29 @@ public:
     }
     void endLinkGesture() { linkDepthActive = false; linkTime = juce::Time::getMillisecondCounter(); }
 
+    // Whole-cell LINK hit target. The cyan ring is drawn over the ENTIRE cell, but the inner
+    // LinkSlider only covers a sub-rect (on sideLabel knobs, just the little left square). Without
+    // these overrides a tap on the name/value strip — inside the advertised ring — falls to
+    // LearnableComponent's long-press and connects nothing (the shipped #56 bug). We handle LINK
+    // for the parent area here; the LinkSlider still handles taps landing on the slider itself.
+    // Guard on eventComponent==this: LearnableComponent listens to the child slider's events too
+    // (listenForLearnGestures), so without the guard a slider tap would run beginLinkGesture twice.
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        if (e.eventComponent == this && beginLinkGesture (e)) return;
+        LearnableComponent::mouseDown (e);
+    }
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (e.eventComponent == this && linkDepthActive) { dragLinkDepth (e); return; }
+        LearnableComponent::mouseDrag (e);
+    }
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        if (e.eventComponent == this && linkDepthActive) { endLinkGesture(); return; }
+        LearnableComponent::mouseUp (e);
+    }
+
     // Hide the numeric value readout (macros — keeps the top bar compact).
     void setShowValue (bool b) { if (b != showValue) { showValue = b; resized(); repaint(); } }
 

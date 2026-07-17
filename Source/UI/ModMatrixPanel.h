@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "VASynthLookAndFeel.h"
+#include "UiText.h"
 #include "../PluginProcessor.h"
 
 // ============================================================================
@@ -18,14 +19,19 @@ class ModMatrixPanel : public juce::Component,
 public:
     static juce::StringArray sourceNames()
     {
-        return { "\xe2\x80\x94", "LFO 1", "LFO 2", "LFO 3", "Mod Env", "Amp Env", "Velocity", "Note",
-                 "Mod Wheel", "Pitch Bend", "Random",
-                 "Macro 1", "Macro 2", "Macro 3", "Macro 4", "Macro 5", "Macro 6", "Macro 7", "Macro 8" };
+        // Item 0 is the "no source" indicator (a real em-dash — must go through u8(); see UiText.h).
+        juce::StringArray a { "LFO 1", "LFO 2", "LFO 3", "Mod Env", "Amp Env", "Velocity", "Note",
+                              "Mod Wheel", "Pitch Bend", "Random",
+                              "Macro 1", "Macro 2", "Macro 3", "Macro 4", "Macro 5", "Macro 6", "Macro 7", "Macro 8" };
+        a.insert (0, uitext::u8 ("\xe2\x80\x94"));
+        return a;
     }
     static juce::StringArray destNames()
     {
-        return { "\xe2\x80\x94", "Pitch", "Cutoff", "Resonance", "Pulse Width", "Amp",
-                 "Wave Pos", "Osc 1 Lvl", "Osc 2 Lvl", "Osc 3 Lvl" };
+        juce::StringArray a { "Pitch", "Cutoff", "Resonance", "Pulse Width", "Amp",
+                              "Wave Pos", "Osc 1 Lvl", "Osc 2 Lvl", "Osc 3 Lvl" };
+        a.insert (0, uitext::u8 ("\xe2\x80\x94"));
+        return a;
     }
 
     explicit ModMatrixPanel (VASynthProcessor& p) : proc (p)
@@ -43,7 +49,7 @@ public:
             r.depth->setDoubleClickReturnValue (true, 0.0);
             for (auto* c : { (juce::Component*) r.src.get(), (juce::Component*) r.dst.get(), (juce::Component*) r.depth.get() })
                 { c->setWantsKeyboardFocus (false); addAndMakeVisible (c); }
-            r.remove.setButtonText ("\xe2\x9c\x95");
+            r.remove.setButtonText (uitext::u8 ("\xe2\x9c\x95"));   // ✕ (decode as UTF-8, not ASCII)
             r.remove.setWantsKeyboardFocus (false);
             addAndMakeVisible (r.remove);
 
@@ -74,7 +80,7 @@ public:
                     getLocalBounds().removeFromTop (34).reduced (16, 0), juce::Justification::centredRight, false);
         g.setColour (VASynthLookAndFeel::dim());
         g.setFont (juce::Font (juce::FontOptions (11.5f)));
-        g.drawText ("Arm LINK and tap a knob to make a route \xe2\x80\x94 or pick a source + destination here.",
+        g.drawText (uitext::u8 ("Arm LINK and tap a knob to make a route \xe2\x80\x94 or pick a source + destination here."),
                     juce::Rectangle<int> (16, getHeight() - 24, getWidth() - 32, 16), juce::Justification::centredLeft, false);
     }
 
@@ -103,7 +109,7 @@ public:
         {
             auto& r = rows[(std::size_t) i];
             const auto sb = r.src->getBounds();
-            g.drawText ("\xe2\x86\x92", juce::Rectangle<int> (sb.getRight(), sb.getY(), 22, sb.getHeight()),
+            g.drawText (uitext::u8 ("\xe2\x86\x92"), juce::Rectangle<int> (sb.getRight(), sb.getY(), 22, sb.getHeight()),
                         juce::Justification::centred, false);
         }
     }
