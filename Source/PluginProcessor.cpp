@@ -1227,7 +1227,11 @@ void VASynthProcessor::applyBlockMods (int part, VoiceParams& vp, FXParams& fx, 
 {
     const int p = juce::jlimit (0, SynthEngine::maxParts - 1, part);
     const auto& mtx = partMatrix[(std::size_t) p];
-    if (! mtx.active()) return;                      // fully inert -> zero-cost (golden-safe)
+    if (! mtx.active())                              // fully inert -> zero-cost (golden-safe)
+    {
+        for (auto& a : blockOffsetPub) a.store (0.0f, std::memory_order_relaxed);   // clear stale UI animation
+        return;
+    }
 
     namespace ID = ParamID;
     // Block-level sources only (per-voice sources — velocity/env/note — have no defined value
@@ -1240,9 +1244,12 @@ void VASynthProcessor::applyBlockMods (int part, VoiceParams& vp, FXParams& fx, 
     s.modWheel = engine.modWheelAmount (p);
     const float bendRange = pitchBendRangeSemis.load (std::memory_order_acquire);
     s.pitchBend = bendRange > 0.0f ? engine.pitchBendSemitones (p) / bendRange : 0.0f;
+    for (int k = 0; k < 3; ++k) s.lfo[(std::size_t) k] = engine.focusLfoRawOut (k);   // block-tier LFO sources (1-block latency)
 
     float off[ModMatrix::kNumBlockDests];
     mtx.blockOffsets (s, off, ModMatrix::kNumBlockDests);
+    for (int i = 0; i < ModMatrix::kNumBlockDests; ++i)
+        blockOffsetPub[(std::size_t) i].store (off[(std::size_t) i], std::memory_order_relaxed);   // publish for UI/tests
 
     // Add the normalized offset to the param's normalized base, then convert back through the
     // param's own range (respects log/skew), and write the natural value to the engine struct.

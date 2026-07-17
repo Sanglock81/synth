@@ -170,6 +170,31 @@ TEST_CASE ("block-tier: Macro -> delay feedback modulates the FX at block rate (
     REQUIRE (tHi > tLo * 2.0f + 1.0e-4f);     // the macro audibly lengthens the delay tail
 }
 
+TEST_CASE ("block-tier: an LFO drives an FX dest and the offset varies over time (#56 G4)",
+           "[plugin][modmatrix][blocktier]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    p.setModSlot (-1, 0, ModMatrix::LFO1, ModMatrix::ReverbMix, 1.0f);   // LFO1 -> reverb mix
+    p.apvts.getParameter (ParamID::lfoRate)->setValueNotifyingHost (0.6f);   // audible LFO rate
+    p.apvts.getParameter (ParamID::lfoDepth)->setValueNotifyingHost (0.5f);
+    p.prepareToPlay (48000.0, 128);
+
+    // Hold a note so the focused part has voices (LFOs only advance for sounding parts), and
+    // watch the published block offset for ReverbMix swing as the LFO cycles.
+    float lo = 1.0e9f, hi = -1.0e9f;
+    for (int b = 0; b < 300; ++b)
+    {
+        juce::AudioBuffer<float> buf (2, 128); buf.clear();
+        juce::MidiBuffer midi;
+        if (b == 0) midi.addEvent (juce::MidiMessage::noteOn (1, 60, 0.8f), 0);
+        p.processBlock (buf, midi);
+        const float o = p.blockModOffset (ModMatrix::ReverbMix);
+        lo = std::min (lo, o); hi = std::max (hi, o);
+    }
+    REQUIRE (hi - lo > 0.2f);        // the LFO actually sweeps the reverb-mix offset
+}
+
 TEST_CASE ("block-tier is inert with no block route (bit-identical) (#56 G4)", "[plugin][modmatrix][blocktier]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

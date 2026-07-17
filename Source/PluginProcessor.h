@@ -338,6 +338,12 @@ public:
     float currentModWheel       (int part) const { return engine.modWheelAmount (part); }
     std::uint32_t pitchBendEventCount() const { return pitchBendEvents.load (std::memory_order_relaxed); }
     std::uint32_t modWheelEventCount()  const { return modWheelEvents.load (std::memory_order_relaxed); }
+    // Live block-tier offset for a destination (normalized param units) — UI knob animation + tests.
+    float blockModOffset (int dest) const
+    {
+        const int i = dest - ModMatrix::kFirstBlockDest;
+        return (i >= 0 && i < ModMatrix::kNumBlockDests) ? blockOffsetPub[(std::size_t) i].load (std::memory_order_relaxed) : 0.0f;
+    }
     // LINK: bind `source`->`dest` in the first free slot (or reuse a slot already on this pair).
     // Returns the slot index, or -1 if all 8 are full. Default depth +50%.
     int linkModRoute (int part, int source, int dest, float depth = 0.5f)
@@ -606,6 +612,10 @@ private:
     // CC1 (mod wheel) message reaches handleControlMessage, so the F12 overlay can prove arrival.
     std::atomic<std::uint32_t> pitchBendEvents { 0 };
     std::atomic<std::uint32_t> modWheelEvents  { 0 };
+
+    // Last block-tier normalized offset per block dest (published by applyBlockMods). Read by the
+    // UI to animate a modulated knob, and by tests. Indexed by (dest - kFirstBlockDest).
+    std::array<std::atomic<float>, (std::size_t) ModMatrix::kNumBlockDests> blockOffsetPub {};
 
     // Arpeggiator step pattern <-> "arp_steps" (on/off) + "arp_vel" (per-step %) state props.
     std::array<float, kArpSteps> arpSteps { };

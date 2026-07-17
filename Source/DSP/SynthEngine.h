@@ -521,6 +521,10 @@ public:
             focusMod[1].store (pPitch[(std::size_t) liveIndex], std::memory_order_relaxed);
             focusMod[2].store (pCut  [(std::size_t) liveIndex], std::memory_order_relaxed);
             focusMod[3].store (pPw   [(std::size_t) liveIndex], std::memory_order_relaxed);
+            // Also publish the focused part's RAW LFO outputs (-1..1) so the processor can use
+            // LFO 1-3 as block-tier mod sources (one-block latency, fine at control rate).
+            for (int k = 0; k < 3; ++k)
+                focusLfoRaw[(std::size_t) k].store (lfoRaw[(std::size_t) liveIndex][(std::size_t) k], std::memory_order_relaxed);
 
             // Per-part performance mods (bend + mod-wheel vibrato). The vibrato LFO advances
             // once per chunk (shared phase); its depth + the bend are per part.
@@ -812,12 +816,16 @@ private:
     std::array<std::vector<float>, maxParts> capPartL, capPartR;   // per-part looper capture taps
     int liveKitPart = -1, liveKitPad = -1;   // kit pad routed through live panel params (edit mode)
     std::atomic<float> focusMod[4] { };   // focused part's LFO mod per dest (UI knob animation)
+    std::atomic<float> focusLfoRaw[3] { };// focused part's raw LFO out (-1..1) for block-tier mod sources
 
 public:
     // Current LFO modulation on the focused part for a destination (0 off, 1 pitch semis,
     // 2 cutoff octaves, 3 pw units). Audio thread writes; the UI reads for knob animation.
     float focusModForDest (int d) const
     { return (d >= 0 && d < 4) ? focusMod[(std::size_t) d].load (std::memory_order_relaxed) : 0.0f; }
+    // Focused part's raw LFO output (-1..1) for block-tier mod sources (k = 0..2).
+    float focusLfoRawOut (int k) const
+    { return (k >= 0 && k < 3) ? focusLfoRaw[(std::size_t) k].load (std::memory_order_relaxed) : 0.0f; }
 private:
     std::array<int, maxParts> fxSilentBlocks {};
     std::array<bool, maxParts> fxCleared {};          // FX state reset on skip-entry (no stale-resume pop)
