@@ -8,31 +8,32 @@
 // ============================================================================
 // MOD MATRIX overlay (#56). A modal panel (same no-focus-leak discipline as the Save /
 // INPUTS dialogs) listing the FOCUSED part's 8 routing slots. Each row: a source, an
-// arrow, a destination, a bipolar depth slider (gold = positive, cyan = inverted), and a
-// remove. Routes are usually made by the LINK gesture (arm a source, tap a knob); this
-// overlay is where you inspect, re-point, re-depth, invert and delete them — and you can
-// build a route here from scratch with the two dropdowns.
+// arrow, a destination, a bipolar depth slider (gold = positive, cyan = inverted) with a
+// numeric read-out, a live-activity dot, and a drawn remove ✕. Routes are usually made by
+// the LINK gesture (arm a source, tap a knob); this overlay inspects, re-points, re-depths,
+// inverts and deletes them — or builds one from scratch with the two grouped dropdowns.
+// The destination list is CATEGORIZED (Osc / Filter / Env / LFO / FX / Part) so the ~40
+// targets stay navigable.
 // ============================================================================
 
 class ModMatrixPanel : public juce::Component,
                        private juce::Timer
 {
 public:
+    // Flat name lists indexed by enum id (item id = enum + 1) — used by the LINK source menu
+    // and by tests. The panel's own dropdowns are built grouped (see fillSource/fillDest).
     static juce::StringArray sourceNames()
     {
-        // Item 0 is the "no source" indicator (a real em-dash — must go through u8(); see UiText.h).
         juce::StringArray a { "LFO 1", "LFO 2", "LFO 3", "Mod Env", "Amp Env", "Velocity", "Note",
                               "Mod Wheel", "Pitch Bend", "Random",
                               "Macro 1", "Macro 2", "Macro 3", "Macro 4", "Macro 5", "Macro 6", "Macro 7", "Macro 8" };
-        a.insert (0, uitext::u8 ("\xe2\x80\x94"));
+        a.insert (0, uitext::u8 ("\xe2\x80\x94"));   // item 0 = "no source" (real em-dash via u8)
         return a;
     }
     static juce::StringArray destNames()
     {
-        // Ordered by ModMatrix::Dest id (item id = dest+1). Names come from the registry;
-        // a dest with no registry entry (reserved, e.g. PartLevel/Pan) shows a dash.
         juce::StringArray a;
-        a.add (uitext::u8 ("\xe2\x80\x94"));                       // DstNone
+        a.add (uitext::u8 ("\xe2\x80\x94"));         // DstNone
         for (int d = 1; d < ModMatrix::kNumDests; ++d)
         {
             const auto n = moddest::nameFor (d);
@@ -50,13 +51,12 @@ public:
             r.src  = std::make_unique<juce::ComboBox>();
             r.dst  = std::make_unique<juce::ComboBox>();
             r.depth = std::make_unique<juce::Slider> (juce::Slider::LinearHorizontal, juce::Slider::NoTextBox);
-            fill (*r.src, sourceNames());
-            fill (*r.dst, destNames());
+            fillSource (*r.src);
+            fillDest   (*r.dst);
             r.depth->setRange (-100.0, 100.0, 1.0);
             r.depth->setDoubleClickReturnValue (true, 0.0);
             for (auto* c : { (juce::Component*) r.src.get(), (juce::Component*) r.dst.get(), (juce::Component*) r.depth.get() })
                 { c->setWantsKeyboardFocus (false); addAndMakeVisible (c); }
-            r.remove.setButtonText (uitext::u8 ("\xe2\x9c\x95"));   // ✕ (decode as UTF-8, not ASCII)
             r.remove.setWantsKeyboardFocus (false);
             addAndMakeVisible (r.remove);
 
@@ -71,37 +71,55 @@ public:
             r.remove.onClick  = [this, idx] { proc.clearModSlot (-1, idx); refresh(); };
         }
         refresh();
-        setSize (560, 96 + VASynthProcessor::kModSlots * 40);
-        startTimerHz (20);   // live modulation bars
+        setSize (600, kHeaderH + kColsH + VASynthProcessor::kModSlots * kRowH + kFootH);
+        startTimerHz (20);   // live modulation dots
     }
 
     void paint (juce::Graphics& g) override
     {
         g.fillAll (VASynthLookAndFeel::panel());
+
+        // Title bar — section-header language.
+        auto title = getLocalBounds().removeFromTop (kHeaderH);
+        g.setColour (VASynthLookAndFeel::panelLight());
+        g.fillRect (title);
         g.setColour (VASynthLookAndFeel::ink());
         g.setFont (juce::Font (juce::FontOptions (16.0f, juce::Font::bold)));
-        g.drawText ("MOD MATRIX", getLocalBounds().removeFromTop (34).reduced (16, 0), juce::Justification::centredLeft, false);
+        g.drawText ("MOD MATRIX", title.reduced (16, 0), juce::Justification::centredLeft, false);
         g.setColour (VASynthLookAndFeel::accent());
         g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold)));
-        g.drawText ("PART " + juce::String (proc.editFocus() + 1),
-                    getLocalBounds().removeFromTop (34).reduced (16, 0), juce::Justification::centredRight, false);
+        g.drawText ("PART " + juce::String (proc.editFocus() + 1), title.reduced (16, 0), juce::Justification::centredRight, false);
+
+        // Column headers.
+        g.setColour (VASynthLookAndFeel::dim());
+        g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold)));
+        const auto& c0 = rows[0];
+        auto hdr = [&] (juce::Rectangle<int> b, const char* t, juce::Justification j)
+        { g.drawText (t, b.withY (kHeaderH + 4).withHeight (kColsH - 6), j, false); };
+        if (c0.src)   hdr (c0.src->getBounds(),   "SOURCE",      juce::Justification::centredLeft);
+        if (c0.dst)   hdr (c0.dst->getBounds(),   "DESTINATION", juce::Justification::centredLeft);
+        if (c0.depth) hdr (c0.depth->getBounds(), "DEPTH",       juce::Justification::centredLeft);
+
+        // Footer hint.
         g.setColour (VASynthLookAndFeel::dim());
         g.setFont (juce::Font (juce::FontOptions (11.5f)));
-        g.drawText (uitext::u8 ("Arm LINK and tap a knob to make a route \xe2\x80\x94 or pick a source + destination here."),
-                    juce::Rectangle<int> (16, getHeight() - 24, getWidth() - 32, 16), juce::Justification::centredLeft, false);
+        g.drawText (uitext::u8 ("Arm LINK and tap a knob to route \xe2\x80\x94 or add one below. Depth is bipolar (drag left to invert)."),
+                    juce::Rectangle<int> (16, getHeight() - kFootH + 4, getWidth() - 32, 16), juce::Justification::centredLeft, false);
     }
 
     void resized() override
     {
         auto c = getLocalBounds().reduced (14, 0);
-        c.removeFromTop (40);
+        c.removeFromTop (kHeaderH + kColsH);
         for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
         {
-            auto row = c.removeFromTop (40).reduced (0, 4);
+            auto row = c.removeFromTop (kRowH).reduced (0, 4);
             auto& r = rows[(std::size_t) i];
+            row.removeFromLeft (14);                                    // activity-dot gutter
             r.src->setBounds  (row.removeFromLeft (120));               row.removeFromLeft (22);   // arrow gap
-            r.dst->setBounds  (row.removeFromLeft (120));               row.removeFromLeft (10);
-            r.remove.setBounds (row.removeFromRight (34).reduced (2, 1)); row.removeFromRight (8);
+            r.dst->setBounds  (row.removeFromLeft (128));               row.removeFromLeft (10);
+            r.remove.setBounds (row.removeFromRight (24).reduced (1, 3)); row.removeFromRight (6);
+            r.numArea = row.removeFromRight (44);                       // numeric depth read-out
             r.depthArea = row;
             r.depth->setBounds (row);
         }
@@ -109,15 +127,41 @@ public:
 
     void paintOverChildren (juce::Graphics& g) override
     {
-        // arrows between the two dropdowns + the live-modulation tick on each depth bar
-        g.setColour (VASynthLookAndFeel::accent());
-        g.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
         for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
         {
             auto& r = rows[(std::size_t) i];
+            const auto s = proc.getModSlot (-1, i);
+            const bool live = s.source != ModMatrix::SrcNone && s.dest != ModMatrix::DstNone;
+
+            // Arrow between the dropdowns.
             const auto sb = r.src->getBounds();
+            g.setColour (live ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::dim().withAlpha (0.5f));
+            g.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
             g.drawText (uitext::u8 ("\xe2\x86\x92"), juce::Rectangle<int> (sb.getRight(), sb.getY(), 22, sb.getHeight()),
                         juce::Justification::centred, false);
+
+            if (! live)
+            {
+                // Empty slot: a faint "+ add route" cue across the (disabled) depth area.
+                g.setColour (VASynthLookAndFeel::dim().withAlpha (0.5f));
+                g.setFont (juce::Font (juce::FontOptions (11.0f)));
+                g.drawText ("+ add route", r.depthArea.toNearestInt(), juce::Justification::centredLeft, false);
+                continue;
+            }
+
+            // Numeric depth read-out (gold positive, cyan inverted).
+            g.setColour (s.depth < 0.0f ? juce::Colour (0xff4bb3c4) : VASynthLookAndFeel::accent());
+            g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 11.0f, juce::Font::bold)));
+            g.drawText (juce::String (juce::roundToInt (s.depth * 100.0f)) + "%",
+                        r.numArea, juce::Justification::centredRight, false);
+
+            // Live-activity dot: brightens with the route's current modulation (block-tier reads
+            // the live per-dest offset; voice-tier pulses on the depth magnitude as a fallback).
+            const float act = liveActivity (s);
+            auto dot = juce::Rectangle<float> (getLocalBounds().reduced (16, 0).toFloat().getX() - 2.0f,
+                                               (float) r.depth->getBounds().getCentreY() - 3.0f, 6.0f, 6.0f);
+            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.25f + 0.75f * juce::jlimit (0.0f, 1.0f, act)));
+            g.fillEllipse (dot);
         }
     }
 
@@ -147,7 +191,6 @@ public:
         rows[(std::size_t) i].depth->setValue (depth * 100.0, juce::sendNotificationSync);
     }
 
-    // Public so the full edit path is testable without the GUI.
     void refresh()
     {
         for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
@@ -160,24 +203,71 @@ public:
             const bool live = s.source != ModMatrix::SrcNone && s.dest != ModMatrix::DstNone;
             r.depth->setEnabled (live);
             r.depth->setAlpha (live ? 1.0f : 0.4f);
+            r.remove.setVisible (live);
         }
         repaint();
     }
 
 private:
-    static void fill (juce::ComboBox& box, const juce::StringArray& names)
+    // A drawn ✕ (no font-glyph dependency — see the mojibake defect).
+    struct XButton : juce::Button
     {
-        for (int i = 0; i < names.size(); ++i) box.addItem (names[i], i + 1);   // item id = enum + 1
+        XButton() : juce::Button ("remove") {}
+        void paintButton (juce::Graphics& g, bool over, bool) override
+        {
+            auto b = getLocalBounds().toFloat().reduced (getWidth() * 0.32f);
+            g.setColour (over ? juce::Colour (0xffd8443a) : VASynthLookAndFeel::dim());
+            g.drawLine (b.getX(), b.getY(), b.getRight(), b.getBottom(), 1.8f);
+            g.drawLine (b.getX(), b.getBottom(), b.getRight(), b.getY(), 1.8f);
+        }
+    };
+
+    // Grouped source dropdown (section headings keep item ids intact so setSelectedId/getText work).
+    void fillSource (juce::ComboBox& box)
+    {
+        box.addItem (uitext::u8 ("\xe2\x80\x94"), 1);                    // None (source 0 + 1)
+        auto add = [&] (int src) { box.addItem (sourceNames()[src], src + 1); };
+        box.addSectionHeading ("LFO");         for (int s = ModMatrix::LFO1; s <= ModMatrix::LFO3; ++s) add (s);
+        box.addSectionHeading ("Envelope");    add (ModMatrix::ModEnv); add (ModMatrix::AmpEnv);
+        box.addSectionHeading ("Performance"); for (int s = ModMatrix::Velocity; s <= ModMatrix::Random; ++s) add (s);
+        box.addSectionHeading ("Macro");       for (int s = ModMatrix::Macro1; s <= ModMatrix::Macro8; ++s) add (s);
         box.setSelectedId (1, juce::dontSendNotification);
     }
+
+    // Grouped destination dropdown, by registry category.
+    void fillDest (juce::ComboBox& box)
+    {
+        box.addItem (uitext::u8 ("\xe2\x80\x94"), 1);                    // None (dest 0 + 1)
+        for (int cat = 0; cat < moddest::kNumCategories; ++cat)
+        {
+            bool headed = false;
+            for (auto& e : moddest::table())
+                if (e.category == cat)
+                {
+                    if (! headed) { box.addSectionHeading (moddest::categoryName (cat)); headed = true; }
+                    box.addItem (e.name, e.dest + 1);
+                }
+        }
+        box.setSelectedId (1, juce::dontSendNotification);
+    }
+
+    float liveActivity (const ModMatrix::Slot& s) const
+    {
+        if (s.dest >= ModMatrix::kFirstBlockDest)
+            return std::abs (proc.blockModOffset (s.dest)) * 4.0f;      // block-tier: live per-dest offset
+        return std::abs (s.depth) * 0.6f;                              // voice-tier: fall back to depth magnitude
+    }
+
     void timerCallback() override { repaint(); }
+
+    static constexpr int kHeaderH = 36, kColsH = 18, kRowH = 40, kFootH = 26;
 
     struct Row
     {
         std::unique_ptr<juce::ComboBox> src, dst;
         std::unique_ptr<juce::Slider>   depth;
-        juce::TextButton                remove;
-        juce::Rectangle<int>            depthArea;
+        XButton                         remove;
+        juce::Rectangle<int>            depthArea, numArea;
     };
 
     VASynthProcessor& proc;

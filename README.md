@@ -30,11 +30,17 @@ a general-purpose synth that runs in any VST3 host or standalone.
 - **8 macros**, pre-assigned to musical defaults (cutoff, reso, filter-env, release, LFO
   rate/depth, reverb, focused-part level), routable to any parameter; Launchkey pots drive them.
 - **Mod matrix** (per part, 8 slots): route any source (3 LFOs, mod/amp env, velocity, note,
-  mod wheel, pitch bend, random, the 8 macros) to any destination (pitch, cutoff, resonance,
-  pulse width, amp, osc 1–3 level). Wire routes by **touch-connect** — hit **LINK**, pick a
-  source, then tap a glowing destination knob; drag that knob within ~2 s to set the depth in
-  one gesture. The **MOD** overlay lists, re-points, inverts, re-depths, and deletes routes.
-  Routes travel with the patch; the matrix is bit-identical passthrough when empty.
+  mod wheel, pitch bend, random, the 8 macros) to **any continuous parameter of the focused
+  part** — a categorized registry of ~40 targets across Osc (pitch, PW, levels, octave/detune),
+  Filter (cutoff, resonance, env-amt, keytrack, vel), Env (all ADSR stages + vel/amp), LFO
+  (1–3 rate/depth), FX (chorus/delay/reverb/width — e.g. an LFO or Macro wobbling **delay
+  feedback**), and per-part EQ gains. Combinations are just more slots (summed). The 5 classic
+  per-voice targets keep full per-voice fidelity; block-level targets (FX/EQ/LFO/env) modulate
+  at control rate. Wire routes by **touch-connect** — hit **LINK** (top bar), pick a source,
+  then tap a glowing destination knob; drag it within ~2 s to set the depth in one gesture. The
+  **MOD** overlay (categorized dropdowns, bipolar depth read-out, live-activity dots) inspects,
+  re-points, inverts, re-depths, and deletes routes. Routes travel with the patch; the matrix is
+  bit-identical passthrough when empty.
 - **Bulletproof output stage**: voice-sum headroom trim + transparent safety
   soft-clip, so the output never clips the DAC on dense chords.
 - **Diatonic chord engine**: one finger → an in-key chord (Major / Natural Minor,
@@ -444,7 +450,7 @@ out-of-range peaks, and non-finite samples. The `[click]` suite runs in every ga
   a show-all toggle) needs a custom `AudioDeviceManager`/plugin-holder — deferred.
 
 **v2 (make it deep)**
-- [ ] Mod matrix (any source → any destination, replaces single LFO dest)
+- [x] Mod matrix — any source → any continuous parameter (registry-driven), touch-connect LINK + categorized overlay
 - [ ] Second LFO, per-voice LFO option, MIDI-clock sync
 - [ ] Unison/detune stacking, hard sync osc2→osc1
 - [ ] Sub-oscillator, filter drive/saturation
