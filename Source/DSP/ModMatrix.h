@@ -47,8 +47,30 @@ public:
                   Macro5, Macro6, Macro7, Macro8, kNumSources };
     // WavePos is RESERVED for the (not-yet-built) wavetable oscillator: it persists and
     // evaluates, but no voice seam consumes it yet, so a route to it is silent for now.
+    //
+    // VOICE-TIER dests (Pitch..Osc3Level) are applied per-voice inside SynthVoice via evaluate().
+    // BLOCK-TIER dests (>= kFirstBlockDest) are applied by the PROCESSOR at block rate to the
+    // focused part's FXParams/PartLfos/VoiceParams before they reach the engine — they modulate
+    // params that aren't per-voice offsets (FX, EQ, LFO rate/depth, env stages, osc tune, ...).
+    // Order is STABLE — only append. Registry metadata (paramId/name/category) lives in the
+    // processor; the matrix only sums source*depth per dest id.
     enum Dest   { DstNone = 0, Pitch, Cutoff, Resonance, PulseWidth, Amp,
-                  WavePos, Osc1Level, Osc2Level, Osc3Level, kNumDests };
+                  WavePos, Osc1Level, Osc2Level, Osc3Level,
+                  // --- block-tier (append only) ---
+                  ChorusRate, ChorusDepth, ChorusMix,
+                  DelayTime, DelayFeedback, DelayMix, DelaySpread,
+                  ReverbSize, ReverbDamp, ReverbWidth, ReverbMix,
+                  StereoWidth,
+                  EqB1Gain, EqB2Gain, EqB3Gain,
+                  Lfo1Rate, Lfo1Depth, Lfo2Rate, Lfo2Depth, Lfo3Rate, Lfo3Depth,
+                  AmpAttack, AmpDecay, AmpSustain, AmpRelease,
+                  FltAttack, FltDecay, FltSustain, FltRelease,
+                  FilterEnvAmt, FilterKeytrack, VelToCutoff, VelToAmp, FltEnvToPitch,
+                  Osc1Octave, Osc1Detune, Osc2Octave, Osc2Detune, Osc3Octave, Osc3Detune,
+                  GlideTime, PartLevel, PartPan,
+                  kNumDests };
+    static constexpr int kFirstBlockDest = ChorusRate;
+    static constexpr int kNumBlockDests  = kNumDests - kFirstBlockDest;
 
     struct Slot { int source = SrcNone; int dest = DstNone; float depth = 0.0f; };  // depth -1..1
 
@@ -83,6 +105,20 @@ public:
         for (auto& s : slots)
             if (s.source != SrcNone && s.dest != DstNone && s.depth != 0.0f) return true;
         return false;
+    }
+
+    // Block-tier: sum the NORMALIZED (0..1 param-space) offset for each block dest into
+    // out[dest - kFirstBlockDest]. The processor adds these to the focused part's param values.
+    // out must have kNumBlockDests entries. Voice-tier dests are ignored here.
+    void blockOffsets (const ModSources& s, float* out, int n) const
+    {
+        for (int i = 0; i < n; ++i) out[i] = 0.0f;
+        for (auto& sl : slots)
+        {
+            if (sl.source == SrcNone || sl.dest < kFirstBlockDest || sl.depth == 0.0f) continue;
+            const int idx = sl.dest - kFirstBlockDest;
+            if (idx >= 0 && idx < n) out[idx] += sourceValue (sl.source, s) * sl.depth;   // -1..1 normalized
+        }
     }
 
     Offsets evaluate (const ModSources& s) const

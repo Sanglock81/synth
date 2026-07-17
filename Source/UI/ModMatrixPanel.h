@@ -2,6 +2,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "VASynthLookAndFeel.h"
 #include "UiText.h"
+#include "../ModDestRegistry.h"
 #include "../PluginProcessor.h"
 
 // ============================================================================
@@ -28,9 +29,15 @@ public:
     }
     static juce::StringArray destNames()
     {
-        juce::StringArray a { "Pitch", "Cutoff", "Resonance", "Pulse Width", "Amp",
-                              "Wave Pos", "Osc 1 Lvl", "Osc 2 Lvl", "Osc 3 Lvl" };
-        a.insert (0, uitext::u8 ("\xe2\x80\x94"));
+        // Ordered by ModMatrix::Dest id (item id = dest+1). Names come from the registry;
+        // a dest with no registry entry (reserved, e.g. PartLevel/Pan) shows a dash.
+        juce::StringArray a;
+        a.add (uitext::u8 ("\xe2\x80\x94"));                       // DstNone
+        for (int d = 1; d < ModMatrix::kNumDests; ++d)
+        {
+            const auto n = moddest::nameFor (d);
+            a.add (n.isNotEmpty() ? n : uitext::u8 ("\xe2\x80\x94"));
+        }
         return a;
     }
 

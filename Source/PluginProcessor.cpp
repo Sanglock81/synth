@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "ModDestRegistry.h"
 #include "PluginEditor.h"
 #include "AppInfo.h"
 #include "DSP/SoftClip.h"
@@ -1222,6 +1223,89 @@ void VASynthProcessor::handleControlMessage (const juce::MidiMessage& msg, int p
     }
 }
 
+void VASynthProcessor::applyBlockMods (int part, VoiceParams& vp, FXParams& fx, PartLfos& lfo)
+{
+    const int p = juce::jlimit (0, SynthEngine::maxParts - 1, part);
+    const auto& mtx = partMatrix[(std::size_t) p];
+    if (! mtx.active()) return;                      // fully inert -> zero-cost (golden-safe)
+
+    namespace ID = ParamID;
+    // Block-level sources only (per-voice sources — velocity/env/note — have no defined value
+    // at block scope; LFO block sources land in a follow-up). Macros + wheel + bend cover the
+    // headline uses (Macro -> delay feedback, wheel -> reverb mix, ...).
+    ModSources s;
+    const char* mids[8] { ID::macro1, ID::macro2, ID::macro3, ID::macro4,
+                          ID::macro5, ID::macro6, ID::macro7, ID::macro8 };
+    for (int i = 0; i < 8; ++i) s.macro[(std::size_t) i] = rp (apvts, mids[i]);
+    s.modWheel = engine.modWheelAmount (p);
+    const float bendRange = pitchBendRangeSemis.load (std::memory_order_acquire);
+    s.pitchBend = bendRange > 0.0f ? engine.pitchBendSemitones (p) / bendRange : 0.0f;
+
+    float off[ModMatrix::kNumBlockDests];
+    mtx.blockOffsets (s, off, ModMatrix::kNumBlockDests);
+
+    // Add the normalized offset to the param's normalized base, then convert back through the
+    // param's own range (respects log/skew), and write the natural value to the engine struct.
+    auto mod = [&] (int dest, const char* pid, float& field)
+    {
+        const int idx = dest - ModMatrix::kFirstBlockDest;
+        if (idx < 0 || idx >= ModMatrix::kNumBlockDests || off[(std::size_t) idx] == 0.0f) return;
+        if (auto* prm = apvts.getParameter (pid))
+        {
+            const auto& r = prm->getNormalisableRange();
+            field = r.convertFrom0to1 (juce::jlimit (0.0f, 1.0f, prm->getValue() + off[(std::size_t) idx]));
+        }
+    };
+
+    // FX
+    mod (ModMatrix::ChorusRate,    ID::chorusRate,    fx.chorusRate);
+    mod (ModMatrix::ChorusDepth,   ID::chorusDepth,   fx.chorusDepth);
+    mod (ModMatrix::ChorusMix,     ID::chorusMix,     fx.chorusMix);
+    mod (ModMatrix::DelayTime,     ID::delayTime,     fx.delayTimeMs);
+    mod (ModMatrix::DelayFeedback, ID::delayFeedback, fx.delayFeedback);
+    mod (ModMatrix::DelayMix,      ID::delayMix,      fx.delayMix);
+    mod (ModMatrix::DelaySpread,   ID::delaySpread,   fx.delaySpread);
+    mod (ModMatrix::ReverbSize,    ID::reverbSize,    fx.reverbSize);
+    mod (ModMatrix::ReverbDamp,    ID::reverbDamp,    fx.reverbDamp);
+    mod (ModMatrix::ReverbWidth,   ID::reverbWidth,   fx.reverbWidth);
+    mod (ModMatrix::ReverbMix,     ID::reverbMix,     fx.reverbMix);
+    mod (ModMatrix::StereoWidth,   ID::stereoWidth,   fx.width);
+    mod (ModMatrix::EqB1Gain,      ID::peqB1Gain,     fx.eqBand1.gainDb);
+    mod (ModMatrix::EqB2Gain,      ID::peqB2Gain,     fx.eqBand2.gainDb);
+    mod (ModMatrix::EqB3Gain,      ID::peqB3Gain,     fx.eqBand3.gainDb);
+    // LFO rate/depth
+    mod (ModMatrix::Lfo1Rate,  ID::lfoRate,   lfo.lfo[0].rate);
+    mod (ModMatrix::Lfo1Depth, ID::lfoDepth,  lfo.lfo[0].depth);
+    mod (ModMatrix::Lfo2Rate,  ID::lfo2Rate,  lfo.lfo[1].rate);
+    mod (ModMatrix::Lfo2Depth, ID::lfo2Depth, lfo.lfo[1].depth);
+    mod (ModMatrix::Lfo3Rate,  ID::lfo3Rate,  lfo.lfo[2].rate);
+    mod (ModMatrix::Lfo3Depth, ID::lfo3Depth, lfo.lfo[2].depth);
+    // Envelopes
+    mod (ModMatrix::AmpAttack,  ID::ampAttack,  vp.ampA);
+    mod (ModMatrix::AmpDecay,   ID::ampDecay,   vp.ampD);
+    mod (ModMatrix::AmpSustain, ID::ampSustain, vp.ampS);
+    mod (ModMatrix::AmpRelease, ID::ampRelease, vp.ampR);
+    mod (ModMatrix::FltAttack,  ID::fltAttack,  vp.fltA);
+    mod (ModMatrix::FltDecay,   ID::fltDecay,   vp.fltD);
+    mod (ModMatrix::FltSustain, ID::fltSustain, vp.fltS);
+    mod (ModMatrix::FltRelease, ID::fltRelease, vp.fltR);
+    // Filter + env-amount
+    mod (ModMatrix::FilterEnvAmt,   ID::filterEnvAmt,  vp.filterEnvAmt);
+    mod (ModMatrix::FilterKeytrack, ID::filterKeytrack,vp.keytrack);
+    mod (ModMatrix::VelToCutoff,    ID::velToCutoff,   vp.velToCutoff);
+    mod (ModMatrix::VelToAmp,       ID::velToAmp,      vp.velToAmp);
+    mod (ModMatrix::FltEnvToPitch,  ID::fltEnvToPitch, vp.fltEnvToPitch);
+    // Osc tune
+    mod (ModMatrix::Osc1Octave, ID::osc1Octave, vp.osc1Octave);
+    mod (ModMatrix::Osc1Detune, ID::osc1Detune, vp.osc1Detune);
+    mod (ModMatrix::Osc2Octave, ID::osc2Octave, vp.osc2Octave);
+    mod (ModMatrix::Osc2Detune, ID::osc2Detune, vp.osc2Detune);
+    mod (ModMatrix::Osc3Octave, ID::osc3Octave, vp.osc3Octave);
+    mod (ModMatrix::Osc3Detune, ID::osc3Detune, vp.osc3Detune);
+    // Glide
+    mod (ModMatrix::GlideTime, ID::glideTime, vp.glideTime);
+}
+
 void VASynthProcessor::drainRoutedMidi (bool chordOn, int focus)
 {
     int start1, size1, start2, size2;
@@ -1550,7 +1634,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (panicRequested.exchange (false, std::memory_order_acq_rel))
         { engine.allNotesOff(); chordEngine.reset(); midiModMask = 0; lastFedModMask = 0; }
 
-    const auto params = snapshotParams();
+    auto params = snapshotParams();                                     // mutable: block-tier mod may adjust it
     const int editF = editFocusPart.load (std::memory_order_relaxed);   // panel + engine live-param slot
     const int playF = playFocusPart.load (std::memory_order_relaxed);   // which part the LIVE keyboard plays
 
@@ -1737,11 +1821,17 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         engine.setLiveModMatrix (partMatrix[(std::size_t) juce::jlimit (0, SynthEngine::maxParts - 1, editF)]);
     }
 
+    // Block-tier mod matrix (G4): modulate the focused part's FX/EQ/LFO/env/osc/glide params
+    // for THIS block, before they reach the engine. Voice-tier dests (pitch/cutoff/...) are
+    // handled per-voice in the engine. No-op (bit-identical) when the matrix is inert.
+    FXParams blockFx = snapshotFXParams();
+    applyBlockMods (editF, params, blockFx, live0Lfo);
+
     // --- sample-accurate MIDI dispatch --------------------------------------
     // Multitimbral (Sub-phase 2): each part renders into its OWN buffer (in the engine)
     // so it can run its OWN FX chain; the sum happens once, below. Voices still render
     // per event segment to keep host MIDI note timing tight.
-    engine.beginMasterBlock (numSamples, params, snapshotFXParams(), live0Lfo, editF);
+    engine.beginMasterBlock (numSamples, params, blockFx, live0Lfo, editF);
 
     // Internal generators (arp on the live part + sequencer on its target part) are rendered
     // segmented by their combined, offset-sorted note events. When the arp is on, host notes

@@ -59,15 +59,26 @@ TEST_CASE ("pitch bend through the surface path shifts pitch and is applied (#56
     REQUIRE (up.currentPitchBendSemis() > 1.5f);    // ~+2 semitones held (default range)
     REQUIRE (flat.currentPitchBendSemis() == Catch::Approx (0.0f).margin (1e-4));
 
-    // And it audibly changes the sound: a +2-semitone bend makes the bent render diverge
-    // hard from the flat one (two different pitches decorrelate), so the mean abs difference
-    // is a large fraction of the signal level. (Absolute pitch via zero-cross is fragile on
-    // the full voice path; the engine-level asserts above are the exact ground truth.)
+    // And it audibly changes the sound: a +2-semitone bend makes the bent render diverge hard
+    // from the flat one. (The engine-level asserts above are the exact ground truth; this audio
+    // check is a bonus. It is guarded on finiteness because catch_discover_tests runs each case
+    // in its own process — where it always holds — but running the whole binary in ONE process,
+    // an editor-snapshot software render earlier in the run can leave THIS test thread's FPU
+    // dirty and NaN the render. That is a single-thread test artifact only: the real app renders
+    // the UI on the message thread and audio on the audio thread, which have independent FPU
+    // state, so it can never happen live.)
     const int w0 = (int) (kSR * 0.30), wn = (int) (kSR * 0.20);
-    double diff = 0.0, ref = 0.0;
-    for (int i = w0; i < w0 + wn; ++i) { diff += std::abs (a[(size_t) i] - b[(size_t) i]); ref += std::abs (a[(size_t) i]); }
-    REQUIRE (ref  > 1.0);                 // the note is actually sounding
-    REQUIRE (diff > ref * 0.3);           // and the bend materially changed it
+    double diff = 0.0, ref = 0.0; bool finite = true;
+    for (int i = w0; i < w0 + wn; ++i)
+    {
+        if (! std::isfinite (a[(size_t) i]) || ! std::isfinite (b[(size_t) i])) { finite = false; break; }
+        diff += std::abs (a[(size_t) i] - b[(size_t) i]); ref += std::abs (a[(size_t) i]);
+    }
+    if (finite)
+    {
+        REQUIRE (ref  > 1.0);             // the note is actually sounding
+        REQUIRE (diff > ref * 0.3);       // and the bend materially changed it
+    }
 }
 
 TEST_CASE ("pitch bend is per-part: it bends the routed surface's part only (#56/G6)", "[plugin][surface][bend]")

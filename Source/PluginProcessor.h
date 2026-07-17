@@ -584,6 +584,9 @@ private:
     }
     void drainRoutedMidi (bool chordOn, int focus);   // audio thread (focus = LIVE part remap, 1.3)
     void handleControlMessage (const juce::MidiMessage& m, int part = -1); // CC/pitch-bend/all-off; part<0 = all (host/global)
+    // G4 block-tier mod matrix: apply the focused part's block-level routes (FX/EQ/LFO/env/osc/
+    // glide) to the per-block param structs before they reach the engine. No-op when inert.
+    void applyBlockMods (int part, VoiceParams& vp, FXParams& fx, PartLfos& lfo);
 
     // Parse an "a,b,c,d" fx_order property into the atomic mirror (used on load).
     void applyFxOrderProperty();

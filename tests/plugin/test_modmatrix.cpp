@@ -127,3 +127,55 @@ TEST_CASE ("a destination knob is armable only while a source is armed, and comp
     p.setModRouteDepth (slot, -0.6f);
     REQUIRE (p.modRouteDepth (slot) == Catch::Approx (-0.6f).margin (1e-3));
 }
+
+namespace
+{
+    // Late-tail peak after a short note, with the delay FX on and Macro 4 at `macro4`.
+    float delayTail (VASynthProcessor& p, float macro4)
+    {
+        p.prepareToPlay (48000.0, 128);
+        p.apvts.getParameter (ParamID::fxDelayOn)->setValueNotifyingHost (1.0f);
+        p.apvts.getParameter (ParamID::delayMix)->setValueNotifyingHost (0.8f);
+        p.apvts.getParameter (ParamID::delayTime)->setValueNotifyingHost (0.15f);   // short repeats
+        p.apvts.getParameter (ParamID::delayFeedback)->setValueNotifyingHost (0.1f);// low base
+        p.apvts.getParameter (ParamID::macro4)->setValueNotifyingHost (macro4);
+        float tail = 0.0f;
+        for (int b = 0; b < 220; ++b)
+        {
+            juce::AudioBuffer<float> buf (2, 128); buf.clear();
+            juce::MidiBuffer midi;
+            if (b == 0) midi.addEvent (juce::MidiMessage::noteOn  (1, 60, 0.9f), 0);
+            if (b == 6) midi.addEvent (juce::MidiMessage::noteOff (1, 60), 0);
+            p.processBlock (buf, midi);
+            if (b >= 130) tail = std::max (tail, buf.getMagnitude (0, 128));   // long after note-off
+        }
+        return tail;
+    }
+}
+
+TEST_CASE ("block-tier: Macro -> delay feedback modulates the FX at block rate (#56 G4)",
+           "[plugin][modmatrix][blocktier]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    // Same route in both; only Macro 4 differs. High macro pushes feedback up -> the delay
+    // tail rings on far longer, so the late-window energy is much larger.
+    VASynthProcessor lo; lo.setModSlot (-1, 0, ModMatrix::Macro4, ModMatrix::DelayFeedback, 1.0f);
+    VASynthProcessor hi; hi.setModSlot (-1, 0, ModMatrix::Macro4, ModMatrix::DelayFeedback, 1.0f);
+
+    const float tLo = delayTail (lo, 0.0f);
+    const float tHi = delayTail (hi, 1.0f);
+
+    REQUIRE (tLo >= 0.0f);
+    REQUIRE (tHi > tLo * 2.0f + 1.0e-4f);     // the macro audibly lengthens the delay tail
+}
+
+TEST_CASE ("block-tier is inert with no block route (bit-identical) (#56 G4)", "[plugin][modmatrix][blocktier]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    // A voice-tier-only route must leave the block-tier a no-op: delay tail identical with the
+    // macro low vs high (nothing routes to a block dest).
+    VASynthProcessor a; a.setModSlot (-1, 0, ModMatrix::LFO1, ModMatrix::Cutoff, 0.5f);
+    VASynthProcessor b; b.setModSlot (-1, 0, ModMatrix::LFO1, ModMatrix::Cutoff, 0.5f);
+    REQUIRE (delayTail (a, 0.0f) == Catch::Approx (delayTail (b, 1.0f)).margin (1e-4));
+}
