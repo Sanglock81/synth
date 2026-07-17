@@ -123,12 +123,12 @@ public:
     // Apply one profile mapping, respecting precedence: it only takes effect if
     // the CC's current mapping is the same source or lower (learned > user >
     // factory). Returns true if it was applied. Used by the profile applier.
-    bool applyProfileMapping (int cc, const juce::String& parameterID, Source src)
+    bool applyProfileMapping (int cc, const juce::String& parameterID, Source src, bool force = false)
     {
         if (cc < 0 || cc >= numCCs) return false;
         const int idx = indexOf (parameterID);
         if (idx < 0) return false;
-        if (ccSource[(std::size_t) cc].load (std::memory_order_acquire) > (int) src)
+        if (! force && ccSource[(std::size_t) cc].load (std::memory_order_acquire) > (int) src)
             return false;                                   // a higher-precedence mapping holds
         ccToParam[(std::size_t) cc].store (idx, std::memory_order_release);
         ccSource[(std::size_t) cc].store ((int) src, std::memory_order_release);

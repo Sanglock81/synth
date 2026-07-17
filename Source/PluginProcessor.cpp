@@ -168,19 +168,22 @@ juce::File VASynthProcessor::userMidiProfileDir()
 }
 
 // Apply the matched profile's default CC map. Factory first, then user, so user
-// overrides factory per-CC; MidiLearnManager's precedence keeps learned mappings
-// untouched (learned > user > factory).
+// A matched device profile is AUTHORITATIVE for the CCs it names: applying it FORCES those
+// mappings, overriding any stale/learned binding (user profile still layers over factory).
+// This is what makes "plug in a Launchkey -> its 8 pots drive the 8 macros" reliable even
+// when an old session had learned those CCs onto something else. (Learn still wins live,
+// until the next enumerate/hot-plug re-asserts the device's own map.)
 void VASynthProcessor::applyDeviceProfile (const juce::String& deviceName)
 {
     using Src = MidiLearnManager::Source;
     if (auto* fac = profileLib.factoryFor (deviceName))
     {
-        for (auto& m : fac->mappings) midiLearn.applyProfileMapping (m.first, m.second, Src::Factory);
+        for (auto& m : fac->mappings) midiLearn.applyProfileMapping (m.first, m.second, Src::Factory, /*force*/ true);
         pitchBendRangeSemis.store ((float) fac->pitchBendRange, std::memory_order_release);
     }
     if (auto* usr = profileLib.userFor (deviceName))
     {
-        for (auto& m : usr->mappings) midiLearn.applyProfileMapping (m.first, m.second, Src::User);
+        for (auto& m : usr->mappings) midiLearn.applyProfileMapping (m.first, m.second, Src::User, /*force*/ true);
         pitchBendRangeSemis.store ((float) usr->pitchBendRange, std::memory_order_release);
     }
 }

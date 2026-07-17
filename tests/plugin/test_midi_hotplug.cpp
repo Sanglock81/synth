@@ -58,6 +58,23 @@ TEST_CASE ("applyDeviceProfile on a factory device keeps its default map", "[plu
     REQUIRE (p.getMidiLearn().getCCForParam ("macro1") == 21);          // factory 21 -> macro1
 }
 
+TEST_CASE ("a matched device profile is authoritative: it forces its map over a stale learn", "[plugin][6c][hotplug]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+
+    // A past session had CC 21 (a Launchkey pot) learned onto a synth param instead of macro1.
+    p.getMidiLearn().armLearn (ParamID::filterCutoff);
+    p.getMidiLearn().handleCC (1, 21, 100);
+    REQUIRE (p.getMidiLearn().getCCForParam (ParamID::filterCutoff) == 21);
+
+    // Plugging the Launchkey in (its profile applies) must RECLAIM CC 21 for macro1 — the
+    // device's pots always drive the macros. Match is broad now ("Launchkey" substring).
+    p.applyDeviceProfile ("Launchkey MK3 25 MIDI 1");
+    REQUIRE (p.getMidiLearn().getCCForParam ("macro1") == 21);
+    REQUIRE (p.getMidiLearn().getCCForParam (ParamID::filterCutoff) == -1);   // no longer on the pot
+}
+
 TEST_CASE ("a no-CC-map profile still passes notes through (Korg B2)", "[plugin][6c][hotplug][bug2]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

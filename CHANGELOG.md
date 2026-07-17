@@ -49,6 +49,11 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
 - **808 / Punchy kick voicing:** amp attack softened 1 ms → 2 ms for a defined transient.
 
 ### Fixed / investigated
+- **A matched controller profile is now authoritative.** Plugging in a Launchkey re-asserts
+  its 8 pots (CC 21–28) onto the 8 macros on connect, overriding any stale/learned binding an
+  old session left on those CCs — so the pots always drive the macros with no manual step. The
+  match is broadened to any "Launchkey" (Mini/MK3/25/…); learn still wins live until the next
+  hot-plug. (Reset MIDI + macros remains as a manual factory-restore.)
 - **Standalone launches full-screen** by default (the recommended live mode — no OS title bar
   for a touch drag to catch); the maximise button still toggles back to a window.
 - **Reset MIDI + macros, and touch-friendly macro knobs.** Added a **Reset MIDI + macros**
