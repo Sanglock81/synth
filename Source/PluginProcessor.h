@@ -334,6 +334,8 @@ public:
     // one can SEE whether a controller's pitch/mod strips are actually arriving.
     float currentPitchBendSemis() const { return engine.pitchBendSemitones(); }
     float currentModWheel()       const { return engine.modWheelAmount(); }
+    float currentPitchBendSemis (int part) const { return engine.pitchBendSemitones (part); }
+    float currentModWheel       (int part) const { return engine.modWheelAmount (part); }
     std::uint32_t pitchBendEventCount() const { return pitchBendEvents.load (std::memory_order_relaxed); }
     std::uint32_t modWheelEventCount()  const { return modWheelEvents.load (std::memory_order_relaxed); }
     // LINK: bind `source`->`dest` in the first free slot (or reuse a slot already on this pair).
@@ -581,7 +583,7 @@ private:
         }   // full -> drop (never blocks a producer)
     }
     void drainRoutedMidi (bool chordOn, int focus);   // audio thread (focus = LIVE part remap, 1.3)
-    void handleControlMessage (const juce::MidiMessage& m); // CC/pitch-bend/all-off, shared
+    void handleControlMessage (const juce::MidiMessage& m, int part = -1); // CC/pitch-bend/all-off; part<0 = all (host/global)
 
     // Parse an "a,b,c,d" fx_order property into the atomic mirror (used on load).
     void applyFxOrderProperty();

@@ -219,10 +219,16 @@ public:
     }
 
     // ---- performance controllers (from any device) -------------------------
-    void setPitchBend (float semitones) { pitchBendSemis = semitones; }
-    void setModWheel   (float amount01) { modWheel = amount01; }        // -> vibrato depth
-    float pitchBendSemitones() const { return pitchBendSemis; }         // (test/diagnostic read-back)
-    float modWheelAmount()     const { return modWheel; }
+    void setPitchBend (float semitones) { pitchBendSemis.fill (semitones); }   // all parts (host/global wheel)
+    void setModWheel   (float amount01) { modWheel.fill (amount01); }          // -> vibrato depth, all parts
+    void setPitchBend (int part, float semitones) { if (part >= 0 && part < maxParts) pitchBendSemis[(std::size_t) part] = semitones; }
+    void setModWheel   (int part, float amount01) { if (part >= 0 && part < maxParts) modWheel[(std::size_t) part]     = amount01; }
+    // Read-back for the F12 diagnostic + tests: the largest-magnitude bend / mod across parts
+    // ("is anything bending?"), plus a per-part overload.
+    float pitchBendSemitones() const { float m = 0.0f; for (auto v : pitchBendSemis) if (std::abs (v) > std::abs (m)) m = v; return m; }
+    float modWheelAmount()     const { float m = 0.0f; for (auto v : modWheel) m = std::max (m, v); return m; }
+    float pitchBendSemitones (int part) const { return (part >= 0 && part < maxParts) ? pitchBendSemis[(std::size_t) part] : 0.0f; }
+    float modWheelAmount     (int part) const { return (part >= 0 && part < maxParts) ? modWheel[(std::size_t) part]     : 0.0f; }
 
     // Mod matrix (#56): the FOCUSED part's live routing table + the current 8 macro values
     // (matrix sources). Called by the processor before beginMasterBlock each block.
@@ -383,15 +389,17 @@ public:
                 case 3: modPw        = lfoVal * 0.45f; break;
                 default: break;
             }
-            const float vib = vibratoLFO.advance (chunk) * modWheel * kVibratoSemis;
-            modPitch += pitchBendSemis + vib;
+            const float vibRaw = vibratoLFO.advance (chunk);   // advance once per chunk; scale per part below
 
-            // Each active voice renders with ITS part's params + the shared mods.
+            // Each active voice renders with ITS part's params + the shared mods + that part's
+            // own pitch-bend/vibrato (per-part performance controllers, G6).
             for (auto& v : voices)
             {
                 if (! v.isActive()) continue;
-                VoiceParams p = paramsFor (v.getPart(), v.getSoundSlot());
-                p.pitchModSemis += modPitch;                // base pitchModSemis is 0
+                const int pt = v.getPart();
+                VoiceParams p = paramsFor (pt, v.getSoundSlot());
+                const float bendVib = pitchBendSemis[(std::size_t) pt] + vibRaw * modWheel[(std::size_t) pt] * kVibratoSemis;
+                p.pitchModSemis += modPitch + bendVib;      // base pitchModSemis is 0
                 p.cutoffModOct   = modCutoffOct;
                 p.pwMod          = modPw;
                 v.render (out + done, chunk, p);
@@ -514,9 +522,9 @@ public:
             focusMod[2].store (pCut  [(std::size_t) liveIndex], std::memory_order_relaxed);
             focusMod[3].store (pPw   [(std::size_t) liveIndex], std::memory_order_relaxed);
 
-            // Shared performance mods (bend + mod-wheel vibrato) hit every part's pitch.
-            const float vib = vibratoLFO.advance (chunk) * modWheel * kVibratoSemis;
-            const float bendVib = pitchBendSemis + vib;
+            // Per-part performance mods (bend + mod-wheel vibrato). The vibrato LFO advances
+            // once per chunk (shared phase); its depth + the bend are per part.
+            const float vibRaw = vibratoLFO.advance (chunk);
 
             // Per-part mod-matrix source snapshot (per-part fields only; the voice fills its
             // own velocity/env/note/random). Built only for parts whose matrix is live.
@@ -526,8 +534,8 @@ public:
                 if (! partMatrixUse[(std::size_t) p].active()) continue;
                 ModSources& ps = partSrc[(std::size_t) p];
                 ps.lfo[0] = lfoRaw[(std::size_t) p][0]; ps.lfo[1] = lfoRaw[(std::size_t) p][1]; ps.lfo[2] = lfoRaw[(std::size_t) p][2];
-                ps.modWheel  = modWheel;
-                ps.pitchBend = pitchBendSemis / 12.0f;     // approximate normalized bend for the matrix
+                ps.modWheel  = modWheel[(std::size_t) p];
+                ps.pitchBend = pitchBendSemis[(std::size_t) p] / 12.0f;     // approximate normalized bend for the matrix
                 for (int mi = 0; mi < 8; ++mi) ps.macro[(std::size_t) mi] = macroVals[(std::size_t) mi];
             }
 
@@ -536,6 +544,7 @@ public:
             {
                 if (! v.isActive()) continue;
                 const int pt = v.getPart();
+                const float bendVib = pitchBendSemis[(std::size_t) pt] + vibRaw * modWheel[(std::size_t) pt] * kVibratoSemis;
                 VoiceParams p = paramsFor (pt, v.getSoundSlot());
                 p.pitchModSemis += pPitch[(std::size_t) pt] + bendVib;
                 p.cutoffModOct   = pCut[(std::size_t) pt];
@@ -835,7 +844,10 @@ private:
     PolyBlepOscillator::Quality oscQuality = PolyBlepOscillator::Quality::Efficient;
 
     // Performance controllers.
-    float pitchBendSemis = 0.0f, modWheel = 0.0f;
+    // Per-part performance controllers (G6): a surface routed to a part bends/vibratos ONLY
+    // that part (a Launchkey bending its bass part must not warp the lead). Default 0 for
+    // every part -> bit-identical to the old global behaviour when nothing is bending.
+    std::array<float, maxParts> pitchBendSemis {}, modWheel {};
     bool  sustainPedal = false;
 
     // Mono/legato state — PER PART (each part has its own mode, note stack, and mono voice).

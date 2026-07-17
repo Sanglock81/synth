@@ -938,7 +938,7 @@ void VASynthProcessor::routeSurfaceMessage (const juce::String& surface, const j
         routeNoteOff (sounding, part);
     }
     else
-        routeMidi (m, 0);                            // CC / pitch-bend / etc: global / live part
+        routeMidi (m, getSurfaceRouting (surface));  // CC / pitch-bend: tagged with THIS surface's part (G6)
 }
 
 // ---- MULTI layouts: a named snapshot of parts + surface zones ---------------
@@ -1184,7 +1184,7 @@ void VASynthProcessor::dispatchNoteOff (int note, int part, bool chordOn)
 
 // CC / pitch-bend / all-notes-off — shared by the host `midi` buffer and the routed
 // FIFO. These act globally / on the live part (v1: control is not per-part).
-void VASynthProcessor::handleControlMessage (const juce::MidiMessage& msg)
+void VASynthProcessor::handleControlMessage (const juce::MidiMessage& msg, int part)
 {
     if (msg.isAllNotesOff() || msg.isAllSoundOff())
     {
@@ -1195,7 +1195,8 @@ void VASynthProcessor::handleControlMessage (const juce::MidiMessage& msg)
     {
         pitchBendEvents.fetch_add (1, std::memory_order_relaxed);       // G6 intake trace
         const float norm = (msg.getPitchWheelValue() - 8192) / 8192.0f;
-        engine.setPitchBend (norm * pitchBendRangeSemis.load (std::memory_order_acquire));
+        const float semis = norm * pitchBendRangeSemis.load (std::memory_order_acquire);
+        if (part < 0) engine.setPitchBend (semis); else engine.setPitchBend (part, semis);   // per routed part
         return;
     }
     if (msg.isController())
@@ -1213,7 +1214,9 @@ void VASynthProcessor::handleControlMessage (const juce::MidiMessage& msg)
         }
         else
         {
-            if (cc == 1) { engine.setModWheel (val / 127.0f); modWheelEvents.fetch_add (1, std::memory_order_relaxed); }   // mod wheel -> vibrato (+ G6 trace)
+            if (cc == 1) { const float amt = val / 127.0f;                                        // mod wheel -> vibrato (+ G6 trace)
+                           if (part < 0) engine.setModWheel (amt); else engine.setModWheel (part, amt);
+                           modWheelEvents.fetch_add (1, std::memory_order_relaxed); }
             midiLearn.handleCC (msg.getChannel(), cc, val);
         }
     }
@@ -1236,7 +1239,7 @@ void VASynthProcessor::drainRoutedMidi (bool chordOn, int focus)
         const bool arpCapture = arp.enabled() && part == focus;
         if (m.isNoteOn())       { looper.recordNote (part, 0, e.d1, e.d2 / 127.0f, true);  if (arpCapture) arp.noteOn (e.d1, e.d2 / 127.0f); else dispatchNoteOn  (e.d1, e.d2 / 127.0f, part, chordOn); }
         else if (m.isNoteOff()) { looper.recordNote (part, 0, e.d1, 0.0f, false);           if (arpCapture) arp.noteOff (e.d1);               else dispatchNoteOff (e.d1, part, chordOn); }
-        else                    handleControlMessage (m);
+        else                    handleControlMessage (m, part);   // bend/CC1 hit the routed part (G6)
     };
     for (int i = 0; i < size1; ++i) handle (start1 + i);
     for (int i = 0; i < size2; ++i) handle (start2 + i);

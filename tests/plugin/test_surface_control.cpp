@@ -70,6 +70,23 @@ TEST_CASE ("pitch bend through the surface path shifts pitch and is applied (#56
     REQUIRE (diff > ref * 0.3);           // and the bend materially changed it
 }
 
+TEST_CASE ("pitch bend is per-part: it bends the routed surface's part only (#56/G6)", "[plugin][surface][bend]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    VASynthProcessor p;
+    p.setSurfaceRouting ("Ctrl A", 0);          // surface A -> live part
+    p.setSurfaceRouting ("Ctrl B", 2);          // surface B -> part 2
+    p.prepareToPlay (kSR, 512);
+
+    p.routeSurfaceMessage ("Ctrl B", juce::MidiMessage::pitchWheel (1, 16383));   // bend B's part only
+    juce::AudioBuffer<float> buf (2, 512); buf.clear(); juce::MidiBuffer midi;
+    p.processBlock (buf, midi);
+
+    REQUIRE (p.currentPitchBendSemis (2) > 1.5f);                                 // part 2 bent
+    REQUIRE (p.currentPitchBendSemis (0) == Catch::Approx (0.0f).margin (1e-4));  // live part untouched
+}
+
 TEST_CASE ("mod wheel (CC1) through the surface path reaches the engine (#56/G6)", "[plugin][surface][modwheel]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
