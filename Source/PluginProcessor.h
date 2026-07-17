@@ -287,6 +287,49 @@ public:
     // Each macro (0..7) can route to one target parameter; the value knob then drives
     // that parameter (applied on the message thread by the editor). The map persists in
     // the apvts state ("macro_map" property), so it saves/loads with presets/sessions.
+    // -- mod matrix (#56): per-part source->dest routing, edited on the FOCUSED part -------
+    // The LINK gesture adds a route; the overlay inspects/re-depths/inverts/removes. Baked
+    // per locked part; persists with the patch. `part < 0` targets the edit-focused part.
+    static constexpr int kModSlots = ModMatrix::kSlots;
+    int modFocusPart (int part) const { return part >= 0 ? juce::jlimit (0, SynthEngine::maxParts - 1, part) : editFocus(); }
+    ModMatrix::Slot getModSlot (int part, int slot) const
+    {
+        const auto& m = partMatrix[(std::size_t) modFocusPart (part)];
+        return (slot >= 0 && slot < kModSlots) ? m.slots[(std::size_t) slot] : ModMatrix::Slot{};
+    }
+    void setModSlot (int part, int slot, int source, int dest, float depth)
+    {
+        const int p = modFocusPart (part);
+        if (slot < 0 || slot >= kModSlots) return;
+        partMatrix[(std::size_t) p].slots[(std::size_t) slot] = { source, dest, juce::jlimit (-1.0f, 1.0f, depth) };
+        writeModMatrixProperty();
+    }
+    void setModDepth (int part, int slot, float depth)
+    {
+        const int p = modFocusPart (part);
+        if (slot < 0 || slot >= kModSlots) return;
+        partMatrix[(std::size_t) p].slots[(std::size_t) slot].depth = juce::jlimit (-1.0f, 1.0f, depth);
+        writeModMatrixProperty();
+    }
+    void clearModSlot (int part, int slot) { setModSlot (part, slot, ModMatrix::SrcNone, ModMatrix::DstNone, 0.0f); }
+    // LINK: bind `source`->`dest` in the first free slot (or reuse a slot already on this pair).
+    // Returns the slot index, or -1 if all 8 are full. Default depth +50%.
+    int linkModRoute (int part, int source, int dest, float depth = 0.5f)
+    {
+        const int p = modFocusPart (part);
+        auto& m = partMatrix[(std::size_t) p];
+        int free = -1;
+        for (int i = 0; i < kModSlots; ++i)
+        {
+            const auto& s = m.slots[(std::size_t) i];
+            if (s.source == source && s.dest == dest) { setModDepth (p, i, depth); return i; }
+            if (free < 0 && (s.source == ModMatrix::SrcNone || s.dest == ModMatrix::DstNone)) free = i;
+        }
+        if (free < 0) return -1;
+        setModSlot (p, free, source, dest, depth);
+        return free;
+    }
+
     // A macro may target the special "focused part level" instead of a fixed param ID: this
     // sentinel resolves at apply-time to the edit-focused part's partN_level (see TopBar).
     static constexpr const char* kFocusLevelTarget = "__focus_level__";
@@ -523,6 +566,11 @@ private:
     std::array<juce::String, 8> macroTargetId {};
     void writeMacroMapProperty();
     void applyMacroMapProperty();
+
+    // Mod matrix (#56): one routing table per part, saved in the "mod_matrix" state property.
+    std::array<ModMatrix, SynthEngine::maxParts> partMatrix {};
+    void writeModMatrixProperty();
+    void applyModMatrixProperty();
 
     // Arpeggiator step pattern <-> "arp_steps" (on/off) + "arp_vel" (per-step %) state props.
     std::array<float, kArpSteps> arpSteps { };

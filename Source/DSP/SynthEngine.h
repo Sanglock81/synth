@@ -245,13 +245,13 @@ public:
     // and LFOs travel WITH the voice params so a locked part is fully self-contained and
     // there is no per-part FX/LFO data race with the audio thread (Sub-phase 2).
     void setLockedPartParams (int part, const VoiceParams& vp,
-                              const FXParams& fx = {}, const PartLfos& lfo = {})
+                              const FXParams& fx = {}, const PartLfos& lfo = {}, const ModMatrix& mtx = {})
     {
         // part 0 is publishable too now: when the edit focus moves OFF part 0, its last
         // state is baked into slot 0 like any other locked part (1.3 edit-focus).
         if (part >= 0 && part < maxParts)
         {
-            lockedSlots[(std::size_t) part].publish ({ vp, fx, lfo, ModMatrix{} });
+            lockedSlots[(std::size_t) part].publish ({ vp, fx, lfo, mtx });
             setPartPolyMode (part, vp.polyMode);   // a locked part bakes its own poly/mono/legato
         }
     }

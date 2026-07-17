@@ -110,7 +110,7 @@ void VASynthProcessor::applyFocusedPartSound (const juce::ValueTree& soundTree)
         partEditState[(std::size_t) f] = apvts.copyState();
         partEdited[(std::size_t) f] = false;               // a freshly loaded preset is unedited
         if (f > 0)                                         // a LOCKED part must re-publish to keep sounding
-            engine.setLockedPartParams (f, snapshotParams(), snapshotFXParams(), lfosFrom (apvts));
+            engine.setLockedPartParams (f, snapshotParams(), snapshotFXParams(), lfosFrom (apvts), partMatrix[(std::size_t) f]);
     }
 }
 
@@ -534,7 +534,8 @@ void VASynthProcessor::bakeStateToSlot (int part, const juce::ValueTree& state)
     if (state.isValid()) scratch.apvts.replaceState (state.createCopy());
     else                 bakeInitBaseline (scratch);
     engine.setLockedPartParams (part, buildVoiceParams (scratch.apvts),
-                                fxParamsFrom (scratch.apvts), lfosFrom (scratch.apvts));
+                                fxParamsFrom (scratch.apvts), lfosFrom (scratch.apvts),
+                                partMatrix[(std::size_t) juce::jlimit (0, SynthEngine::maxParts - 1, part)]);
 }
 
 // Copy ONLY the per-part sound params (+ fx order) from a stored state tree into the live
@@ -572,7 +573,7 @@ void VASynthProcessor::setEditFocus (int part)
     if (part == cur) return;
 
     partEditState[(std::size_t) cur] = apvts.copyState();                    // remember cur's sound
-    engine.setLockedPartParams (cur, snapshotParams(), snapshotFXParams(), lfosFrom (apvts));  // keep it playing
+    engine.setLockedPartParams (cur, snapshotParams(), snapshotFXParams(), lfosFrom (apvts), partMatrix[(std::size_t) cur]);  // keep it playing
 
     if (! partEditState[(std::size_t) part].isValid())                       // never visited -> Init
     { BakeProcessor b; bakeInitBaseline (b); partEditState[(std::size_t) part] = b.apvts.copyState(); }
@@ -641,7 +642,7 @@ bool VASynthProcessor::setPartPreset (int part, const juce::String& name)
     bool ok = true;
     FXParams fx; PartLfos lfo; juce::ValueTree st;
     const VoiceParams vp = bakePresetParams (name, ok, &fx, &lfo, &st);
-    engine.setLockedPartParams (part, vp, fx, lfo);  // voice + FX + LFOs published together
+    engine.setLockedPartParams (part, vp, fx, lfo, partMatrix[(std::size_t) part]);  // voice + FX + LFOs + matrix
     engine.clearPartKit (part);                     // a plain preset turns any kit off
     partKits[(std::size_t) part] = KitDefinition{}; // forget the kit definition
     partPresetName[(std::size_t) part] = ok ? name : juce::String ("Init");
@@ -1327,6 +1328,41 @@ void VASynthProcessor::applyMacroMapProperty()
             macroTargetId[(std::size_t) i] = tokens[i];
 }
 
+// Mod matrix (#56): "src:dest:depth,...(8 slots)" per part, parts joined by ';'.
+void VASynthProcessor::writeModMatrixProperty()
+{
+    juce::StringArray parts;
+    for (auto& m : partMatrix)
+    {
+        juce::StringArray slots;
+        for (auto& s : m.slots)
+            slots.add (juce::String (s.source) + ":" + juce::String (s.dest) + ":" + juce::String (s.depth, 4));
+        parts.add (slots.joinIntoString (","));
+    }
+    apvts.state.setProperty ("mod_matrix", parts.joinIntoString (";"), nullptr);
+}
+
+void VASynthProcessor::applyModMatrixProperty()
+{
+    for (auto& m : partMatrix) m = ModMatrix{};
+    const auto str = apvts.state.getProperty ("mod_matrix").toString();
+    if (str.isEmpty()) return;                                  // absent -> all inert (default)
+    auto parts = juce::StringArray::fromTokens (str, ";", "");
+    for (int p = 0; p < juce::jmin ((int) partMatrix.size(), parts.size()); ++p)
+    {
+        auto slots = juce::StringArray::fromTokens (parts[p], ",", "");
+        for (int i = 0; i < juce::jmin (kModSlots, slots.size()); ++i)
+        {
+            auto f = juce::StringArray::fromTokens (slots[i], ":", "");
+            if (f.size() >= 3)
+                partMatrix[(std::size_t) p].slots[(std::size_t) i]
+                    = { juce::jlimit (0, ModMatrix::kNumSources - 1, f[0].getIntValue()),
+                        juce::jlimit (0, ModMatrix::kNumDests   - 1, f[1].getIntValue()),
+                        juce::jlimit (-1.0f, 1.0f, f[2].getFloatValue()) };
+        }
+    }
+}
+
 void VASynthProcessor::writeArpStepsProperty()
 {
     juce::StringArray on;  for (float s : arpSteps)          on.add  (s > 0.5f ? "1" : "0");
@@ -1685,6 +1721,18 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // they sound from sample 0 (block-granular; sample-accurate routing is future).
     drainRoutedMidi (chordOn, playF);
 
+    // Mod matrix (#56): the focused part's live routing table + the current macro values (a
+    // matrix source). Locked parts carry their own baked matrix (published with their sound).
+    {
+        namespace ID = ParamID;
+        const char* mids[8] { ID::macro1, ID::macro2, ID::macro3, ID::macro4,
+                              ID::macro5, ID::macro6, ID::macro7, ID::macro8 };
+        std::array<float, 8> mv {};
+        for (int i = 0; i < 8; ++i) mv[(std::size_t) i] = rp (apvts, mids[i]);
+        engine.setMacroValues (mv);
+        engine.setLiveModMatrix (partMatrix[(std::size_t) juce::jlimit (0, SynthEngine::maxParts - 1, editF)]);
+    }
+
     // --- sample-accurate MIDI dispatch --------------------------------------
     // Multitimbral (Sub-phase 2): each part renders into its OWN buffer (in the engine)
     // so it can run its OWN FX chain; the sum happens once, below. Voices still render
@@ -1939,6 +1987,7 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
         // Restore the FX chain order (state-tree property, not an APVTS param).
         applyFxOrderProperty();
         applyMacroMapProperty();       // restore macro->param routing
+        applyModMatrixProperty();      // restore the per-part mod matrix (#56)
         applyArpStepsProperty();       // restore the arp step pattern
         applySeqProperty();            // restore the sequencer grid
 

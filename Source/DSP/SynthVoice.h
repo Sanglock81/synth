@@ -190,13 +190,19 @@ public:
         const float ampScale = (1.0f - p.velToAmp) + p.velToAmp * velocity;  // vel -> amp
         const float ampMul   = std::clamp (1.0f + mm.amp, 0.0f, 2.0f);       // matrix -> amp
 
+        // Effective per-source levels, folding in any matrix osc-level modulation. Used for
+        // BOTH the kill-skip test and the mix, so a level modulated up from 0 is not skipped.
+        const float l1 = std::clamp (p.osc1Level + mm.osc1Level, 0.0f, 1.0f);
+        const float l2 = std::clamp (p.osc2Level + mm.osc2Level, 0.0f, 1.0f);
+        const float l3 = std::clamp (p.osc3Level + mm.osc3Level, 0.0f, 1.0f);
+
         // Kill-skip: an oscillator whose (smoothed, on/off-folded) level is ~0 is
         // NOT rendered at all — the CPU saving the kill switch exists for, and
         // what makes osc3-off genuinely free. Level smoothing (engine side) means
         // this crosses the threshold while inaudibly quiet, so toggling is click-free.
-        const bool o1 = p.osc1Level > 1.0e-4f;
-        const bool o2 = p.osc2Level > 1.0e-4f;
-        const bool o3 = p.osc3Level > 1.0e-4f;
+        const bool o1 = l1 > 1.0e-4f;
+        const bool o2 = l2 > 1.0e-4f;
+        const bool o3 = l3 > 1.0e-4f;
         const bool useNoise = p.noiseLevel > 1.0e-4f;
 
         for (int i = 0; i < numSamples; ++i)
@@ -223,9 +229,9 @@ public:
 
             // --- oscillators (per-source level; skip silent/off sources) ---
             float s = 0.0f;
-            if (o1) s += osc1.nextSample() * p.osc1Level;
-            if (o2) s += osc2.nextSample() * p.osc2Level;
-            if (o3) s += osc3.nextSample() * p.osc3Level;
+            if (o1) s += osc1.nextSample() * l1;
+            if (o2) s += osc2.nextSample() * l2;
+            if (o3) s += osc3.nextSample() * l3;
             if (useNoise) s += noise() * p.noiseLevel;
 
             s = filter.process (s);

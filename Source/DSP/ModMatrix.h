@@ -45,7 +45,10 @@ public:
     enum Source { SrcNone = 0, LFO1, LFO2, LFO3, ModEnv, AmpEnv, Velocity, Note,
                   ModWheel, PitchBend, Random, Macro1, Macro2, Macro3, Macro4,
                   Macro5, Macro6, Macro7, Macro8, kNumSources };
-    enum Dest   { DstNone = 0, Pitch, Cutoff, Resonance, PulseWidth, Amp, kNumDests };
+    // WavePos is RESERVED for the (not-yet-built) wavetable oscillator: it persists and
+    // evaluates, but no voice seam consumes it yet, so a route to it is silent for now.
+    enum Dest   { DstNone = 0, Pitch, Cutoff, Resonance, PulseWidth, Amp,
+                  WavePos, Osc1Level, Osc2Level, Osc3Level, kNumDests };
 
     struct Slot { int source = SrcNone; int dest = DstNone; float depth = 0.0f; };  // depth -1..1
 
@@ -57,14 +60,20 @@ public:
         float reso       = 0.0f;   // added to resonance (0..1 domain)
         float pw         = 0.0f;   // added to pulse width
         float amp        = 0.0f;   // amp multiplier is clamp(1 + amp, 0, 2)
+        float wavePos    = 0.0f;   // RESERVED (wavetable position) — no seam consumes it yet
+        float osc1Level  = 0.0f;   // added to osc 1/2/3 level (0..1 domain)
+        float osc2Level  = 0.0f;
+        float osc3Level  = 0.0f;
     };
 
     // Full-scale destination ranges at |depth| = 1 and a full-scale source.
-    static constexpr float kRangePitch  = 24.0f;   // +/- 2 octaves
-    static constexpr float kRangeCutoff = 4.0f;    // +/- 4 octaves
-    static constexpr float kRangeReso   = 1.0f;    // +/- full resonance
-    static constexpr float kRangePw     = 0.45f;   // matches the LFO->PW range
-    static constexpr float kRangeAmp    = 1.0f;    // +/- full (mul 0..2)
+    static constexpr float kRangePitch    = 24.0f;   // +/- 2 octaves
+    static constexpr float kRangeCutoff   = 4.0f;    // +/- 4 octaves
+    static constexpr float kRangeReso     = 1.0f;    // +/- full resonance
+    static constexpr float kRangePw       = 0.45f;   // matches the LFO->PW range
+    static constexpr float kRangeAmp      = 1.0f;    // +/- full (mul 0..2)
+    static constexpr float kRangeWavePos  = 1.0f;    // +/- full wavetable sweep (reserved)
+    static constexpr float kRangeOscLevel = 1.0f;    // +/- full source level
 
     std::array<Slot, kSlots> slots { };
 
@@ -85,11 +94,15 @@ public:
             const float v = sourceValue (sl.source, s) * sl.depth;
             switch (sl.dest)
             {
-                case Pitch:      o.pitchSemis += v * kRangePitch;  break;
-                case Cutoff:     o.cutoffOct  += v * kRangeCutoff; break;
-                case Resonance:  o.reso       += v * kRangeReso;   break;
-                case PulseWidth: o.pw         += v * kRangePw;     break;
-                case Amp:        o.amp        += v * kRangeAmp;    break;
+                case Pitch:      o.pitchSemis += v * kRangePitch;    break;
+                case Cutoff:     o.cutoffOct  += v * kRangeCutoff;   break;
+                case Resonance:  o.reso       += v * kRangeReso;     break;
+                case PulseWidth: o.pw         += v * kRangePw;       break;
+                case Amp:        o.amp        += v * kRangeAmp;      break;
+                case WavePos:    o.wavePos    += v * kRangeWavePos;  break;   // reserved
+                case Osc1Level:  o.osc1Level  += v * kRangeOscLevel; break;
+                case Osc2Level:  o.osc2Level  += v * kRangeOscLevel; break;
+                case Osc3Level:  o.osc3Level  += v * kRangeOscLevel; break;
                 default: break;
             }
         }

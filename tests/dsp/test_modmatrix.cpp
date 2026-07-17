@@ -65,6 +65,17 @@ TEST_CASE ("each source reads the right field", "[dsp][modmatrix]")
     REQUIRE (oneSlot (ModMatrix::Random,   ModMatrix::Pitch).pitchSemis == Catch::Approx (-1.0f * ModMatrix::kRangePitch));
 }
 
+TEST_CASE ("osc-level and reserved wavetable destinations route (#56)", "[dsp][modmatrix]")
+{
+    ModSources s; s.macro[0] = 1.0f; s.lfo[0] = 1.0f;
+
+    ModMatrix a; a.slots[0] = { ModMatrix::Macro1, ModMatrix::Osc2Level, -0.5f };
+    REQUIRE (a.evaluate (s).osc2Level == Catch::Approx (-0.5f * ModMatrix::kRangeOscLevel));
+
+    ModMatrix b; b.slots[0] = { ModMatrix::LFO1, ModMatrix::WavePos, 1.0f };   // reserved (evaluates, silent)
+    REQUIRE (b.evaluate (s).wavePos == Catch::Approx (ModMatrix::kRangeWavePos));
+}
+
 TEST_CASE ("multiple slots targeting one destination sum", "[dsp][modmatrix]")
 {
     ModMatrix m;

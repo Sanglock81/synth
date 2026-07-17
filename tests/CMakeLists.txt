@@ -79,6 +79,7 @@ add_executable(plugin_tests
     plugin/test_touch.cpp
     plugin/test_arp_ui.cpp
     plugin/test_seq_ui.cpp
+    plugin/test_modmatrix.cpp
     plugin/test_preset_velocity.cpp
     plugin/test_layout_mockup.cpp
     plugin/test_drums.cpp
