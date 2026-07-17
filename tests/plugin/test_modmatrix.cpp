@@ -6,6 +6,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include "PluginProcessor.h"
+#include "UI/ModMatrixPanel.h"
+#include "UI/Widgets.h"
 
 TEST_CASE ("mod matrix routes persist across a state round-trip (#56)", "[plugin][modmatrix][state]")
 {
@@ -75,4 +77,53 @@ TEST_CASE ("a live ModWheel->Amp route modulates the sound through processBlock 
 
     REQUIRE (base > 0.0f);
     REQUIRE (lifted > base * 1.4f);
+}
+
+TEST_CASE ("mod matrix overlay mirrors and edits the focused part (#56)", "[plugin][modmatrix][ui]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    p.setModSlot (-1, 0, ModMatrix::LFO2, ModMatrix::Cutoff, 0.5f);   // a route on the focused part
+
+    ModMatrixPanel panel (p);                                         // ctor refreshes from the processor
+    REQUIRE (panel.rowSource (0) == ModMatrix::LFO2);
+    REQUIRE (panel.rowDest   (0) == ModMatrix::Cutoff);
+    REQUIRE (panel.rowDepth  (0) == Catch::Approx (0.5f).margin (1e-2));
+
+    // Build a route from the dropdowns + depth, through the real change handlers.
+    panel.pickForTest (1, ModMatrix::Velocity, ModMatrix::Amp, -0.8f);
+    const auto s = p.getModSlot (-1, 1);
+    REQUIRE (s.source == ModMatrix::Velocity);
+    REQUIRE (s.dest   == ModMatrix::Amp);
+    REQUIRE (s.depth  == Catch::Approx (-0.8f).margin (1e-2));
+}
+
+TEST_CASE ("a destination knob is armable only while a source is armed, and completing routes it (#56)",
+           "[plugin][modmatrix][ui]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+
+    RotaryKnob knob (p.apvts, ParamID::filterCutoff, "CUTOFF", p.getMidiLearn());
+    knob.setModDestination (p, ModMatrix::Cutoff);
+    REQUIRE_FALSE (knob.isLinkArmable());          // nothing armed yet
+
+    p.armModLink (ModMatrix::LFO1);
+    REQUIRE (knob.isLinkArmable());                // source armed -> this dest lights up
+    REQUIRE (p.linkArmed());
+
+    // The knob's press completes through the same ModLinkController path the LinkSlider uses.
+    const int slot = p.completeModLink (ModMatrix::Cutoff);
+    REQUIRE (slot >= 0);
+    REQUIRE_FALSE (p.linkArmed());                 // completing disarms
+    REQUIRE_FALSE (knob.isLinkArmable());
+
+    const auto s = p.getModSlot (-1, slot);
+    REQUIRE (s.source == ModMatrix::LFO1);
+    REQUIRE (s.dest   == ModMatrix::Cutoff);
+    REQUIRE (s.depth  > 0.0f);                      // a usable default depth, tunable by drag
+
+    // Re-grab depth within the window mirrors setModRouteDepth on that slot.
+    p.setModRouteDepth (slot, -0.6f);
+    REQUIRE (p.modRouteDepth (slot) == Catch::Approx (-0.6f).margin (1e-3));
 }

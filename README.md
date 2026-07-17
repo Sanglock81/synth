@@ -29,6 +29,12 @@ a general-purpose synth that runs in any VST3 host or standalone.
   parametric EQ** at the end of the chain.
 - **8 macros**, pre-assigned to musical defaults (cutoff, reso, filter-env, release, LFO
   rate/depth, reverb, focused-part level), routable to any parameter; Launchkey pots drive them.
+- **Mod matrix** (per part, 8 slots): route any source (3 LFOs, mod/amp env, velocity, note,
+  mod wheel, pitch bend, random, the 8 macros) to any destination (pitch, cutoff, resonance,
+  pulse width, amp, osc 1–3 level). Wire routes by **touch-connect** — hit **LINK**, pick a
+  source, then tap a glowing destination knob; drag that knob within ~2 s to set the depth in
+  one gesture. The **MOD** overlay lists, re-points, inverts, re-depths, and deletes routes.
+  Routes travel with the patch; the matrix is bit-identical passthrough when empty.
 - **Bulletproof output stage**: voice-sum headroom trim + transparent safety
   soft-clip, so the output never clips the DAC on dense chords.
 - **Diatonic chord engine**: one finger → an in-key chord (Major / Natural Minor,

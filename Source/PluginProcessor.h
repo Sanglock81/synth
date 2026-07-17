@@ -4,6 +4,7 @@
 #include "MidiLearnManager.h"
 #include "ModifierLearnManager.h"
 #include "MidiProfile.h"
+#include "UI/ModLink.h"
 #include "FactoryPresets.h"
 #include "DSP/SynthEngine.h"
 #include "DSP/ChordEngine.h"
@@ -34,6 +35,7 @@
 // ============================================================================
 
 class VASynthProcessor : public juce::AudioProcessor,
+                         public  ModLinkController,
                          private juce::AudioProcessorValueTreeState::Listener
 {
 public:
@@ -312,6 +314,20 @@ public:
         writeModMatrixProperty();
     }
     void clearModSlot (int part, int slot) { setModSlot (part, slot, ModMatrix::SrcNone, ModMatrix::DstNone, 0.0f); }
+
+    // -- LINK gesture: arm a source, then a tap on a destination knob binds it -------------
+    void armModLink (int source) { modLinkSource.store (source, std::memory_order_release); }
+    void disarmModLink()         { modLinkSource.store (-1, std::memory_order_release); }
+    int  modLinkArmedSource() const { return modLinkSource.load (std::memory_order_acquire); }
+    // ModLinkController (for the destination knobs, which don't see the whole processor):
+    bool  linkArmed() const override { return modLinkSource.load (std::memory_order_acquire) >= 0; }
+    int   completeModLink (int dest) override
+    {
+        const int src = modLinkSource.exchange (-1, std::memory_order_acq_rel);
+        return src >= 0 ? linkModRoute (-1, src, dest) : -1;   // -1 = focused part
+    }
+    void  setModRouteDepth (int slot, float depth) override { setModDepth (-1, slot, depth); }
+    float modRouteDepth (int slot) const override { return getModSlot (-1, slot).depth; }
     // LINK: bind `source`->`dest` in the first free slot (or reuse a slot already on this pair).
     // Returns the slot index, or -1 if all 8 are full. Default depth +50%.
     int linkModRoute (int part, int source, int dest, float depth = 0.5f)
@@ -571,6 +587,7 @@ private:
     std::array<ModMatrix, SynthEngine::maxParts> partMatrix {};
     void writeModMatrixProperty();
     void applyModMatrixProperty();
+    std::atomic<int> modLinkSource { -1 };   // LINK gesture: armed source (-1 = disarmed)
 
     // Arpeggiator step pattern <-> "arp_steps" (on/off) + "arp_vel" (per-step %) state props.
     std::array<float, kArpSteps> arpSteps { };

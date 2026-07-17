@@ -55,6 +55,8 @@ public:
             // LFO->PW: the pw mod is in pw units (0..1 linear), so it maps straight to the
             // knob's normalized offset. Shown on every oscillator's PW knob.
             o.k[2]->setModSource ([&p]() -> float { return p.lfoModForDest (3); });
+            o.k[2]->setModDestination (p, ModMatrix::PulseWidth);              // LINK target: PW
+            o.k[3]->setModDestination (p, ModMatrix::Osc1Level + i);           // LINK target: osc i level
             addAndMakeVisible (*o.on);   addAndMakeVisible (*o.wave);
             for (auto& k : o.k) addAndMakeVisible (*k);
         }
@@ -125,6 +127,8 @@ public:
         {
             auto* k = new RotaryKnob (p.apvts, d.pid, d.name, p.getMidiLearn(), /*sideLabel*/ true);
             knobs.add (k); addAndMakeVisible (k);
+            if (juce::String (d.pid) == ID::filterCutoff) k->setModDestination (p, ModMatrix::Cutoff);      // LINK targets
+            if (juce::String (d.pid) == ID::filterReso)   k->setModDestination (p, ModMatrix::Resonance);
             if (juce::String (d.pid) == ID::filterCutoff)
             {
                 auto* cut = p.apvts.getParameter (ID::filterCutoff);

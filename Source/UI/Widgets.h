@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "VASynthLookAndFeel.h"
+#include "ModLink.h"
 #include "../MidiLearnManager.h"
 
 // ============================================================================
@@ -379,6 +380,7 @@ public:
             g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 11.5f, juce::Font::bold)));
             g.drawFittedText (text, lab, juce::Justification::centredLeft, 1);
             paintLearnDecorations (g);
+            paintLinkHint (g);
             return;
         }
 
@@ -394,6 +396,15 @@ public:
         }
 
         paintLearnDecorations (g);
+        paintLinkHint (g);
+    }
+
+    // A cyan ring marks a knob the armed LINK gesture can bind to (tap to connect).
+    void paintLinkHint (juce::Graphics& g)
+    {
+        if (! isLinkArmable()) return;
+        g.setColour (juce::Colour (0xff4bb3c4).withAlpha (0.9f));
+        g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.5f), 5.0f, 2.0f);
     }
 
     void resized() override
@@ -427,6 +438,37 @@ public:
     // being forced upward into the OS title bar, which on a windowed touch screen would grab
     // the drag and move the window. The mouse cursor is pinned during any rotary drag anyway.
     void setBothAxisDrag() { slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag); }
+
+    // Mark this knob a mod-matrix destination so the LINK gesture can target it (#56).
+    void setModDestination (ModLinkController& c, int dest) { modLink = &c; modDest = dest; }
+    bool isLinkArmable() const { return modLink != nullptr && modDest >= 0 && modLink->linkArmed(); }
+
+    // Called by the inner LinkSlider. Returns true when the press was consumed for LINK.
+    bool beginLinkGesture (const juce::MouseEvent& e)
+    {
+        if (modLink == nullptr || modDest < 0) return false;
+        const juce::uint32 now = juce::Time::getMillisecondCounter();
+        if (modLink->linkArmed())
+        {
+            const int slot = modLink->completeModLink (modDest);
+            if (slot < 0) return false;                          // matrix full -> behave as a normal knob
+            linkSlot = slot; linkDepthActive = true; linkDownY = e.getPosition().y;
+            linkDownDepth = modLink->modRouteDepth (slot); linkTime = now; repaint(); return true;
+        }
+        if (linkSlot >= 0 && now - linkTime < 2000)              // re-grab the just-made route within ~2 s
+        {
+            linkDepthActive = true; linkDownY = e.getPosition().y;
+            linkDownDepth = modLink->modRouteDepth (linkSlot); return true;
+        }
+        return false;
+    }
+    void dragLinkDepth (const juce::MouseEvent& e)
+    {
+        const float d = juce::jlimit (-1.0f, 1.0f, linkDownDepth + (float) (linkDownY - e.getPosition().y) * 0.007f);
+        modLink->setModRouteDepth (linkSlot, d);
+        repaint();
+    }
+    void endLinkGesture() { linkDepthActive = false; linkTime = juce::Time::getMillisecondCounter(); }
 
     // Hide the numeric value readout (macros — keeps the top bar compact).
     void setShowValue (bool b) { if (b != showValue) { showValue = b; resized(); repaint(); } }
@@ -466,10 +508,28 @@ private:
         bool wasOn = false;
     };
 
+    // A LINK-aware rotary: while the mod-matrix LINK is armed and this knob is a destination,
+    // a tap binds the armed source here; and for ~2 s after connecting, dragging the knob sets
+    // the new route's DEPTH (one continuous motion) instead of the parameter (#56).
+    struct LinkSlider : juce::Slider
+    {
+        explicit LinkSlider (RotaryKnob& o) : owner (o) {}
+        void mouseDown (const juce::MouseEvent& e) override { if (! owner.beginLinkGesture (e)) juce::Slider::mouseDown (e); }
+        void mouseDrag (const juce::MouseEvent& e) override { if (owner.linkDepthActive) owner.dragLinkDepth (e); else juce::Slider::mouseDrag (e); }
+        void mouseUp   (const juce::MouseEvent& e) override { if (owner.linkDepthActive) owner.endLinkGesture(); else juce::Slider::mouseUp (e); }
+        RotaryKnob& owner;
+    };
+
     juce::String name;
     bool sideLabel = false;
     bool showValue = true;
-    juce::Slider slider;
+    LinkSlider slider { *this };
+
+    ModLinkController* modLink = nullptr;
+    int   modDest = -1, linkSlot = -1, linkDownY = 0;
+    bool  linkDepthActive = false;
+    float linkDownDepth = 0.0f;
+    juce::uint32 linkTime = 0;
     juce::RangedAudioParameter* param = nullptr;
     std::unique_ptr<juce::SliderParameterAttachment> attachment;
     std::unique_ptr<ModOverlay> overlay;
