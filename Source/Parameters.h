@@ -162,6 +162,11 @@ namespace ParamID
     inline constexpr auto peqB1Freq = "peq_b1_freq";  inline constexpr auto peqB1Gain = "peq_b1_gain";  inline constexpr auto peqB1Q = "peq_b1_q";
     inline constexpr auto peqB2Freq = "peq_b2_freq";  inline constexpr auto peqB2Gain = "peq_b2_gain";  inline constexpr auto peqB2Q = "peq_b2_q";
     inline constexpr auto peqB3Freq = "peq_b3_freq";  inline constexpr auto peqB3Gain = "peq_b3_gain";  inline constexpr auto peqB3Q = "peq_b3_q";
+    // K1: consolidated per-part EQ becomes a fixed end-of-part 4-band shaper. B4 + per-band on/off
+    // are appended (ID freeze: add, never rename). The master-EQ eq_* IDs stay registered but inert.
+    inline constexpr auto peqB4Freq = "peq_b4_freq";  inline constexpr auto peqB4Gain = "peq_b4_gain";  inline constexpr auto peqB4Q = "peq_b4_q";
+    inline constexpr auto peqB1On = "peq_b1_on";  inline constexpr auto peqB2On = "peq_b2_on";
+    inline constexpr auto peqB3On = "peq_b3_on";  inline constexpr auto peqB4On = "peq_b4_on";
 
     // Tempo (R3): internal clock BPM, drives the arpeggiator + looper. (Host-tempo
     // sync in a DAW is future; standalone uses this.)
@@ -366,6 +371,13 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         params.push_back(std::make_unique<P>(juce::ParameterID{ID::peqB3Freq, 1}, "Part EQ B3 Freq", fR, 5000.0f, hz));
         params.push_back(std::make_unique<P>(juce::ParameterID{ID::peqB3Gain, 1}, "Part EQ B3 Gain", gainR, 0.0f, db));
         params.push_back(std::make_unique<P>(juce::ParameterID{ID::peqB3Q, 1},    "Part EQ B3 Q",    qR, 0.9f));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::peqB4Freq, 1}, "Part EQ B4 Freq", fR, 10000.0f, hz));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::peqB4Gain, 1}, "Part EQ B4 Gain", gainR, 0.0f, db));
+        params.push_back(std::make_unique<P>(juce::ParameterID{ID::peqB4Q, 1},    "Part EQ B4 Q",    qR, 0.9f));
+        params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::peqB1On, 1}, "Part EQ B1 On", true));   // per-band on/off (K1)
+        params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::peqB2On, 1}, "Part EQ B2 On", true));
+        params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::peqB3On, 1}, "Part EQ B3 On", true));
+        params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::peqB4On, 1}, "Part EQ B4 On", true));
     }
 
     // --- Tempo + arpeggiator (R3) --------------------------------------------

@@ -165,17 +165,24 @@ TEST_CASE ("EQ defaults keep the master output a true bypass", "[plugin][eq][sta
         REQUIRE (p.apvts.getRawParameterValue (id)->load() == 0.0f);
 }
 
-TEST_CASE ("master EQ is functional: enabling a low-shelf boost lifts a low note", "[plugin][eq]")
+TEST_CASE ("per-part EQ is functional: enabling a low boost lifts a low note (K1)", "[plugin][eq]")
 {
-    // Render a low tone through the processor with the EQ off, then with a big low-shelf
+    // Render a low tone through the processor with the EQ off, then with a big low-band
     // boost enabled; the boosted render must carry more low-end energy. Proves the EQ is
     // wired end-to-end (param -> processBlock -> audio), not just present in the UI.
     auto renderRms = [] (bool eqOn)
     {
         VASynthProcessor p;
         p.prepareToPlay (48000.0, 128);
-        p.apvts.getParameter (ParamID::eqOn)->setValueNotifyingHost (eqOn ? 1.0f : 0.0f);
-        if (eqOn) p.apvts.getParameter (ParamID::eqLsGain)->setValueNotifyingHost (1.0f);  // +18 dB
+        p.apvts.getParameter (ParamID::peqOn)->setValueNotifyingHost (eqOn ? 1.0f : 0.0f);
+        if (eqOn)
+        {
+            auto* fr = p.apvts.getParameter (ParamID::peqB1Freq);
+            fr->setValueNotifyingHost (fr->convertTo0to1 (110.0f));                 // sit the bell on the tone
+            auto* q = p.apvts.getParameter (ParamID::peqB1Q);
+            q->setValueNotifyingHost (q->convertTo0to1 (0.5f));                     // wide
+            p.apvts.getParameter (ParamID::peqB1Gain)->setValueNotifyingHost (1.0f); // +max dB
+        }
 
         juce::AudioBuffer<float> buf (2, 128);
         juce::MidiBuffer note; note.addEvent (juce::MidiMessage::noteOn (1, 45, 0.9f), 0);   // ~110 Hz

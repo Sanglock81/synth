@@ -88,9 +88,10 @@ namespace moddest
             { ModMatrix::ReverbWidth,  P::reverbWidth,   "Reverb Width",  Fx },
             { ModMatrix::ReverbMix,    P::reverbMix,     "Reverb Mix",    Fx },
             { ModMatrix::StereoWidth,  P::stereoWidth,   "Stereo Width",  Fx },
-            { ModMatrix::EqB1Gain,     P::peqB1Gain,     "EQ Low Gain",   Fx },
-            { ModMatrix::EqB2Gain,     P::peqB2Gain,     "EQ Mid Gain",   Fx },
-            { ModMatrix::EqB3Gain,     P::peqB3Gain,     "EQ High Gain",  Fx },
+            { ModMatrix::EqB1Gain,     P::peqB1Gain,     "EQ Low Gain",    Fx },
+            { ModMatrix::EqB2Gain,     P::peqB2Gain,     "EQ L-Mid Gain",  Fx },
+            { ModMatrix::EqB3Gain,     P::peqB3Gain,     "EQ H-Mid Gain",  Fx },
+            { ModMatrix::EqB4Gain,     P::peqB4Gain,     "EQ High Gain",   Fx },
             // Part
             { ModMatrix::GlideTime, P::glideTime, "Glide",   Part },
             // PartLevel / PartPan reserved (enum stable) — they modulate the mixer, a later seam.

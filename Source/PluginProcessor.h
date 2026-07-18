@@ -799,9 +799,10 @@ private:
     // Per-sample master gain ramp to kill zipper on gain steps/automation.
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> masterGain;
 
-    // Master parametric EQ (end of chain, post-FX sum / pre master gain). Audio thread only.
+    // Master parametric EQ — RETIRED (K1). No longer in the signal path; the single EQ is
+    // now the per-part 4-band EQ at the end of each part's chain. Kept prepared but dormant
+    // so the class/state stays valid; eq_* params remain registered but inert.
     ParametricEQ masterEQ;
-    bool eqWasOn = false;
 
     // Arpeggiator (audio thread). When enabled it captures the LIVE part's played notes
     // and re-emits them on its internal clock. A fixed per-block event buffer keeps the

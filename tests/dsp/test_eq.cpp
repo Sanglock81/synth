@@ -19,7 +19,7 @@ namespace
 TEST_CASE ("PartEQ flat (all 0 dB) is transparent", "[dsp][eq][parteq]")
 {
     PartEQ eq; eq.prepare (kSR);
-    eq.setBands (pflat (180), pflat (1000), pflat (5000));
+    eq.setBands (pflat (180), pflat (1000), pflat (5000), pflat (10000));
     std::vector<float> L (512), R (512);
     for (int i = 0; i < 512; ++i) { L[(size_t) i] = 0.3f * std::sin (i * 0.11f); R[(size_t) i] = 0.2f * std::sin (i * 0.05f); }
     auto L0 = L, R0 = R;
@@ -31,13 +31,28 @@ TEST_CASE ("PartEQ flat (all 0 dB) is transparent", "[dsp][eq][parteq]")
     }
 }
 
-TEST_CASE ("PartEQ: each of the 3 bells lands on its target dB", "[dsp][eq][parteq]")
+TEST_CASE ("PartEQ: each of the 4 bells lands on its target dB", "[dsp][eq][parteq]")
 {
     PartEQ eq; eq.prepare (kSR);
-    eq.setBands ({ 200.0f, 9.0f, 2.0f }, { 1000.0f, -9.0f, 2.0f }, { 6000.0f, 6.0f, 2.0f });
-    REQUIRE (eq.magnitudeDb (200.0)  == Catch::Approx (9.0).margin (0.6));
-    REQUIRE (eq.magnitudeDb (1000.0) == Catch::Approx (-9.0).margin (0.6));
-    REQUIRE (eq.magnitudeDb (6000.0) == Catch::Approx (6.0).margin (0.6));
+    eq.setBands ({ 200.0f, 9.0f, 2.0f }, { 1000.0f, -9.0f, 2.0f },
+                 { 6000.0f, 6.0f, 2.0f }, { 12000.0f, -6.0f, 2.0f });
+    REQUIRE (eq.magnitudeDb (200.0)   == Catch::Approx (9.0).margin (0.6));
+    REQUIRE (eq.magnitudeDb (1000.0)  == Catch::Approx (-9.0).margin (0.6));
+    REQUIRE (eq.magnitudeDb (6000.0)  == Catch::Approx (6.0).margin (0.6));
+    REQUIRE (eq.magnitudeDb (12000.0) == Catch::Approx (-6.0).margin (0.7));
+}
+
+TEST_CASE ("PartEQ: a band switched off contributes exactly unity (0 dB)", "[dsp][eq][parteq]")
+{
+    PartEQ eq; eq.prepare (kSR);
+    // Band 2 has a big cut but is OFF -> must read flat at its centre; the ON bands still land.
+    PartEQ::Band b1 { 200.0f,   6.0f, 2.0f, true  };
+    PartEQ::Band b2 { 1000.0f, -18.0f, 2.0f, false };   // off: gain ignored
+    PartEQ::Band b3 { 6000.0f,  0.0f, 0.9f, true  };
+    PartEQ::Band b4 { 12000.0f, 0.0f, 0.9f, true  };
+    eq.setBands (b1, b2, b3, b4);
+    REQUIRE (eq.magnitudeDb (1000.0) == Catch::Approx (0.0).margin (0.3));   // off band = transparent
+    REQUIRE (eq.magnitudeDb (200.0)  == Catch::Approx (6.0).margin (0.6));   // on band still works
 }
 
 TEST_CASE ("EQ flat (all 0 dB) is transparent", "[dsp][eq]")

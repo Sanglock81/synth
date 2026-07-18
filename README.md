@@ -25,8 +25,11 @@ a general-purpose synth that runs in any VST3 host or standalone.
 - **Three LFOs per part** (tri/sine/square/S&H) → pitch / cutoff / PW, plus pitch-bend,
   mod-wheel vibrato, and sustain-pedal handling.
 - **Reorderable stereo FX** (per part): chorus, ping-pong delay, Freeverb-style reverb,
-  mid/side width — drag to reorder, click-free crossfade — plus a master **4-band
-  parametric EQ** at the end of the chain.
+  mid/side width — drag to reorder, click-free crossfade — followed by a fixed **4-band
+  parametric EQ at the end of each part's chain**. The EQ is a mixing-desk section that
+  follows edit focus: a vertical gain slider per band (drag sideways = frequency,
+  double-tap = numeric freq/gain/Q), per-band + section on/off. (The old global master EQ
+  is retired — there is now one EQ concept, scoped per part.)
 - **8 macros**, pre-assigned to musical defaults (cutoff, reso, filter-env, release, LFO
   rate/depth, reverb, focused-part level), routable to any parameter; Launchkey pots drive them.
 - **Mod matrix** (per part, 8 slots): route any source (3 LFOs, mod/amp env, velocity, note,
@@ -345,7 +348,7 @@ Hardware-style single-surface panel (`docs/editor.png`), everything visible at o
 a **top bar** (preset · Save/Random · poly/mono/legato · glide · master · REC ·
 fullscreen · help), a **MACRO strip** (M1–M8), a left **PART RAIL** (P1–P4 + level/
 pan + INPUTS), the **centre** in signal-flow order (**Oscillators · Filter · Envelope
-· LFO · FX**), a right **Scope + FFT + master EQ**, and a bottom **workstation**
+· LFO · FX**), a right **Scope + FFT + per-part EQ**, and a bottom **workstation**
 (Chord bar · Rhythm arp+sequencer · Looper). Every control is bound to its APVTS
 parameter via attachments (GUI ↔ automation ↔ MIDI-learn stay in sync); dark hardware
 LookAndFeel; layout scales with the window.

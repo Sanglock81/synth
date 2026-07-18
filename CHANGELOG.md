@@ -9,6 +9,21 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Changed
+- **One EQ, per part, at the end of the chain (K1).** The plugin now has a single EQ concept:
+  a fixed **4-band parametric EQ** applied as the **last stage of the focused part's chain**
+  (post-FX), living in its own right-column section that **follows edit focus** (the header
+  names the part). It replaces two older, overlapping EQs — the **master finisher EQ is
+  retired** (its `eq_*` params stay registered but are inert/hidden for state back-compat), and
+  the per-part EQ is **removed from the FX drag-reorder chain** (that chain is now the four
+  reorderable FX: chorus/delay/reverb/width). The new section is a mixing-desk surface: a
+  vertical **gain slider per band** (drag up/down = gain, **drag sideways = frequency** with a
+  live readout, **double-tap = numeric freq/gain/Q**), a per-band on/off dot, and a section
+  on/off bar; editing any band auto-enables the section so a boosted band is never silently
+  bypassed. The four band gains (`EQ Low/L-Mid/H-Mid/High Gain`) are mod-matrix / macro targets.
+  Old presets migrate transparently: an EQ anywhere in a saved `fx_order` now always runs last
+  (its slot is inert), and band 4 + the per-band switches default to a neutral, on state.
+  *Fixes a latent bug:* the per-part EQ previously did nothing on the LIVE/focused part
+  (`snapshotFXParams` never carried it) — it now works on every part.
 - **Macros ship pre-assigned.** The 8 macros now default to musical targets — M1 filter
   cutoff, M2 resonance, M3 filter-env amount, M4 amp release, M5 LFO1 rate, M6 LFO1 depth,
   M7 reverb mix, and M8 the **focused part's level** (follows the edit focus). Older sessions

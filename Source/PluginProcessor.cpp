@@ -362,9 +362,10 @@ static const juce::StringArray& perPartSoundIds()
         ID::delayTime, ID::delayFeedback, ID::delayMix, ID::delaySpread, ID::fxDelayOn,
         ID::reverbSize, ID::reverbDamp, ID::reverbWidth, ID::reverbMix, ID::fxReverbOn,
         ID::stereoWidth, ID::fxWidthOn,
-        ID::peqOn, ID::peqB1Freq, ID::peqB1Gain, ID::peqB1Q,
-        ID::peqB2Freq, ID::peqB2Gain, ID::peqB2Q,
-        ID::peqB3Freq, ID::peqB3Gain, ID::peqB3Q,
+        ID::peqOn, ID::peqB1Freq, ID::peqB1Gain, ID::peqB1Q, ID::peqB1On,
+        ID::peqB2Freq, ID::peqB2Gain, ID::peqB2Q, ID::peqB2On,
+        ID::peqB3Freq, ID::peqB3Gain, ID::peqB3Q, ID::peqB3On,
+        ID::peqB4Freq, ID::peqB4Gain, ID::peqB4Q, ID::peqB4On,
         ID::polyMode        // per-part Poly/Mono/Legato (edited via focus like the rest of the sound)
     };
     return ids;
@@ -450,9 +451,10 @@ static FXParams fxParamsFrom (const juce::AudioProcessorValueTreeState& src)
     p.reverbSize = rp (src, ID::reverbSize); p.reverbDamp = rp (src, ID::reverbDamp);
     p.reverbWidth = rp (src, ID::reverbWidth); p.reverbMix = rp (src, ID::reverbMix);
     p.width = rp (src, ID::stereoWidth);
-    p.eqBand1 = { rp (src, ID::peqB1Freq), rp (src, ID::peqB1Gain), rp (src, ID::peqB1Q) };
-    p.eqBand2 = { rp (src, ID::peqB2Freq), rp (src, ID::peqB2Gain), rp (src, ID::peqB2Q) };
-    p.eqBand3 = { rp (src, ID::peqB3Freq), rp (src, ID::peqB3Gain), rp (src, ID::peqB3Q) };
+    p.eqBand1 = { rp (src, ID::peqB1Freq), rp (src, ID::peqB1Gain), rp (src, ID::peqB1Q), rp (src, ID::peqB1On) > 0.5f };
+    p.eqBand2 = { rp (src, ID::peqB2Freq), rp (src, ID::peqB2Gain), rp (src, ID::peqB2Q), rp (src, ID::peqB2On) > 0.5f };
+    p.eqBand3 = { rp (src, ID::peqB3Freq), rp (src, ID::peqB3Gain), rp (src, ID::peqB3Q), rp (src, ID::peqB3On) > 0.5f };
+    p.eqBand4 = { rp (src, ID::peqB4Freq), rp (src, ID::peqB4Gain), rp (src, ID::peqB4Q), rp (src, ID::peqB4On) > 0.5f };
     p.enabled[FXChain::Chorus_] = rp (src, ID::fxChorusOn) > 0.5f;
     p.enabled[FXChain::Delay_]  = rp (src, ID::fxDelayOn)  > 0.5f;
     p.enabled[FXChain::Reverb_] = rp (src, ID::fxReverbOn) > 0.5f;
@@ -1293,6 +1295,7 @@ void VASynthProcessor::applyBlockMods (int part, VoiceParams& vp, FXParams& fx, 
     mod (ModMatrix::EqB1Gain,      ID::peqB1Gain,     fx.eqBand1.gainDb);
     mod (ModMatrix::EqB2Gain,      ID::peqB2Gain,     fx.eqBand2.gainDb);
     mod (ModMatrix::EqB3Gain,      ID::peqB3Gain,     fx.eqBand3.gainDb);
+    mod (ModMatrix::EqB4Gain,      ID::peqB4Gain,     fx.eqBand4.gainDb);
     // LFO rate/depth
     mod (ModMatrix::Lfo1Rate,  ID::lfoRate,   lfo.lfo[0].rate);
     mod (ModMatrix::Lfo1Depth, ID::lfoDepth,  lfo.lfo[0].depth);
@@ -1371,10 +1374,19 @@ FXParams VASynthProcessor::snapshotFXParams() const
 
     p.width = rp (apvts, ID::stereoWidth);
 
+    // K1: the per-part EQ (fixed last stage). The LIVE part reads it here — this was the
+    // missing wiring: snapshotFXParams never carried the EQ, so the live part's EQ did
+    // nothing until now. Locked parts get it via fxParamsFrom (scratch APVTS).
+    p.eqBand1 = { rp (apvts, ID::peqB1Freq), rp (apvts, ID::peqB1Gain), rp (apvts, ID::peqB1Q), rp (apvts, ID::peqB1On) > 0.5f };
+    p.eqBand2 = { rp (apvts, ID::peqB2Freq), rp (apvts, ID::peqB2Gain), rp (apvts, ID::peqB2Q), rp (apvts, ID::peqB2On) > 0.5f };
+    p.eqBand3 = { rp (apvts, ID::peqB3Freq), rp (apvts, ID::peqB3Gain), rp (apvts, ID::peqB3Q), rp (apvts, ID::peqB3On) > 0.5f };
+    p.eqBand4 = { rp (apvts, ID::peqB4Freq), rp (apvts, ID::peqB4Gain), rp (apvts, ID::peqB4Q), rp (apvts, ID::peqB4On) > 0.5f };
+
     p.enabled[FXChain::Chorus_] = rp (apvts, ID::fxChorusOn) > 0.5f;
     p.enabled[FXChain::Delay_]  = rp (apvts, ID::fxDelayOn)  > 0.5f;
     p.enabled[FXChain::Reverb_] = rp (apvts, ID::fxReverbOn) > 0.5f;
     p.enabled[FXChain::Width_]  = rp (apvts, ID::fxWidthOn)  > 0.5f;
+    p.enabled[FXChain::EQ_]     = rp (apvts, ID::peqOn)      > 0.5f;
 
     getFxOrder (p.order);
     return p;
@@ -2216,19 +2228,12 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         al.advance (numSamples);
     }
 
-    // --- master parametric EQ (end of chain: post-FX sum, pre master gain). Off/flat
-    //     is a true bypass (skipped), so the output is bit-identical until it's used.
-    const bool eqOn = rp (apvts, ID::eqOn) > 0.5f;
-    if (eqOn)
-    {
-        if (! eqWasOn) masterEQ.reset();                        // clean state on off->on
-        masterEQ.setBands ({ rp (apvts, ID::eqLsFreq), rp (apvts, ID::eqLsGain), 0.7f },
-                           { rp (apvts, ID::eqLmFreq), rp (apvts, ID::eqLmGain), rp (apvts, ID::eqLmQ) },
-                           { rp (apvts, ID::eqHmFreq), rp (apvts, ID::eqHmGain), rp (apvts, ID::eqHmQ) },
-                           { rp (apvts, ID::eqHsFreq), rp (apvts, ID::eqHsGain), 0.7f });
-        masterEQ.process (L, R, numSamples);
-    }
-    eqWasOn = eqOn;
+    // --- master parametric EQ: RETIRED (K1). The single EQ concept is now the per-part
+    //     4-band EQ applied at the end of each part's own chain (FXChain, fixed last
+    //     stage). The old global master EQ (eq_* params) is no longer processed here —
+    //     its parameters remain registered but inert/hidden for state back-compat, so
+    //     old sessions still deserialise without error; they simply have no audible
+    //     effect. masterEQ / eqWasOn members are dormant.
 
     // --- master gain (per-sample ramp, kills zipper on gain steps/automation)
     //     followed by the safety soft-clipper — the LAST thing before output.

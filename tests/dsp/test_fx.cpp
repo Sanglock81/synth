@@ -317,6 +317,52 @@ TEST_CASE ("FXChain: bypass identity, order matters, and reorder is click-free",
         // steady chain's — a hard switch would spike this well above.
         REQUIRE (reorderDelta < steadyDelta * 1.5f + 0.02f);
     }
+
+    // K1: the per-part EQ is a FIXED final stage. Its slot in order[] must not change
+    // the result — put EQ first vs. last, everything else equal; the output is identical.
+    SECTION ("EQ position in order[] is inert (always applied last)")
+    {
+        auto render = [&] (int eqSlot)
+        {
+            FXChain chain; chain.prepare (kSR, kBlock);
+            FXParams p;
+            p.enabled[FXChain::EQ_]     = true;
+            p.enabled[FXChain::Chorus_] = true;
+            p.chorusMix = 0.6f;
+            p.eqBand2 = { 1000.0f, 12.0f, 2.0f, true };   // an audible boost at the tone
+            // Build an order with EQ pinned at eqSlot and the other four filling around it.
+            int fill[4] { FXChain::Chorus_, FXChain::Delay_, FXChain::Reverb_, FXChain::Width_ };
+            int fi = 0;
+            for (int s = 0; s < 5; ++s) p.order[s] = (s == eqSlot) ? FXChain::EQ_ : fill[fi++];
+            chain.setParams (p);
+            auto l = L, r = R;
+            for (int i = 0; i < N; i += kBlock) chain.process (l.data() + i, r.data() + i, kBlock);
+            return l;
+        };
+        auto eqFirst = render (0);
+        auto eqLast  = render (4);
+        REQUIRE (rmsDiff (eqFirst, eqLast) < 1e-6);   // position-independent -> migration is a no-op
+    }
+
+    // A boosted EQ band must audibly lift the tone at its centre when enabled.
+    SECTION ("EQ boost lifts the tone; disabled EQ is transparent")
+    {
+        auto render = [&] (bool eqOn)
+        {
+            FXChain chain; chain.prepare (kSR, kBlock);
+            FXParams p;
+            p.enabled[FXChain::EQ_] = eqOn;
+            p.eqBand1 = { 200.0f, 12.0f, 1.5f, true };   // boost at the 200 Hz tone
+            chain.setParams (p);
+            auto l = L, r = R;
+            for (int i = 0; i < N; i += kBlock) chain.process (l.data() + i, r.data() + i, kBlock);
+            return l;
+        };
+        auto boosted = render (true);
+        auto flat    = render (false);
+        REQUIRE (rmsDiff (flat, L) < 1e-6);            // disabled -> bit-transparent
+        REQUIRE (tu::rms (boosted) > tu::rms (flat) * 1.3f);
+    }
 }
 
 // ---------------------------------------------------------------------------

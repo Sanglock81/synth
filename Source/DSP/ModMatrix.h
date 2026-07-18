@@ -68,6 +68,7 @@ public:
                   FilterEnvAmt, FilterKeytrack, VelToCutoff, VelToAmp, FltEnvToPitch,
                   Osc1Octave, Osc1Detune, Osc2Octave, Osc2Detune, Osc3Octave, Osc3Detune,
                   GlideTime, PartLevel, PartPan,
+                  EqB4Gain,   // K1: appended (stable-order rule) though it groups with EqB1-3Gain
                   kNumDests };
     static constexpr int kFirstBlockDest = ChorusRate;
     static constexpr int kNumBlockDests  = kNumDests - kFirstBlockDest;

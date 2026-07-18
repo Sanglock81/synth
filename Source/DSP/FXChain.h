@@ -12,18 +12,26 @@
 // Per-part reorderable stereo FX chain. Hand-rolled, JUCE-free, allocation-free
 // after prepare().
 //
-// Five blocks — chorus, delay, reverb, stereo width, per-part EQ — applied in a
-// user-defined order. A disabled block is skipped entirely (no CPU, like an
-// oscillator kill switch), so the cost scales with what's actually on.
+// Four REORDERABLE blocks — chorus, delay, reverb, stereo width — applied in a
+// user-defined order, plus the per-part EQ as a FIXED final stage. A disabled block
+// is skipped entirely (no CPU, like an oscillator kill switch), so the cost scales
+// with what's actually on.
+//
+// K1: the per-part EQ (index 4) is no longer reorderable — it always runs LAST,
+// after every other block, regardless of where EQ_ sits in order[]. Its order[] slot
+// is positionally inert (kept only so old presets deserialise unchanged and the
+// enable still drives the crossfade). This is the whole "one EQ at the end of the
+// part's chain" model; the UI drag panel exposes only the four reorderable FX.
 //
 // REORDERING / TOGGLING is click-free via a ~30 ms equal-power crossfade between
 // two internal chain copies: on any configuration change the standby copy inherits
 // the active copy's state, adopts the new order/enables, and the two are blended
 // over the window before the standby becomes active. The doubled cost only lasts
-// for the fade, which happens on a user gesture — never in steady state.
+// for the fade, which happens on a user gesture — never in steady state. EQ on/off is
+// an enabled[] change, so it fades in/out click-free too.
 //
 // Effect indices (order[] is a permutation of these):
-//   0 = chorus, 1 = delay, 2 = reverb, 3 = width, 4 = EQ (3-band per-part)
+//   0 = chorus, 1 = delay, 2 = reverb, 3 = width, 4 = EQ (4-band per-part, fixed last)
 // ============================================================================
 
 struct FXParams
@@ -33,9 +41,10 @@ struct FXParams
     float delayTimeMs = 300.0f, delayFeedback = 0.35f, delayMix = 0.35f, delaySpread = 1.0f;
     float reverbSize = 0.5f, reverbDamp = 0.5f, reverbWidth = 1.0f, reverbMix = 0.3f;
     float width = 1.4f;
-    PartEQ::Band eqBand1 { 180.0f,  0.0f, 0.9f };   // per-part EQ, 3 fully parametric bells
-    PartEQ::Band eqBand2 { 1000.0f, 0.0f, 0.9f };
-    PartEQ::Band eqBand3 { 5000.0f, 0.0f, 0.9f };
+    PartEQ::Band eqBand1 { 180.0f,   0.0f, 0.9f };   // per-part EQ, 4 fully parametric bells (fixed last)
+    PartEQ::Band eqBand2 { 1000.0f,  0.0f, 0.9f };
+    PartEQ::Band eqBand3 { 5000.0f,  0.0f, 0.9f };
+    PartEQ::Band eqBand4 { 10000.0f, 0.0f, 0.9f };
 
     // Structural config (a change here triggers the crossfade).
     bool enabled[5] { false, false, false, false, false };
@@ -137,7 +146,7 @@ private:
             delay.setParams  (p.delayTimeMs, p.delayFeedback, p.delayMix, p.delaySpread);
             reverb.setParams (p.reverbSize, p.reverbDamp, p.reverbWidth, p.reverbMix);
             width.setWidth   (p.width);
-            eq.setBands      (p.eqBand1, p.eqBand2, p.eqBand3);
+            eq.setBands      (p.eqBand1, p.eqBand2, p.eqBand3, p.eqBand4);
         }
         void setConfig (const int ord[kNumFX], const bool en[kNumFX])
         {
@@ -164,10 +173,13 @@ private:
                     case Delay_:  delay.process  (L, R, n); break;
                     case Reverb_: reverb.process (L, R, n); break;
                     case Width_:  width.process  (L, R, n); break;
-                    case EQ_:     eq.process     (L, R, n); break;
+                    case EQ_:     break;   // K1: EQ is not reorderable — applied last, below
                     default: break;
                 }
             }
+            // Fixed final stage: the per-part EQ always runs after everything else,
+            // ignoring its position in order[] (its enable still gates it click-free).
+            if (enabled[EQ_]) eq.process (L, R, n);
         }
     };
 

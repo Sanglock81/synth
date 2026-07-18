@@ -1,6 +1,7 @@
 // PROBE (temporary): do the master EQ and per-part width actually affect the processor's
 // output in the real topology? Answers "do they work / did they ever" empirically.
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include "PluginProcessor.h"
 #include <cmath>
 
@@ -30,21 +31,44 @@ namespace
     }
 }
 
-TEST_CASE ("master EQ affects the processor output", "[plugin][fx][topology]")
+TEST_CASE ("per-part EQ affects the processor output (K1: end-of-part, fixed last)", "[plugin][fx][topology]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 512);
     p.loadInitPreset();                 // dry mono sine on the live part
     const double flat = render (p, 45).rms;
 
-    set01 (p, ParamID::eqOn, 1.0f);     // enable EQ, boost every band hard
-    setV (p, ParamID::eqLsGain, 18.0f);
-    setV (p, ParamID::eqLmGain, 18.0f);
-    setV (p, ParamID::eqHmGain, 18.0f);
-    setV (p, ParamID::eqHsGain, 18.0f);
+    set01 (p, ParamID::peqOn, 1.0f);    // enable the per-part EQ, boost every band hard
+    setV (p, ParamID::peqB1Gain, 18.0f);
+    setV (p, ParamID::peqB2Gain, 18.0f);
+    setV (p, ParamID::peqB3Gain, 18.0f);
+    setV (p, ParamID::peqB4Gain, 18.0f);
     const double boosted = render (p, 45).rms;
 
     INFO ("flat rms=" << flat << "  EQ-boosted rms=" << boosted);
     REQUIRE (boosted > flat * 1.5);     // a big broadband boost must raise the level
+}
+
+TEST_CASE ("retired master EQ no longer affects output (eq_* params are inert)", "[plugin][fx][topology]")
+{
+    // Fresh processor per render so no reverb/LFO/smoothing state carries between the two.
+    auto rms = [] (bool boostMasterEq)
+    {
+        VASynthProcessor p; p.prepareToPlay (48000.0, 512);
+        p.loadInitPreset();
+        if (boostMasterEq)
+        {
+            set01 (p, ParamID::eqOn, 1.0f);     // old master EQ: enabling + boosting must do NOTHING now
+            setV (p, ParamID::eqLsGain, 18.0f);
+            setV (p, ParamID::eqLmGain, 18.0f);
+            setV (p, ParamID::eqHmGain, 18.0f);
+            setV (p, ParamID::eqHsGain, 18.0f);
+        }
+        return render (p, 45).rms;
+    };
+    const double flat  = rms (false);
+    const double after = rms (true);
+    INFO ("flat rms=" << flat << "  master-EQ-'boosted' rms=" << after);
+    REQUIRE (after == Catch::Approx (flat).epsilon (0.001));   // retired -> bit-for-bit no effect
 }
 
 TEST_CASE ("stereo width affects L/R correlation with a stereo source", "[plugin][fx][topology]")

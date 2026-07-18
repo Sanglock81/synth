@@ -7,27 +7,33 @@
 #include <vector>
 
 // ============================================================================
-// FX panel — a centre section (signal-flow order). Four effect blocks (chorus /
-// delay / reverb / width), each a knob strip beneath a backlit NAME BAR: the bar
-// glows in the FX tint when the effect is on and darkens when off (tap it to
+// FX panel — a centre section (signal-flow order). Four reorderable effect blocks
+// (chorus / delay / reverb / width), each a knob strip beneath a backlit NAME BAR:
+// the bar glows in the FX tint when the effect is on and darkens when off (tap it to
 // toggle) — the on/off IS the label, no separate switch. Drag a block by its bar
 // (finger or mouse) to reorder; on drop the new chain order is committed and the
 // audio chain crossfades click-free. Knobs are MIDI-learnable and refuse keyboard
 // focus, so QWERTY note input keeps working.
+//
+// K1: the per-part EQ is NO LONGER in this reorderable chain — it is a fixed final
+// stage with its own dedicated section (EQPanel). This panel manages only the four
+// reorderable FX; the processor's 5-slot order[] keeps the EQ slot pinned last.
 // ============================================================================
 
 class FXPanel : public juce::Component,
                 private juce::Timer
 {
 public:
+    static constexpr int kNumShown = 4;   // chorus/delay/reverb/width (EQ excluded — fixed last)
+
     explicit FXPanel (VASynthProcessor& p) : proc (p)
     {
-        proc.getFxOrder (order);
+        syncFromProc();
 
-        for (int fx = 0; fx < 5; ++fx)
+        for (int i = 0; i < kNumShown; ++i)
         {
-            blocks[(size_t) fx] = std::make_unique<FXBlock> (proc, fx, defs()[(size_t) fx], *this);
-            addAndMakeVisible (*blocks[(size_t) fx]);
+            blocks[(size_t) i] = std::make_unique<FXBlock> (proc, i, defs()[(size_t) i], *this);
+            addAndMakeVisible (*blocks[(size_t) i]);
         }
         startTimerHz (15);      // resync the visual order if it changes elsewhere (e.g. preset load)
     }
@@ -38,22 +44,43 @@ public:
     void resized() override { layoutBlocks(); }
 
 private:
+    // Read the processor's 5-slot order and project it to the 4 reorderable FX in
+    // display order (EQ_ = 4 is dropped; it always runs last regardless of position).
+    void syncFromProc()
+    {
+        int full[5]; proc.getFxOrder (full);
+        int k = 0;
+        for (int slot = 0; slot < 5; ++slot)
+            if (full[slot] != FXChain::EQ_ && k < kNumShown) disp[k++] = full[slot];
+        for (; k < kNumShown; ++k) disp[k] = k;   // defensive fill (never expected)
+    }
+
+    // Commit the 4-block display order back, pinning EQ last (its slot is inert in DSP).
+    void commit()
+    {
+        int full[5];
+        for (int i = 0; i < kNumShown; ++i) full[i] = disp[i];
+        full[kNumShown] = FXChain::EQ_;
+        proc.setFxOrder (full);
+    }
+
     void timerCallback() override
     {
         if (draggingFx >= 0) return;
-        int cur[5]; proc.getFxOrder (cur);
+        int prev[kNumShown]; for (int i = 0; i < kNumShown; ++i) prev[i] = disp[i];
+        syncFromProc();
         bool diff = false;
-        for (int i = 0; i < 5; ++i) diff = diff || (cur[i] != order[i]);
-        if (diff) { for (int i = 0; i < 5; ++i) order[i] = cur[i]; layoutBlocks(); repaint(); }
+        for (int i = 0; i < kNumShown; ++i) diff = diff || (prev[i] != disp[i]);
+        if (diff) { layoutBlocks(); repaint(); }
     }
 
     struct KnobDef  { const char* pid; const char* name; };
     struct BlockDef { const char* title; juce::Colour tint; const char* enablePid; std::vector<KnobDef> knobs; };
 
-    static const std::array<BlockDef, 5>& defs()
+    static const std::array<BlockDef, kNumShown>& defs()
     {
         namespace ID = ParamID;
-        static const std::array<BlockDef, 5> d { {
+        static const std::array<BlockDef, kNumShown> d { {
             { "CHORUS", juce::Colour (0xff46c9b0), ID::fxChorusOn,
               { { ID::chorusRate, "RATE" }, { ID::chorusDepth, "DEPTH" }, { ID::chorusMix, "MIX" } } },
             { "DELAY",  juce::Colour (0xff6ea8ff), ID::fxDelayOn,
@@ -62,10 +89,6 @@ private:
               { { ID::reverbSize, "SIZE" }, { ID::reverbDamp, "DAMP" }, { ID::reverbWidth, "WIDTH" }, { ID::reverbMix, "MIX" } } },
             { "WIDTH",  juce::Colour (0xfff0a04b), ID::fxWidthOn,
               { { ID::stereoWidth, "WIDTH" } } },
-            { "EQ",     juce::Colour (0xff67c0c8), ID::peqOn,
-              { { ID::peqB1Freq, "F1" }, { ID::peqB1Gain, "G1" }, { ID::peqB1Q, "Q1" },
-                { ID::peqB2Freq, "F2" }, { ID::peqB2Gain, "G2" }, { ID::peqB2Q, "Q2" },
-                { ID::peqB3Freq, "F3" }, { ID::peqB3Gain, "G3" }, { ID::peqB3Q, "Q3" } } },
         } };
         return d;
     }
@@ -181,8 +204,8 @@ private:
         if (draggingFx != fx) return;
         dragY = panelY;
         const auto content = contentBounds();
-        const int blockH = juce::jmax (1, content.getHeight() / 5);
-        const int targetSlot = juce::jlimit (0, 4, (int) ((panelY - content.getY()) / blockH));
+        const int blockH = juce::jmax (1, content.getHeight() / kNumShown);
+        const int targetSlot = juce::jlimit (0, kNumShown - 1, (int) ((panelY - content.getY()) / blockH));
         const int curSlot = slotOf (fx);
         if (targetSlot != curSlot) moveInOrder (curSlot, targetSlot);
         layoutBlocks();
@@ -193,7 +216,7 @@ private:
         if (draggingFx < 0) return;
         blocks[(size_t) draggingFx]->dragging = false;
         draggingFx = -1;
-        proc.setFxOrder (order);      // commit -> audio chain crossfades to the new order
+        commit();                     // commit -> audio chain crossfades to the new order
         layoutBlocks();
         repaint();
     }
@@ -201,10 +224,10 @@ private:
     void layoutBlocks()
     {
         const auto content = contentBounds();
-        const int blockH = juce::jmax (1, (content.getHeight() - 4 * kGap) / 5);
-        for (int slot = 0; slot < 5; ++slot)
+        const int blockH = juce::jmax (1, (content.getHeight() - (kNumShown - 1) * kGap) / kNumShown);
+        for (int slot = 0; slot < kNumShown; ++slot)
         {
-            const int fx = order[slot];
+            const int fx = disp[slot];
             if (fx == draggingFx) continue;
             blocks[(size_t) fx]->setBounds (content.getX(), content.getY() + slot * (blockH + kGap),
                                             content.getWidth(), blockH);
@@ -222,15 +245,15 @@ private:
 
     int slotOf (int fx) const
     {
-        for (int i = 0; i < 5; ++i) if (order[i] == fx) return i;
+        for (int i = 0; i < kNumShown; ++i) if (disp[i] == fx) return i;
         return 0;
     }
     void moveInOrder (int from, int to)
     {
-        const int fx = order[from];
-        if (from < to) for (int i = from; i < to; ++i) order[i] = order[i + 1];
-        else           for (int i = from; i > to; --i) order[i] = order[i - 1];
-        order[to] = fx;
+        const int fx = disp[from];
+        if (from < to) for (int i = from; i < to; ++i) disp[i] = disp[i + 1];
+        else           for (int i = from; i > to; --i) disp[i] = disp[i - 1];
+        disp[to] = fx;
     }
 
     static constexpr int kBarH = 26;
@@ -238,8 +261,8 @@ private:
 
     VASynthProcessor& proc;
     juce::Colour tint { 0xff5ecb8a };
-    std::array<std::unique_ptr<FXBlock>, 5> blocks;
-    int order[5] { 0, 1, 2, 3, 4 };
+    std::array<std::unique_ptr<FXBlock>, kNumShown> blocks;
+    int disp[kNumShown] { 0, 1, 2, 3 };   // the 4 reorderable FX in display order
     int draggingFx = -1;
     float dragY = 0.0f;
 
