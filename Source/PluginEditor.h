@@ -226,7 +226,9 @@ public:
 
     void resized() override
     {
-        overlay.setBounds (getWidth() - 320, 92, 312, 78);
+        // Tall + wide enough for the core health lines PLUS the bend/mod trace and the full
+        // MIDI monitor (long surface names). Previously 78 px -> every extra line was clipped.
+        overlay.setBounds (getWidth() - 452, 92, 444, 360);
         toast.setBounds ((getWidth() - 460) / 2, 92, 460, 46);
         kitBar.setBounds ((getWidth() - 620) / 2, 96, 620, 40);
         helpOverlay.setBounds (getLocalBounds());
