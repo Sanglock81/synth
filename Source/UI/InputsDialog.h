@@ -63,7 +63,7 @@ public:
         refreshMultiList();
         addAndMakeVisible (loadMulti);
 
-        setSize (640, 560);
+        setSize (780, 560);   // wide enough for full device names + name/route/preset/split columns
         startTimerHz (12);
     }
 
@@ -166,7 +166,9 @@ private:
             setWantsKeyboardFocus (false);
 
             route.setWantsKeyboardFocus (false);
-            route.addItem ("Live", 1); route.addItem ("Part 1", 2); route.addItem ("Part 2", 3); route.addItem ("Part 3", 4);
+            // Labels match the P1-P4 naming used everywhere else (part index 0..3 -> P1..P4);
+            // P1 is the LIVE part. (id = part + 1.)
+            route.addItem ("P1 (Live)", 1); route.addItem ("P2", 2); route.addItem ("P3", 3); route.addItem ("P4", 4);
             route.onChange = [this]
             {
                 proc.setSurfaceRouting (name, route.getSelectedId() - 1);   // collapses any split
@@ -199,7 +201,7 @@ private:
             g.fillEllipse (10.0f, rowH / 2 - 5.0f, 10.0f, 10.0f);
             g.setColour (VASynthLookAndFeel::ink());
             g.setFont (juce::Font (juce::FontOptions (13.0f)));
-            g.drawText (name, 30, 0, 150, rowH, juce::Justification::centredLeft, true);
+            g.drawText (name, 30, 0, 300, rowH, juce::Justification::centredLeft, true);   // wide enough for "<device> Pads"
 
             if (! expanded) return;
 
@@ -218,14 +220,15 @@ private:
                 g.fillRoundedRectangle (cell.toFloat(), 2.0f);
                 g.setColour (juce::Colours::black.withAlpha (0.85f));
                 g.setFont (juce::Font (juce::FontOptions (10.0f, juce::Font::bold)));
-                g.drawText (seg.part == 0 ? "LIVE" : ("P" + juce::String (seg.part)), cell, juce::Justification::centred, false);
+                g.drawText ("P" + juce::String (seg.part + 1) + (seg.part == 0 ? " Live" : ""),
+                            cell, juce::Justification::centred, false);
             }
         }
 
         void resized() override
         {
             auto header = getLocalBounds().removeFromTop (rowH);
-            header.removeFromLeft (185);
+            header.removeFromLeft (335);                      // name column (matches paint's 300 + dot)
             route.setBounds  (header.removeFromLeft (95).reduced (2, 6));
             preset.setBounds (header.removeFromLeft (160).reduced (2, 6));
             splitBtn.setBounds (header.removeFromLeft (70).reduced (2, 6));
@@ -327,7 +330,7 @@ private:
             {
                 setWantsKeyboardFocus (false);
                 part.setWantsKeyboardFocus (false);
-                part.addItem ("Live", 1); part.addItem ("Part 1", 2); part.addItem ("Part 2", 3); part.addItem ("Part 3", 4);
+                part.addItem ("P1 (Live)", 1); part.addItem ("P2", 2); part.addItem ("P3", 3); part.addItem ("P4", 4);
                 part.onChange = [this] { edit ([this] (VASynthProcessor::Zone& z) { z.part = part.getSelectedId() - 1; }); refreshPreset(); };
                 addAndMakeVisible (part);
 
@@ -422,7 +425,7 @@ private:
     void relayout()
     {
         int y = 0;
-        const int w = juce::jmax (560, scroll.getMaximumVisibleWidth());
+        const int w = juce::jmax (660, scroll.getMaximumVisibleWidth());
         for (auto& r : rows) { const int h = r->desiredHeight(); r->setBounds (0, y, w, h); y += h + 2; }
         list->setSize (w, juce::jmax (y, scroll.getHeight()));
     }
