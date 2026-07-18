@@ -17,6 +17,7 @@
 #include "UI/Widgets.h"
 #include "UI/ModMatrixPanel.h"
 #include "ModDestRegistry.h"
+#include "VersionInfo.h"
 #include <memory>
 
 #ifndef VASYNTH_DOCS_DIR
@@ -88,6 +89,15 @@ namespace
         }
         return peak;
     }
+}
+
+// --- H0: the build-fresh version hash header is wired (banner is confirmable) ----------
+TEST_CASE ("build-fresh git-hash header is present and populated (#H0)", "[plugin][smoke][version]")
+{
+    const juce::String hash = VASYNTH_GIT_HASH_RT;    // regenerated every build by cmake/gen_version.cmake
+    REQUIRE (hash.isNotEmpty());
+    REQUIRE (hash != "unknown");
+    REQUIRE (hash.length() >= 7);                      // a real short hash (optionally + a "+" dirty flag)
 }
 
 // --- encoding: the overlay strings decode as UTF-8, not ASCII/Latin-1 -----------------

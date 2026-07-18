@@ -92,6 +92,25 @@ if (NOT VASYNTH_GIT_HASH)
     set(VASYNTH_GIT_HASH "unknown")
 endif()
 
+# BUILD-TIME-fresh hash for the on-screen banner: a custom target regenerates VersionInfo.h on
+# every build (the configure-time value above goes stale on rebuild). VASynth depends on it.
+set(VASYNTH_GEN_DIR ${CMAKE_BINARY_DIR}/generated)
+file(MAKE_DIRECTORY ${VASYNTH_GEN_DIR})
+execute_process(                                            # seed it once so the first configure has a header
+    COMMAND ${CMAKE_COMMAND}
+        -DSRCDIR=${CMAKE_SOURCE_DIR}
+        -DINFILE=${CMAKE_SOURCE_DIR}/Source/VersionInfo.h.in
+        -DOUTFILE=${VASYNTH_GEN_DIR}/VersionInfo.h
+        -P ${CMAKE_SOURCE_DIR}/cmake/gen_version.cmake)
+add_custom_target(vasynth_version ALL
+    BYPRODUCTS ${VASYNTH_GEN_DIR}/VersionInfo.h
+    COMMAND ${CMAKE_COMMAND}
+        -DSRCDIR=${CMAKE_SOURCE_DIR}
+        -DINFILE=${CMAKE_SOURCE_DIR}/Source/VersionInfo.h.in
+        -DOUTFILE=${VASYNTH_GEN_DIR}/VersionInfo.h
+        -P ${CMAKE_SOURCE_DIR}/cmake/gen_version.cmake
+    COMMENT "Refreshing git hash for the version banner")
+
 target_compile_definitions(VASynth PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
@@ -104,6 +123,9 @@ target_compile_definitions(VASynth PUBLIC
     VASYNTH_VERSION="${PROJECT_VERSION}"
     VASYNTH_GIT_HASH="${VASYNTH_GIT_HASH}"
     VASYNTH_BUILD_TYPE="$<CONFIG>")
+
+add_dependencies(VASynth vasynth_version)
+target_include_directories(VASynth PUBLIC ${VASYNTH_GEN_DIR})   # generated VersionInfo.h (build-fresh hash)
 
 # LTO on by default (release artefacts); turn OFF for fast dev rebuilds:
 #   cmake -B build -DVASYNTH_ENABLE_LTO=OFF

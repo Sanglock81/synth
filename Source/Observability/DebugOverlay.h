@@ -30,6 +30,10 @@ public:
     // Kept decoupled from the processor — the editor supplies a provider.
     void setExtraLinesProvider (std::function<juce::StringArray()> fn) { extraLines = std::move (fn); }
 
+    // The running build banner (version + build-fresh git hash) — so the exact binary is confirmable.
+    void setVersionLine (juce::String v) { versionLine = std::move (v); }
+    juce::String versionLineText() const { return versionLine; }   // test hook
+
     void paint (juce::Graphics& g) override
     {
         const auto s = health.snapshot();
@@ -39,6 +43,12 @@ public:
         g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
                                                   13.0f, juce::Font::plain)));
 
+        if (versionLine.isNotEmpty())
+        {
+            g.setColour (juce::Colours::aqua);
+            g.drawText (versionLine, 8, 6, getWidth() - 16, 16, juce::Justification::left);
+        }
+
         juce::StringArray lines;
         lines.add ("CPU  " + juce::String (s.cpuPercent, 1) + "%   p99 "
                    + juce::String (s.p99Ms, 3) + " / " + juce::String (s.budgetMs, 3) + " ms");
@@ -47,7 +57,8 @@ public:
         lines.add ("overruns " + juce::String (s.overruns)
                    + "   log-drops " + juce::String ((juce::int64) s.dropped));
 
-        int y = 6;
+        g.setColour (juce::Colours::limegreen);
+        int y = versionLine.isNotEmpty() ? 24 : 6;
         for (auto& l : lines) { g.drawText (l, 8, y, getWidth() - 16, 16, juce::Justification::left); y += 17; }
 
         // Saturation-activity indicator: the safety clipper engaged this window.
@@ -71,6 +82,7 @@ private:
 
     AudioHealthLogger& health;
     std::function<juce::StringArray()> extraLines;
+    juce::String versionLine;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DebugOverlay)
 };

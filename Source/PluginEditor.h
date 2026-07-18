@@ -1,6 +1,7 @@
 #pragma once
 #include "PluginProcessor.h"
 #include "ModDestRegistry.h"
+#include "VersionInfo.h"          // build-fresh git hash for the on-screen banner
 #include "QwertyKeyboard.h"
 #include <cstdlib>
 #include <typeinfo>
@@ -103,6 +104,14 @@ public:
                 "bend  " + juce::String (proc.currentPitchBendSemis(), 2) + " st   (" + juce::String ((int) proc.pitchBendEventCount()) + " ev)",
                 "mod   " + juce::String (proc.currentModWheel(), 2)       + "      (" + juce::String ((int) proc.modWheelEventCount())  + " ev)" };
         });
+        // Version banner (H0): the running build, confirmable on screen. VASYNTH_GIT_HASH_RT is
+        // regenerated every build so it always names the exact binary. Shown persistently in the
+        // F12 overlay and flashed as a toast at launch (the log-only banner was invisible before).
+        versionBanner = juce::String ("synth ") + VASYNTH_VERSION + "   git " + VASYNTH_GIT_HASH_RT
+                        + "   " + VASYNTH_BUILD_TYPE;
+        overlay.setVersionLine (versionBanner);
+        if (isStandalone()) proc.postToast (versionBanner);
+
         addChildComponent (overlay);
         addChildComponent (toast);
         addChildComponent (helpOverlay);
@@ -374,6 +383,7 @@ private:
     VASynthProcessor& proc;
     VASynthLookAndFeel lnf;
     DebugOverlay overlay { proc.health };
+    juce::String versionBanner;
     PresetManager presets;
     QwertyKeyboard qwerty;
     Toast toast;

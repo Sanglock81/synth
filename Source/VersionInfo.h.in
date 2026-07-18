@@ -1,0 +1,4 @@
+#pragma once
+// GENERATED each build by cmake/gen_version.cmake — always the currently-built commit
+// ("+" suffix = uncommitted changes present). Do not edit; edit VersionInfo.h.in instead.
+#define VASYNTH_GIT_HASH_RT "@GITHASH@"
