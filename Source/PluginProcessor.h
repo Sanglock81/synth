@@ -442,6 +442,23 @@ public:
     // global/performance control alone.
     static const juce::StringArray& soundDesignParamIDs();
 
+    // -- H5: musical RANDOM (NEW) + VARY -------------------------------------------------
+    // NEW rolls a mode: ~70% WILD (full-range + 0..4 random matrix routes), ~15% ARCHETYPE
+    // (a coherent bass/lead/pad/pluck/keys/perc within constrained, correlated ranges + a
+    // tasteful route or two), ~15% CONSTRAINED (musical per-param ranges). Two guardrails in
+    // EVERY mode: the exclusion list (performance/global untouched) and an AUDIBILITY FLOOR
+    // (>=1 osc at an audible level, non-silent amp env, cutoff not fully closed). All on the
+    // FOCUSED part only. VARY perturbs the CURRENT patch by small bounded deltas.
+    enum class RandomMode { Wild, Constrained, Archetype };
+    struct RandomResult { RandomMode mode = RandomMode::Wild; juce::String label; };
+    static constexpr int   kRandWildPct = 70, kRandArchetypePct = 15;   // constrained = the remainder
+    static constexpr int   kNumArchetypes = 6;
+    static constexpr float kVaryDelta = 0.07f;                          // +/- 7% of range per continuous param
+    RandomResult randomizeSound (juce::Random& rng);                                 // roll a mode
+    RandomResult randomizeSound (juce::Random& rng, RandomMode mode, int archetype); // explicit (long-press picker)
+    void         varySound      (juce::Random& rng);
+    static juce::String archetypeName (int i);
+
     // -- arpeggiator 16-step pattern (R3; per-step velocity #54) ----------------
     // Each step has an on/off ("arp_steps") AND a velocity percent ("arp_vel", 10..200,
     // 0/100 = default). Identical model + interaction to the step sequencer's cells/vel:

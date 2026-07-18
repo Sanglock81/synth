@@ -96,6 +96,7 @@ add_executable(plugin_tests
     plugin/test_surface_control.cpp
     plugin/test_modanim.cpp
     plugin/test_link_sweep.cpp
+    plugin/test_random.cpp
     plugin/test_presets.cpp
     plugin/test_migration.cpp
     plugin/test_fx_plugin.cpp
