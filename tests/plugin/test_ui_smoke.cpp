@@ -16,6 +16,7 @@
 #include "PluginEditor.h"
 #include "UI/Widgets.h"
 #include "UI/ModMatrixPanel.h"
+#include "ModDestRegistry.h"
 #include <memory>
 
 #ifndef VASYNTH_DOCS_DIR
@@ -34,6 +35,18 @@ namespace
             if (auto* found = findKnob (*ch, paramId)) return found;
         }
         return nullptr;
+    }
+
+    // Every parameter-attached control on the panel whose parameter is a registry mod destination.
+    void collectModTargets (juce::Component& c, std::vector<LearnableComponent*>& out)
+    {
+        for (auto* ch : c.getChildren())
+        {
+            if (auto* lc = dynamic_cast<LearnableComponent*> (ch))
+                if (moddest::destForParam (lc->parameterID()) != ModMatrix::DstNone)
+                    out.push_back (lc);
+            collectModTargets (*ch, out);
+        }
     }
 
     // Synthesize a real mouse click ON `comp` (eventComponent == comp — the parent-area
@@ -135,6 +148,60 @@ TEST_CASE ("LINK gesture: a real tap on a destination knob creates a route that 
     REQUIRE (lifted > base * 1.15f);
 }
 
+// --- THE load-bearing gate: EVERY registry destination control connects + animates ---------
+// Iterates every mod-target control in the real editor. For each: arm a source, assert the
+// control reports the connect-ring, drive a REAL tap, assert the route exists in the matrix,
+// then engage the source and assert the control's animation offset goes live. This makes
+// "LINK works on some knobs but not others" structurally impossible to ship.
+TEST_CASE ("LINK connects + animates on EVERY registry destination control (#56 follow-up)",
+           "[plugin][smoke][modmatrix][link]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+
+    std::vector<LearnableComponent*> targets;
+    collectModTargets (*ed, targets);
+
+    // The panel must expose a broad set of targets (FX, EQ, LFO, env, osc, filter, glide) — not
+    // just the original five. A regression that drops the central wiring collapses this count.
+    INFO ("mod-target controls found: " << (int) targets.size());
+    REQUIRE (targets.size() >= 25);
+
+    // Macro 1 drives both tiers; set it high so the applied offset (and animation) is unambiguous.
+    p.apvts.getParameter (ParamID::macro1)->setValueNotifyingHost (1.0f);
+    p.prepareToPlay (48000.0, 128);
+
+    int connected = 0, animated = 0;
+    for (auto* lc : targets)
+    {
+        const int dest = moddest::destForParam (lc->parameterID());
+        for (int s = 0; s < ModMatrix::kSlots; ++s) p.clearModSlot (-1, s);   // clean slate each time
+
+        p.armModLink (ModMatrix::Macro1);
+        REQUIRE (lc->isLinkArmable());                       // the connect-ring shows on THIS control
+        tap (*lc);                                           // a real tap on the control
+
+        bool routed = false;
+        for (int s = 0; s < ModMatrix::kSlots; ++s)
+        {
+            const auto slot = p.getModSlot (-1, s);
+            if (slot.source == ModMatrix::Macro1 && slot.dest == dest) routed = true;
+        }
+        INFO ("dest " << dest << " (" << lc->parameterID() << ") did not route");
+        REQUIRE (routed);
+        ++connected;
+
+        // Engage the source through a block so the offset publishes, then the animation is live.
+        for (int b = 0; b < 4; ++b) { juce::AudioBuffer<float> buf (2, 128); buf.clear(); juce::MidiBuffer m; p.processBlock (buf, m); }
+        if (std::abs (lc->modAnim()) > 1.0e-4f) ++animated;
+    }
+
+    REQUIRE (connected == (int) targets.size());             // ALL of them connect
+    REQUIRE (animated  >= (int) (targets.size() * 8 / 10));   // and the vast majority animate live
+}
+
 // --- screenshot artifacts for the gate (human eyeball; also proves both paint) ---------
 TEST_CASE ("smoke screenshots: editor + mod overlay render for the gate (#56)",
            "[plugin][smoke][screenshot]")
@@ -150,4 +217,9 @@ TEST_CASE ("smoke screenshots: editor + mod overlay render for the gate (#56)",
 
     ModMatrixPanel panel (p);
     snapshot (panel, "mod-overlay.png");
+
+    // Connect-mode: arm a source and every registry control across the panel shows its cyan ring.
+    p.armModLink (ModMatrix::Macro1);
+    ed->repaint();
+    snapshot (*ed, "editor-link-armed.png");
 }

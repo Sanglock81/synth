@@ -1230,6 +1230,9 @@ void VASynthProcessor::applyBlockMods (int part, VoiceParams& vp, FXParams& fx, 
     if (! mtx.active())                              // fully inert -> zero-cost (golden-safe)
     {
         for (auto& a : blockOffsetPub) a.store (0.0f, std::memory_order_relaxed);   // clear stale UI animation
+        voiceOffCutoffOct.store (0.0f, std::memory_order_relaxed); voiceOffPw.store (0.0f, std::memory_order_relaxed);
+        voiceOffReso.store (0.0f, std::memory_order_relaxed);
+        for (auto& a : voiceOffOscLvl) a.store (0.0f, std::memory_order_relaxed);
         return;
     }
 
@@ -1250,6 +1253,15 @@ void VASynthProcessor::applyBlockMods (int part, VoiceParams& vp, FXParams& fx, 
     mtx.blockOffsets (s, off, ModMatrix::kNumBlockDests);
     for (int i = 0; i < ModMatrix::kNumBlockDests; ++i)
         blockOffsetPub[(std::size_t) i].store (off[(std::size_t) i], std::memory_order_relaxed);   // publish for UI/tests
+
+    // Voice-tier offsets (from the same block-level sources) for UI animation of cutoff/reso/pw/levels.
+    const auto vo = mtx.evaluate (s);
+    voiceOffCutoffOct.store (vo.cutoffOct, std::memory_order_relaxed);
+    voiceOffPw.store   (vo.pw,   std::memory_order_relaxed);
+    voiceOffReso.store (vo.reso, std::memory_order_relaxed);
+    voiceOffOscLvl[0].store (vo.osc1Level, std::memory_order_relaxed);
+    voiceOffOscLvl[1].store (vo.osc2Level, std::memory_order_relaxed);
+    voiceOffOscLvl[2].store (vo.osc3Level, std::memory_order_relaxed);
 
     // Add the normalized offset to the param's normalized base, then convert back through the
     // param's own range (respects log/skew), and write the natural value to the engine struct.

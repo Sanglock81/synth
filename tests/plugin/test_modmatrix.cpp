@@ -105,7 +105,7 @@ TEST_CASE ("a destination knob is armable only while a source is armed, and comp
     VASynthProcessor p;
 
     RotaryKnob knob (p.apvts, ParamID::filterCutoff, "CUTOFF", p.getMidiLearn());
-    knob.setModDestination (p, ModMatrix::Cutoff);
+    knob.setModTarget (p, ModMatrix::Cutoff, [] { return 0.0f; });   // registry-driven in the app; explicit here
     REQUIRE_FALSE (knob.isLinkArmable());          // nothing armed yet
 
     p.armModLink (ModMatrix::LFO1);

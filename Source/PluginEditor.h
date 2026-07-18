@@ -1,5 +1,6 @@
 #pragma once
 #include "PluginProcessor.h"
+#include "ModDestRegistry.h"
 #include "QwertyKeyboard.h"
 #include <cstdlib>
 #include <typeinfo>
@@ -92,6 +93,7 @@ public:
         setLookAndFeel (&lnf);
 
         buildUI();
+        wireModTargets (*this);   // ONE place: every registry-bound control becomes a LINK target + animates
         // G6 intake trace: F12 overlay shows the live pitch-bend / mod-wheel value and a running
         // count of how many of each has arrived — so a dead strip is instantly diagnosable
         // (0 events => the controller isn't sending; events but no sound => downstream).
@@ -224,6 +226,26 @@ public:
 
 private:
     bool isStandalone() const { return proc.wrapperType == juce::AudioProcessor::wrapperType_Standalone; }
+
+    // The SINGLE mod-target path: walk the whole control tree and, for every parameter-attached
+    // control whose parameter is in the destination registry, attach LINK + animation. No control
+    // is ever hand-wired for modulation; a new parameter joins simply by being in the registry.
+    void wireModTargets (juce::Component& c)
+    {
+        for (auto* child : c.getChildren())
+        {
+            if (auto* lc = dynamic_cast<LearnableComponent*> (child))
+            {
+                const int dest = moddest::destForParam (lc->parameterID());
+                if (dest != ModMatrix::DstNone)
+                {
+                    auto* param = proc.apvts.getParameter (lc->parameterID());
+                    lc->setModTarget (proc, dest, [this, dest, param] { return proc.modAnimNorm (dest, param); });
+                }
+            }
+            wireModTargets (*child);
+        }
+    }
 
     void buildUI()
     {

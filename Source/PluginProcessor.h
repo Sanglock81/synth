@@ -344,6 +344,33 @@ public:
         const int i = dest - ModMatrix::kFirstBlockDest;
         return (i >= 0 && i < ModMatrix::kNumBlockDests) ? blockOffsetPub[(std::size_t) i].load (std::memory_order_relaxed) : 0.0f;
     }
+
+    // The live modulation on a destination as a NORMALIZED param-space offset — the single source
+    // the animation indicator (knob arc / fader ghost) reads for ANY registry control. Block dests
+    // return their published offset directly; voice dests combine the legacy per-part LFO routing
+    // with the matrix's voice-tier offset (cutoff converts through the param's log range).
+    float modAnimNorm (int dest, const juce::RangedAudioParameter* param) const
+    {
+        if (dest >= ModMatrix::kFirstBlockDest) return blockModOffset (dest);
+        switch (dest)
+        {
+            case ModMatrix::Cutoff:
+            {
+                const float oct = engine.focusModForDest (2) + voiceOffCutoffOct.load (std::memory_order_relaxed);
+                if (std::abs (oct) < 1.0e-5f || param == nullptr) return 0.0f;
+                const auto& r = param->getNormalisableRange();
+                const float base01 = param->getValue();
+                const float modHz  = r.convertFrom0to1 (base01) * std::pow (2.0f, oct);
+                return r.convertTo0to1 (modHz) - base01;
+            }
+            case ModMatrix::PulseWidth: return engine.focusModForDest (3) + voiceOffPw.load (std::memory_order_relaxed);
+            case ModMatrix::Resonance:  return voiceOffReso.load (std::memory_order_relaxed);
+            case ModMatrix::Osc1Level:  return voiceOffOscLvl[0].load (std::memory_order_relaxed);
+            case ModMatrix::Osc2Level:  return voiceOffOscLvl[1].load (std::memory_order_relaxed);
+            case ModMatrix::Osc3Level:  return voiceOffOscLvl[2].load (std::memory_order_relaxed);
+            default: return 0.0f;
+        }
+    }
     // LINK: bind `source`->`dest` in the first free slot (or reuse a slot already on this pair).
     // Returns the slot index, or -1 if all 8 are full. Default depth +50%.
     int linkModRoute (int part, int source, int dest, float depth = 0.5f)
@@ -616,6 +643,9 @@ private:
     // Last block-tier normalized offset per block dest (published by applyBlockMods). Read by the
     // UI to animate a modulated knob, and by tests. Indexed by (dest - kFirstBlockDest).
     std::array<std::atomic<float>, (std::size_t) ModMatrix::kNumBlockDests> blockOffsetPub {};
+    // Voice-tier matrix offsets on the focused part (published each block for UI animation).
+    std::atomic<float> voiceOffCutoffOct { 0.0f }, voiceOffPw { 0.0f }, voiceOffReso { 0.0f };
+    std::array<std::atomic<float>, 3> voiceOffOscLvl {};
 
     // Arpeggiator step pattern <-> "arp_steps" (on/off) + "arp_vel" (per-step %) state props.
     std::array<float, kArpSteps> arpSteps { };

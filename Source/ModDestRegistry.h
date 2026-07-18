@@ -35,13 +35,15 @@ namespace moddest
     {
         namespace P = ParamID;
         static const std::vector<Entry> t {
-            // Osc
+            // Osc — voice-tier dests carry the paramId of THEIR knob so the control resolves to
+            // them (Pitch/WavePos have no single knob; they stay overlay-only). PulseWidth is one
+            // offset shared by all 3 osc PW knobs (see destForParam).
             { ModMatrix::Pitch,      "",             "Pitch",        Osc },
-            { ModMatrix::PulseWidth, "",             "Pulse Width",  Osc },
+            { ModMatrix::PulseWidth, P::osc1PW,      "Pulse Width",  Osc },
             { ModMatrix::WavePos,    "",             "Wave Pos",     Osc },
-            { ModMatrix::Osc1Level,  "",             "Osc 1 Level",  Osc },
-            { ModMatrix::Osc2Level,  "",             "Osc 2 Level",  Osc },
-            { ModMatrix::Osc3Level,  "",             "Osc 3 Level",  Osc },
+            { ModMatrix::Osc1Level,  P::osc1Level,   "Osc 1 Level",  Osc },
+            { ModMatrix::Osc2Level,  P::osc2Level,   "Osc 2 Level",  Osc },
+            { ModMatrix::Osc3Level,  P::osc3Level,   "Osc 3 Level",  Osc },
             { ModMatrix::Osc1Octave, P::osc1Octave,  "Osc 1 Octave", Osc },
             { ModMatrix::Osc1Detune, P::osc1Detune,  "Osc 1 Detune", Osc },
             { ModMatrix::Osc2Octave, P::osc2Octave,  "Osc 2 Octave", Osc },
@@ -49,8 +51,8 @@ namespace moddest
             { ModMatrix::Osc3Octave, P::osc3Octave,  "Osc 3 Octave", Osc },
             { ModMatrix::Osc3Detune, P::osc3Detune,  "Osc 3 Detune", Osc },
             // Filter
-            { ModMatrix::Cutoff,        "",              "Cutoff",       Filter },
-            { ModMatrix::Resonance,     "",              "Resonance",    Filter },
+            { ModMatrix::Cutoff,        P::filterCutoff, "Cutoff",       Filter },
+            { ModMatrix::Resonance,     P::filterReso,   "Resonance",    Filter },
             { ModMatrix::FilterEnvAmt,  P::filterEnvAmt, "Filter EnvAmt",Filter },
             { ModMatrix::FilterKeytrack,P::filterKeytrack,"Filter Keytrk",Filter },
             { ModMatrix::VelToCutoff,   P::velToCutoff,  "Vel>Cutoff",   Filter },
@@ -106,5 +108,17 @@ namespace moddest
         if (dest == ModMatrix::DstNone) return {};
         if (auto* e = find (dest)) return e->name;
         return {};
+    }
+
+    // Resolve a control's APVTS parameter to its mod destination (DstNone if not a target).
+    // This is the SINGLE source of truth: any control whose paramId resolves here becomes a
+    // LINK target + animates; anything else (choice/mode/enable/master gain) gets nothing.
+    inline int destForParam (const juce::String& paramId)
+    {
+        if (paramId.isEmpty()) return ModMatrix::DstNone;
+        // Osc 2/3 PW share the single PulseWidth offset with osc 1.
+        if (paramId == ParamID::osc2PW || paramId == ParamID::osc3PW) return ModMatrix::PulseWidth;
+        for (auto& e : table()) if (e.paramId != nullptr && *e.paramId != 0 && paramId == e.paramId) return e.dest;
+        return ModMatrix::DstNone;
     }
 }

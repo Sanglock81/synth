@@ -52,11 +52,8 @@ public:
             o.k[1] = std::make_unique<RotaryKnob> (p.apvts, detIds[i], "DETUNE", p.getMidiLearn());
             o.k[2] = std::make_unique<RotaryKnob> (p.apvts, pwIds[i],  "PW",     p.getMidiLearn());
             o.k[3] = std::make_unique<RotaryKnob> (p.apvts, lvlIds[i], "LEVEL",  p.getMidiLearn());
-            // LFO->PW: the pw mod is in pw units (0..1 linear), so it maps straight to the
-            // knob's normalized offset. Shown on every oscillator's PW knob.
-            o.k[2]->setModSource ([&p]() -> float { return p.lfoModForDest (3); });
-            o.k[2]->setModDestination (p, ModMatrix::PulseWidth);              // LINK target: PW
-            o.k[3]->setModDestination (p, ModMatrix::Osc1Level + i);           // LINK target: osc i level
+            // LINK targets + animation are wired centrally from the registry (editor::wireModTargets);
+            // PW/level/cutoff/reso etc. no longer need per-knob wiring here.
             addAndMakeVisible (*o.on);   addAndMakeVisible (*o.wave);
             for (auto& k : o.k) addAndMakeVisible (*k);
         }
@@ -127,21 +124,8 @@ public:
         {
             auto* k = new RotaryKnob (p.apvts, d.pid, d.name, p.getMidiLearn(), /*sideLabel*/ true);
             knobs.add (k); addAndMakeVisible (k);
-            if (juce::String (d.pid) == ID::filterCutoff) k->setModDestination (p, ModMatrix::Cutoff);      // LINK targets
-            if (juce::String (d.pid) == ID::filterReso)   k->setModDestination (p, ModMatrix::Resonance);
-            if (juce::String (d.pid) == ID::filterCutoff)
-            {
-                auto* cut = p.apvts.getParameter (ID::filterCutoff);
-                k->setModSource ([&p, cut]() -> float          // LFO->cutoff: octaves -> normalized offset
-                {
-                    const float oct = p.lfoModForDest (2);
-                    if (std::abs (oct) < 1.0e-5f) return 0.0f;
-                    const auto& r = cut->getNormalisableRange();
-                    const float base01 = cut->getValue();
-                    const float modHz  = r.convertFrom0to1 (base01) * std::pow (2.0f, oct);
-                    return r.convertTo0to1 (modHz) - base01;
-                });
-            }
+            // LINK target + animation for cutoff/reso/env-amt/keytrack/vel are wired centrally
+            // from the registry (editor::wireModTargets) — no per-knob wiring here.
         }
     }
 
