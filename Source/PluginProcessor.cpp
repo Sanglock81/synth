@@ -190,6 +190,39 @@ void VASynthProcessor::applyDeviceProfile (const juce::String& deviceName)
     }
 }
 
+// I1: the profile (user wins over factory) that gives this device a PAD sub-surface, or null.
+const MidiProfile* VASynthProcessor::padProfileFor (const juce::String& deviceName) const
+{
+    if (auto* usr = profileLib.userFor (deviceName)) if (usr->hasPadSurface()) return usr;
+    if (auto* fac = profileLib.factoryFor (deviceName)) if (fac->hasPadSurface()) return fac;
+    return nullptr;
+}
+
+// The name of a device's pad sub-surface ("<device> Pads"), or empty if it has none. Used by
+// the INPUTS dialog to list it and by routeDeviceMessage to tag its pad notes.
+juce::String VASynthProcessor::padSubSurfaceName (const juce::String& deviceName) const
+{
+    return padProfileFor (deviceName) != nullptr ? deviceName + " Pads" : juce::String();
+}
+
+// The standalone's per-device MIDI entry point (I1). If this device has a pad sub-surface and
+// the message is a note on/off on the pad channel within the pad note range, it is split off
+// into the "<device> Pads" surface; everything else stays on the device's own surface. Keeps
+// the "each message reaches exactly one surface" invariant the standalone relies on.
+void VASynthProcessor::routeDeviceMessage (const juce::String& deviceName, const juce::MidiMessage& m)
+{
+    if (const auto* pad = padProfileFor (deviceName))
+    {
+        if (m.isNoteOnOrOff() && m.getChannel() == pad->padChannel
+            && m.getNoteNumber() >= pad->padLo && m.getNoteNumber() <= pad->padHi)
+        {
+            routeSurfaceMessage (deviceName + " Pads", m);
+            return;
+        }
+    }
+    routeSurfaceMessage (deviceName, m);
+}
+
 // Oscillator anti-aliasing quality. Compile-time default is Efficient (glitch-
 // free with headroom on the 2-core live ThinkPad); build with
 // -DVASYNTH_OSC_QUALITY_HQ for the studio/Windows HQ default. A runtime GUI

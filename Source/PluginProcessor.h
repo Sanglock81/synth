@@ -214,6 +214,13 @@ public:
     // pass through globally. Runs off the audio thread (MIDI-callback / message thread).
     void routeSurfaceMessage (const juce::String& surface, const juce::MidiMessage& m);
 
+    // I1: per-device entry point for the standalone. Splits a device's drum PADS (a profile-
+    // declared channel + note range) into a separate "<device> Pads" surface, so pads can route
+    // to a different part than the keys; other messages stay on the device's own surface.
+    void routeDeviceMessage (const juce::String& deviceName, const juce::MidiMessage& m);
+    // The device's pad sub-surface name ("<device> Pads"), or empty if it has none (INPUTS + tests).
+    juce::String padSubSurfaceName (const juce::String& deviceName) const;
+
     // -- MULTI layouts (Part B) -----------------------------------------------
     // A MULTI is a NAMED snapshot of the multitimbral LAYOUT — each locked part's preset
     // plus every surface's zones (ranges/parts/transposes). Since ordinary routing RESETS
@@ -717,6 +724,7 @@ private:
     MidiLearnManager    midiLearn { apvts };
     ModifierLearnManager modifierLearn;
     MidiProfileLibrary  profileLib;
+    const MidiProfile*  padProfileFor (const juce::String& deviceName) const;   // I1: pad-surface profile or null
     FactoryPresetLibrary factoryPresets;
     juce::AudioBuffer<float> stereoScratch;   // master L/R sum target
     std::atomic<std::uint32_t> fxOrderPacked { kDefaultOrderPacked };

@@ -8,6 +8,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
+### Added
+- **Launchkey drum pads are their own routable input surface (I1).** A controller whose pads
+  send on a separate MIDI channel + note range (declared in its device profile — the Launchkey
+  Mini's 16 pads are notes 36–51 on channel 10) now split off into an independent
+  **"&lt;device&gt; Pads"** surface. It appears as its own row in **INPUTS** right under the device, so
+  the pads can route to a different part than the keys — e.g. pads → the P4 drum kit while the
+  keys play a lead. The split is data-driven (`padChannel` / `padNotes` in the profile JSON), so
+  the pads get their own key-range zones, activity indicator, and MULTI persistence like any
+  surface; keys and other CCs stay on the device's own surface.
+
 ### Changed
 - **The per-part EQ reaches drum-kit parts, and kit parts are now focusable (K2).** Tapping any
   part cell — synth **or** kit — moves the shared edit-focus, so the EQ section (and the part's

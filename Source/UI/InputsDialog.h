@@ -409,7 +409,14 @@ private:
     {
         surfaceNames.clear();
         surfaceNames.add ("QWERTY");
-        for (auto& d : juce::MidiInput::getAvailableDevices()) surfaceNames.add (d.name);
+        for (auto& d : juce::MidiInput::getAvailableDevices())
+        {
+            surfaceNames.add (d.name);
+            // I1: a controller whose drum pads channel-split off get a second, independently
+            // routable "<device> Pads" surface right beneath it.
+            const auto pads = proc.padSubSurfaceName (d.name);
+            if (pads.isNotEmpty()) surfaceNames.add (pads);
+        }
     }
 
     void relayout()

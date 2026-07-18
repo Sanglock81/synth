@@ -82,7 +82,7 @@ public:
     void handleIncomingMidiMessage (MidiInput* source, const MidiMessage& message) override
     {
         const auto name = source != nullptr ? source->getName() : juce::String();
-        proc.routeSurfaceMessage (name, message);    // zone-resolves notes (+ transpose); bumps activity
+        proc.routeDeviceMessage (name, message);     // I1: splits pads (ch/note) to "<device> Pads"; else zone-resolves
     }
 
 private:

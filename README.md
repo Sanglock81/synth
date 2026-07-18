@@ -57,8 +57,11 @@ a general-purpose synth that runs in any VST3 host or standalone.
   LOCKED — each with its **own** voice, FX chain, three LFOs, and mixer level/pan. Route
   each input surface (QWERTY, each MIDI controller) to a part in the **INPUTS** dialog
   (with key-range split zones), so a B2 can hold a bass part while a Launchkey plays the
-  live patch. One shared 24-voice pool with full per-part isolation — a running generator
-  never steals a note you play live. **MULTI** save/load recalls the whole layout.
+  live patch. A controller whose **drum pads** send on a separate channel/note range (e.g. the
+  Launchkey Mini: notes 36–51 on channel 10) splits into its own **"&lt;device&gt; Pads"** surface,
+  so the pads can drive the drum kit while the keys play a lead. One shared 24-voice pool with
+  full per-part isolation — a running generator never steals a note you play live. **MULTI**
+  save/load recalls the whole layout.
 - **Drum kit parts**: per-pad synth voices, choke groups, learn-by-play, per-pad editing
   (the full synth panel on any pad), factory kits + user `.kit` files.
 - **Groove tools**: a diatonic **arpeggiator**, an 8-row **step sequencer** (dedicated

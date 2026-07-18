@@ -105,6 +105,7 @@ add_executable(plugin_tests
     plugin/test_fx_plugin.cpp
     plugin/test_midi_profile.cpp
     plugin/test_midi_hotplug.cpp
+    plugin/test_pad_surface.cpp
     plugin/test_presets_factory.cpp
     plugin/test_macros.cpp
     plugin/test_rhythm.cpp

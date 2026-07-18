@@ -29,6 +29,14 @@ struct MidiProfile
     std::vector<std::pair<int, juce::String>> mappings;   // (cc, paramID)
     bool                    isUser = false;
 
+    // I1: an optional PAD sub-surface. Some controllers (e.g. Launchkey Mini) send their
+    // drum pads on a separate MIDI channel + note range from the keys. When padChannel > 0,
+    // note messages on that channel within [padLo, padHi] are split off into their OWN input
+    // surface ("<device> Pads") so the pads can route to a different part than the keys.
+    int                     padChannel = 0;               // 0 = no pad sub-surface
+    int                     padLo = 36, padHi = 51;
+    bool hasPadSurface() const { return padChannel >= 1 && padChannel <= 16 && padHi >= padLo; }
+
     bool matchesDevice (const juce::String& deviceName) const
     {
         const auto dev = deviceName.toLowerCase();
@@ -51,6 +59,13 @@ struct MidiProfile
         if (auto* matchArr = v.getProperty ("match", juce::var()).getArray())
             for (auto& m : *matchArr) p.match.add (m.toString());
         p.pitchBendRange = (int) v.getProperty ("pitchBendRange", 2);
+
+        // Optional pad sub-surface (I1). Absent -> padChannel stays 0 (no split).
+        p.padChannel = (int) v.getProperty ("padChannel", 0);
+        if (auto* pad = v.getProperty ("padNotes", juce::var()).getArray())
+        {
+            if (pad->size() == 2) { p.padLo = (int) (*pad)[0]; p.padHi = (int) (*pad)[1]; }
+        }
 
         if (auto* maps = v.getProperty ("mappings", juce::var()).getArray())
         {

@@ -2,7 +2,9 @@
   "name": "Novation Launchkey Mini",
   "match": ["Launchkey", "LKMK3", "LKMini"],
   "pitchBendRange": 2,
-  "notes": "Default: the 8 rotary pots (CC 21-28) drive the 8 MACRO knobs (macro1-8). The macros ship pre-assigned (M1 cutoff, M2 reso, M3 filter-env, M4 amp release, M5 LFO rate, M6 LFO depth, M7 reverb, M8 focused-part level); reassign any in the app or hit RANDOM. Pads/transport send notes/other CCs. Learn any control to override.",
+  "padChannel": 10,
+  "padNotes": [36, 51],
+  "notes": "Default: the 8 rotary pots (CC 21-28) drive the 8 MACRO knobs (macro1-8). The macros ship pre-assigned (M1 cutoff, M2 reso, M3 filter-env, M4 amp release, M5 LFO rate, M6 LFO depth, M7 reverb, M8 focused-part level); reassign any in the app or hit RANDOM. The 16 drum PADS send notes 36-51 on MIDI channel 10 and appear as a separate 'Novation Launchkey Mini Pads' input surface, routable to its own part (e.g. a drum kit) in INPUTS. Learn any control to override.",
   "mappings": [
     { "cc": 21, "param": "macro1" },
     { "cc": 22, "param": "macro2" },
