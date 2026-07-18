@@ -99,6 +99,7 @@ add_executable(plugin_tests
     plugin/test_random.cpp
     plugin/test_eq_mockup.cpp
     plugin/test_eq_panel.cpp
+    plugin/test_eq_kit.cpp
     plugin/test_presets.cpp
     plugin/test_migration.cpp
     plugin/test_fx_plugin.cpp

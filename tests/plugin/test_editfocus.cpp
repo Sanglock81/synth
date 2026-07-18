@@ -90,14 +90,16 @@ TEST_CASE ("edit-focus: revert restores the clean preset (clears edited)", "[plu
     juce::ignoreUnused (clean);
 }
 
-TEST_CASE ("edit-focus: tapping a kit part plays it but keeps the panel on the synth", "[plugin][editfocus]")
+TEST_CASE ("edit-focus: tapping a kit part focuses it (K2: its EQ/channel is editable)", "[plugin][editfocus]")
 {
     VASynthProcessor p;
     p.prepareToPlay (48000.0, 128);
     p.setPartKit (2, p.loadKit ("808 Basics"));
     p.setEditFocus (2);
-    REQUIRE (p.playFocus() == 2);      // the keyboard now plays the kit (per-pad)
-    REQUIRE (p.editFocus() == 0);      // panel stays editing the synth (edit the kit in the Kit Editor)
+    REQUIRE (p.playFocus() == 2);      // the keyboard plays the kit (per-pad)
+    REQUIRE (p.editFocus() == 2);      // K2: focus lands on the kit so its per-part EQ follows;
+                                       // the synth panels dim (edit pad voices in the Kit Editor)
+    REQUIRE (p.isPartKit (2));
 }
 
 TEST_CASE ("edit-focus: playing a loaded kit triggers per-pad drums, not one pitched voice", "[plugin][editfocus][kit]")

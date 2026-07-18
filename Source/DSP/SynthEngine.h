@@ -423,6 +423,17 @@ public:
     // host MIDI sample-accurate (render voices per event segment) while FX+sum run once
     // per block. renderMaster() is the whole-block convenience for tests.
 
+    // A copy of `src` with only the per-part EQ kept (all creative FX disabled). Used to give
+    // kit parts their channel EQ while keeping chorus/delay/reverb/width dry (v1).
+    static FXParams eqOnly (const FXParams& src)
+    {
+        FXParams f;                                       // ctor: all enabled[] = false
+        f.eqBand1 = src.eqBand1; f.eqBand2 = src.eqBand2; f.eqBand3 = src.eqBand3;
+        f.eqBand4 = src.eqBand4; f.eqBand5 = src.eqBand5;
+        f.enabled[FXChain::EQ_] = src.enabled[FXChain::EQ_];
+        return f;
+    }
+
     // Clear per-part accumulators + snapshot locked/kit state for the block. part 0 uses
     // the caller's LIVE FX + LFOs; parts 1-3 use the FX/LFOs published WITH their baked
     // voice params (a kit part is dry). partFxUse/partLfoUse become the per-part config
@@ -440,10 +451,12 @@ public:
         for (int pt = 0; pt < maxParts; ++pt)
             kitReadIdx[(std::size_t) pt] = kitSlots[(std::size_t) pt].idx.load (std::memory_order_acquire);
 
-        // The focused part uses the panel's FX/LFO — unless it's a kit (kits are dry in v1,
-        // even while editing one of their pads), so a pad edit never FXes the other pads.
+        // The focused part uses the panel's FX/LFO — unless it's a kit. Kits keep the creative
+        // FX (chorus/delay/reverb/width) DRY in v1 so a pad edit never FXes the other pads, but
+        // the per-part EQ IS a part-bus shaper (applied to the whole kit's summed output, not
+        // per-pad), so it applies to kits too — eqOnly() strips everything but the EQ.
         const bool focusIsKit = partIsKit (focus);
-        partFxUse[(std::size_t) focus]  = focusIsKit ? FXParams{} : liveFx;
+        partFxUse[(std::size_t) focus]  = focusIsKit ? eqOnly (liveFx) : liveFx;
         partLfoUse[(std::size_t) focus] = focusIsKit ? PartLfos{} : liveLfo;
         partMatrixUse[(std::size_t) focus] = focusIsKit ? ModMatrix{} : liveMatrixStore;
         for (int pt = 0; pt < maxParts; ++pt)
@@ -451,8 +464,8 @@ public:
             if (pt == focus) continue;                   // the live part is filled by renderParts
             const LockedPub& cur = lockedSlots[(std::size_t) pt].current();
             partParams[(std::size_t) pt] = cur.vp;
-            if (partIsKit (pt)) { partFxUse[(std::size_t) pt] = FXParams{}; partLfoUse[(std::size_t) pt] = PartLfos{}; }
-            else                { partFxUse[(std::size_t) pt] = cur.fx;     partLfoUse[(std::size_t) pt] = cur.lfo; }
+            if (partIsKit (pt)) { partFxUse[(std::size_t) pt] = eqOnly (cur.fx); partLfoUse[(std::size_t) pt] = PartLfos{}; }
+            else                { partFxUse[(std::size_t) pt] = cur.fx;          partLfoUse[(std::size_t) pt] = cur.lfo; }
             partMatrixUse[(std::size_t) pt] = cur.mtx;   // baked per-part matrix (empty until a part bakes one)
         }
         if (! smoothPrimed)

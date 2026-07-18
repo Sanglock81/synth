@@ -9,6 +9,15 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Changed
+- **The per-part EQ reaches drum-kit parts, and kit parts are now focusable (K2).** Tapping any
+  part cell — synth **or** kit — moves the shared edit-focus, so the EQ section (and the part's
+  channel) follows it. A kit's summed output now runs through its per-part EQ (the creative FX —
+  chorus/delay/reverb/width — stay dry on kits, only the EQ passes through). Because a drum kit has
+  no single synth sound, while a kit is focused the OSC / FILTER / ENVELOPE / LFO panels dim with a
+  "KIT — edit pads in Kit Editor" hint and a one-tap button; the kit keeps playing from its per-pad
+  voices. Each part remembers its own EQ across focus changes and in the session. *(Previously the
+  whole FX chain was bypassed for kits, and tapping a kit refused edit-focus — so its EQ was
+  unreachable and the FFT showed no EQ shaping on drums. The master scope/FFT was already post-EQ.)*
 - **One EQ, per part, at the end of the chain (K1).** The plugin now has a single EQ concept:
   a fixed **5-band parametric EQ** applied as the **last stage of the focused part's chain**
   (post-FX), living in its own right-column section that **follows edit focus** (the header

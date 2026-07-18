@@ -110,9 +110,9 @@ public:
         }
     }
 
-    // Tap a cell -> focus that part (the whole panel swaps to its sound). A kit part
-    // opens the Kit Editor instead (it has no single panel sound). Right-click / long-press
-    // -> per-part menu (Kit/preset editor + Revert to preset).
+    // Tap a cell -> focus that part (the panel swaps to its sound). A kit part focuses too
+    // (K2): its channel EQ becomes editable while the synth panels dim; edit the kit's pad
+    // voices via long-press -> Kit Editor. Right-click / long-press -> per-part menu.
     void mouseDown (const juce::MouseEvent& e) override
     {
         const int i = cellAt (e.getPosition());
@@ -124,8 +124,8 @@ public:
         const int i = cellAt (e.getPosition());
         pressCell = -1;
         if (i < 0 || e.mods.isPopupMenu() || e.getDistanceFromDragStart() > 8) return;
-        // Tap PLAYS the part (a kit triggers its pads; a synth also becomes the panel edit
-        // focus). Edit a kit via long-press -> Drum kit editor.
+        // Tap PLAYS the part AND focuses it (a kit triggers its pads + exposes its channel EQ;
+        // a synth also swaps the panel to its sound). Edit kit pad voices via long-press -> editor.
         proc.setEditFocus (i);
         repaint(); if (restoreFocus) restoreFocus();
     }

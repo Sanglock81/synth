@@ -82,6 +82,56 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KitPadEditBar)
 };
 
+// K2: when a KIT part is edit-focused, the synth-only panels (osc/filter/env/LFO) have no
+// meaning — a drum kit's sound lives in its per-pad voices. This scrim dims that whole region
+// and says so, with a one-tap route into the Kit Editor. The per-part EQ + mixer (elsewhere)
+// stay live, so you still shape the kit's channel. Intercepts clicks so the dead controls
+// beneath can't be fiddled by accident.
+class KitScrim : public juce::Component
+{
+public:
+    KitScrim()
+    {
+        setWantsKeyboardFocus (false);
+        setInterceptsMouseClicks (true, true);
+        openBtn.setButtonText ("Open Kit Editor");
+        openBtn.setWantsKeyboardFocus (false);
+        openBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff67c0c8));
+        openBtn.setColour (juce::TextButton::textColourOffId, juce::Colours::black);
+        openBtn.onClick = [this] { if (onOpen) onOpen(); };
+        addAndMakeVisible (openBtn);
+    }
+    std::function<void()> onOpen;
+    void setPartLabel (const juce::String& s) { if (s != partLabel) { partLabel = s; repaint(); } }
+
+    void paint (juce::Graphics& g) override
+    {
+        auto r = getLocalBounds().toFloat();
+        g.setColour (juce::Colour (0xea0e1319));                      // heavy dim scrim
+        g.fillRoundedRectangle (r, 8.0f);
+        g.setColour (juce::Colour (0xff67c0c8).withAlpha (0.55f));
+        g.drawRoundedRectangle (r.reduced (1.5f), 8.0f, 1.5f);
+
+        auto body = getLocalBounds().reduced (18);
+        g.setColour (juce::Colour (0xff67c0c8));
+        g.setFont (juce::Font (juce::FontOptions (17.0f, juce::Font::bold)));
+        g.drawFittedText ("KIT  -  " + partLabel, body.removeFromTop (30), juce::Justification::centred, 1);
+        g.setColour (VASynthLookAndFeel::dim());
+        g.setFont (juce::Font (juce::FontOptions (12.5f)));
+        g.drawFittedText ("These synth controls don't apply to a drum kit.\n"
+                          "Edit each pad's sound in the Kit Editor.\n"
+                          "The EQ (right) still shapes the whole kit.",
+                          body.removeFromTop (70), juce::Justification::centredTop, 3);
+    }
+    void resized() override
+    { openBtn.setBounds (getLocalBounds().withSizeKeepingCentre (176, 34).withY (getHeight() * 62 / 100)); }
+
+private:
+    juce::String partLabel;
+    juce::TextButton openBtn;
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KitScrim)
+};
+
 class VASynthEditor : public juce::AudioProcessorEditor,
                       private juce::Timer
 {
@@ -206,6 +256,10 @@ public:
         placeL (*envSection, 2);
         placeL (*lfoSection, 3);
         fxPanel->setBounds (centre);
+
+        // The kit scrim covers the whole synth-panel region (osc..lfo).
+        kitScrim.setBounds (oscSection->getBounds().getUnion (lfoSection->getBounds()));
+        refreshKitScrim();
     }
 
     // F11 fullscreen (standalone), F12 debug overlay, '?' help.
@@ -279,6 +333,14 @@ private:
         bottomZones = std::make_unique<BottomZones> (proc);
         bottomZones->onResizeNeeded = [this] { resized(); };
         addAndMakeVisible (*bottomZones);
+
+        addChildComponent (kitScrim);       // shown only while a kit part is edit-focused (K2)
+        kitScrim.onOpen = [this]
+        {
+            KitEditor::show (proc, getTopLevelComponent(), proc.editFocus(),
+                             [this] { restoreQwertyFocus(); },
+                             [this] (int pt, int pd) { proc.beginKitPadEdit (pt, pd); });
+        };
     }
 
     void grabQwertyFocus()
@@ -349,6 +411,18 @@ private:
         // Kit pad-edit banner: shown while a pad's voice is loaded into the main panel.
         const bool editing = proc.isEditingKitPad();
         if (editing != kitBar.isVisible()) { kitBar.setVisible (editing); if (editing) { kitBar.toFront (false); kitBar.repaint(); } }
+
+        refreshKitScrim();
+    }
+
+    // K2: dim the synth panels when the edit-focused part is a drum kit (its EQ still edits).
+    void refreshKitScrim()
+    {
+        const int f = proc.editFocus();
+        const bool kitFocused = proc.isPartKit (f) && ! proc.isEditingKitPad();   // pad-edit temporarily makes it a synth
+        if (kitFocused != kitScrim.isVisible())
+        { kitScrim.setVisible (kitFocused); if (kitFocused) kitScrim.toFront (false); }
+        if (kitFocused) kitScrim.setPartLabel ("P" + juce::String (f + 1) + "   " + proc.getPartPreset (f));
     }
 
     void emitNote (int note, bool on)
@@ -424,6 +498,7 @@ private:
     std::unique_ptr<ScopeView> scopeView;
     std::unique_ptr<EQPanel> eqPanel;
     std::unique_ptr<BottomZones> bottomZones;
+    KitScrim kitScrim;                     // K2: dims osc/filter/env/LFO while a kit is focused
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VASynthEditor)
 };

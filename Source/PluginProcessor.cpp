@@ -571,10 +571,11 @@ void VASynthProcessor::setEditFocus (int part)
     // plays its sound). The audio thread does the note hand-off when play-focus changes.
     playFocusPart.store (part, std::memory_order_release);
 
-    // A KIT part has no single panel sound, so the panel/edit-focus stays on the current
-    // synth part (edit the kit in the Kit Editor).
-    if (isPartKit (part)) return;
-
+    // K2: a KIT part CAN be edit-focused now — its per-part channel EQ (and level/pan)
+    // follow the tap. The kit has no single synth sound, so the osc/filter/env/LFO panels
+    // show as inactive (dimmed + "edit pads in Kit Editor") while focused; the kit still
+    // plays from its per-pad voices (they ignore the live synth params). The EQ reads/writes
+    // this part's stored peq, preserved per part via partEditState below.
     const int cur = editFocusPart.load (std::memory_order_relaxed);
     if (part == cur) return;
 
