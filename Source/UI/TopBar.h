@@ -147,12 +147,13 @@ public:
     {
         auto tb = getLocalBounds().reduced (10, 7);
 
-        auto preset = tb.removeFromLeft (300); tb.removeFromLeft (8);
+        auto preset = tb.removeFromLeft (300); tb.removeFromLeft (30);   // J4#2: bigger gap before the voice group
         auto pTop = preset.removeFromTop (34);
         presetBtn.setBounds (pTop.removeFromLeft (126).reduced (0, 1));
         save.setBounds   (pTop.removeFromLeft (44).reduced (2, 1));
         random.setBounds (pTop.removeFromLeft (66).reduced (2, 1));
         clear.setBounds  (pTop.reduced (2, 1));
+        preset.removeFromTop (8);                                        // J4#3: nudge the action row down
         // Global-action row below the preset row: LINK | MOD | INPUTS on the right, VARY + CPU left.
         auto grow = preset.removeFromTop (26);
         inputs.setBounds (grow.removeFromRight (68).reduced (2, 1));
@@ -171,11 +172,13 @@ public:
         mode->setBounds (tb.removeFromLeft (120).withSizeKeepingCentre (120, 30)); tb.removeFromLeft (6);
         glide->setBounds (tb.removeFromLeft (52)); tb.removeFromLeft (10);
 
-        // 8 macro knobs fill the middle span between the voice group and the right cluster.
+        // 8 macro knobs, packed to 75% of the middle span (J4#1: closer together), centred.
         const int n = macros.size();
-        const int mw = juce::jmax (10, tb.getWidth() / n);
+        const int span = tb.getWidth();
+        const int mw = juce::jmax (10, (span * 3 / 4) / n);
+        tb.removeFromLeft (juce::jmax (0, (span - mw * n) / 2));
         for (int m = 0; m < n; ++m)
-            macros[m]->setBounds ((m < n - 1 ? tb.removeFromLeft (mw) : tb).reduced (2, 0));
+            macros[m]->setBounds (tb.removeFromLeft (mw).reduced (2, 0));
     }
 
     // Update the shown patch name from outside (e.g. a factory load elsewhere).

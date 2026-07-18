@@ -191,7 +191,7 @@ public:
         partRail->setBounds (area.removeFromLeft (232)); area.removeFromLeft (gap);
 
         auto right = area.removeFromRight (286); area.removeFromRight (gap);
-        scopeView->setBounds (right.removeFromTop (right.getHeight() * 56 / 100)); right.removeFromTop (gap);
+        scopeView->setBounds (right.removeFromTop (right.getHeight() * 47 / 100)); right.removeFromTop (gap);   // J4: give the EQ more room
         eqPanel->setBounds (right);
 
         auto centre = area;

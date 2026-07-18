@@ -496,7 +496,10 @@ public:
 private:
     // Taller than R2: chord chips ~2x tall (readability), arp holds the gate grid,
     // seq rows ~60% taller. The centre synth section flows shorter to make the room.
-    static constexpr int kChordH = 92, kArpH = 74, kGridH = 268, gap = 5;
+    // J4#4/#5: seq + looper row ~20% taller (268 -> 322); looper already shares this height with the
+    // sequencer. The synth centre section shrinks to fit (#6). (+20%, not +35%, so the right-hand
+    // scope/EQ column still lays out cleanly; the master-EQ consolidation is a separate increment.)
+    static constexpr int kChordH = 92, kArpH = 74, kGridH = 322, gap = 5;
     ChordBar chord;
     ArpBar arp;
     SeqPanel seq;
