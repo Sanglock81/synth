@@ -99,3 +99,19 @@ TEST_CASE ("pad-surface routing round-trips through a MULTI", "[plugin][pads][mu
     REQUIRE (dst.getSurfaceRouting (kLK)     == 1);
     REQUIRE (dst.getSurfaceRouting (kLKPads) == 3);  // the pads surface persisted independently
 }
+
+TEST_CASE ("MIDI monitor records the surface + channel of each message (F12 diagnostic)", "[plugin][pads][monitor]")
+{
+    VASynthProcessor p; p.prepareToPlay (kSR, 256);
+    // A key (ch1) and a pad (ch10) from the same Launchkey take different surfaces.
+    p.routeDeviceMessage (kLK, juce::MidiMessage::noteOn (1, 60, 0.9f));
+    p.routeDeviceMessage (kLK, juce::MidiMessage::noteOn (10, 36, 0.9f));
+    auto lines = p.midiMonitorLines();          // newest first
+    REQUIRE (lines.size() >= 2);
+    REQUIRE (lines[0].contains (kLKPads));       // the pad landed on the Pads surface
+    REQUIRE (lines[0].contains ("ch10"));
+    REQUIRE (lines[0].contains ("note 36"));
+    REQUIRE (lines[1].contains ("ch1"));
+    REQUIRE (lines[1].contains ("note 60"));
+    REQUIRE_FALSE (lines[1].contains (kLKPads)); // the key stayed on the device surface
+}

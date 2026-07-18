@@ -943,6 +943,7 @@ int VASynthProcessor::getSurfaceRouting (const juce::String& surface) const
 void VASynthProcessor::routeSurfaceMessage (const juce::String& surface, const juce::MidiMessage& m)
 {
     bumpSurfaceActivity (surface);
+    pushMonitor (surface, m, getSurfaceRouting (surface));   // F12 diagnostic: exact surface/ch/note
 
     if (m.isNoteOn())
     {

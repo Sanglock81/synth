@@ -366,6 +366,42 @@ public:
     float currentModWheel       (int part) const { return engine.modWheelAmount (part); }
     std::uint32_t pitchBendEventCount() const { return pitchBendEvents.load (std::memory_order_relaxed); }
     std::uint32_t modWheelEventCount()  const { return modWheelEvents.load (std::memory_order_relaxed); }
+
+    // -- MIDI monitor (diagnostic; F12 overlay) -------------------------------------------
+    // The last few incoming surface messages — SO the exact channel / note / surface of every
+    // controller (e.g. Launchkey keys vs pads) is visible on screen. Written on the MIDI/message
+    // thread by routeSurfaceMessage, read by the UI timer; a tiny SpinLock ring (never audio).
+    struct MonEvent { juce::String surface; int chan = 0, d1 = 0, d2 = 0, part = 0; int kind = 0; };  // kind: 0 none,1 noteOn,2 noteOff,3 cc,4 bend
+    void pushMonitor (const juce::String& surface, const juce::MidiMessage& m, int part)
+    {
+        MonEvent e; e.surface = surface; e.chan = m.getChannel(); e.part = part;
+        if      (m.isNoteOn())     { e.kind = 1; e.d1 = m.getNoteNumber();       e.d2 = (int) (m.getFloatVelocity() * 127.0f + 0.5f); }
+        else if (m.isNoteOff())    { e.kind = 2; e.d1 = m.getNoteNumber();       e.d2 = 0; }
+        else if (m.isController()) { e.kind = 3; e.d1 = m.getControllerNumber(); e.d2 = m.getControllerValue(); }
+        else if (m.isPitchWheel()) { e.kind = 4; e.d1 = m.getPitchWheelValue();  e.d2 = 0; }
+        else return;
+        const juce::SpinLock::ScopedLockType sl (monLock);
+        monRing[(std::size_t) (monWrite++ & (kMonSize - 1))] = std::move (e);
+    }
+    juce::StringArray midiMonitorLines() const
+    {
+        const juce::SpinLock::ScopedLockType sl (monLock);
+        juce::StringArray out;
+        for (int i = 0; i < kMonSize; ++i)
+        {
+            const auto& e = monRing[(std::size_t) ((monWrite - 1 - i) & (kMonSize - 1))];
+            if (e.kind == 0) continue;
+            juce::String body = e.kind == 1 ? "note " + juce::String (e.d1) + " on v" + juce::String (e.d2)
+                              : e.kind == 2 ? "note " + juce::String (e.d1) + " off"
+                              : e.kind == 3 ? "cc " + juce::String (e.d1) + "=" + juce::String (e.d2)
+                                            : "bend " + juce::String (e.d1);
+            // channel + note lead (the pad-vs-key tell); surface name trails so the clip, if any,
+            // never hides the diagnostic bits.
+            out.add ("ch" + juce::String (e.chan) + " " + body + "  -> P" + juce::String (e.part + 1)
+                     + "  [" + e.surface + "]");
+        }
+        return out;
+    }
     // Live block-tier offset for a destination (normalized param units) — UI knob animation + tests.
     float blockModOffset (int dest) const
     {
@@ -725,6 +761,12 @@ private:
     ModifierLearnManager modifierLearn;
     MidiProfileLibrary  profileLib;
     const MidiProfile*  padProfileFor (const juce::String& deviceName) const;   // I1: pad-surface profile or null
+
+    // MIDI monitor ring (diagnostic; F12). Power-of-two so writes mask cheaply.
+    static constexpr int kMonSize = 8;
+    mutable juce::SpinLock monLock;
+    std::array<MonEvent, kMonSize> monRing {};
+    int monWrite = 0;
     FactoryPresetLibrary factoryPresets;
     juce::AudioBuffer<float> stereoScratch;   // master L/R sum target
     std::atomic<std::uint32_t> fxOrderPacked { kDefaultOrderPacked };

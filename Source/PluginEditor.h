@@ -150,9 +150,14 @@ public:
         // (0 events => the controller isn't sending; events but no sound => downstream).
         overlay.setExtraLinesProvider ([this]
         {
-            return juce::StringArray {
+            juce::StringArray lines {
                 "bend  " + juce::String (proc.currentPitchBendSemis(), 2) + " st   (" + juce::String ((int) proc.pitchBendEventCount()) + " ev)",
                 "mod   " + juce::String (proc.currentModWheel(), 2)       + "      (" + juce::String ((int) proc.modWheelEventCount())  + " ev)" };
+            // Live MIDI monitor: the last few incoming messages with their surface / channel / note,
+            // so pad-vs-key channel splits (and any device) are diagnosable at a glance.
+            lines.add ("-- MIDI in (newest first) --");
+            lines.addArray (proc.midiMonitorLines());
+            return lines;
         });
         // Version banner (H0): the running build, confirmable on screen. VASYNTH_GIT_HASH_RT is
         // regenerated every build so it always names the exact binary. Shown persistently in the
