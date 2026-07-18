@@ -2,6 +2,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "VASynthLookAndFeel.h"
 #include "ModLink.h"
+#include "ModAnim.h"
 #include "../MidiLearnManager.h"
 
 // ============================================================================
@@ -125,6 +126,10 @@ public:
         g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.5f), 5.0f, 2.0f);
     }
 
+    // Owner-supplied extra right-click/long-press items (e.g. a macro's Restore-default / Rename).
+    void addContextMenuItem (juce::String label, std::function<void()> action)
+    { extraMenuItems.emplace_back (std::move (label), std::move (action)); }
+
     // Subclasses call this in paint() to draw the armed outline + CC badge.
     void paintLearnDecorations (juce::Graphics& g)
     {
@@ -181,6 +186,7 @@ protected:
     float linkDownDepth = 0.0f;
     juce::uint32 linkTime = 0;
     std::function<float()> modAnimFn;
+    std::vector<std::pair<juce::String, std::function<void()>>> extraMenuItems;
 
 private:
     void commitNumericEntry()
@@ -224,11 +230,18 @@ private:
         m.addItem (1, "MIDI-learn this control");
         const int cc = learn.getCCForParam (paramID);
         if (cc >= 0) m.addItem (2, "Clear mapping (CC" + juce::String (cc) + ")");
+        if (! extraMenuItems.empty())
+        {
+            m.addSeparator();
+            int id = 100;
+            for (auto& it : extraMenuItems) m.addItem (id++, it.first);
+        }
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
                          [this] (int r)
                          {
                              if (r == 1) armLearn();
                              else if (r == 2) { learn.clearParam (paramID); repaint(); }
+                             else if (r >= 100 && r - 100 < (int) extraMenuItems.size()) extraMenuItems[(std::size_t) (r - 100)].second();
                          });
     }
 
@@ -363,20 +376,25 @@ private:
     struct FaderModOverlay : juce::Component, private juce::Timer
     {
         FaderModOverlay (juce::Slider& sl, LearnableComponent& o) : s (sl), owner (o) { setInterceptsMouseClicks (false, false); }
-        void begin() { startTimerHz (30); }
-        void timerCallback() override { const bool on = std::abs (owner.modAnim()) > 1.0e-4f; if (on || wasOn) repaint(); wasOn = on; }
+        void begin() { startTimerHz (modanim::kTimerHz); }
+        void timerCallback() override { if (st.tick (owner.modAnim(), juce::Time::getMillisecondCounter())) repaint(); }
         void paint (juce::Graphics& g) override
         {
-            const float mod = owner.modAnim();
-            if (std::abs (mod) < 1.0e-4f) return;
+            if (! st.visible()) return;                                 // motion-gated: nothing at rest
+            const float a = st.alpha();
             const float base = (float) s.valueToProportionOfLength (s.getValue());
-            const float modP = juce::jlimit (0.0f, 1.0f, base + mod);
+            const float curP = juce::jlimit (0.0f, 1.0f, base + st.cur);
+            const float lagP = juce::jlimit (0.0f, 1.0f, base + st.lag);
             auto b = getLocalBounds().toFloat();
-            const float y = b.getBottom() - modP * b.getHeight();      // vertical fader: value up
-            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.85f));
-            g.fillRoundedRectangle (b.getX() - 3.0f, y - 2.0f, b.getWidth() + 6.0f, 4.0f, 2.0f);
+            const float yCur = b.getBottom() - curP * b.getHeight();    // vertical fader: value up
+            const float yLag = b.getBottom() - lagP * b.getHeight();
+            // Trail from the echo toward the current position, then the ghost thumb at current.
+            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.35f * a));
+            g.fillRect (b.getX() - 1.0f, juce::jmin (yCur, yLag), b.getWidth() + 2.0f, std::abs (yCur - yLag));
+            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.9f * a));
+            g.fillRoundedRectangle (b.getX() - 3.0f, yCur - 2.0f, b.getWidth() + 6.0f, 4.0f, 2.0f);
         }
-        juce::Slider& s; LearnableComponent& owner; bool wasOn = false;
+        juce::Slider& s; LearnableComponent& owner; modanim::State st;
     };
 
     juce::String name;
@@ -545,33 +563,34 @@ private:
     struct ModOverlay : juce::Component, private juce::Timer
     {
         explicit ModOverlay (juce::Slider& sl) : s (sl) { setInterceptsMouseClicks (false, false); }
-        void begin() { startTimerHz (30); }
-        void timerCallback() override { const bool on = modFn && std::abs (modFn()) > 1.0e-4f; if (on || wasOn) repaint(); wasOn = on; }
+        void begin() { startTimerHz (modanim::kTimerHz); }
+        void timerCallback() override { if (modFn && st.tick (modFn(), juce::Time::getMillisecondCounter())) repaint(); }
         void paint (juce::Graphics& g) override
         {
-            if (! modFn) return;
-            const float mod = modFn();
-            if (std::abs (mod) < 1.0e-4f) return;
+            if (! modFn || ! st.visible()) return;                        // motion-gated: nothing at rest
+            const float a = st.alpha();
             const auto rp = s.getRotaryParameters();
-            const float base    = (float) s.valueToProportionOfLength (s.getValue());
-            const float modNorm = juce::jlimit (0.0f, 1.0f, base + mod);
+            const float base = (float) s.valueToProportionOfLength (s.getValue());
+            const float cur  = juce::jlimit (0.0f, 1.0f, base + st.cur);  // leading edge (current value)
+            const float lag  = juce::jlimit (0.0f, 1.0f, base + st.lag);  // trailing echo
             auto b = getLocalBounds().toFloat().reduced (3.0f);
             const float radius = juce::jmin (b.getWidth(), b.getHeight()) * 0.5f;
             const float cx = b.getCentreX(), cy = b.getCentreY();
             const float lineW = juce::jmax (2.5f, radius * 0.16f);
             const float arcR = radius - lineW * 0.5f;
-            const float a0 = rp.startAngleRadians + base    * (rp.endAngleRadians - rp.startAngleRadians);
-            const float a1 = rp.startAngleRadians + modNorm * (rp.endAngleRadians - rp.startAngleRadians);
-            juce::Path span; span.addCentredArc (cx, cy, arcR, arcR, 0.0f, a0, a1, true);
-            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.5f));
-            g.strokePath (span, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            const auto ang = [&] (float p) { return rp.startAngleRadians + p * (rp.endAngleRadians - rp.startAngleRadians); };
+            // Trail: an arc from the echo (recent) toward the current value; collapses when static.
+            juce::Path trail; trail.addCentredArc (cx, cy, arcR, arcR, 0.0f, ang (lag), ang (cur), true);
+            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.45f * a));
+            g.strokePath (trail, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            const float a1 = ang (cur);
             const juce::Point<float> pt (cx + std::sin (a1) * arcR, cy - std::cos (a1) * arcR);
-            g.setColour (VASynthLookAndFeel::accentWarm());
+            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (a));
             g.fillEllipse (pt.x - 3.0f, pt.y - 3.0f, 6.0f, 6.0f);
         }
         juce::Slider& s;
         std::function<float()> modFn;
-        bool wasOn = false;
+        modanim::State st;
     };
 
     juce::String name;

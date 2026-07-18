@@ -1435,6 +1435,35 @@ void VASynthProcessor::applyMacroMapProperty()
             macroTargetId[(std::size_t) i] = tokens[i];
 }
 
+void VASynthProcessor::writeMacroNamesProperty()
+{
+    juce::StringArray ns;
+    for (auto& n : macroName) ns.add (n.isEmpty() ? "-" : n);
+    apvts.state.setProperty ("macro_names", ns.joinIntoString ("\t"), nullptr);   // tab-joined (names may hold commas)
+}
+
+void VASynthProcessor::applyMacroNamesProperty()
+{
+    for (auto& n : macroName) n.clear();
+    const auto str = apvts.state.getProperty ("macro_names").toString();
+    if (str.isEmpty()) return;
+    auto tokens = juce::StringArray::fromTokens (str, "\t", "");
+    for (int i = 0; i < juce::jmin (8, tokens.size()); ++i)
+        if (tokens[i] != "-") macroName[(std::size_t) i] = tokens[i];
+}
+
+juce::StringArray VASynthProcessor::macroDestinationNames (int i) const
+{
+    juce::StringArray out;
+    if (i < 0 || i >= 8) return out;
+    if (macroTargetId[(std::size_t) i].isNotEmpty()) out.add (getMacroTargetName (i));
+    const auto& m = partMatrix[(std::size_t) juce::jlimit (0, SynthEngine::maxParts - 1, editFocus())];
+    for (auto& s : m.slots)
+        if (s.source == ModMatrix::Macro1 + i && s.dest != ModMatrix::DstNone)
+            out.add (moddest::nameFor (s.dest));
+    return out;
+}
+
 // Mod matrix (#56): "src:dest:depth,...(8 slots)" per part, parts joined by ';'.
 void VASynthProcessor::writeModMatrixProperty()
 {
@@ -2100,6 +2129,7 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
         // Restore the FX chain order (state-tree property, not an APVTS param).
         applyFxOrderProperty();
         applyMacroMapProperty();       // restore macro->param routing
+        applyMacroNamesProperty();     // restore user macro names (H3)
         applyModMatrixProperty();      // restore the per-part mod matrix (#56)
         applyArpStepsProperty();       // restore the arp step pattern
         applySeqProperty();            // restore the sequencer grid

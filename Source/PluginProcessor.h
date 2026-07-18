@@ -84,6 +84,27 @@ public:
     // thread. Does not move any parameter — only the routing map changes.
     void resetMacroAssignments() { macroTargetId = defaultMacroTargets(); writeMacroMapProperty(); }
 
+    // H2/H3 macro helpers. A macro's "assignments" = its direct macro-map target (if any) PLUS any
+    // mod-matrix routes on the focused part where this macro is the SOURCE. Restore/rename operate
+    // on the direct target; the label + tooltip reflect the full set.
+    void restoreMacroDefault (int i)                       // per-macro "Restore default assignment"
+    { if (i < 0 || i >= 8) return; macroTargetId[(std::size_t) i] = defaultMacroTargets()[(std::size_t) i]; writeMacroMapProperty(); }
+    juce::String macroCustomName (int i) const { return (i >= 0 && i < 8) ? macroName[(std::size_t) i] : juce::String(); }
+    void setMacroCustomName (int i, const juce::String& n)
+    { if (i < 0 || i >= 8) return; macroName[(std::size_t) i] = n; writeMacroNamesProperty(); }
+
+    // Number of destinations this macro drives (direct target + matrix routes as source, focused part).
+    int macroDestinationCount (int i) const
+    {
+        if (i < 0 || i >= 8) return 0;
+        int n = macroTargetId[(std::size_t) i].isNotEmpty() ? 1 : 0;
+        const auto& m = partMatrix[(std::size_t) juce::jlimit (0, SynthEngine::maxParts - 1, editFocus())];
+        for (auto& s : m.slots)
+            if (s.source == ModMatrix::Macro1 + i && s.dest != ModMatrix::DstNone) ++n;
+        return n;
+    }
+    juce::StringArray macroDestinationNames (int i) const;   // for the tooltip (impl in .cpp)
+
     // -- chord engine (7B) -----------------------------------------------------
     // The editor publishes which QWERTY chord-modifier keys are down as a bitmask
     // (bit i = ChordEngine::ModifierId i). RT-safe: the audio thread diffs it each
@@ -626,8 +647,11 @@ private:
 
     // Macro routing map <-> the "macro_map" state property (persists with presets).
     std::array<juce::String, 8> macroTargetId {};
+    std::array<juce::String, 8> macroName {};              // optional user labels (H3) <-> "macro_names"
     void writeMacroMapProperty();
     void applyMacroMapProperty();
+    void writeMacroNamesProperty();
+    void applyMacroNamesProperty();
 
     // Mod matrix (#56): one routing table per part, saved in the "mod_matrix" state property.
     std::array<ModMatrix, SynthEngine::maxParts> partMatrix {};

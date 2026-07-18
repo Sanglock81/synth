@@ -109,6 +109,10 @@ public:
             const int idx = m;
             macroAtt.add (new juce::ParameterAttachment (*proc.apvts.getParameter (ids[m]),
                 [this, idx] (float v) { applyMacro (idx, v); }, nullptr));
+            // Macro context menu (long-press / right-click): restore the factory default, rename.
+            k->addContextMenuItem ("Restore default assignment",
+                [this, idx] { proc.restoreMacroDefault (idx); refreshMacroLabels(); if (restoreFocus) restoreFocus(); });
+            k->addContextMenuItem ("Rename macro...", [this, idx] { renameMacro (idx); });
         }
 
         master = std::make_unique<RotaryKnob> (proc.apvts, ParamID::masterGain, "MASTER", proc.getMidiLearn());
@@ -232,9 +236,33 @@ private:
     {
         for (int m = 0; m < macros.size(); ++m)
         {
-            const auto tgt = proc.getMacroTargetName (m);
-            macros[m]->setDisplayName (tgt.isNotEmpty() ? tgt : ("M" + juce::String (m + 1)));
+            // Label what the macro CONTROLS: single dest -> its short name; multiple -> a user name
+            // if set, else "M3 x2"; none -> the plain "M3" fallback. (H3)
+            const int n = proc.macroDestinationCount (m);
+            const juce::String fallback = "M" + juce::String (m + 1);
+            juce::String label;
+            if (n == 0)      label = fallback;
+            else if (n == 1) label = proc.macroDestinationNames (m).joinIntoString ("");
+            else             { const auto custom = proc.macroCustomName (m);
+                               label = custom.isNotEmpty() ? custom : (fallback + " x" + juce::String (n)); }
+            macros[m]->setDisplayName (label.isNotEmpty() ? label : fallback);
         }
+    }
+
+    void renameMacro (int idx)
+    {
+        auto* aw = new juce::AlertWindow ("Rename Macro " + juce::String (idx + 1),
+                                          "A label shown when this macro drives several destinations:",
+                                          juce::MessageBoxIconType::NoIcon, this);
+        aw->addTextEditor ("name", proc.macroCustomName (idx));
+        aw->addButton ("OK",     1, juce::KeyPress (juce::KeyPress::returnKey));
+        aw->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+        aw->enterModalState (true, juce::ModalCallbackFunction::create (
+            [this, aw, idx] (int r)
+            {
+                if (r == 1) { proc.setMacroCustomName (idx, aw->getTextEditorContents ("name").trim()); refreshMacroLabels(); }
+                if (restoreFocus) restoreFocus();
+            }), true);
     }
 
     void refreshTitle() { presetBtn.setButtonText ("synth  -  " + currentName); }

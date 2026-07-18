@@ -45,6 +45,13 @@ public:
     explicit ModMatrixPanel (VASynthProcessor& p) : proc (p)
     {
         setWantsKeyboardFocus (false);
+
+        // Restore-all-macro-defaults (H2): resets the 8 macro->param assignments to the factory map.
+        resetMacros.setButtonText ("Restore macro defaults");
+        resetMacros.setWantsKeyboardFocus (false);
+        resetMacros.onClick = [this] { proc.resetMacroAssignments(); proc.postToast ("Macro assignments restored to defaults"); };
+        addAndMakeVisible (resetMacros);
+
         for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
         {
             auto& r = rows[(std::size_t) i];
@@ -104,11 +111,12 @@ public:
         g.setColour (VASynthLookAndFeel::dim());
         g.setFont (juce::Font (juce::FontOptions (11.5f)));
         g.drawText (uitext::u8 ("Arm LINK and tap a knob to route \xe2\x80\x94 or add one below. Depth is bipolar (drag left to invert)."),
-                    juce::Rectangle<int> (16, getHeight() - kFootH + 4, getWidth() - 32, 16), juce::Justification::centredLeft, false);
+                    juce::Rectangle<int> (16, getHeight() - kFootH + 4, getWidth() - 32 - 190, 16), juce::Justification::centredLeft, false);
     }
 
     void resized() override
     {
+        resetMacros.setBounds (getLocalBounds().removeFromBottom (kFootH).removeFromRight (184).reduced (10, 4));
         auto c = getLocalBounds().reduced (14, 0);
         c.removeFromTop (kHeaderH + kColsH);
         for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
@@ -271,6 +279,7 @@ private:
     };
 
     VASynthProcessor& proc;
+    juce::TextButton resetMacros;
     std::array<Row, VASynthProcessor::kModSlots> rows;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModMatrixPanel)

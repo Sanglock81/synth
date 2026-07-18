@@ -121,6 +121,40 @@ TEST_CASE ("moving a macro drives its default target; M8 drives the focused part
     REQUIRE (p.apvts.getParameter (ParamID::part0Level)->getValue() == Catch::Approx (0.8f).margin (1e-4));  // P1 untouched
 }
 
+TEST_CASE ("per-macro restore brings back that macro's factory assignment (#H2)", "[plugin][macros]")
+{
+    VASynthProcessor p;
+    p.setMacroTarget (0, ParamID::delayFeedback);
+    REQUIRE (p.getMacroTargetId (0) == ParamID::delayFeedback);
+    p.restoreMacroDefault (0);
+    REQUIRE (p.getMacroTargetId (0) == ParamID::filterCutoff);   // only M1 restored...
+    p.setMacroTarget (6, ParamID::stereoWidth);
+    REQUIRE (p.getMacroTargetId (6) == ParamID::stereoWidth);    // ...M7 left as the user set it
+}
+
+TEST_CASE ("macro custom names persist across a state round-trip (#H3)", "[plugin][macros][state]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor src;
+    src.setMacroCustomName (2, "Wobble");
+    juce::MemoryBlock blob; src.getStateInformation (blob);
+    VASynthProcessor dst; dst.setStateInformation (blob.getData(), (int) blob.getSize());
+    REQUIRE (dst.macroCustomName (2) == "Wobble");
+}
+
+TEST_CASE ("macro destination count = direct target + matrix routes as source (#H3)", "[plugin][macros]")
+{
+    VASynthProcessor p;
+    REQUIRE (p.macroDestinationCount (3) == 1);                  // M4 default target = amp release
+    p.setModSlot (-1, 0, ModMatrix::Macro4, ModMatrix::DelayFeedback, 0.5f);
+    p.setModSlot (-1, 1, ModMatrix::Macro4, ModMatrix::ReverbMix,     0.5f);
+    REQUIRE (p.macroDestinationCount (3)      == 3);
+    REQUIRE (p.macroDestinationNames (3).size() == 3);
+
+    p.setMacroTarget (5, "");                                    // M6: no direct target, no routes
+    REQUIRE (p.macroDestinationCount (5) == 0);
+}
+
 TEST_CASE ("EQ defaults keep the master output a true bypass", "[plugin][eq][state]")
 {
     VASynthProcessor p;
