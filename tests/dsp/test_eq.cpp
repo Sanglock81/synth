@@ -19,7 +19,7 @@ namespace
 TEST_CASE ("PartEQ flat (all 0 dB) is transparent", "[dsp][eq][parteq]")
 {
     PartEQ eq; eq.prepare (kSR);
-    eq.setBands (pflat (180), pflat (1000), pflat (5000), pflat (10000));
+    eq.setBands (pflat (180), pflat (1000), pflat (5000), pflat (10000), pflat (14000));
     std::vector<float> L (512), R (512);
     for (int i = 0; i < 512; ++i) { L[(size_t) i] = 0.3f * std::sin (i * 0.11f); R[(size_t) i] = 0.2f * std::sin (i * 0.05f); }
     auto L0 = L, R0 = R;
@@ -31,15 +31,21 @@ TEST_CASE ("PartEQ flat (all 0 dB) is transparent", "[dsp][eq][parteq]")
     }
 }
 
-TEST_CASE ("PartEQ: each of the 4 bells lands on its target dB", "[dsp][eq][parteq]")
+TEST_CASE ("PartEQ: each of the 5 bells lands on its target dB (in isolation)", "[dsp][eq][parteq]")
 {
-    PartEQ eq; eq.prepare (kSR);
-    eq.setBands ({ 200.0f, 9.0f, 2.0f }, { 1000.0f, -9.0f, 2.0f },
-                 { 6000.0f, 6.0f, 2.0f }, { 12000.0f, -6.0f, 2.0f });
-    REQUIRE (eq.magnitudeDb (200.0)   == Catch::Approx (9.0).margin (0.6));
-    REQUIRE (eq.magnitudeDb (1000.0)  == Catch::Approx (-9.0).margin (0.6));
-    REQUIRE (eq.magnitudeDb (6000.0)  == Catch::Approx (6.0).margin (0.6));
-    REQUIRE (eq.magnitudeDb (12000.0) == Catch::Approx (-6.0).margin (0.7));
+    // Test one boosted band at a time (the others flat) so adjacent bells never bleed
+    // into the measurement — proves all 5 bands are independently parametric.
+    const float freqs[5] { 200.0f, 1000.0f, 5000.0f, 10000.0f, 15000.0f };
+    const float gains[5] { 9.0f, -9.0f, 6.0f, -6.0f, 5.0f };
+    for (int active = 0; active < 5; ++active)
+    {
+        PartEQ::Band b[5];
+        for (int i = 0; i < 5; ++i) b[i] = { freqs[i], i == active ? gains[i] : 0.0f, 2.0f, true };
+        PartEQ eq; eq.prepare (kSR);
+        eq.setBands (b[0], b[1], b[2], b[3], b[4]);
+        INFO ("band " << active << " @ " << freqs[active] << " Hz");
+        REQUIRE (eq.magnitudeDb (freqs[active]) == Catch::Approx (gains[active]).margin (0.7));
+    }
 }
 
 TEST_CASE ("PartEQ: a band switched off contributes exactly unity (0 dB)", "[dsp][eq][parteq]")
@@ -50,7 +56,8 @@ TEST_CASE ("PartEQ: a band switched off contributes exactly unity (0 dB)", "[dsp
     PartEQ::Band b2 { 1000.0f, -18.0f, 2.0f, false };   // off: gain ignored
     PartEQ::Band b3 { 6000.0f,  0.0f, 0.9f, true  };
     PartEQ::Band b4 { 12000.0f, 0.0f, 0.9f, true  };
-    eq.setBands (b1, b2, b3, b4);
+    PartEQ::Band b5 { 16000.0f, 0.0f, 0.9f, true  };
+    eq.setBands (b1, b2, b3, b4, b5);
     REQUIRE (eq.magnitudeDb (1000.0) == Catch::Approx (0.0).margin (0.3));   // off band = transparent
     REQUIRE (eq.magnitudeDb (200.0)  == Catch::Approx (6.0).margin (0.6));   // on band still works
 }

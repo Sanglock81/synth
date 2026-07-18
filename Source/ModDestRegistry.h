@@ -92,6 +92,7 @@ namespace moddest
             { ModMatrix::EqB2Gain,     P::peqB2Gain,     "EQ L-Mid Gain",  Fx },
             { ModMatrix::EqB3Gain,     P::peqB3Gain,     "EQ H-Mid Gain",  Fx },
             { ModMatrix::EqB4Gain,     P::peqB4Gain,     "EQ High Gain",   Fx },
+            { ModMatrix::EqB5Gain,     P::peqB5Gain,     "EQ Air Gain",    Fx },
             // Part
             { ModMatrix::GlideTime, P::glideTime, "Glide",   Part },
             // PartLevel / PartPan reserved (enum stable) — they modulate the mixer, a later seam.

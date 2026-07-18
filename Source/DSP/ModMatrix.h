@@ -69,6 +69,7 @@ public:
                   Osc1Octave, Osc1Detune, Osc2Octave, Osc2Detune, Osc3Octave, Osc3Detune,
                   GlideTime, PartLevel, PartPan,
                   EqB4Gain,   // K1: appended (stable-order rule) though it groups with EqB1-3Gain
+                  EqB5Gain,   // K1 tweak: 5th EQ band gain (also appended)
                   kNumDests };
     static constexpr int kFirstBlockDest = ChorusRate;
     static constexpr int kNumBlockDests  = kNumDests - kFirstBlockDest;

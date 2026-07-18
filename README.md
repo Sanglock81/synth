@@ -25,7 +25,7 @@ a general-purpose synth that runs in any VST3 host or standalone.
 - **Three LFOs per part** (tri/sine/square/S&H) → pitch / cutoff / PW, plus pitch-bend,
   mod-wheel vibrato, and sustain-pedal handling.
 - **Reorderable stereo FX** (per part): chorus, ping-pong delay, Freeverb-style reverb,
-  mid/side width — drag to reorder, click-free crossfade — followed by a fixed **4-band
+  mid/side width — drag to reorder, click-free crossfade — followed by a fixed **5-band
   parametric EQ at the end of each part's chain**. The EQ is a mixing-desk section that
   follows edit focus: a vertical gain slider per band (drag sideways = frequency,
   double-tap = numeric freq/gain/Q), per-band + section on/off. (The old global master EQ

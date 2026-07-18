@@ -6,7 +6,7 @@
 namespace peqconst { inline constexpr double kPi = 3.14159265358979323846; }
 
 // ============================================================================
-// Per-part parametric EQ — JUCE-free (standard library only). FOUR fully parametric
+// Per-part parametric EQ — JUCE-free (standard library only). FIVE fully parametric
 // RBJ peaking (bell) bands in series, each with its own freq / gain / Q and an on/off
 // switch. Stereo (independent state per channel), transposed-direct-form-II so
 // coefficient updates don't click. K1: this is the single consolidated per-part EQ,
@@ -20,18 +20,19 @@ namespace peqconst { inline constexpr double kPi = 3.14159265358979323846; }
 class PartEQ
 {
 public:
-    static constexpr int kNumBands = 4;
+    static constexpr int kNumBands = 5;
     struct Band { float freq = 1000.0f, gainDb = 0.0f, q = 0.9f; bool on = true; };
 
     void prepare (double sr) { sampleRate = sr > 0.0 ? sr : 48000.0; reset(); }
     void reset() { for (auto& b : bands) b.reset(); }
 
-    void setBands (const Band& b1, const Band& b2, const Band& b3, const Band& b4)
+    void setBands (const Band& b1, const Band& b2, const Band& b3, const Band& b4, const Band& b5)
     {
         bands[0].set (sampleRate, b1);
         bands[1].set (sampleRate, b2);
         bands[2].set (sampleRate, b3);
         bands[3].set (sampleRate, b4);
+        bands[4].set (sampleRate, b5);
     }
 
     void process (float* L, float* R, int n) noexcept
@@ -47,7 +48,7 @@ public:
     // Adopt another instance's filter state (for the FX reorder crossfade).
     void copyStateFrom (const PartEQ& o) { bands = o.bands; }
 
-    // Magnitude (dB) of the whole 4-band chain at a frequency — for a UI response curve.
+    // Magnitude (dB) of the whole 5-band chain at a frequency — for a UI response curve.
     float magnitudeDb (double freq) const noexcept
     {
         double m = 1.0;

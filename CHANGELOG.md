@@ -10,7 +10,7 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
 
 ### Changed
 - **One EQ, per part, at the end of the chain (K1).** The plugin now has a single EQ concept:
-  a fixed **4-band parametric EQ** applied as the **last stage of the focused part's chain**
+  a fixed **5-band parametric EQ** applied as the **last stage of the focused part's chain**
   (post-FX), living in its own right-column section that **follows edit focus** (the header
   names the part). It replaces two older, overlapping EQs — the **master finisher EQ is
   retired** (its `eq_*` params stay registered but are inert/hidden for state back-compat), and

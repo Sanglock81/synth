@@ -7,7 +7,7 @@
 #include <array>
 
 // ============================================================================
-// K1 — the ONE EQ. A fixed 4-band parametric EQ at the END of the focused part's
+// K1 — the ONE EQ. A fixed 5-band parametric EQ at the END of the focused part's
 // chain (post-FX, applied last by FXChain). This section FOLLOWS EDIT FOCUS: it reads
 // and writes the per-part peq_* params, which the processor keeps pointed at the
 // focused part, so the header always names whose EQ this is.
@@ -205,12 +205,12 @@ private:
     static constexpr int kFreqPixels = 260;               // px for a full 0..1 freq sweep
 
     // --- per-band param id helpers (the four peq bands, appended B4 in K1) -----
-    static const char* freqId (int b) { const char* a[] { ParamID::peqB1Freq, ParamID::peqB2Freq, ParamID::peqB3Freq, ParamID::peqB4Freq }; return a[b]; }
-    static const char* gainId (int b) { const char* a[] { ParamID::peqB1Gain, ParamID::peqB2Gain, ParamID::peqB3Gain, ParamID::peqB4Gain }; return a[b]; }
-    static const char* qId    (int b) { const char* a[] { ParamID::peqB1Q,    ParamID::peqB2Q,    ParamID::peqB3Q,    ParamID::peqB4Q    }; return a[b]; }
-    static const char* onId   (int b) { const char* a[] { ParamID::peqB1On,   ParamID::peqB2On,   ParamID::peqB3On,   ParamID::peqB4On   }; return a[b]; }
-    static int eqDestFor (int b) { const int d[] { ModMatrix::EqB1Gain, ModMatrix::EqB2Gain, ModMatrix::EqB3Gain, ModMatrix::EqB4Gain }; return d[b]; }
-    static const char* bandName (int b) { const char* a[] { "LOW", "L-MID", "H-MID", "HIGH" }; return a[b]; }
+    static const char* freqId (int b) { const char* a[] { ParamID::peqB1Freq, ParamID::peqB2Freq, ParamID::peqB3Freq, ParamID::peqB4Freq, ParamID::peqB5Freq }; return a[b]; }
+    static const char* gainId (int b) { const char* a[] { ParamID::peqB1Gain, ParamID::peqB2Gain, ParamID::peqB3Gain, ParamID::peqB4Gain, ParamID::peqB5Gain }; return a[b]; }
+    static const char* qId    (int b) { const char* a[] { ParamID::peqB1Q,    ParamID::peqB2Q,    ParamID::peqB3Q,    ParamID::peqB4Q,    ParamID::peqB5Q    }; return a[b]; }
+    static const char* onId   (int b) { const char* a[] { ParamID::peqB1On,   ParamID::peqB2On,   ParamID::peqB3On,   ParamID::peqB4On,   ParamID::peqB5On   }; return a[b]; }
+    static int eqDestFor (int b) { const int d[] { ModMatrix::EqB1Gain, ModMatrix::EqB2Gain, ModMatrix::EqB3Gain, ModMatrix::EqB4Gain, ModMatrix::EqB5Gain }; return d[b]; }
+    static const char* bandName (int b) { const char* a[] { "LOW", "L-MID", "H-MID", "HIGH", "AIR" }; return a[b]; }
 
     juce::String headerText() const
     {

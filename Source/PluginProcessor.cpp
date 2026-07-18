@@ -366,6 +366,7 @@ static const juce::StringArray& perPartSoundIds()
         ID::peqB2Freq, ID::peqB2Gain, ID::peqB2Q, ID::peqB2On,
         ID::peqB3Freq, ID::peqB3Gain, ID::peqB3Q, ID::peqB3On,
         ID::peqB4Freq, ID::peqB4Gain, ID::peqB4Q, ID::peqB4On,
+        ID::peqB5Freq, ID::peqB5Gain, ID::peqB5Q, ID::peqB5On,
         ID::polyMode        // per-part Poly/Mono/Legato (edited via focus like the rest of the sound)
     };
     return ids;
@@ -455,6 +456,7 @@ static FXParams fxParamsFrom (const juce::AudioProcessorValueTreeState& src)
     p.eqBand2 = { rp (src, ID::peqB2Freq), rp (src, ID::peqB2Gain), rp (src, ID::peqB2Q), rp (src, ID::peqB2On) > 0.5f };
     p.eqBand3 = { rp (src, ID::peqB3Freq), rp (src, ID::peqB3Gain), rp (src, ID::peqB3Q), rp (src, ID::peqB3On) > 0.5f };
     p.eqBand4 = { rp (src, ID::peqB4Freq), rp (src, ID::peqB4Gain), rp (src, ID::peqB4Q), rp (src, ID::peqB4On) > 0.5f };
+    p.eqBand5 = { rp (src, ID::peqB5Freq), rp (src, ID::peqB5Gain), rp (src, ID::peqB5Q), rp (src, ID::peqB5On) > 0.5f };
     p.enabled[FXChain::Chorus_] = rp (src, ID::fxChorusOn) > 0.5f;
     p.enabled[FXChain::Delay_]  = rp (src, ID::fxDelayOn)  > 0.5f;
     p.enabled[FXChain::Reverb_] = rp (src, ID::fxReverbOn) > 0.5f;
@@ -1296,6 +1298,7 @@ void VASynthProcessor::applyBlockMods (int part, VoiceParams& vp, FXParams& fx, 
     mod (ModMatrix::EqB2Gain,      ID::peqB2Gain,     fx.eqBand2.gainDb);
     mod (ModMatrix::EqB3Gain,      ID::peqB3Gain,     fx.eqBand3.gainDb);
     mod (ModMatrix::EqB4Gain,      ID::peqB4Gain,     fx.eqBand4.gainDb);
+    mod (ModMatrix::EqB5Gain,      ID::peqB5Gain,     fx.eqBand5.gainDb);
     // LFO rate/depth
     mod (ModMatrix::Lfo1Rate,  ID::lfoRate,   lfo.lfo[0].rate);
     mod (ModMatrix::Lfo1Depth, ID::lfoDepth,  lfo.lfo[0].depth);
@@ -1381,6 +1384,7 @@ FXParams VASynthProcessor::snapshotFXParams() const
     p.eqBand2 = { rp (apvts, ID::peqB2Freq), rp (apvts, ID::peqB2Gain), rp (apvts, ID::peqB2Q), rp (apvts, ID::peqB2On) > 0.5f };
     p.eqBand3 = { rp (apvts, ID::peqB3Freq), rp (apvts, ID::peqB3Gain), rp (apvts, ID::peqB3Q), rp (apvts, ID::peqB3On) > 0.5f };
     p.eqBand4 = { rp (apvts, ID::peqB4Freq), rp (apvts, ID::peqB4Gain), rp (apvts, ID::peqB4Q), rp (apvts, ID::peqB4On) > 0.5f };
+    p.eqBand5 = { rp (apvts, ID::peqB5Freq), rp (apvts, ID::peqB5Gain), rp (apvts, ID::peqB5Q), rp (apvts, ID::peqB5On) > 0.5f };
 
     p.enabled[FXChain::Chorus_] = rp (apvts, ID::fxChorusOn) > 0.5f;
     p.enabled[FXChain::Delay_]  = rp (apvts, ID::fxDelayOn)  > 0.5f;
