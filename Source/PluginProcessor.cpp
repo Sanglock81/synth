@@ -2094,12 +2094,12 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         for (int lane = 0; lane < SynthEngine::maxParts; ++lane)
             if (clearMask & (1 << lane)) { looper.clear (lane); audioLoops[(std::size_t) lane].clear(); flushLoopNotesForPart (lane, chordOn); }
 
-        const double bpm = juce::jmax (20.0f, rp (apvts, ID::tempo));
-        const double sr  = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
-        const int barsSel = (int) rp (apvts, ID::loopBars);          // 0->1, 1->2, 2->4 bars (shared grid)
-        const int bars = (barsSel == 2) ? 4 : (barsSel == 1) ? 2 : 1;
-        const int loopLen = juce::jmax (1, (int) (sr * 60.0 / bpm * 4.0 * bars));   // 4 beats/bar
-        looper.setLoopLength (loopLen);                              // MIDI grid: full length at any tempo
+        // Loop length tracks the SAME host-aware tempo clock as the arp/seq (bpm/sr from above),
+        // so in a DAW the loop grid follows the project tempo (J1) rather than the internal knob.
+        const double barSamples = sr * 60.0 / bpm * 4.0;             // 4 beats/bar
+        // J2: MASTER wrap = the longest possible loop (32 bars), a common multiple of every lane
+        // length so each lane's phase (masterPos % laneLen) is continuous across the master wrap.
+        looper.setMasterLength (juce::jmax (1, (int) (barSamples * 32.0)));
 
         // 1/32-note quantize grid (shared, from tempo): half a 16th step.
         looper.setQuantizeGrid ((int) juce::jmax (1.0, samplesPerStep * 0.5));
@@ -2108,13 +2108,21 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         static const char* const recIds[]  { ParamID::loopRec,  ParamID::loopRec2,  ParamID::loopRec3,  ParamID::loopRec4 };
         static const char* const playIds[] { ParamID::loopPlay, ParamID::loopPlay2, ParamID::loopPlay3, ParamID::loopPlay4 };
         static const char* const modeIds[] { ParamID::loopMode, ParamID::loopMode2, ParamID::loopMode3, ParamID::loopMode4 };
+        static const char* const barsIds[] { ParamID::loopBars, ParamID::loopBars2, ParamID::loopBars3, ParamID::loopBars4 };
         static const char* const quantIds[]{ ParamID::loopQuant, ParamID::loopQuant2, ParamID::loopQuant3, ParamID::loopQuant4 };
+        static const int barsForSel[] { 1, 2, 4, 8, 16, 32 };       // loop_bars choice index -> bars
 
         for (int lane = 0; lane < SynthEngine::maxParts; ++lane)
         {
             const std::size_t L = (std::size_t) lane;
             auto& al = audioLoops[L];
+
+            // J2: this lane's OWN length. MIDI gets it at any tempo; AUDIO clamps to the ring.
+            const int barsSel = juce::jlimit (0, 5, (int) rp (apvts, barsIds[L]));
+            const int loopLen = juce::jmax (1, (int) (barSamples * barsForSel[barsSel]));
+            looper.setLoopLength (lane, loopLen);
             al.setLoopLength (loopLen);          // clamps to the ring (honest bar-cap lives in the UI)
+            loopLenDisp[L].store (loopLen, std::memory_order_relaxed);
 
             const bool recReq   = rp (apvts, recIds[L])  > 0.5f;
             const bool playReq  = rp (apvts, playIds[L]) > 0.5f;
@@ -2123,14 +2131,14 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             if (recReq && ! loopRecPrev[L]) loopArmPending[L] = true;             // REC on -> arm
             if (! recReq)                 { loopArmPending[L] = false; loopRecording[L] = false; }   // REC off -> cancel
             loopRecPrev[L] = recReq;
-            // Engage at the loop downbeat: the very start (pos 0) or the block after a wrap.
-            if (loopArmPending[L] && (looper.position() == 0 || loopWrappedLastBlock))
+            // Engage at THIS lane's downbeat: its very start (phase 0) or the block after its wrap.
+            if (loopArmPending[L] && (looper.position (lane) == 0 || loopLaneWrapped[L]))
             { loopArmPending[L] = false; loopRecording[L] = true; loopRecJustEngaged[L] = true; }
 
-            // ONE-SHOT fixed length (#47 correction): record exactly one loop (the set 1/2/4
-            // bars), then auto-stop at the next downbeat and switch this lane to PLAY. The
-            // engage block's own wrap is skipped via loopRecJustEngaged so we get one FULL pass.
-            if (loopRecording[L] && loopWrappedLastBlock && ! loopRecJustEngaged[L])
+            // ONE-SHOT fixed length (#47 correction): record exactly one loop (this lane's bars),
+            // then auto-stop at the next downbeat and switch this lane to PLAY. The engage block's
+            // own wrap is skipped via loopRecJustEngaged so we get one FULL pass.
+            if (loopRecording[L] && loopLaneWrapped[L] && ! loopRecJustEngaged[L])
             {
                 loopRecording[L] = false;
                 if (auto* pr = apvts.getParameter (recIds[L]))  pr->setValueNotifyingHost (0.0f);   // REC off (one-shot)
@@ -2300,12 +2308,13 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // next block's armed-record can engage on the boundary. The AUDIO lane advances later
     // (after mixParts captures this block), so both lanes stay anchored to the same pos.
     {
-        const int posBefore = looper.position();
+        int laneBefore[SynthEngine::maxParts];
+        for (int lane = 0; lane < SynthEngine::maxParts; ++lane) laneBefore[lane] = looper.position (lane);
         looper.advance (numSamples);
-        loopWrappedLastBlock = looper.position() < posBefore;
+        for (int lane = 0; lane < SynthEngine::maxParts; ++lane)     // per-lane wrap for next block's engage/one-shot
+            loopLaneWrapped[(std::size_t) lane] = looper.position (lane) < laneBefore[lane];
     }
     loopPosDisp.store (looper.position(), std::memory_order_relaxed);
-    loopLenDisp.store (looper.loopLength(), std::memory_order_relaxed);
 
     // Publish the held-modifier mask (QWERTY | MIDI) for the CHORD UI indicators.
     activeModMask.store (qwertyModMask.load (std::memory_order_acquire) | midiModMask,

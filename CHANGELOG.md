@@ -9,6 +9,14 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Per-part looper loop lengths, up to 32 bars (J2).** Each of the four looper lanes now sets
+  its **own** length — a **BARS** selector on every row (**1 / 2 / 4 / 8 / 16 / 32**) instead of one
+  shared grid. So a 2-bar drum groove on P4 can loop under an 8-bar chord progression on P1, and the
+  lanes stay locked to a single downbeat (a shorter loop simply wraps a whole number of times inside
+  a longer one — driven by one master clock, `masterPos % laneLength`, so there is no phase drift).
+  **MIDI** loops offer all lengths at any tempo; **AUDIO** loops are honestly capped by the ring size
+  (shown as "aud Nb" on the row when a slower tempo can't fit the selection). Old sessions restore
+  unchanged (the length list was extended append-only).
 - **Master tempo linking + tempo-synced LFOs (J1).** In a DAW the synth now **follows the host's
   tempo and transport** — the arpeggiator, step sequencer, looper **and** LFOs lock to the project
   BPM and play position (via `AudioPlayHead`); standalone keeps using the internal **Tempo** knob.

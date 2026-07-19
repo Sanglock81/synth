@@ -16,6 +16,7 @@
 #include "PluginEditor.h"
 #include "UI/Widgets.h"
 #include "UI/Sections.h"
+#include "UI/BottomZones.h"
 #include "UI/ModMatrixPanel.h"
 #include "ModDestRegistry.h"
 #include "VersionInfo.h"
@@ -49,6 +50,18 @@ namespace
                     out.push_back (lc);
             collectModTargets (*ch, out);
         }
+    }
+
+    // Depth-first search for the parameter-attached control (any LearnableComponent) bound to `paramId`.
+    LearnableComponent* findLearnable (juce::Component& c, const juce::String& paramId)
+    {
+        for (auto* ch : c.getChildren())
+        {
+            if (auto* lc = dynamic_cast<LearnableComponent*> (ch))
+                if (lc->parameterID() == paramId) return lc;
+            if (auto* found = findLearnable (*ch, paramId)) return found;
+        }
+        return nullptr;
     }
 
     // Synthesize a real mouse click ON `comp` (eventComponent == comp — the parent-area
@@ -252,6 +265,36 @@ TEST_CASE ("LFO SYNC swaps the visible RATE<->DIV control (#J1)", "[plugin][smok
     p.apvts.getParameter (ParamID::lfoSync)->setValueNotifyingHost (0.0f);
     REQUIRE (rate->isVisible());
     REQUIRE_FALSE (div->isVisible());
+}
+
+// --- J2: each looper lane has its OWN bars selector (per-part loop length) ---------------
+TEST_CASE ("J2: per-lane looper BARS selectors are wired + render (#J2)", "[plugin][smoke][looper][j2]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);   // full recursive layout so the looper rows get real bounds
+
+    // All four per-lane bars selectors exist and are bound to their OWN param.
+    const char* barsIds[] { ParamID::loopBars, ParamID::loopBars2, ParamID::loopBars3, ParamID::loopBars4 };
+    for (auto* id : barsIds) { INFO ("missing bars selector: " << id); REQUIRE (findLearnable (*ed, id) != nullptr); }
+
+    // Set a distinct length per lane (2 / 4 / 8 / 16 bars) so the screenshot shows the spread,
+    // and confirm each selector reflects its own param independently.
+    const int idx[] { 1, 2, 3, 4 };
+    for (int i = 0; i < 4; ++i)
+        p.apvts.getParameter (barsIds[i])->setValueNotifyingHost (
+            p.apvts.getParameter (barsIds[i])->convertTo0to1 ((float) idx[i]));
+    for (int i = 0; i < 4; ++i)
+        REQUIRE (dynamic_cast<juce::AudioParameterChoice*> (p.apvts.getParameter (barsIds[i]))->getIndex() == idx[i]);
+
+    // Snapshot the looper panel for the gate's human review.
+    LearnableComponent* lc = findLearnable (*ed, ParamID::loopBars2);
+    juce::Component* panel = lc ? lc->getParentComponent() : nullptr;
+    while (panel != nullptr && dynamic_cast<LooperPanel*> (panel) == nullptr) panel = panel->getParentComponent();
+    REQUIRE (panel != nullptr);
+    panel->repaint();
+    snapshot (*panel, "looper-lengths.png");
 }
 
 // --- screenshot artifacts for the gate (human eyeball; also proves both paint) ---------

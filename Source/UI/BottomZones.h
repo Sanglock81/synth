@@ -283,8 +283,9 @@ private:
 
 // ---- LOOPER: FOUR fixed lanes (lane N == part N), each with its OWN transport ----
 // Lane N records + plays part N regardless of the edit/play focus (#47). Each lane row:
-// part label, REC, PLAY, MIDI/AUDIO, CLEAR, and a content/playhead strip. loop_bars is the
-// shared grid; below ~40 BPM a lane's AUDIO mode is capped (honest, shown on the row).
+// part label, REC, PLAY, MIDI/AUDIO, per-lane BARS length, quantize, CLEAR, and a
+// content/playhead strip. J2: each lane picks its OWN length (1..32 bars); at slow tempos a
+// lane's AUDIO mode is capped to what the ring can hold (honest, shown on the row).
 class LooperPanel : public juce::Component,
                     private juce::Timer
 {
@@ -297,6 +298,7 @@ public:
         const char* const recIds[]  { ParamID::loopRec,  ParamID::loopRec2,  ParamID::loopRec3,  ParamID::loopRec4 };
         const char* const playIds[] { ParamID::loopPlay, ParamID::loopPlay2, ParamID::loopPlay3, ParamID::loopPlay4 };
         const char* const modeIds[] { ParamID::loopMode, ParamID::loopMode2, ParamID::loopMode3, ParamID::loopMode4 };
+        const char* const barsIds[] { ParamID::loopBars, ParamID::loopBars2, ParamID::loopBars3, ParamID::loopBars4 };
         const char* const quantIds[]{ ParamID::loopQuant, ParamID::loopQuant2, ParamID::loopQuant3, ParamID::loopQuant4 };
 
         auto styleBtn = [] (juce::TextButton& b)
@@ -312,18 +314,19 @@ public:
             playBtn[(std::size_t) i] = std::make_unique<PowerToggle> (p.apvts, playIds[(std::size_t) i], "P");
             modeSel[(std::size_t) i] = std::make_unique<HSelector> (p.apvts, modeIds[(std::size_t) i], p.getMidiLearn(),
                                                                     juce::StringArray { "MIDI", "AUD" });
+            barsSel[(std::size_t) i] = std::make_unique<HSelector> (p.apvts, barsIds[(std::size_t) i], p.getMidiLearn(),
+                                                                    juce::StringArray { "1", "2", "4", "8", "16", "32" });   // per-lane bars
             quantBtn[(std::size_t) i] = std::make_unique<PowerToggle> (p.apvts, quantIds[(std::size_t) i], "Q");   // 1/32 quantize
             addAndMakeVisible (*recBtn[(std::size_t) i]); addAndMakeVisible (*playBtn[(std::size_t) i]);
-            addAndMakeVisible (*modeSel[(std::size_t) i]); addAndMakeVisible (*quantBtn[(std::size_t) i]);
+            addAndMakeVisible (*modeSel[(std::size_t) i]); addAndMakeVisible (*barsSel[(std::size_t) i]);
+            addAndMakeVisible (*quantBtn[(std::size_t) i]);
             auto& cb = clearBtn[(std::size_t) i];
             cb.setButtonText ("x"); styleBtn (cb);
             cb.onClick = [this, i] { proc.clearLoopLane (i); };
             addAndMakeVisible (cb);
         }
 
-        sync = std::make_unique<HSelector> (p.apvts, ParamID::loopBars, p.getMidiLearn(),
-                                            juce::StringArray { "1 BAR", "2 BAR", "4 BAR" });
-        addAndMakeVisible (*sync);
+        // J2: length is now PER-LANE (a BARS selector on each row) — no shared top-bar selector.
         expo.setButtonText ("MIDI"); styleBtn (expo);   expo.onClick    = [this] { exportMidi(); }; addAndMakeVisible (expo);
         expoWav.setButtonText ("WAV"); styleBtn (expoWav); expoWav.onClick = [this] { exportWav(); }; addAndMakeVisible (expoWav);
 
@@ -335,12 +338,12 @@ public:
         const auto tLoop = juce::Colour (0xffca6bd0);
         chrome::section (g, getLocalBounds(), "Looper  -  4 lanes (P1-P4), MIDI + audio", tLoop);
 
-        const float ph = proc.loopPlayhead();
         const int maxAudioBars = proc.maxAudioLoopBars();   // honest audio cap at this tempo
         for (int i = 0; i < kLanes; ++i)
         {
             auto lane = laneStrip[(std::size_t) i];
             if (lane.isEmpty()) continue;
+            const float ph = proc.loopPlayhead (i);         // J2: each lane has its own phase
 
             const bool audioMode = proc.apvts.getRawParameterValue (laneModeId (i))->load() > 0.5f;
             const bool hasMidi   = proc.loopLaneHasContent (i);
@@ -367,8 +370,9 @@ public:
                 g.fillEllipse (juce::Rectangle<float> ((float) lane.getX() + 4.0f, (float) lane.getCentreY() - 3.5f, 7.0f, 7.0f));
             }
             // honest audio-cap note (this lane is AUDIO but the grid can't fit in the ring).
-            const int barsSel = (int) proc.apvts.getRawParameterValue (ParamID::loopBars)->load();   // 0/1/2 -> 1/2/4
-            const int selBars = (barsSel == 2) ? 4 : (barsSel == 1) ? 2 : 1;
+            static const int barsForSel[] { 1, 2, 4, 8, 16, 32 };
+            const int barsIdx = juce::jlimit (0, 5, (int) proc.apvts.getRawParameterValue (laneBarsId (i))->load());
+            const int selBars = barsForSel[barsIdx];
             if (audioMode && selBars > maxAudioBars)
             {
                 g.setColour (juce::Colour (0xffe0b050));
@@ -384,13 +388,12 @@ public:
     void resized() override
     {
         auto c = chrome::sectionContent (getLocalBounds());
-        // Top bar: shared BARS + the two exports.
+        // Top bar: the two exports (length is per-lane now, on each row).
         auto top = c.removeFromTop (26); c.removeFromTop (5);
-        sync->setBounds (top.removeFromLeft (160).reduced (2, 2));
         expoWav.setBounds (top.removeFromRight (54).reduced (2, 2)); top.removeFromRight (3);
         expo.setBounds    (top.removeFromRight (54).reduced (2, 2));
 
-        // Four lane rows: [P# label] [R][P] [MIDI/AUD] [x] [content strip].
+        // Four lane rows: [P# label] [R][P] [MIDI/AUD] [BARS] [Q] [x] [content strip].
         const int rh = juce::jmax (22, (c.getHeight() - (kLanes - 1) * 4) / kLanes);
         for (int i = 0; i < kLanes; ++i)
         {
@@ -398,7 +401,8 @@ public:
             labelRect[(std::size_t) i] = row.removeFromLeft (34);
             recBtn[(std::size_t) i]->setBounds  (row.removeFromLeft (24).reduced (1, 2));
             playBtn[(std::size_t) i]->setBounds (row.removeFromLeft (24).reduced (1, 2));
-            modeSel[(std::size_t) i]->setBounds (row.removeFromLeft (juce::jmin (64, row.getWidth() - 60)).reduced (1, 2));
+            modeSel[(std::size_t) i]->setBounds (row.removeFromLeft (juce::jmin (56, row.getWidth() - 190)).reduced (1, 2));
+            barsSel[(std::size_t) i]->setBounds (row.removeFromLeft (juce::jmin (156, row.getWidth() - 46)).reduced (1, 2));
             quantBtn[(std::size_t) i]->setBounds (row.removeFromLeft (22).reduced (1, 2));
             clearBtn[(std::size_t) i].setBounds (row.removeFromLeft (18).reduced (1, 3));
             row.removeFromLeft (3);
@@ -422,6 +426,10 @@ private:
     static const char* laneModeId (int i)
     {
         switch (i) { case 1: return ParamID::loopMode2; case 2: return ParamID::loopMode3; case 3: return ParamID::loopMode4; default: return ParamID::loopMode; }
+    }
+    static const char* laneBarsId (int i)
+    {
+        switch (i) { case 1: return ParamID::loopBars2; case 2: return ParamID::loopBars3; case 3: return ParamID::loopBars4; default: return ParamID::loopBars; }
     }
 
     void exportMidi()
@@ -456,9 +464,8 @@ private:
 
     VASynthProcessor& proc;
     std::array<std::unique_ptr<PowerToggle>, kLanes> recBtn, playBtn, quantBtn;
-    std::array<std::unique_ptr<HSelector>, kLanes> modeSel;
+    std::array<std::unique_ptr<HSelector>, kLanes> modeSel, barsSel;   // J2: per-lane length selector
     std::array<juce::TextButton, kLanes> clearBtn;
-    std::unique_ptr<HSelector> sync;
     juce::TextButton expo, expoWav;
     std::array<juce::Rectangle<int>, kLanes> labelRect { }, laneStrip { };
     std::unique_ptr<juce::FileChooser> chooser;

@@ -73,8 +73,9 @@ a general-purpose synth that runs in any VST3 host or standalone.
   synth panel on any pad), factory kits + user `.kit` files. Samples live in a managed,
   content-deduplicated library and travel with kits, sessions, and MULTIs.
 - **Groove tools**: a diatonic **arpeggiator**, an 8-row **step sequencer** (dedicated
-  drum grid), and a clock-linked **looper** (armed + measure-quantized, dual MIDI + AUDIO
-  lanes, WAV export).
+  drum grid), and a clock-linked **looper** — four lanes (one per part), armed +
+  measure-quantized, dual MIDI + AUDIO, WAV export, with **per-lane loop length 1–32 bars**
+  (a short groove loops under a long progression, all locked to one downbeat).
 - **16 factory presets + 6 drums** + user save/load + sound-design Randomize. Loading a
   patch is **sound-only** — it never disturbs the sequencer, looper, tempo, or other parts.
   A default startup scene (P1 lead / P2 spare / P3 bass / P4 808 kit) is playable out of the box.
@@ -457,6 +458,13 @@ out-of-range peaks, and non-finite samples. The `[click]` suite runs in every ga
   (median), and on a 2-core machine internal threading competes with PipeWire on
   core 1 and adds RT jitter. The DAW already parallelizes across instances.
   Revisit only if HQ-live or large unison is needed (v2, needs a lock-free pool).
+- **Per-instance memory (multi-instance note).** Each plugin instance pre-allocates its
+  four audio-looper rings up front (RT-safe, never resized): `kMaxLoopSeconds` (64 s) ×
+  48 kHz × 2 ch × 4 B × 4 lanes ≈ **98 MB resident per instance** (J2, raised from ~37 MB
+  to make 32-bar audio loops honest down to ~120 BPM). This is RAM, not CPU — negligible on
+  the ThinkPad — but scales linearly with instance count, so a session with many instances
+  should account for it; lower `kMaxLoopSeconds` for a memory-tight host. MIDI loops cost
+  nothing here.
 - **Curated audio-device selector UI (backlog).** The just-works PipeWire default
   and curated device *logging* land now (`AudioDeviceCuration`), but the settings
   dialog still shows JUCE's raw ALSA list as the advanced view. Replacing it with a

@@ -304,6 +304,26 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   transition cases), `plugin/test_ui_smoke` (SYNC RATE↔DIV swap + screenshot). Goldens bit-identical
   (sync defaults off).
 
+## J2 — per-part looper loop lengths (up to 32 bars) — DONE (at gate)
+
+- **DSP (`Looper.h`):** one master position + per-lane `loopLen[kParts]`; a lane's phase is
+  `masterPos % laneLen`. The master wraps at 32 bars (a common multiple of every length), so a
+  shorter lane wraps a whole number of times inside a longer one, always on the same downbeat — no
+  drift, no reset pulses. Per-lane arm-on-wrap; per-lane one-shot record engage/auto-stop.
+- **Params:** `loop_bars` enum EXTENDED APPEND-ONLY to `{1,2,4,8,16,32}` (indices 0-2 unchanged →
+  old sessions restore correctly) + new `loop_bars2/3/4` for P2-P4. Added to the RANDOM exclusion
+  list (length is performance state).
+- **Audio ring:** `AudioLoop::kMaxLoopSeconds` 24 → **64 s** (~98 MB resident for the 4 lanes), so
+  32-bar audio is honest down to ~120 BPM and 16-bar to ~60; slower tempos fall back to the honest
+  per-lane cap shown in the UI. MIDI lanes have full length at any tempo. Documented as a
+  per-instance RAM figure in the README multi-instance note.
+- **UI (`BottomZones.h`):** the shared top-bar BARS selector is replaced by a per-lane BARS selector
+  (1/2/4/8/16/32) on each row; per-lane playhead + honest audio cap. Screenshot `docs/smoke/looper-lengths.png`.
+- **Tests:** `dsp/test_looper` (per-lane phase alignment, short-in-long wrap counting, phase
+  continuity across the master wrap), `plugin/test_looper_lengths` (append-only migration, per-lane
+  length end-to-end incl. 32 bars), `plugin/test_ui_smoke` (per-lane selectors wired + screenshot).
+  Goldens bit-identical (defaults unchanged).
+
 ### Committed follow-on — MIDI clock OUT (the synth as clock MASTER)
 
 **Not part of J1 (which is host-*follow*), tracked as its own item (task #85).** Transmit MIDI

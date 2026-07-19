@@ -602,23 +602,26 @@ public:
     // MIDI. The UI reads the playhead + per-lane content for drawing. Message thread.
     void  clearLoops() { loopClearMask.store ((1 << SynthEngine::maxParts) - 1, std::memory_order_release); }        // all lanes
     void  clearLoopLane (int part) { if (part >= 0 && part < SynthEngine::maxParts) loopClearMask.fetch_or (1 << part, std::memory_order_release); }
-    float loopPlayhead() const                                                 // 0..1 through the loop
+    float loopPlayhead (int lane) const                                        // 0..1 through THIS lane's loop
     {
-        const int len = loopLenDisp.load (std::memory_order_relaxed);
-        return len > 0 ? (float) loopPosDisp.load (std::memory_order_relaxed) / (float) len : 0.0f;
+        if (lane < 0 || lane >= SynthEngine::maxParts) return 0.0f;
+        const int len = loopLenDisp[(std::size_t) lane].load (std::memory_order_relaxed);
+        return len > 0 ? (float) (loopPosDisp.load (std::memory_order_relaxed) % len) / (float) len : 0.0f;
     }
     bool  loopLaneHasContent (int part) const { return looper.hasContent (part); }
     int   loopLaneEventCount (int part) const { return looper.eventCount (part); }
-    // Honest audio cap: how many bars (1/2/4) the audio ring can hold at the current tempo.
-    // Below ~40 BPM a 4-bar loop exceeds the ring, so AUDIO mode is limited (shown in the UI).
+    // Honest audio cap: the largest power-of-two bar count (1..32) the audio ring can hold at
+    // the current tempo. MIDI lanes are unlimited; only AUDIO mode is clamped (shown in the UI).
     int   maxAudioLoopBars() const
     {
-        const double bpm = juce::jmax (20.0f, apvts.getRawParameterValue (ParamID::tempo)->load());
+        const double bpm = juce::jmax (20.0f, effectiveBpm());   // host-aware, matches the DSP loop grid
         const double sr  = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
         const double barSamples = sr * 60.0 / bpm * 4.0;                 // 4 beats/bar
         const double ring = sr * AudioLoop::kMaxLoopSeconds;
         const int fit = (int) (ring / juce::jmax (1.0, barSamples));     // whole bars that fit
-        return fit >= 4 ? 4 : fit >= 2 ? 2 : 1;
+        int cap = 1;                                                     // largest power-of-two <= fit, capped at 32
+        for (int b : { 2, 4, 8, 16, 32 }) if (fit >= b) cap = b;
+        return cap;
     }
     bool  loopAudioHasContent (int part) const { return part >= 0 && part < SynthEngine::maxParts && audioLoops[(std::size_t) part].hasContent(); }
     int   loopRecDisplayState (int lane) const { return (lane >= 0 && lane < SynthEngine::maxParts) ? loopRecStateDisp[(std::size_t) lane].load (std::memory_order_relaxed) : 0; }
@@ -894,7 +897,8 @@ private:
     Looper looper;
     std::array<AudioLoop, SynthEngine::maxParts> audioLoops;   // one AUDIO lane per part (#47)
     std::atomic<int>  loopClearMask { 0 };      // bit per lane: RT-safe per-lane CLEAR request
-    std::atomic<int>  loopPosDisp { 0 }, loopLenDisp { 48000 };
+    std::atomic<int>  loopPosDisp { 0 };        // master loop position (mirrored for the UI)
+    std::array<std::atomic<int>, SynthEngine::maxParts> loopLenDisp {};   // per-lane length (samples), for the playhead
     std::array<std::atomic<int>, SynthEngine::maxParts> loopRecStateDisp {};   // per lane: 0 idle,1 armed,2 rec
     // Per-lane transport edge/state (audio-thread only).
     std::array<bool, SynthEngine::maxParts> loopRecPrev {};      // REC param edge detect
@@ -902,7 +906,7 @@ private:
     std::array<bool, SynthEngine::maxParts> loopRecording {};    // capture engaged (both lanes of this part)
     std::array<bool, SynthEngine::maxParts> loopRecJustEngaged {};   // engage block (don't count its wrap)
     std::array<bool, SynthEngine::maxParts> loopPlayWasOn {};    // MIDI-lane playback edge, to flush on stop
-    bool  loopWrappedLastBlock = false;         // the shared loop clock wrapped on the previous block
+    std::array<bool, SynthEngine::maxParts> loopLaneWrapped {};   // per-lane: this lane wrapped on the previous block
     std::array<std::array<bool, 128>, SynthEngine::maxParts> loopNoteHeld {};   // notes the loop turned on (release on stop/clear)
 
     // Master scope tap ring (see pushScope/readScope).
