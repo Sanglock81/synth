@@ -283,7 +283,7 @@ private:
 
 // ---- LOOPER: FOUR fixed lanes (lane N == part N), each with its OWN transport ----
 // Lane N records + plays part N regardless of the edit/play focus (#47). Each lane row:
-// part label, REC, PLAY, MIDI/AUDIO, per-lane BARS length, quantize, CLEAR, and a
+// part label, REC, PLAY, MIDI/AUDIO, a per-lane BARS length knob, quantize, CLEAR, and a
 // content/playhead strip. J2: each lane picks its OWN length (1..32 bars); at slow tempos a
 // lane's AUDIO mode is capped to what the ring can hold (honest, shown on the row).
 class LooperPanel : public juce::Component,
@@ -314,21 +314,21 @@ public:
             playBtn[(std::size_t) i] = std::make_unique<PowerToggle> (p.apvts, playIds[(std::size_t) i], "P");
             modeSel[(std::size_t) i] = std::make_unique<HSelector> (p.apvts, modeIds[(std::size_t) i], p.getMidiLearn(),
                                                                     juce::StringArray { "MIDI", "AUD" });
-            barsSel[(std::size_t) i] = std::make_unique<HSelector> (p.apvts, barsIds[(std::size_t) i], p.getMidiLearn(),
-                                                                    juce::StringArray { "1", "2", "4", "8", "16", "32" });   // per-lane bars
+            barsSel[(std::size_t) i] = std::make_unique<RotaryKnob> (p.apvts, barsIds[(std::size_t) i], "BARS", p.getMidiLearn());   // per-lane length knob
             quantBtn[(std::size_t) i] = std::make_unique<PowerToggle> (p.apvts, quantIds[(std::size_t) i], "Q");   // 1/32 quantize
             addAndMakeVisible (*recBtn[(std::size_t) i]); addAndMakeVisible (*playBtn[(std::size_t) i]);
             addAndMakeVisible (*modeSel[(std::size_t) i]); addAndMakeVisible (*barsSel[(std::size_t) i]);
             addAndMakeVisible (*quantBtn[(std::size_t) i]);
             auto& cb = clearBtn[(std::size_t) i];
             cb.setButtonText ("x"); styleBtn (cb);
+            cb.setTooltip ("Clear this lane (MIDI + audio)");
             cb.onClick = [this, i] { proc.clearLoopLane (i); };
             addAndMakeVisible (cb);
         }
 
         // J2: length is now PER-LANE (a BARS selector on each row) — no shared top-bar selector.
-        expo.setButtonText ("MIDI"); styleBtn (expo);   expo.onClick    = [this] { exportMidi(); }; addAndMakeVisible (expo);
-        expoWav.setButtonText ("WAV"); styleBtn (expoWav); expoWav.onClick = [this] { exportWav(); }; addAndMakeVisible (expoWav);
+        expo.setButtonText ("MIDI"); styleBtn (expo);   expo.setTooltip ("Export recorded loops to a MIDI file");   expo.onClick    = [this] { exportMidi(); }; addAndMakeVisible (expo);
+        expoWav.setButtonText ("WAV"); styleBtn (expoWav); expoWav.setTooltip ("Export the audio loops to a WAV file"); expoWav.onClick = [this] { exportWav(); }; addAndMakeVisible (expoWav);
 
         startTimerHz (20);   // playhead + armed-record blink
     }
@@ -401,8 +401,8 @@ public:
             labelRect[(std::size_t) i] = row.removeFromLeft (34);
             recBtn[(std::size_t) i]->setBounds  (row.removeFromLeft (24).reduced (1, 2));
             playBtn[(std::size_t) i]->setBounds (row.removeFromLeft (24).reduced (1, 2));
-            modeSel[(std::size_t) i]->setBounds (row.removeFromLeft (juce::jmin (56, row.getWidth() - 190)).reduced (1, 2));
-            barsSel[(std::size_t) i]->setBounds (row.removeFromLeft (juce::jmin (156, row.getWidth() - 46)).reduced (1, 2));
+            modeSel[(std::size_t) i]->setBounds (row.removeFromLeft (juce::jmin (56, row.getWidth() - 90)).reduced (1, 2));
+            barsSel[(std::size_t) i]->setBounds (row.removeFromLeft (46).reduced (1, 2));   // compact BARS knob
             quantBtn[(std::size_t) i]->setBounds (row.removeFromLeft (22).reduced (1, 2));
             clearBtn[(std::size_t) i].setBounds (row.removeFromLeft (18).reduced (1, 3));
             row.removeFromLeft (3);
@@ -464,7 +464,8 @@ private:
 
     VASynthProcessor& proc;
     std::array<std::unique_ptr<PowerToggle>, kLanes> recBtn, playBtn, quantBtn;
-    std::array<std::unique_ptr<HSelector>, kLanes> modeSel, barsSel;   // J2: per-lane length selector
+    std::array<std::unique_ptr<HSelector>, kLanes> modeSel;
+    std::array<std::unique_ptr<RotaryKnob>, kLanes> barsSel;   // J2: per-lane length knob (1..32 bars)
     std::array<juce::TextButton, kLanes> clearBtn;
     juce::TextButton expo, expoWav;
     std::array<juce::Rectangle<int>, kLanes> labelRect { }, laneStrip { };

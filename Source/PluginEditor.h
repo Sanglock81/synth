@@ -463,6 +463,9 @@ private:
 
     VASynthProcessor& proc;
     VASynthLookAndFeel lnf;
+    // Hover help: after 1 s over any control, show its full parameter name (controls set their
+    // own tooltip from the APVTS name). One window services the whole editor.
+    juce::TooltipWindow tooltips { this, 1000 };
     DebugOverlay overlay { proc.health };
     juce::String versionBanner;
     PresetManager presets;

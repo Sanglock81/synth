@@ -46,6 +46,7 @@ inline juce::String formatParamValue (juce::RangedAudioParameter* p)
 
 // Shared MIDI-learn interaction for a control bound to one parameter.
 class LearnableComponent : public juce::Component,
+                           public juce::SettableTooltipClient,
                            private juce::Timer
 {
 public:
@@ -53,6 +54,18 @@ public:
         : learn (learnToUse), paramID (std::move (paramIdToUse))
     {
         setWantsKeyboardFocus (false);
+    }
+
+    // Use the parameter's full registered name (e.g. "Filter Cutoff") as the hover tooltip.
+    // `inner` is the interactive child that actually receives the mouse (a slider) — it needs its
+    // own tooltip since the TooltipWindow reads the leaf under the cursor, not this parent.
+    void setTooltipFromParam (juce::AudioProcessorValueTreeState& apvts, juce::Component* inner = nullptr)
+    {
+        if (auto* p = apvts.getParameter (paramID))
+        {
+            setTooltip (p->getName (128));
+            if (auto* ttc = dynamic_cast<juce::SettableTooltipClient*> (inner)) ttc->setTooltip (getTooltip());
+        }
     }
 
     // Call from a subclass ctor after the inner control is added, passing it so
@@ -282,6 +295,7 @@ public:
         btn.setColour (juce::TextButton::textColourOffId,  VASynthLookAndFeel::dim());
         addAndMakeVisible (btn);
         attachment = std::make_unique<juce::ButtonParameterAttachment> (*apvts.getParameter (pid), btn);
+        if (auto* p = apvts.getParameter (pid)) btn.setTooltip (p->getName (128));   // hover -> full name
         getProperties().set ("layoutFlex", 0.55);
     }
     void resized() override { btn.setBounds (getLocalBounds().reduced (2)); }
@@ -320,6 +334,7 @@ public:
         param = apvts.getParameter (pid);
         enableNumericEntry (param);
         listenForLearnGestures (slider);
+        setTooltipFromParam (apvts, &slider);      // hover -> full parameter name
     }
 
     void paint (juce::Graphics& g) override
@@ -488,6 +503,7 @@ public:
         param = apvts.getParameter (pid);
         enableNumericEntry (param);
         listenForLearnGestures (slider);
+        setTooltipFromParam (apvts, &slider);      // hover -> full parameter name
     }
 
     void paint (juce::Graphics& g) override
@@ -632,9 +648,11 @@ public:
             b->setColour (juce::TextButton::textColourOnId, juce::Colours::black);
             const int idx = i;
             b->onClick = [this, idx] { setIndex (idx); };
+            b->setTooltip (choice->getName (128));      // hover -> full parameter name
             addAndMakeVisible (b);
             listenForLearnGestures (*b);
         }
+        setTooltipFromParam (apvts);
         attachment = std::make_unique<juce::ParameterAttachment> (
             *choice, [this] (float) { refresh(); }, nullptr);
         attachment->sendInitialUpdate();
@@ -711,9 +729,11 @@ public:
             b->setColour (juce::TextButton::textColourOnId, juce::Colours::black);
             const int idx = i;
             b->onClick = [this, idx] { setIndex (idx); };
+            b->setTooltip (choice->getName (128));      // hover -> full parameter name
             addAndMakeVisible (b);
             listenForLearnGestures (*b);
         }
+        setTooltipFromParam (apvts);
         attachment = std::make_unique<juce::ParameterAttachment> (
             *choice, [this] (float) { refresh(); }, nullptr);
         attachment->sendInitialUpdate();
@@ -770,6 +790,7 @@ public:
     {
         choice = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (pid));
         jassert (choice != nullptr);
+        setTooltipFromParam (apvts);                    // hover -> full parameter name
         attachment = std::make_unique<juce::ParameterAttachment> (
             *choice, [this] (float) { repaint(); }, nullptr);
         attachment->sendInitialUpdate();

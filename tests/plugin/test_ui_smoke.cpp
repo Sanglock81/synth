@@ -297,6 +297,36 @@ TEST_CASE ("J2: per-lane looper BARS selectors are wired + render (#J2)", "[plug
     snapshot (*panel, "looper-lengths.png");
 }
 
+// --- hover help: every parameter-bound control carries its full name as a tooltip ---------
+TEST_CASE ("controls expose their parameter name as a hover tooltip", "[plugin][smoke][tooltip]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+
+    // A knob, a choice selector, and the new looper BARS knob each report the registered param name.
+    struct { const char* id; } probes[] { { ParamID::lfoRate }, { ParamID::filterCutoff },
+                                          { ParamID::loopBars }, { ParamID::lfoDest } };
+    for (auto& pr : probes)
+    {
+        auto* lc = findLearnable (*ed, pr.id);
+        INFO ("no control for " << pr.id);
+        REQUIRE (lc != nullptr);
+        const auto want = p.apvts.getParameter (pr.id)->getName (128);
+        INFO (pr.id << " tooltip '" << lc->getTooltip() << "' != name '" << want << "'");
+        REQUIRE (lc->getTooltip() == want);
+        REQUIRE (lc->getTooltip().isNotEmpty());
+    }
+
+    // The whole editor is served by exactly one TooltipWindow (JUCE finds it by walking up).
+    int windows = 0;
+    std::function<void (juce::Component&)> count = [&] (juce::Component& c)
+    { if (dynamic_cast<juce::TooltipWindow*> (&c)) ++windows; for (auto* ch : c.getChildren()) count (*ch); };
+    count (*ed);
+    REQUIRE (windows >= 1);
+}
+
 // --- screenshot artifacts for the gate (human eyeball; also proves both paint) ---------
 TEST_CASE ("smoke screenshots: editor + mod overlay render for the gate (#56)",
            "[plugin][smoke][screenshot]")
