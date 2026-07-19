@@ -1,5 +1,6 @@
 #pragma once
 #include "SynthVoice.h"
+#include "SampleVoice.h"
 #include "Kit.h"
 #include "LFO.h"
 #include "FXChain.h"
@@ -46,6 +47,7 @@ public:
             v.setOscQuality (oscQuality);
             v.prepare (sampleRate);
         }
+        for (auto& sv : sampleVoices) sv.prepare (sampleRate);   // I2: stereo sample-pad voices
         // Per-part FX (Sub-phase 2): each part owns a chain + stereo scratch, all sized
         // now so renderMaster() never allocates. Skipped for silent/bypassed parts.
         for (int p = 0; p < maxParts; ++p)
@@ -54,6 +56,8 @@ public:
             partMono[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
             partL[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
             partR[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
+            partSampleL[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);   // I2: per-part sample bus
+            partSampleR[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
             fxSilentBlocks[(std::size_t) p] = kFxHoldBlocks;   // start idle
         }
         for (std::size_t p = 0; p < (std::size_t) maxParts; ++p)   // per-part looper capture taps
@@ -202,6 +206,7 @@ public:
     void allNotesOff()
     {
         for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i) { voices[i].noteOff(); sustained[i] = false; }
+        for (auto& sv : sampleVoices) sv.steal();               // I2: fade out any playing samples (click-free)
         sustainPedal = false;
         for (std::size_t p = 0; p < (std::size_t) maxParts; ++p) { numMonoHeld[p] = 0; monoVoice[p] = -1; }
         for (auto& e : kitLedger) { e.part = -1; e.trigger = -1; e.num = 0; }
@@ -292,19 +297,45 @@ public:
 
         const int group = k.pads[(std::size_t) pad].chokeGroup;
         if (group != 0)                                         // cross-pad choke: quick-release the group
+        {                                                       // across BOTH the synth and sample pools (I2)
             for (auto& v : voices)
                 if (v.isActive() && v.getPart() == part && v.getSoundSlot() != pad
                     && k.pads[(std::size_t) v.getSoundSlot()].chokeGroup == group)
                     v.steal();
+            for (auto& sv : sampleVoices)
+                if (sv.isActive() && sv.getPart() == part && sv.getSoundSlot() != pad
+                    && k.pads[(std::size_t) sv.getSoundSlot()].chokeGroup == group)
+                    sv.steal();
+        }
 
         auto* e = kitLedgerFor (part, trigger, true);
         if (e != nullptr) { e->num = 0; e->slot = pad; }
         const auto& pd = k.pads[(std::size_t) pad];
         for (int i = 0; i < pd.numSound && i < kMaxPadSoundNotes; ++i)
         {
-            noteOn (pd.soundNote[(std::size_t) i], velocity, part, pad, generator);   // self-choke = retrigger same voice
+            if (pd.isSample)
+                sampleNoteOn (pd, pd.soundNote[(std::size_t) i], velocity, part, pad, generator);
+            else
+                noteOn (pd.soundNote[(std::size_t) i], velocity, part, pad, generator);   // self-choke = retrigger same voice
             if (e != nullptr && e->num < kMaxPadSoundNotes) e->notes[(std::size_t) e->num++] = pd.soundNote[(std::size_t) i];
         }
+    }
+
+    // Allocate a stereo sample voice for a sample pad (I2). Poly (each hit layers); steals the
+    // oldest sample voice when the pool is full. Choke/note-off are handled like synth pads.
+    void sampleNoteOn (const KitPad& pd, int note, float velocity, int part, int pad, bool gen)
+    {
+        SampleVoice* pick = nullptr;
+        for (auto& sv : sampleVoices) if (! sv.isActive()) { pick = &sv; break; }
+        if (pick == nullptr)                                    // steal the oldest sounding sample voice
+        {
+            std::uint64_t oldest = ~0ull;
+            for (auto& sv : sampleVoices) if (sv.stamp() < oldest) { oldest = sv.stamp(); pick = &sv; }
+        }
+        if (pick == nullptr) return;
+        SamplePlay sp { pd.sampleL, pd.sampleR, pd.sampleLen, pd.sampleSR, pd.sampleRoot,
+                        pd.sampleGain * velocity };
+        pick->noteOn (sp, note, ++eventCounter, part, pad, gen);
     }
     void kitNoteOff (int part, int trigger)
     {
@@ -478,7 +509,11 @@ public:
         partLevelUse = { { 1.0f, 1.0f, 1.0f, 1.0f } };   // unity until setMix() (test path stays unity)
         partPanUse   = {};
         for (int p = 0; p < maxParts; ++p)
-            std::fill (partMono[(std::size_t) p].begin(), partMono[(std::size_t) p].begin() + numSamples, 0.0f);
+        {
+            std::fill (partMono[(std::size_t) p].begin(),    partMono[(std::size_t) p].begin()    + numSamples, 0.0f);
+            std::fill (partSampleL[(std::size_t) p].begin(), partSampleL[(std::size_t) p].begin() + numSamples, 0.0f);   // I2
+            std::fill (partSampleR[(std::size_t) p].begin(), partSampleR[(std::size_t) p].begin() + numSamples, 0.0f);
+        }
     }
 
     // Render active voices for [startSample, startSample+numSamples) into their parts'
@@ -488,6 +523,7 @@ public:
     void renderParts (int startSample, int numSamples, VoiceParams liveParams)
     {
         for (auto& v : voices) if (v.isActive()) partHadVoice[(std::size_t) v.getPart()] = true;
+        for (auto& sv : sampleVoices) if (sv.isActive()) partHadVoice[(std::size_t) sv.getPart()] = true;   // I2
 
         int done = 0;
         while (done < numSamples)
@@ -571,6 +607,15 @@ public:
                           mtxOn ? &partMatrixUse[(std::size_t) pt] : nullptr,
                           mtxOn ? &partSrc[(std::size_t) pt]       : nullptr);
             }
+            // I2: sample-pad voices render (stereo) into their part's sample bus for THIS chunk.
+            // No LFO/bend/matrix mods — a one-shot just plays; choke/steal handled on the voice.
+            for (auto& sv : sampleVoices)
+            {
+                if (! sv.isActive()) continue;
+                const int pt = sv.getPart();
+                sv.render (partSampleL[(std::size_t) pt].data() + off,
+                           partSampleR[(std::size_t) pt].data() + off, chunk);
+            }
             done += chunk;
         }
     }
@@ -637,7 +682,16 @@ public:
 
             float* sL = partL[(std::size_t) p].data();
             float* sR = partR[(std::size_t) p].data();
-            for (int i = 0; i < numSamples; ++i) { sL[i] = m[i]; sR[i] = m[i]; }
+            const float* smpL = partSampleL[(std::size_t) p].data();   // I2: this part's stereo sample bus
+            const float* smpR = partSampleR[(std::size_t) p].data();
+            // Sample voices join the mono synth voices BEFORE the part FX (so they get the part's
+            // chorus/delay/reverb/width + EQ + pan). Same voiceTrim as synth voices for consistent
+            // loudness and bounded headroom.
+            for (int i = 0; i < numSamples; ++i)
+            {
+                sL[i] = m[i] + smpL[i] * voiceTrim;
+                sR[i] = m[i] + smpR[i] * voiceTrim;
+            }
             if (fxOn) { partFx[(std::size_t) p].setParams (partFxUse[(std::size_t) p]); partFx[(std::size_t) p].process (sL, sR, numSamples); }
 
             // Mixer level/pan (0 dB-centre balance law), SMOOTHED: ramp the L/R gains from
@@ -766,6 +820,8 @@ private:
     static constexpr float kVibratoSemis = 0.5f;   // max mod-wheel vibrato depth (+/-)
 
     std::array<SynthVoice, maxVoices> voices;
+    static constexpr int kMaxSampleVoices = 16;    // I2: stereo sample-pad voices (kit one-shots)
+    std::array<SampleVoice, kMaxSampleVoices> sampleVoices;
     std::array<bool, maxVoices> sustained {};      // key released but held by pedal
     std::size_t activeVoiceLimit = maxVoices;      // <= maxVoices; see setMaxVoices
     float voiceTrim = 0.25f;                        // 1/sqrt(maxVoices); headroom trim
@@ -826,6 +882,7 @@ private:
     int maxBlockSize = 2048;
     std::array<FXChain, maxParts> partFx;
     std::array<std::vector<float>, maxParts> partMono, partL, partR;
+    std::array<std::vector<float>, maxParts> partSampleL, partSampleR;   // I2: per-part stereo sample bus
     std::array<std::vector<float>, maxParts> capPartL, capPartR;   // per-part looper capture taps
     int liveKitPart = -1, liveKitPad = -1;   // kit pad routed through live panel params (edit mode)
     std::atomic<float> focusMod[4] { };   // focused part's LFO mod per dest (UI knob animation)

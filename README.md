@@ -62,8 +62,10 @@ a general-purpose synth that runs in any VST3 host or standalone.
   so the pads can drive the drum kit while the keys play a lead. One shared 24-voice pool with
   full per-part isolation — a running generator never steals a note you play live. **MULTI**
   save/load recalls the whole layout.
-- **Drum kit parts**: per-pad synth voices, choke groups, learn-by-play, per-pad editing
-  (the full synth panel on any pad), factory kits + user `.kit` files.
+- **Drum kit parts**: per-pad synth voices **or loaded WAV/AIFF/FLAC samples** (stereo,
+  pitch-tracked, cubic-interpolated), choke groups, learn-by-play, per-pad editing (the full
+  synth panel on any pad), factory kits + user `.kit` files. Samples live in a managed,
+  content-deduplicated library and travel with kits, sessions, and MULTIs.
 - **Groove tools**: a diatonic **arpeggiator**, an 8-row **step sequencer** (dedicated
   drum grid), and a clock-linked **looper** (armed + measure-quantized, dual MIDI + AUDIO
   lanes, WAV export).

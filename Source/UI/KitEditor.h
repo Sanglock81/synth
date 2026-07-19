@@ -49,6 +49,26 @@ public:
         source.onChange = [this] { pad().source = source.getText(); apply(); repaint(); };
         addAndMakeVisible (source);
 
+        // I2: load a sample onto the selected pad (an alternative to the source preset).
+        loadSample.setButtonText ("Load sample..."); loadSample.setWantsKeyboardFocus (false);
+        loadSample.onClick = [this]
+        {
+            chooser = std::make_unique<juce::FileChooser> (
+                "Load a sample into pad " + juce::String (selected + 1),
+                juce::File::getSpecialLocation (juce::File::userMusicDirectory), "*.wav;*.aiff;*.aif;*.flac");
+            chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                [this] (const juce::FileChooser& fc)
+                {
+                    const auto f = fc.getResult();
+                    if (f != juce::File() && proc.importPadSample (part, selected, f))
+                        { def = proc.getPartKit (part); rebuildSelected(); }
+                });
+        };
+        addAndMakeVisible (loadSample);
+        clearSample.setButtonText ("Clear sample"); clearSample.setWantsKeyboardFocus (false);
+        clearSample.onClick = [this] { proc.clearPadSample (part, selected); def = proc.getPartKit (part); rebuildSelected(); };
+        addAndMakeVisible (clearSample);
+
         learnTrig.setButtonText ("Learn"); learnTrig.setClickingTogglesState (true); learnTrig.setWantsKeyboardFocus (false);
         learnTrig.onClick = [this] { if (learnTrig.getToggleState()) armSeq = proc.noteSeq(); };
         addAndMakeVisible (learnTrig);
@@ -138,9 +158,12 @@ public:
             {
                 g.setFont (juce::Font (juce::FontOptions (11.0f)));
                 g.drawText (noteName (pd.triggerNote), c.reduced (5), juce::Justification::centred, false);
-                g.setColour (VASynthLookAndFeel::dim());
-                g.setFont (juce::Font (juce::FontOptions (9.5f)));
-                g.drawText (pd.source, c.reduced (4, 3).removeFromBottom (12), juce::Justification::centred, true);
+                // A sample pad shows a "SMPL" tag (accent) instead of the source preset name.
+                const bool smp = pd.samplePath.isNotEmpty();
+                g.setColour (smp ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::dim());
+                g.setFont (juce::Font (juce::FontOptions (9.5f, smp ? juce::Font::bold : juce::Font::plain)));
+                g.drawText (smp ? juce::String ("SMPL") : pd.source,
+                            c.reduced (4, 3).removeFromBottom (12), juce::Justification::centred, true);
             }
         }
     }
@@ -167,7 +190,9 @@ public:
 
         auto r1 = row (24); r1.removeFromLeft (70); trigDown.setBounds (r1.removeFromLeft (26));
         trigUp.setBounds (r1.removeFromLeft (26)); r1.removeFromLeft (8); learnTrig.setBounds (r1.removeFromLeft (60));
-        auto r2 = row (24); r2.removeFromLeft (70); source.setBounds (r2.removeFromLeft (220));
+        auto r2 = row (24); r2.removeFromLeft (70); source.setBounds (r2.removeFromLeft (200));
+        r2.removeFromLeft (8); loadSample.setBounds (r2.removeFromLeft (110));
+        r2.removeFromLeft (6); clearSample.setBounds (r2.removeFromLeft (100));
         auto r3 = row (24); r3.removeFromLeft (70); learnSound.setBounds (r3.removeFromLeft (60));
         r3.removeFromLeft (8); clearSound.setBounds (r3.removeFromLeft (90));
         auto r4 = row (24); r4.removeFromLeft (70); level.setBounds (r4.removeFromLeft (200));
@@ -212,7 +237,10 @@ private:
     void rebuildSelected()
     {
         const auto& pd = pad();
+        const bool smp = pd.samplePath.isNotEmpty();
         source.setText (pd.source, juce::dontSendNotification);
+        source.setEnabled (! smp);                            // a sample supersedes the source preset
+        clearSample.setEnabled (smp);
         level.setValue (pd.level, juce::dontSendNotification);
         choke.setSelectedId (juce::jlimit (0, 4, pd.chokeGroup) + 1, juce::dontSendNotification);
         learnTrig.setToggleState (false, juce::dontSendNotification);
@@ -296,6 +324,8 @@ private:
 
     juce::ComboBox partSel, kitLoad, source, choke;
     juce::TextButton saveBtn, learnTrig, learnSound, trigDown, trigUp, clearSound, audition, clearPad, editVoice;
+    juce::TextButton loadSample, clearSample;                 // I2: per-pad WAV/AIFF/FLAC
+    std::unique_ptr<juce::FileChooser> chooser;               // held: launchAsync is non-blocking
     juce::Slider level;
 
 public:

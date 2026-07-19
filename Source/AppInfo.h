@@ -31,6 +31,7 @@ namespace AppInfo
     inline juce::File midiProfileDir() { auto d = configDir().getChildFile ("midi-profiles"); d.createDirectory(); return d; }
     inline juce::File multiDir()       { auto d = configDir().getChildFile ("multis");        d.createDirectory(); return d; }
     inline juce::File kitDir()         { auto d = configDir().getChildFile ("kits");          d.createDirectory(); return d; }
+    inline juce::File samplesDir()     { auto d = configDir().getChildFile ("samples");       d.createDirectory(); return d; }   // I2: managed sample library (<md5>.<ext>)
     inline juce::File logFile()        { return configDir().getChildFile (juce::String (kName) + ".log"); }
 
     // Core migration (pure, so it is unit-testable with temp dirs): copy each of

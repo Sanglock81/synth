@@ -9,6 +9,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Sample-playback kit pads (I2).** Any drum-kit pad can now play a loaded **WAV / AIFF / FLAC**
+  one-shot instead of a synthesized voice — load it in the **Kit Editor** ("Load sample…"; the pad
+  shows **SMPL**). Playback is **stereo**, **pitch-tracked** (the sample transposes with the note;
+  4-point cubic interpolation, which also does the file-rate→engine-rate conversion), and
+  **play-as-recorded** by default (root = the pad's note, ratio 1.0). Samples get the pad's level,
+  choke group, trigger/sounding notes, and the part's FX + EQ + pan like any pad, with a short
+  anti-click fade at each end and on choke. Files live in a **managed, content-deduplicated**
+  library (`~/.config/synth/samples/`), so a pad references a sample by content hash — five kits
+  loading the same file share one copy, and the reference travels with `.kit` files, sessions, and
+  MULTIs. A missing sample is silent, never a crash.
 - **Launchkey drum pads are their own routable input surface (I1).** A controller whose pads
   send on a separate MIDI channel + note range (declared in its device profile — the Launchkey
   Mini's 16 pads are notes 36–51 on channel 10) now split off into an independent

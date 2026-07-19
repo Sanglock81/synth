@@ -42,6 +42,7 @@ add_executable(dsp_tests
     dsp/test_golden.cpp
     dsp/test_softclip.cpp
     dsp/test_eq.cpp
+    dsp/test_sample_voice.cpp
     dsp/test_arp.cpp
     dsp/test_stepseq.cpp
     dsp/test_clock_align.cpp
@@ -100,6 +101,7 @@ add_executable(plugin_tests
     plugin/test_eq_mockup.cpp
     plugin/test_eq_panel.cpp
     plugin/test_eq_kit.cpp
+    plugin/test_sample_kit.cpp
     plugin/test_presets.cpp
     plugin/test_migration.cpp
     plugin/test_fx_plugin.cpp

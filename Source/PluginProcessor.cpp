@@ -706,6 +706,34 @@ void VASynthProcessor::setPartKit (int part, const KitDefinition& def)
         auto& out = kd.pads[(std::size_t) i];
         if (pd.triggerNote < 0) { out.triggerNote = -1; continue; }   // empty pad
 
+        out.triggerNote = pd.triggerNote;
+        out.numSound    = juce::jlimit (1, kMaxPadSoundNotes, pd.numSound);
+        for (int s = 0; s < kMaxPadSoundNotes; ++s) out.soundNote[(std::size_t) s] = pd.soundNote[(std::size_t) s];
+        out.chokeGroup  = juce::jlimit (0, 8, pd.chokeGroup);
+
+        // I2: a SAMPLE pad resolves its managed buffer and carries borrowed pointers into the
+        // engine POD; the synth VoiceParams path is skipped. Play-as-recorded: the sample root =
+        // the pad's sounding note, so ratio == 1.0 by default (no accidental repitch). A missing/
+        // unresolvable sample falls back to a silent pad (logged), never a crash.
+        if (pd.samplePath.isNotEmpty())
+        {
+            if (const SampleData* sd = sampleStore.resolve (pd.samplePath))
+            {
+                out.isSample   = true;
+                out.sampleL    = sd->L.data();
+                out.sampleR    = sd->R.data();
+                out.sampleLen  = sd->len;
+                out.sampleSR   = sd->nativeSR;
+                out.sampleRoot = out.soundNote[0];
+                out.sampleGain = juce::jlimit (0.0f, 4.0f, pd.level);
+                continue;                                                // no synth VoiceParams for a sample pad
+            }
+            // A sample pad whose file can't be resolved is SILENT (not a surprise synth sound).
+            juce::Logger::writeToLog ("kit pad " + juce::String (i) + ": sample '" + pd.samplePath + "' missing -> silent");
+            out.triggerNote = -1;
+            continue;
+        }
+
         bool ok = true;
         // Edited pads (Group 4 kit editing) bake from their own voice state; otherwise from
         // the source preset. Either way it's a full VoiceParams built the same kill-fold way.
@@ -713,14 +741,32 @@ void VASynthProcessor::setPartKit (int part, const KitDefinition& def)
                                           : bakePresetParams (pd.source, ok);
         vp.gain *= juce::jlimit (0.0f, 4.0f, pd.level);               // fold pad level into the voice
         kd.params[(std::size_t) i] = vp;
-        out.triggerNote = pd.triggerNote;
-        out.numSound    = juce::jlimit (1, kMaxPadSoundNotes, pd.numSound);
-        for (int s = 0; s < kMaxPadSoundNotes; ++s) out.soundNote[(std::size_t) s] = pd.soundNote[(std::size_t) s];
-        out.chokeGroup  = juce::jlimit (0, 8, pd.chokeGroup);
     }
     engine.setPartKit (part, kd);                    // a Kit part is dry in v1 (engine uses dry FX/LFO for kits)
     partKits[(std::size_t) part] = def;
     partPresetName[(std::size_t) part] = def.name.isNotEmpty() ? def.name : juce::String ("Kit");
+}
+
+bool VASynthProcessor::importPadSample (int part, int pad, const juce::File& file)
+{
+    if (part < 1 || part >= SynthEngine::maxParts || pad < 0 || pad >= kMaxKitPads) return false;
+    const juce::String key = sampleStore.importFile (file);
+    if (key.isEmpty()) return false;
+    auto def = partKits[(std::size_t) part];
+    auto& pd = def.pads[(std::size_t) pad];
+    if (pd.triggerNote < 0) pd.triggerNote = 36 + pad;   // seed an empty pad so it can sound
+    pd.samplePath = key;
+    pd.voiceState = {};                                  // a sample supersedes any edited synth voice
+    setPartKit (part, def);                              // re-bake + publish
+    return true;
+}
+
+void VASynthProcessor::clearPadSample (int part, int pad)
+{
+    if (part < 1 || part >= SynthEngine::maxParts || pad < 0 || pad >= kMaxKitPads) return;
+    auto def = partKits[(std::size_t) part];
+    def.pads[(std::size_t) pad].samplePath = {};
+    setPartKit (part, def);
 }
 
 // ---- kit serialisation (shared by *.kit files and MULTI) --------------------
@@ -736,6 +782,7 @@ juce::ValueTree VASynthProcessor::kitToTree (const KitDefinition& def)
         juce::ValueTree p ("PAD");
         p.setProperty ("trigger", pd.triggerNote, nullptr);
         p.setProperty ("source",  pd.source, nullptr);
+        if (pd.samplePath.isNotEmpty()) p.setProperty ("sample", pd.samplePath, nullptr);   // I2: md5 key
         p.setProperty ("num",     pd.numSound, nullptr);
         p.setProperty ("level",   pd.level, nullptr);
         p.setProperty ("choke",   pd.chokeGroup, nullptr);
@@ -758,6 +805,7 @@ VASynthProcessor::KitDefinition VASynthProcessor::kitFromTree (const juce::Value
         auto& pd = def.pads[(std::size_t) idx++];
         pd.triggerNote = (int) p.getProperty ("trigger", -1);
         pd.source      = p.getProperty ("source", juce::String()).toString();
+        pd.samplePath  = p.getProperty ("sample", juce::String()).toString();   // I2 (empty for synth pads / old kits)
         pd.numSound    = (int) p.getProperty ("num", 1);
         pd.level       = (float) p.getProperty ("level", 1.0);
         pd.chokeGroup  = (int) p.getProperty ("choke", 0);

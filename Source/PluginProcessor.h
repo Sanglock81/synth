@@ -6,6 +6,7 @@
 #include "MidiProfile.h"
 #include "UI/ModLink.h"
 #include "FactoryPresets.h"
+#include "SampleStore.h"
 #include "DSP/SynthEngine.h"
 #include "DSP/ChordEngine.h"
 #include "DSP/FXChain.h"
@@ -167,6 +168,7 @@ public:
         int            chokeGroup = 0;
         juce::ValueTree voiceState;                          // edited voice (Group 4 kit editing);
                                                              // invalid = bake from `source` (default)
+        juce::String   samplePath;                           // I2: md5 key of a managed sample; empty = synth pad
     };
     struct KitDefinition
     {
@@ -175,6 +177,11 @@ public:
     };
     void          setPartKit (int part, const KitDefinition& def);
     bool          isPartKit (int part) const { return part >= 1 && part < SynthEngine::maxParts && engine.partIsKit (part); }
+    // I2: import an audio file (WAV/AIFF/FLAC) into pad `pad` of kit `part` (managed + deduped),
+    // then re-bake so it plays. Returns false if the file couldn't be loaded. clearPadSample
+    // reverts the pad to its synth source. Both message thread.
+    bool          importPadSample (int part, int pad, const juce::File& file);
+    void          clearPadSample  (int part, int pad);
     KitDefinition getPartKit (int part) const { return (part >= 1 && part < SynthEngine::maxParts) ? partKits[(std::size_t) part] : KitDefinition{}; }
 
     // Kit presets: factory kits (embedded) + user kits (*.kit XML under kitDir). Save
@@ -786,6 +793,7 @@ private:
     // thread; the baked params reach the audio thread via the engine's double buffer.
     std::array<juce::String, SynthEngine::maxParts> partPresetName {};
     std::array<KitDefinition, SynthEngine::maxParts> partKits {};   // per-part kit definition (message thread)
+    SampleStore sampleStore;                                        // I2: managed sample library (message thread)
 
     // Edit focus (1.3). editFocusPart = the part the APVTS currently represents (panel +
     // engine live slot). partEditState holds the OTHER parts' full panel states; on a
