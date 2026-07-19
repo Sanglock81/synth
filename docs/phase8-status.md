@@ -324,6 +324,29 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   length end-to-end incl. 32 bars), `plugin/test_ui_smoke` (per-lane selectors wired + screenshot).
   Goldens bit-identical (defaults unchanged).
 
+## J3 — scenes (loop-clip + drum-pattern snapshots, quantized launch) — DONE (at gate)
+
+- **Model (Option B, direct-edit):** the live Looper + drum grid + APVTS transport ARE
+  `scenes[active]`; the other 7 slots hold snapshots. No store gesture — edits accumulate in the
+  active scene. `SceneSlot` = {4 looper lanes, seq cells/vel/notes/mutes, per-lane transport}.
+- **Launch:** `launchScene(i)` arms `pendingScene`; `processBlock` engages it at the `scene_quant`
+  boundary — 1/2/4/8 bar (off the J1 `transportBeats` bar clock, with a priming flag so the first
+  block isn't a false boundary) or **Loop end** (the longest playing lane's wrap). Flip snapshots
+  live→outgoing, loads incoming→live, **skipping recording lanes** so an in-flight take completes
+  into the new scene (the edge rule), and flushes held loop notes (anti-click). Re-tapping a pending
+  or the active scene cancels.
+- **Transport params** restore via `juce::AsyncUpdater` (setValueNotifyingHost off the audio
+  thread); clips + pattern flip sample-accurately, params settle one message-cycle later.
+- **Commands:** long-press → *Copy active scene here* / *Clear scene*, posted as atomics and run on
+  the audio thread (`serviceSceneCommands`). `scene_quant` added to the RANDOM exclusion list.
+- **UI:** eight `SceneButton`s + the launch-quantum selector in the looper top bar (MIDI/WAV
+  shrank); outline/filled/blink/solid states off `pendingScene`/`activeScene`/`sceneContentDisp`.
+  Screenshot `docs/smoke/scenes.png`.
+- **Tests:** `plugin/test_scenes` (quantized engage, priming, per-scene pattern recall, blank-canvas
+  + clear, cancel, the recording-crosses-flip edge rule), `plugin/test_click_torture` (scene churn
+  under a playing loop, ~0.12 vs the 0.35 ceiling), `plugin/test_ui_smoke` (tap arms pending +
+  screenshot). Audio loops excluded from scenes in v1 (RAM); scene content is session-runtime.
+
 ### Committed follow-on — MIDI clock OUT (the synth as clock MASTER)
 
 **Not part of J1 (which is host-*follow*), tracked as its own item (task #85).** Transmit MIDI

@@ -76,6 +76,10 @@ a general-purpose synth that runs in any VST3 host or standalone.
   drum grid), and a clock-linked **looper** — four lanes (one per part), armed +
   measure-quantized, dual MIDI + AUDIO, WAV export, with **per-lane loop length 1–32 bars**
   (a short groove loops under a long progression, all locked to one downbeat).
+- **Scenes**: eight arrangement snapshots (loop clips + drum pattern + per-lane transport). The
+  active scene is the live state (edits write straight in); **tap to launch**, quantized to a
+  selectable boundary (1/2/4/8 bar or loop-end) with a click-free, phase-locked switch; long-press
+  to clone or clear. Great for moving between song sections live.
 - **16 factory presets + 6 drums** + user save/load + sound-design Randomize. Loading a
   patch is **sound-only** — it never disturbs the sequencer, looper, tempo, or other parts.
   A default startup scene (P1 lead / P2 spare / P3 bass / P4 808 kit) is playable out of the box.

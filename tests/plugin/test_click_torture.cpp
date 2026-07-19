@@ -371,6 +371,40 @@ TEST_CASE ("torture: live host tempo change re-rating a synced cutoff LFO", "[pl
     p.setPlayHead (nullptr);
 }
 
+// ---- J3 scene-transition click-safety -------------------------------------------------
+// Launching a scene mid-phrase swaps the loop clips; the flip must flush any notes the old
+// clip left sounding so the incoming scene starts clean. Record a loop, let it play, then
+// churn scene launches across boundaries and scan for pops.
+TEST_CASE ("torture: scene launches under a playing loop stay click-free (J3)", "[plugin][click][scene]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+    setVal (p, ParamID::tempo, 240.0f);              // 1 bar = 375 blocks
+    setVal (p, ParamID::ampRelease, 0.02f);
+    set01 (p, ParamID::sceneQuant, 0.0f);            // 1-bar launch quantum
+    p.apvts.getParameter (ParamID::loopBars)->setValueNotifyingHost (
+        p.apvts.getParameter (ParamID::loopBars)->convertTo0to1 (0.0f));   // lane 0 = 1 bar
+
+    Pumper pm (p, 128);
+    // Record a 1-bar loop of a held-ish note on lane 0, let the one-shot auto-play.
+    set01 (p, ParamID::loopRec, 1.0f);
+    for (int i = 0; i < 4000 && p.loopRecDisplayState (0) != 2; ++i) pm.pump (1);
+    p.routeNoteOn (60, 0.9f, 0); pm.pump (8); p.routeNoteOff (60, 0);
+    for (int i = 0; i < 4000 && p.loopRecDisplayState (0) == 2; ++i) pm.pump (1);   // finish the take -> plays
+
+    // Now churn scene launches: 0 -> 1 (empty) -> 0 ... each crossing a bar boundary mid-loop.
+    for (int cycle = 0; cycle < 8; ++cycle)
+    {
+        p.launchScene ((cycle % 2 == 0) ? 1 : 0);
+        pm.pump (420);                               // > 1 bar, so the pending scene engages and plays
+    }
+    INFO ("peak=" << pm.s.peak << " maxJump=" << pm.s.maxJump);
+    REQUIRE (pm.s.finite);
+    REQUIRE (pm.s.peak <= 1.0f);
+    REQUIRE (pm.s.maxJump < kClick);
+}
+
 TEST_CASE ("torture: HOLD chord-replacement churn", "[plugin][click][arp][hold]")
 {
     juce::ScopedJuceInitialiser_GUI init;

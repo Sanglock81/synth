@@ -79,7 +79,8 @@ public:
             ID::tempo,
             ID::arpOn, ID::arpMode, ID::arpOctaves, ID::arpGate, ID::arpSwing, ID::arpLatch, ID::arpHold,
             ID::loopRec, ID::loopPlay, ID::loopBars, ID::loopMode,
-            ID::loopBars2, ID::loopBars3, ID::loopBars4   // J2: per-lane length is performance state
+            ID::loopBars2, ID::loopBars3, ID::loopBars4,  // J2: per-lane length is performance state
+            ID::sceneQuant                                 // J3: scene launch quantum is performance state
         };
         // The arp 16-step PATTERN is a state-tree property (not an APVTS parameter), so
         // randomize()'s getParameters() loop never reaches it — the pattern is safe too.

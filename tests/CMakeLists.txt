@@ -126,6 +126,7 @@ add_executable(plugin_tests
     plugin/test_scoping_audit.cpp
     plugin/test_looper_focus.cpp
     plugin/test_looper_lengths.cpp
+    plugin/test_scenes.cpp
     plugin/test_perpart_mono.cpp
     plugin/test_click_torture.cpp
     plugin/test_editfocus.cpp

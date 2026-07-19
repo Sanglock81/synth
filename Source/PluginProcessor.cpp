@@ -421,6 +421,130 @@ void VASynthProcessor::flushLoopNotesForPart (int pt, bool chordOn)
         { dispatchNoteOff (n, pt, chordOn); loopNoteHeld[(std::size_t) pt][(std::size_t) n] = false; }
 }
 
+// ============================================================================
+// J3 scenes. The ACTIVE scene IS the live state (looper clips + drum pattern + per-lane
+// transport). Tapping a scene arms it (pendingScene); it engages at the next launch-quantum
+// boundary. Long-press posts a clone/clear command. All scene mutation happens on the audio
+// thread; only the transport-param restore is bounced to the message thread (AsyncUpdater),
+// since setValueNotifyingHost is not RT-safe.
+// ============================================================================
+namespace
+{
+    // Per-lane transport param IDs (lane N == part N; lane 1 keeps the original IDs).
+    const char* const kBarsIds[]  { ParamID::loopBars,  ParamID::loopBars2, ParamID::loopBars3, ParamID::loopBars4 };
+    const char* const kModeIds[]  { ParamID::loopMode,  ParamID::loopMode2, ParamID::loopMode3, ParamID::loopMode4 };
+    const char* const kPlayIds[]  { ParamID::loopPlay,  ParamID::loopPlay2, ParamID::loopPlay3, ParamID::loopPlay4 };
+    const char* const kQuantIds[] { ParamID::loopQuant, ParamID::loopQuant2, ParamID::loopQuant3, ParamID::loopQuant4 };
+}
+
+void VASynthProcessor::launchScene (int i)
+{
+    if (i < 0 || i >= kScenes) return;
+    // Re-tapping the pending scene, or tapping the already-active one, cancels the pending switch.
+    const int cur = pendingScene.load (std::memory_order_relaxed);
+    const int pend = (i == cur || i == activeSceneDisp.load (std::memory_order_relaxed)) ? -1 : i;
+    pendingScene.store (pend, std::memory_order_release);
+    pendingSceneDisp.store (pend, std::memory_order_relaxed);
+}
+
+void VASynthProcessor::copyActiveSceneTo (int i) { if (i >= 0 && i < kScenes) sceneCopyCmd.store (i, std::memory_order_release); }
+void VASynthProcessor::clearScene       (int i) { if (i >= 0 && i < kScenes) sceneClearCmd.store (i, std::memory_order_release); }
+
+bool VASynthProcessor::liveHasContent() const
+{
+    for (int p = 0; p < SynthEngine::maxParts; ++p) if (looper.hasContent (p)) return true;
+    for (auto& row : seqCells) for (unsigned char c : row) if (c) return true;
+    return false;
+}
+
+void VASynthProcessor::captureLiveTransportInto (SceneSlot& s) const
+{
+    for (int L = 0; L < SynthEngine::maxParts; ++L)
+    {
+        s.tBars[(std::size_t) L]  = rp (apvts, kBarsIds[L]);
+        s.tMode[(std::size_t) L]  = rp (apvts, kModeIds[L]);
+        s.tPlay[(std::size_t) L]  = rp (apvts, kPlayIds[L]);
+        s.tQuant[(std::size_t) L] = rp (apvts, kQuantIds[L]);
+    }
+}
+
+// Message thread: push the just-engaged scene's transport values into the APVTS params so the UI
+// and the DSP agree. A one-message-cycle lag behind the (sample-accurate) clip/pattern flip.
+void VASynthProcessor::handleAsyncUpdate()
+{
+    const int to = restoreTransportScene.exchange (-1, std::memory_order_acquire);
+    if (to < 0 || to >= kScenes) return;
+    const auto& s = scenes[(std::size_t) to];
+    auto set = [this] (const char* id, float norm)
+    { if (auto* p = apvts.getParameter (id)) p->setValueNotifyingHost (p->convertTo0to1 (norm)); };
+    for (int L = 0; L < SynthEngine::maxParts; ++L)
+    {
+        set (kBarsIds[L],  s.tBars[(std::size_t) L]);
+        set (kModeIds[L],  s.tMode[(std::size_t) L]);
+        set (kPlayIds[L],  s.tPlay[(std::size_t) L]);
+        set (kQuantIds[L], s.tQuant[(std::size_t) L]);
+    }
+}
+
+// Audio thread: at a launch boundary, swap the live clips + drum pattern with scene `to`, saving
+// the outgoing live state into `from`. Recording lanes are left untouched so an in-flight take
+// completes into the incoming scene (the edge rule). Flushes held loop notes so it starts clean.
+void VASynthProcessor::engageSceneFlip (int from, int to, bool chordOn)
+{
+    if (from < 0 || from >= kScenes || to < 0 || to >= kScenes || from == to) return;
+    auto& S = scenes[(std::size_t) from];
+    auto& D = scenes[(std::size_t) to];
+
+    for (int L = 0; L < SynthEngine::maxParts; ++L)
+    {
+        if (loopRecording[(std::size_t) L]) continue;    // in-flight recording carries into scene `to`
+        S.lanes[(std::size_t) L] = looper.laneContent (L);          // save outgoing clip
+        looper.setLaneContent (L, D.lanes[(std::size_t) L]);        // load incoming clip
+        flushLoopNotesForPart (L, chordOn);                         // release anything the old clip held
+    }
+    // drum pattern (whole; the sequencer re-reads seqCells via setConfig next block)
+    S.cells = seqCells; S.vel = seqVel; S.notes = seqNotes; S.mutes = seqMutes;
+    seqCells = D.cells; seqVel = D.vel; seqNotes = D.notes; seqMutes = D.mutes;
+    // transport: snapshot outgoing live params, request the incoming ones be restored (message thread)
+    captureLiveTransportInto (S);
+    S.has = liveHasContent();
+
+    activeSceneAudio = to;
+    activeSceneDisp.store (to, std::memory_order_relaxed);
+    pendingScene.store (-1, std::memory_order_relaxed);
+    pendingSceneDisp.store (-1, std::memory_order_relaxed);
+    sceneContentDisp[(std::size_t) from].store (S.has, std::memory_order_relaxed);
+    restoreTransportScene.store (to, std::memory_order_release);
+    triggerAsyncUpdate();
+}
+
+// Audio thread: apply pending long-press menu commands (clone active scene into a slot / clear a slot).
+void VASynthProcessor::serviceSceneCommands (bool chordOn)
+{
+    const int copyTo = sceneCopyCmd.exchange (-1, std::memory_order_acquire);
+    if (copyTo >= 0 && copyTo < kScenes && copyTo != activeSceneAudio)
+    {
+        auto& D = scenes[(std::size_t) copyTo];
+        for (int L = 0; L < SynthEngine::maxParts; ++L) D.lanes[(std::size_t) L] = looper.laneContent (L);
+        D.cells = seqCells; D.vel = seqVel; D.notes = seqNotes; D.mutes = seqMutes;
+        captureLiveTransportInto (D);
+        D.has = liveHasContent();
+        sceneContentDisp[(std::size_t) copyTo].store (D.has, std::memory_order_relaxed);
+    }
+
+    const int clr = sceneClearCmd.exchange (-1, std::memory_order_acquire);
+    if (clr >= 0 && clr < kScenes)
+    {
+        if (clr == activeSceneAudio)   // clearing the live scene wipes the live clips + pattern now
+        {
+            for (int L = 0; L < SynthEngine::maxParts; ++L) { looper.clear (L); audioLoops[(std::size_t) L].clear(); flushLoopNotesForPart (L, chordOn); }
+            seqCells = {}; seqVel = {}; for (auto& m : seqMutes) m = false;
+        }
+        scenes[(std::size_t) clr] = SceneSlot{};   // reset to an empty blank canvas
+        sceneContentDisp[(std::size_t) clr].store (false, std::memory_order_relaxed);
+    }
+}
+
 void VASynthProcessor::applyChordModifiers (std::uint32_t combined)
 {
     const std::uint32_t changed = combined ^ lastFedModMask;
@@ -2039,6 +2163,36 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (hostPlaying && haveHostPpq) transportBeats = hostPpq;
     else                            transportBeats += (double) numSamples / samplesPerBeat;
     engine.setTransport (transportBeats, samplesPerBeat);
+
+    // --- J3 scene launch: run long-press commands, then engage a pending scene at its quantum ---
+    //     (before the seq config + looper block below, so the swapped pattern/clips take effect now).
+    serviceSceneCommands (chordOn);
+    {
+        const int  bar    = (int) std::floor (transportBeats / 4.0);
+        const bool newBar = sceneClockPrimed && bar != sceneLastBar;   // first block primes (no false boundary)
+        sceneLastBar = bar; sceneClockPrimed = true;
+        const int pend = pendingScene.load (std::memory_order_acquire);
+        if (pend >= 0 && pend != activeSceneAudio)
+        {
+            const int q = (int) rp (apvts, ID::sceneQuant);   // 0..3 = 1/2/4/8 bar, 4 = Loop end
+            bool boundary = false;
+            if (q >= 4)   // Loop end: engage when the longest PLAYING lane hits its own downbeat
+            {
+                int longest = -1, longestLen = 0;
+                for (int L = 0; L < SynthEngine::maxParts; ++L)
+                    if (looper.playing (L) && looper.loopLength (L) > longestLen) { longestLen = looper.loopLength (L); longest = L; }
+                boundary = (longest >= 0) ? loopLaneWrapped[(std::size_t) longest] : newBar;
+            }
+            else
+            {
+                static const int qb[] { 1, 2, 4, 8 };
+                const int bars = qb[juce::jlimit (0, 3, q)];
+                boundary = newBar && (bar % bars == 0);
+            }
+            if (boundary) engageSceneFlip (activeSceneAudio, pend, chordOn);
+        }
+        sceneContentDisp[(std::size_t) activeSceneAudio].store (liveHasContent(), std::memory_order_relaxed);
+    }
 
     // --- arpeggiator (R3, Group 2 = decoupled from the step grid): a pure arpeggiator of
     //     the held notes, playing every 16th at the gate length. HOLD sustains the chord

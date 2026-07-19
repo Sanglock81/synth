@@ -37,7 +37,8 @@
 
 class VASynthProcessor : public juce::AudioProcessor,
                          public  ModLinkController,
-                         private juce::AudioProcessorValueTreeState::Listener
+                         private juce::AudioProcessorValueTreeState::Listener,
+                         private juce::AsyncUpdater   // J3: restore a scene's transport params off the audio thread
 {
 public:
     VASynthProcessor();
@@ -625,6 +626,18 @@ public:
     }
     bool  loopAudioHasContent (int part) const { return part >= 0 && part < SynthEngine::maxParts && audioLoops[(std::size_t) part].hasContent(); }
     int   loopRecDisplayState (int lane) const { return (lane >= 0 && lane < SynthEngine::maxParts) ? loopRecStateDisp[(std::size_t) lane].load (std::memory_order_relaxed) : 0; }
+
+    // -- J3 scenes ------------------------------------------------------------
+    // Eight arrangement snapshots (loop clips + drum pattern + per-lane transport). The ACTIVE
+    // scene IS the live state (edits write into it automatically — no store gesture). Tapping a
+    // scene arms it; it engages at the next launch-quantum boundary (scene_quant).
+    static constexpr int kScenes = 8;
+    void  launchScene (int i);              // arm scene i (or cancel if it's already pending)
+    void  copyActiveSceneTo (int i);        // long-press menu: clone the active scene into slot i
+    void  clearScene (int i);               // long-press menu: wipe slot i
+    int   activeScene()  const { return activeSceneDisp.load (std::memory_order_relaxed); }
+    int   pendingSceneIndex() const { return pendingSceneDisp.load (std::memory_order_relaxed); }
+    bool  sceneHasContent (int i) const { return i >= 0 && i < kScenes && sceneContentDisp[(std::size_t) i].load (std::memory_order_relaxed); }
     // Write the recorded loops to a Standard MIDI File (one track per part). Returns false
     // if there's nothing recorded or the write fails.
     bool  exportLoopsToMidiFile (const juce::File& file) const;
@@ -908,6 +921,32 @@ private:
     std::array<bool, SynthEngine::maxParts> loopPlayWasOn {};    // MIDI-lane playback edge, to flush on stop
     std::array<bool, SynthEngine::maxParts> loopLaneWrapped {};   // per-lane: this lane wrapped on the previous block
     std::array<std::array<bool, 128>, SynthEngine::maxParts> loopNoteHeld {};   // notes the loop turned on (release on stop/clear)
+
+    // -- J3 scenes (audio-thread owned state; UI posts commands via atomics) ---
+    struct SceneSlot
+    {
+        std::array<Looper::Lane, SynthEngine::maxParts> lanes {};              // per-lane MIDI loop clips
+        std::array<std::array<unsigned char, kSeqSteps>, kSeqRows> cells {}, vel {};   // drum pattern
+        std::array<int, kSeqRows>  notes { { 36, 37, 38, 39, 40, 41, 42, 43 } };
+        std::array<bool, kSeqRows> mutes {};
+        std::array<float, SynthEngine::maxParts> tBars {}, tMode {}, tPlay {}; // per-lane transport
+        std::array<float, SynthEngine::maxParts> tQuant { { 1.0f, 1.0f, 1.0f, 1.0f } };
+        bool has = false;                                                      // holds a non-empty arrangement
+    };
+    std::array<SceneSlot, kScenes> scenes {};
+    int  activeSceneAudio = 0;                       // audio-thread active index (live == scenes[active])
+    int  sceneLastBar = 0;                           // bar-boundary edge detect for the launch quantum
+    bool sceneClockPrimed = false;                   // first block primes sceneLastBar (no false boundary)
+    std::atomic<int> pendingScene { -1 };            // UI -> audio: armed scene, or -1
+    std::atomic<int> sceneClearCmd { -1 }, sceneCopyCmd { -1 };   // UI -> audio: long-press menu commands
+    std::atomic<int> restoreTransportScene { -1 };   // audio -> message: transport params to restore (AsyncUpdater)
+    std::atomic<int> activeSceneDisp { 0 }, pendingSceneDisp { -1 };          // UI display mirrors
+    std::array<std::atomic<bool>, kScenes> sceneContentDisp {};
+    void handleAsyncUpdate() override;               // write restoreTransportScene's transport into the APVTS
+    void engageSceneFlip (int from, int to, bool chordOn);   // audio thread: swap clips+seq, flush, set active
+    void serviceSceneCommands (bool chordOn);        // clear / copy-here commands (audio thread)
+    void captureLiveTransportInto (SceneSlot& s) const;      // read the live APVTS transport into a slot
+    bool liveHasContent() const;                     // any loop clip or seq cell present
 
     // Master scope tap ring (see pushScope/readScope).
     std::array<std::atomic<float>, kScopeSize> scopeRing {};

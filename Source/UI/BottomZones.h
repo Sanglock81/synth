@@ -286,6 +286,60 @@ private:
 // part label, REC, PLAY, MIDI/AUDIO, a per-lane BARS length knob, quantize, CLEAR, and a
 // content/playhead strip. J2: each lane picks its OWN length (1..32 bars); at slow tempos a
 // lane's AUDIO mode is capped to what the ring can hold (honest, shown on the row).
+
+// ---- J3: one scene slot button. Tap = launch (quantized); long-press = copy/clear menu.
+// Visual: outline = empty, filled = has content, blinking = pending (armed), solid = active.
+class SceneButton : public juce::Component,
+                    public  juce::SettableTooltipClient,
+                    private juce::Timer
+{
+public:
+    SceneButton (VASynthProcessor& p, int idx) : proc (p), index (idx)
+    {
+        setWantsKeyboardFocus (false);
+        setTooltip ("Scene " + juce::String (idx + 1) + " - tap to launch, long-press to copy/clear");
+    }
+    void mouseDown (const juce::MouseEvent&) override { longPressed = false; startTimer (450); }
+    void mouseUp   (const juce::MouseEvent&) override { stopTimer(); if (! longPressed) proc.launchScene (index); }
+    void timerCallback() override
+    {
+        stopTimer(); longPressed = true;
+        juce::PopupMenu m;
+        m.addItem (1, "Copy active scene here");
+        m.addItem (2, "Clear scene");
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+            [this] (int r) { if (r == 1) proc.copyActiveSceneTo (index); else if (r == 2) proc.clearScene (index); });
+    }
+    void paint (juce::Graphics& g) override
+    {
+        const bool active  = proc.activeScene() == index;
+        const bool pending = proc.pendingSceneIndex() == index;
+        const bool has     = proc.sceneHasContent (index);
+        const auto accent  = VASynthLookAndFeel::accent();
+        auto r = getLocalBounds().toFloat().reduced (1.0f);
+
+        juce::Colour fill = active ? accent
+                          : has    ? VASynthLookAndFeel::track().brighter (0.18f)
+                                   : VASynthLookAndFeel::track();
+        if (pending)   // blink between dim + accent while armed
+        {
+            const float b = 0.5f + 0.5f * (float) std::sin (juce::Time::getMillisecondCounter() * 0.012);
+            fill = accent.withAlpha (0.30f + 0.55f * b);
+        }
+        g.setColour (fill);
+        g.fillRoundedRectangle (r, 3.0f);
+        if (! has && ! active)          // empty slot: just an outline
+        { g.setColour (VASynthLookAndFeel::dim()); g.drawRoundedRectangle (r, 3.0f, 1.0f); }
+
+        g.setColour (active ? juce::Colours::black : VASynthLookAndFeel::ink());
+        g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
+        g.drawText (juce::String (index + 1), getLocalBounds(), juce::Justification::centred, false);
+    }
+private:
+    VASynthProcessor& proc; int index; bool longPressed = false;
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SceneButton)
+};
+
 class LooperPanel : public juce::Component,
                     private juce::Timer
 {
@@ -329,6 +383,13 @@ public:
         // J2: length is now PER-LANE (a BARS selector on each row) — no shared top-bar selector.
         expo.setButtonText ("MIDI"); styleBtn (expo);   expo.setTooltip ("Export recorded loops to a MIDI file");   expo.onClick    = [this] { exportMidi(); }; addAndMakeVisible (expo);
         expoWav.setButtonText ("WAV"); styleBtn (expoWav); expoWav.setTooltip ("Export the audio loops to a WAV file"); expoWav.onClick = [this] { exportWav(); }; addAndMakeVisible (expoWav);
+
+        // J3: eight scene slots + the launch-quantum selector, in the top bar.
+        for (int i = 0; i < VASynthProcessor::kScenes; ++i)
+        { sceneBtn[(std::size_t) i] = std::make_unique<SceneButton> (p, i); addAndMakeVisible (*sceneBtn[(std::size_t) i]); }
+        sceneQuant = std::make_unique<HSelector> (p.apvts, ParamID::sceneQuant, p.getMidiLearn(),
+                                                  juce::StringArray { "1", "2", "4", "8", "END" });   // launch quantum (bars / loop-end)
+        addAndMakeVisible (*sceneQuant);
 
         startTimerHz (20);   // playhead + armed-record blink
     }
@@ -388,10 +449,14 @@ public:
     void resized() override
     {
         auto c = chrome::sectionContent (getLocalBounds());
-        // Top bar: the two exports (length is per-lane now, on each row).
+        // Top bar: [SCENE 1..8]  [launch quantum]  ......  [MIDI][WAV].
         auto top = c.removeFromTop (26); c.removeFromTop (5);
-        expoWav.setBounds (top.removeFromRight (54).reduced (2, 2)); top.removeFromRight (3);
-        expo.setBounds    (top.removeFromRight (54).reduced (2, 2));
+        expoWav.setBounds (top.removeFromRight (46).reduced (2, 2)); top.removeFromRight (3);
+        expo.setBounds    (top.removeFromRight (46).reduced (2, 2));
+        for (int i = 0; i < VASynthProcessor::kScenes; ++i)
+            sceneBtn[(std::size_t) i]->setBounds (top.removeFromLeft (26).reduced (1, 1));
+        top.removeFromLeft (8);
+        sceneQuant->setBounds (top.removeFromLeft (juce::jmin (155, juce::jmax (60, top.getWidth()))).reduced (2, 2));
 
         // Four lane rows: [P# label] [R][P] [MIDI/AUD] [BARS] [Q] [x] [content strip].
         const int rh = juce::jmax (22, (c.getHeight() - (kLanes - 1) * 4) / kLanes);
@@ -467,6 +532,8 @@ private:
     std::array<std::unique_ptr<HSelector>, kLanes> modeSel;
     std::array<std::unique_ptr<RotaryKnob>, kLanes> barsSel;   // J2: per-lane length knob (1..32 bars)
     std::array<juce::TextButton, kLanes> clearBtn;
+    std::array<std::unique_ptr<SceneButton>, VASynthProcessor::kScenes> sceneBtn;   // J3
+    std::unique_ptr<HSelector> sceneQuant;
     juce::TextButton expo, expoWav;
     std::array<juce::Rectangle<int>, kLanes> labelRect { }, laneStrip { };
     std::unique_ptr<juce::FileChooser> chooser;

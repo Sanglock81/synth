@@ -327,6 +327,40 @@ TEST_CASE ("controls expose their parameter name as a hover tooltip", "[plugin][
     REQUIRE (windows >= 1);
 }
 
+// --- J3: eight scene buttons launch on tap; screenshot the states -----------------------
+TEST_CASE ("J3: tapping a scene button arms it (pending); the row renders (#J3)", "[plugin][smoke][scene][j3]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+
+    // Collect the eight scene buttons.
+    std::vector<SceneButton*> scenes;
+    std::function<void (juce::Component&)> collect = [&] (juce::Component& c)
+    { if (auto* s = dynamic_cast<SceneButton*> (&c)) scenes.push_back (s); for (auto* ch : c.getChildren()) collect (*ch); };
+    collect (*ed);
+    REQUIRE (scenes.size() == (size_t) VASynthProcessor::kScenes);
+
+    // A real tap on scene 3 arms it as pending (launch is quantized, so it does not switch yet).
+    REQUIRE (p.pendingSceneIndex() == -1);
+    tap (*scenes[3]);
+    REQUIRE (p.pendingSceneIndex() == 3);
+    REQUIRE (p.activeScene() == 0);                  // still on scene 0 until the boundary
+
+    // The launch-quantum selector is bound to its param.
+    REQUIRE (findLearnable (*ed, ParamID::sceneQuant) != nullptr);
+
+    // Screenshot: scene 0 active (with content), scene 3 pending, others empty.
+    p.setSeqCell (0, 0, 1);
+    { juce::AudioBuffer<float> buf (2, 128); for (int b = 0; b < 4; ++b) { buf.clear(); juce::MidiBuffer m; p.processBlock (buf, m); } }
+    juce::Component* panel = scenes[0]->getParentComponent();
+    while (panel != nullptr && dynamic_cast<LooperPanel*> (panel) == nullptr) panel = panel->getParentComponent();
+    REQUIRE (panel != nullptr);
+    panel->repaint();
+    snapshot (*panel, "scenes.png");
+}
+
 // --- screenshot artifacts for the gate (human eyeball; also proves both paint) ---------
 TEST_CASE ("smoke screenshots: editor + mod overlay render for the gate (#56)",
            "[plugin][smoke][screenshot]")

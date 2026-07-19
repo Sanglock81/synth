@@ -29,6 +29,12 @@ public:
     static constexpr int kMaxEvents = 512;   // per part
 
     struct Event { int t; int note; float vel; bool on; bool armed; };
+    struct Lane { std::array<Event, kMaxEvents> ev { }; int count = 0; };   // one lane's recorded clip
+
+    // J3 scenes: snapshot / restore a lane's recorded clip (a plain copy of its events).
+    const Lane& laneContent (int part) const
+    { return parts[(std::size_t) (part < 0 ? 0 : part >= kParts ? kParts - 1 : part)]; }
+    void setLaneContent (int part, const Lane& l) { if (part >= 0 && part < kParts) parts[(std::size_t) part] = l; }
 
     // The master wrap period — a common multiple of every lane length so masterPos % laneLen
     // is continuous across the wrap. Set from tempo each block (32 bars); clamped >= 1.
@@ -133,7 +139,6 @@ private:
         for (int i = 0; i < p.count; ++i) p.ev[(std::size_t) i].armed = true;
     }
 
-    struct Lane { std::array<Event, kMaxEvents> ev { }; int count = 0; };
     std::array<Lane, kParts> parts { };
     std::array<int, kParts> loopLen { { 48000, 48000, 48000, 48000 } };  // per-lane length (samples)
     int  masterLen = 48000;                                              // master wrap period (32 bars)
