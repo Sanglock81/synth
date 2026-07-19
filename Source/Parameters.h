@@ -86,6 +86,10 @@ namespace ParamID
     inline constexpr auto lfo3Depth   = "lfo3_depth";
     inline constexpr auto lfo3Shape   = "lfo3_shape";
     inline constexpr auto lfo3Dest    = "lfo3_dest";
+    // J1: per-LFO tempo sync. sync off = free-running Hz (rate); sync on = the div note-division.
+    inline constexpr auto lfoSync     = "lfo_sync";   inline constexpr auto lfoDiv  = "lfo_div";
+    inline constexpr auto lfo2Sync    = "lfo2_sync";  inline constexpr auto lfo2Div = "lfo2_div";
+    inline constexpr auto lfo3Sync    = "lfo3_sync";  inline constexpr auto lfo3Div = "lfo3_div";
 
     // Global
     inline constexpr auto glideTime   = "glide_time";
@@ -287,6 +291,16 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::lfo3Depth, 1}, "LFO3 Depth", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfo3Shape, 1}, "LFO3 Shape", juce::StringArray{ "Triangle", "Sine", "Square", "S&H" }, 0));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfo3Dest, 1},  "LFO3 Dest",  juce::StringArray{ "Off", "Pitch", "Cutoff", "PW" }, 0));
+    // J1: per-LFO tempo sync (default OFF -> goldens hold) + note-division (default 1/8, index 5).
+    {
+        const juce::StringArray divs { "4 bar","2 bar","1/1","1/2","1/4","1/8","1/16","1/32","1/4T","1/8T","1/16T","1/4.","1/8.","1/16." };
+        params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::lfoSync,  1}, "LFO Sync",  false));
+        params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfoDiv,   1}, "LFO Div",  divs, 5));
+        params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::lfo2Sync, 1}, "LFO2 Sync", false));
+        params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfo2Div,  1}, "LFO2 Div", divs, 5));
+        params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::lfo3Sync, 1}, "LFO3 Sync", false));
+        params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfo3Div,  1}, "LFO3 Div", divs, 5));
+    }
 
     // --- Global --------------------------------------------------------------
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::glideTime, 1}, "Glide", juce::NormalisableRange<float>(0.0f, 2.0f, 0.0f, 0.4f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("s")));

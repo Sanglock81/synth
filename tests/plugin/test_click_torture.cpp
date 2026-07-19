@@ -51,6 +51,29 @@ namespace
     // measures ~0.10-0.12. A genuine retrigger/skip pop jumps toward the peak-to-peak
     // (>0.4), so 0.35 catches pops with margin above the honest waveform slope.
     constexpr float kClick = 0.35f;
+
+    // A minimal host playhead for the J1 synced-LFO torture: an advancing ppq that can be
+    // snapped (loop brace / play) or re-rated (tempo change) mid-stream.
+    struct MockHost : juce::AudioPlayHead
+    {
+        double bpm = 120.0, ppq = 0.0; bool playing = true;
+        juce::Optional<PositionInfo> getPosition() const override
+        {
+            PositionInfo pi; pi.setBpm (bpm); pi.setPpqPosition (ppq); pi.setIsPlaying (playing);
+            return pi;
+        }
+    };
+
+    // Set up a held-note patch whose LFO 1 is a deep, tempo-synced modulation of the FILTER
+    // cutoff — the worst case for a phase-discontinuity click (a cutoff step is audible).
+    void armSyncedCutoffLfo (VASynthProcessor& p)
+    {
+        p.loadInitPreset();
+        setVal (p, ParamID::filterCutoff, 800.0f);     // mid cutoff so the LFO swings audibly
+        set01 (p, ParamID::lfoDest, 2.0f / 3.0f);      // Dest = Cutoff (index 2 of 4)
+        setVal (p, ParamID::lfoDepth, 0.9f);           // deep -> a phase jump moves cutoff a lot
+        set01 (p, ParamID::lfoDiv, 4.0f / 13.0f);      // 1/4 (index 4 of 14)
+    }
 }
 
 TEST_CASE ("BASELINE: held saw chord, no arp (waveform reference)", "[plugin][click][baseline]")
@@ -243,6 +266,109 @@ TEST_CASE ("torture: chord modifier morph churn under held notes (1.4)", "[plugi
     REQUIRE (pm.s.finite);
     REQUIRE (pm.s.peak <= 1.0f);
     REQUIRE (pm.s.maxJump < kClick);
+}
+
+// ---- J1.2 synced-LFO transition click-safety (amendment #2) ---------------------------
+// All three phase-discontinuity moments, each on a deep cutoff-routed synced LFO, must stay
+// below the click ceiling. These prove (not assert) the modulation smoothing absorbs the step.
+
+TEST_CASE ("torture: toggle LFO SYNC on then off mid-note (bar-engage, frozen rate)", "[plugin][click][lfo][sync]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    armSyncedCutoffLfo (p);
+    setVal (p, ParamID::tempo, 120.0f);            // standalone free-run beat clock
+
+    Pumper pm (p, 128);
+    pm.pump (10);
+    p.routeNoteOn (48, 0.9f, 0);                    // a held, sustained note
+    pm.pump (200);                                  // free-running LFO settles
+    set01 (p, ParamID::lfoSync, 1.0f);             // SYNC on -> engages at the NEXT bar, no instant jump
+    pm.pump (800);                                  // cross several bars (engage happens here)
+    set01 (p, ParamID::lfoSync, 0.0f);             // SYNC off -> freeze current rate as free Hz, no jump
+    pm.pump (800);
+    INFO ("peak=" << pm.s.peak << " maxJump=" << pm.s.maxJump);
+    REQUIRE (pm.s.finite);
+    REQUIRE (pm.s.peak <= 1.0f);
+    REQUIRE (pm.s.maxJump < kClick);
+}
+
+TEST_CASE ("torture: host ppq snap (play + loop-brace) under a synced cutoff LFO", "[plugin][click][lfo][sync][host]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    armSyncedCutoffLfo (p);
+    set01 (p, ParamID::lfoSync, 1.0f);
+    MockHost host; host.bpm = 120.0; host.playing = true; p.setPlayHead (&host);
+    const double beatsPerBlock = (host.bpm / 60.0) * (128.0 / 48000.0);
+
+    juce::AudioBuffer<float> buf (2, 128); float prevL = 0, prevR = 0; Scan s;
+    auto run = [&] (int blocks)
+    {
+        for (int b = 0; b < blocks; ++b)
+        {
+            juce::MidiBuffer m; buf.clear(); p.processBlock (buf, m); host.ppq += beatsPerBlock;
+            const float* L = buf.getReadPointer (0); const float* R = buf.getReadPointer (1);
+            for (int i = 0; i < 128; ++i)
+            {
+                s.finite = s.finite && std::isfinite (L[i]) && std::isfinite (R[i]);
+                s.peak = std::max ({ s.peak, std::abs (L[i]), std::abs (R[i]) });
+                s.maxJump = std::max ({ s.maxJump, std::abs (L[i] - prevL), std::abs (R[i] - prevR) });
+                prevL = L[i]; prevR = R[i];
+            }
+        }
+    };
+    run (10);
+    p.routeNoteOn (48, 0.9f, 0);
+    run (300);
+    host.ppq = 7.37;              // loop brace snaps to a mid-bar, non-integer ppq
+    run (300);
+    host.ppq = 0.0;               // stop/restart from the top (play from bar 1)
+    run (300);
+    INFO ("peak=" << s.peak << " maxJump=" << s.maxJump);
+    REQUIRE (s.finite);
+    REQUIRE (s.peak <= 1.0f);
+    REQUIRE (s.maxJump < kClick);
+    p.setPlayHead (nullptr);
+}
+
+TEST_CASE ("torture: live host tempo change re-rating a synced cutoff LFO", "[plugin][click][lfo][sync][tempo]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    armSyncedCutoffLfo (p);
+    set01 (p, ParamID::lfoSync, 1.0f);
+    MockHost host; host.bpm = 90.0; host.playing = true; p.setPlayHead (&host);
+
+    juce::AudioBuffer<float> buf (2, 128); float prevL = 0, prevR = 0; Scan s;
+    auto run = [&] (int blocks)
+    {
+        for (int b = 0; b < blocks; ++b)
+        {
+            juce::MidiBuffer m; buf.clear(); p.processBlock (buf, m);
+            host.ppq += (host.bpm / 60.0) * (128.0 / 48000.0);
+            const float* L = buf.getReadPointer (0); const float* R = buf.getReadPointer (1);
+            for (int i = 0; i < 128; ++i)
+            {
+                s.finite = s.finite && std::isfinite (L[i]) && std::isfinite (R[i]);
+                s.peak = std::max ({ s.peak, std::abs (L[i]), std::abs (R[i]) });
+                s.maxJump = std::max ({ s.maxJump, std::abs (L[i] - prevL), std::abs (R[i] - prevR) });
+                prevL = L[i]; prevR = R[i];
+            }
+        }
+    };
+    run (10);
+    p.routeNoteOn (48, 0.9f, 0);
+    run (300);
+    host.bpm = 174.0;             // sudden tempo jump (near-double) re-rates the LFO live
+    run (300);
+    host.bpm = 60.0;             // and back down
+    run (300);
+    INFO ("peak=" << s.peak << " maxJump=" << s.maxJump);
+    REQUIRE (s.finite);
+    REQUIRE (s.peak <= 1.0f);
+    REQUIRE (s.maxJump < kClick);
+    p.setPlayHead (nullptr);
 }
 
 TEST_CASE ("torture: HOLD chord-replacement churn", "[plugin][click][arp][hold]")

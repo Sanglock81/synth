@@ -282,3 +282,31 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
 ## 8B–8F — not started (blocked on Phase 7)
 
 (To be filled in as each sub-phase runs.)
+
+## J1 — master tempo linking + tempo-synced LFOs — DONE (at gate)
+
+- **J1.1 transport:** `processBlock` reads `getPlayHead()->getPosition()`. `effectiveBpm` =
+  host BPM if present else the `Tempo` knob; a `transportBeats` clock **snaps to the host
+  `ppqPosition`** when playing else **free-runs** `+= numSamples/samplesPerBeat`. It drives
+  the arp/seq/looper AND the synced-LFO phase, and is handed to the engine each block via
+  `engine.setTransport(beats, samplesPerBeat)`. `publishedBpm` (atomic) surfaces the live BPM.
+- **J1.2 synced LFOs (DSP):** per-LFO `lfo_sync` (bool, default off) + `lfo_div` (14 divisions).
+  A synced+engaged LFO's phase is `frac((transportBeats + done/spb) / cycleBeats)` — a continuous
+  function of transport position, so it is bar-locked with **no phase jump** (triplet/dotted
+  included). Effective Hz is computed **in the engine from live tempo**, so LOCKED parts track
+  tempo changes. Click-safety: SYNC-on **engages at the next bar** (no mid-note jump), SYNC-off
+  **freezes the rate as free Hz**; host ppq snaps and tempo changes are absorbed by the existing
+  modulation smoothing (proven by click-torture, ~0.13–0.16 vs the 0.35 ceiling).
+- **J1.3 UI:** each LFO section gains a **SYNC** toggle that morphs the **RATE** knob into a
+  stepped **DIV** knob (shares the same slot). Screenshot: `docs/smoke/lfo-sync.png`.
+- **Tests:** `dsp/test_lfo_sync` (rate = tempo/division for straight/triplet/dotted, tempo-follow,
+  bar-continuity), `plugin/test_tempo_sync` (host-follow), `plugin/test_click_torture` (3 synced-LFO
+  transition cases), `plugin/test_ui_smoke` (SYNC RATE↔DIV swap + screenshot). Goldens bit-identical
+  (sync defaults off).
+
+### Committed follow-on — MIDI clock OUT (the synth as clock MASTER)
+
+**Not part of J1 (which is host-*follow*), tracked as its own item (task #85).** Transmit MIDI
+clock (`0xF8` @ 24 ppqn + Start/Stop/Continue) from the internal transport out to external gear
+(the Aeros looper, Chase Bliss pedals) so they lock to the synth's tempo. Standing commitment —
+to be built after J1, from the same `transportBeats`/`effectiveBpm` clock this phase established.

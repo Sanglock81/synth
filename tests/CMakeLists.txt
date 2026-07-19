@@ -43,6 +43,7 @@ add_executable(dsp_tests
     dsp/test_softclip.cpp
     dsp/test_eq.cpp
     dsp/test_sample_voice.cpp
+    dsp/test_lfo_sync.cpp
     dsp/test_arp.cpp
     dsp/test_stepseq.cpp
     dsp/test_clock_align.cpp
@@ -108,6 +109,7 @@ add_executable(plugin_tests
     plugin/test_midi_profile.cpp
     plugin/test_midi_hotplug.cpp
     plugin/test_pad_surface.cpp
+    plugin/test_tempo_sync.cpp
     plugin/test_presets_factory.cpp
     plugin/test_macros.cpp
     plugin/test_rhythm.cpp

@@ -28,8 +28,21 @@
 
 // Per-part LFO configuration (Sub-phase 2). Three LFOs per part; each routes to a
 // single destination (0 off / 1 pitch / 2 cutoff / 3 PW). Depth 0 or dest 0 = inert.
-struct LfoConfig { float rate = 2.0f, depth = 0.0f; int shape = 0, dest = 0; };
+struct LfoConfig { float rate = 2.0f, depth = 0.0f; int shape = 0, dest = 0;
+                   bool synced = false; int division = 5; };   // J1: sync + note-division index
 struct PartLfos  { LfoConfig lfo[3]; };
+
+// J1: LFO note divisions -> cycle length in BEATS (4/4). Index order matches the lfo_div param
+// choices { 4 bar,2 bar,1/1,1/2,1/4,1/8,1/16,1/32, 1/4T,1/8T,1/16T, 1/4.,1/8.,1/16. }.
+namespace lfodiv
+{
+    inline constexpr int kNum = 14;
+    inline constexpr double kBeats[kNum] =
+        { 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25, 0.125,           // 4bar..1/32
+          2.0/3.0, 1.0/3.0, 1.0/6.0,                            // 1/4T, 1/8T, 1/16T
+          1.5, 0.75, 0.375 };                                   // 1/4., 1/8., 1/16.
+    inline double cycleBeats (int i) { return kBeats[(i >= 0 && i < kNum) ? i : 4]; }
+}
 
 class SynthEngine
 {
@@ -239,6 +252,8 @@ public:
     // (matrix sources). Called by the processor before beginMasterBlock each block.
     void setLiveModMatrix (const ModMatrix& m)        { liveMatrixStore = m; }
     void setMacroValues   (const std::array<float, 8>& m) { macroVals = m; }
+    // J1: the transport beat position at this block's start + samples-per-beat, for tempo-synced LFOs.
+    void setTransport (double beats, double spb) { transportBeats_ = beats; samplesPerBeat_ = spb > 0.0 ? spb : 1.0; }
 
     // Sustain pedal (CC64). While down, note-offs are deferred; on release the
     // held notes are let go. The Korg B2's damper is the primary expression.
@@ -505,6 +520,25 @@ public:
             smL1 = liveParams.osc1Level; smL2 = liveParams.osc2Level; smL3 = liveParams.osc3Level;
             smoothPrimed = true;
         }
+        // J1: per-LFO SYNC engage. Turning SYNC on does NOT jump the phase immediately — the LFO
+        // keeps free-running until the NEXT bar boundary, then engages the transport-derived phase
+        // (click-safe handoff). Turning it off resumes free-run from the current phase (continuous).
+        const int barNow = (int) std::floor (transportBeats_ / 4.0);
+        const bool barCrossed = barNow != lfoPrevBar_;
+        for (int p = 0; p < maxParts; ++p)
+            for (int k = 0; k < 3; ++k)
+            {
+                const bool want = partLfoUse[(std::size_t) p].lfo[k].synced;
+                if (want && ! lfoPrevSynced[(std::size_t) p][(std::size_t) k])
+                    lfoSyncEngaged[(std::size_t) p][(std::size_t) k] = false;   // just enabled -> pending until a bar
+                if (! want)
+                    lfoSyncEngaged[(std::size_t) p][(std::size_t) k] = false;   // disabled -> free-run
+                if (want && barCrossed)
+                    lfoSyncEngaged[(std::size_t) p][(std::size_t) k] = true;    // engage at the bar downbeat
+                lfoPrevSynced[(std::size_t) p][(std::size_t) k] = want;
+            }
+        lfoPrevBar_ = barNow;
+
         partHadVoice = {};
         partLevelUse = { { 1.0f, 1.0f, 1.0f, 1.0f } };   // unity until setMix() (test path stays unity)
         partPanUse   = {};
@@ -552,8 +586,18 @@ public:
                 {
                     const LfoConfig& c = partLfoUse[(std::size_t) p].lfo[k];
                     LFO& l = partLfo[(std::size_t) p][(std::size_t) k];
-                    l.setRate (c.rate); l.setShape (static_cast<LFO::Shape> (c.shape));
-                    const float raw = l.advance (chunk);
+                    l.setShape (static_cast<LFO::Shape> (c.shape));
+                    float raw;
+                    if (c.synced && lfoSyncEngaged[(std::size_t) p][(std::size_t) k])
+                    {                                                     // J1: transport-position-derived phase (bar-locked, continuous)
+                        const double beats = transportBeats_ + (double) (startSample + done) / samplesPerBeat_;
+                        raw = l.setPhase (beats / lfodiv::cycleBeats (c.division));
+                    }
+                    else                                                  // free-running Hz (also the pre-engage phase of a syncing LFO)
+                    {
+                        l.setRate (c.rate);
+                        raw = l.advance (chunk);
+                    }
                     lfoRaw[(std::size_t) p][(std::size_t) k] = raw;
                     const float v = raw * c.depth;
                     switch (c.dest)
@@ -849,6 +893,9 @@ private:
     std::array<ModMatrix, maxParts> partMatrixUse {}; // per-part mod matrix in effect this block (#56)
     ModMatrix liveMatrixStore {};                     // the focused part's live matrix (set by the processor)
     std::array<float, 8> macroVals {};                // current macro knob values 0..1 (matrix sources)
+    double transportBeats_ = 0.0, samplesPerBeat_ = 12000.0;   // J1: block-start beat position + samples/beat
+    std::array<std::array<bool, 3>, maxParts> lfoSyncEngaged {}, lfoPrevSynced {};   // J1: per-LFO deferred sync engage
+    int lfoPrevBar_ = -1000000;
     std::array<float, maxParts> partLevelUse { { 1.0f, 1.0f, 1.0f, 1.0f } };   // mixer level (unity default)
     std::array<float, maxParts> partPanUse   {};      // mixer pan (centre default = 0)
     std::array<float, maxParts> prevLg { { 1.0f, 1.0f, 1.0f, 1.0f } };         // per-block-ramped mixer L gain

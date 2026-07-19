@@ -9,6 +9,17 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Master tempo linking + tempo-synced LFOs (J1).** In a DAW the synth now **follows the host's
+  tempo and transport** — the arpeggiator, step sequencer, looper **and** LFOs lock to the project
+  BPM and play position (via `AudioPlayHead`); standalone keeps using the internal **Tempo** knob.
+  Each of the three per-part LFOs gains a **SYNC** toggle: when on, its **RATE** knob morphs into a
+  stepped **DIV** (note-division) knob — **4 bar, 2 bar, 1/1…1/32** straight, **1/4T–1/16T** triplet,
+  **1/4.–1/16.** dotted (14 divisions). A synced LFO's phase is derived from the transport position,
+  so it stays **bar-locked with no phase jump** — even for triplet/dotted divisions that don't
+  divide the bar evenly, and across tempo changes and host loop braces. Toggling SYNC on engages at
+  the next bar boundary (no mid-note jump); toggling off freezes the current rate as free Hz. The
+  effective rate is computed live in the engine, so **locked parts** track tempo changes too.
+
 - **Sample-playback kit pads (I2).** Any drum-kit pad can now play a loaded **WAV / AIFF / FLAC**
   one-shot instead of a synthesized voice — load it in the **Kit Editor** ("Load sample…"; the pad
   shows **SMPL**). Playback is **stereo**, **pitch-tracked** (the sample transposes with the note;

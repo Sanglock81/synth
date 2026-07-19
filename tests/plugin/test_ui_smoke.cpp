@@ -15,6 +15,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "UI/Widgets.h"
+#include "UI/Sections.h"
 #include "UI/ModMatrixPanel.h"
 #include "ModDestRegistry.h"
 #include "VersionInfo.h"
@@ -210,6 +211,47 @@ TEST_CASE ("LINK connects + animates on EVERY registry destination control (#56 
 
     REQUIRE (connected == (int) targets.size());             // ALL of them connect
     REQUIRE (animated  >= (int) (targets.size() * 8 / 10));   // and the vast majority animate live
+}
+
+// --- J1.3: the LFO SYNC toggle morphs the RATE knob into the DIV (note-division) knob ----
+TEST_CASE ("LFO SYNC swaps the visible RATE<->DIV control (#J1)", "[plugin][smoke][lfo][sync]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);   // full recursive layout so both knobs get real bounds
+
+    auto* rate = findKnob (*ed, ParamID::lfoRate);
+    auto* div  = findKnob (*ed, ParamID::lfoDiv);
+    REQUIRE (rate != nullptr);
+    REQUIRE (div  != nullptr);
+
+    // ParameterAttachment callbacks fire synchronously when driven on the message thread (here).
+
+    // Default: SYNC off -> RATE (free Hz) shows, DIV hidden.
+    p.apvts.getParameter (ParamID::lfoSync)->setValueNotifyingHost (0.0f);
+    REQUIRE (rate->isVisible());
+    REQUIRE_FALSE (div->isVisible());
+
+    // SYNC on -> DIV (note division) shows in the same slot, RATE hidden.
+    p.apvts.getParameter (ParamID::lfoSync)->setValueNotifyingHost (1.0f);
+    REQUIRE (div->isVisible());
+    REQUIRE_FALSE (rate->isVisible());
+
+    // The two occupy the same bounds (a true morph, not two stacked controls).
+    REQUIRE (rate->getBounds() == div->getBounds());
+
+    // Snapshot the LFO section in the synced state for the gate's human review.
+    juce::Component* section = div->getParentComponent();
+    while (section != nullptr && dynamic_cast<LfoSection*> (section) == nullptr)
+        section = section->getParentComponent();
+    REQUIRE (section != nullptr);
+    snapshot (*section, "lfo-sync.png");
+
+    // Back off -> RATE returns (idempotent swap).
+    p.apvts.getParameter (ParamID::lfoSync)->setValueNotifyingHost (0.0f);
+    REQUIRE (rate->isVisible());
+    REQUIRE_FALSE (div->isVisible());
 }
 
 // --- screenshot artifacts for the gate (human eyeball; also proves both paint) ---------

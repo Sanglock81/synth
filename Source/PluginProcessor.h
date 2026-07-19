@@ -250,6 +250,8 @@ public:
     // learn-by-play polls these to capture a trigger / sounding note.
     int           lastAnyNote() const { return lastAnyNoteVal.load (std::memory_order_relaxed); }
     std::uint32_t noteSeq()    const { return lastAnyNoteSeq.load (std::memory_order_relaxed); }
+    // J1: the effective tempo actually driving the transport (host BPM in a DAW, else the knob).
+    float         effectiveBpm() const { return publishedBpm.load (std::memory_order_relaxed); }
     // The trigger note a kit part last fired (pad flicker in the editor).
     int           partLastTrigger (int part) const
     { return (part >= 0 && part < SynthEngine::maxParts) ? partLastTrig[(std::size_t) part].load (std::memory_order_relaxed) : -1; }
@@ -877,6 +879,8 @@ private:
     bool seqWasOn = false;                  // seq enable edge -> flush held notes on disable
     int  prevSeqTarget = 3;                 // seq target-change edge -> release the old part's note (default P4 = kit)
     int  prevBarIdx = -1;                   // shared-transport bar index (#53): re-anchor arp/seq at each bar
+    double transportBeats = 0.0;            // J1: always-advancing beat clock (host ppq when playing, else free-run)
+    std::atomic<float> publishedBpm { 120.0f };   // J1: effective BPM (host or internal) for the UI Tempo readout
     bool chordWasOn = false;               // chord enable edge -> release held tones on disable
     std::atomic<int> seqStepDisp { -1 };   // audio -> UI: sequencer playhead
     int  prevPlayFocus = 0;                // audio-thread mirror of play-focus, for hand-off

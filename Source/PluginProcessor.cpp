@@ -388,9 +388,9 @@ static const juce::StringArray& perPartSoundIds()
         ID::filterType, ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack,
         ID::ampAttack, ID::ampDecay, ID::ampSustain, ID::ampRelease,
         ID::fltAttack, ID::fltDecay, ID::fltSustain, ID::fltRelease, ID::fltEnvToPitch, ID::glideTime,
-        ID::lfoRate, ID::lfoDepth, ID::lfoShape, ID::lfoDest,
-        ID::lfo2Rate, ID::lfo2Depth, ID::lfo2Shape, ID::lfo2Dest,
-        ID::lfo3Rate, ID::lfo3Depth, ID::lfo3Shape, ID::lfo3Dest,
+        ID::lfoRate, ID::lfoDepth, ID::lfoShape, ID::lfoDest, ID::lfoSync, ID::lfoDiv,
+        ID::lfo2Rate, ID::lfo2Depth, ID::lfo2Shape, ID::lfo2Dest, ID::lfo2Sync, ID::lfo2Div,
+        ID::lfo3Rate, ID::lfo3Depth, ID::lfo3Shape, ID::lfo3Dest, ID::lfo3Sync, ID::lfo3Div,
         ID::chorusRate, ID::chorusDepth, ID::chorusMix, ID::fxChorusOn,
         ID::delayTime, ID::delayFeedback, ID::delayMix, ID::delaySpread, ID::fxDelayOn,
         ID::reverbSize, ID::reverbDamp, ID::reverbWidth, ID::reverbMix, ID::fxReverbOn,
@@ -516,9 +516,9 @@ static FXParams fxParamsFrom (const juce::AudioProcessorValueTreeState& src)
 static PartLfos lfosFrom (const juce::AudioProcessorValueTreeState& src)
 {
     namespace ID = ParamID; PartLfos pl;
-    pl.lfo[0] = { rp (src, ID::lfoRate),  rp (src, ID::lfoDepth),  (int) rp (src, ID::lfoShape),  (int) rp (src, ID::lfoDest) };
-    pl.lfo[1] = { rp (src, ID::lfo2Rate), rp (src, ID::lfo2Depth), (int) rp (src, ID::lfo2Shape), (int) rp (src, ID::lfo2Dest) };
-    pl.lfo[2] = { rp (src, ID::lfo3Rate), rp (src, ID::lfo3Depth), (int) rp (src, ID::lfo3Shape), (int) rp (src, ID::lfo3Dest) };
+    pl.lfo[0] = { rp (src, ID::lfoRate),  rp (src, ID::lfoDepth),  (int) rp (src, ID::lfoShape),  (int) rp (src, ID::lfoDest),  rp (src, ID::lfoSync)  > 0.5f, (int) rp (src, ID::lfoDiv) };
+    pl.lfo[1] = { rp (src, ID::lfo2Rate), rp (src, ID::lfo2Depth), (int) rp (src, ID::lfo2Shape), (int) rp (src, ID::lfo2Dest), rp (src, ID::lfo2Sync) > 0.5f, (int) rp (src, ID::lfo2Div) };
+    pl.lfo[2] = { rp (src, ID::lfo3Rate), rp (src, ID::lfo3Depth), (int) rp (src, ID::lfo3Shape), (int) rp (src, ID::lfo3Dest), rp (src, ID::lfo3Sync) > 0.5f, (int) rp (src, ID::lfo3Div) };
     return pl;
 }
 
@@ -1989,9 +1989,9 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // Per-part LFOs (Sub-phase 2). Part 0 (LIVE) = the panel's three LFOs; locked parts'
     // LFOs travel with their bake (read inside beginMasterBlock), so only part 0 here.
     PartLfos live0Lfo;
-    live0Lfo.lfo[0] = { rp (apvts, ID::lfoRate),  rp (apvts, ID::lfoDepth),  (int) rp (apvts, ID::lfoShape),  (int) rp (apvts, ID::lfoDest) };
-    live0Lfo.lfo[1] = { rp (apvts, ID::lfo2Rate), rp (apvts, ID::lfo2Depth), (int) rp (apvts, ID::lfo2Shape), (int) rp (apvts, ID::lfo2Dest) };
-    live0Lfo.lfo[2] = { rp (apvts, ID::lfo3Rate), rp (apvts, ID::lfo3Depth), (int) rp (apvts, ID::lfo3Shape), (int) rp (apvts, ID::lfo3Dest) };
+    live0Lfo.lfo[0] = { rp (apvts, ID::lfoRate),  rp (apvts, ID::lfoDepth),  (int) rp (apvts, ID::lfoShape),  (int) rp (apvts, ID::lfoDest),  rp (apvts, ID::lfoSync)  > 0.5f, (int) rp (apvts, ID::lfoDiv) };
+    live0Lfo.lfo[1] = { rp (apvts, ID::lfo2Rate), rp (apvts, ID::lfo2Depth), (int) rp (apvts, ID::lfo2Shape), (int) rp (apvts, ID::lfo2Dest), rp (apvts, ID::lfo2Sync) > 0.5f, (int) rp (apvts, ID::lfo2Div) };
+    live0Lfo.lfo[2] = { rp (apvts, ID::lfo3Rate), rp (apvts, ID::lfo3Depth), (int) rp (apvts, ID::lfo3Shape), (int) rp (apvts, ID::lfo3Dest), rp (apvts, ID::lfo3Sync) > 0.5f, (int) rp (apvts, ID::lfo3Div) };
 
     // --- chord engine (7B): one played note -> a diatonic chord -------------
     const bool chordOn = rp (apvts, ID::chordEnabled) > 0.5f;
@@ -2013,11 +2013,32 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // Feed QWERTY modifier edges (message thread) into the latest-wins forcer stack.
     applyChordModifiers (qwertyModMask.load (std::memory_order_acquire) | midiModMask);
 
+    // Master tempo (J1): in a DAW, FOLLOW the host — its BPM drives the arp/seq/looper + synced
+    // LFOs, and its play position gives the bar grid the synced LFOs phase-lock to. Standalone (or
+    // a host with no tempo) uses the internal Tempo knob. hostBpm/hostPpq set only when valid.
+    double hostBpm = 0.0, hostPpq = 0.0; bool hostPlaying = false, haveHostPpq = false;
+    if (auto* ph = getPlayHead())
+        if (auto pos = ph->getPosition())
+        {
+            if (auto b = pos->getBpm())          hostBpm = *b;
+            hostPlaying = pos->getIsPlaying();
+            if (auto q = pos->getPpqPosition()) { hostPpq = *q; haveHostPpq = true; }
+        }
+
     // Shared rhythm clock: 16th-note length + swing, common to the arp and sequencer.
-    const double bpm = juce::jmax (20.0f, rp (apvts, ID::tempo));
+    const double bpm = hostBpm >= 20.0 ? hostBpm : (double) juce::jmax (20.0f, rp (apvts, ID::tempo));
     const double sr  = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
     const double samplesPerStep = juce::jmax (1.0, sr * 60.0 / bpm / 4.0);
+    const double samplesPerBeat = samplesPerStep * 4.0;
     const float  swing = rp (apvts, ID::arpSwing);
+    publishedBpm.store ((float) bpm, std::memory_order_relaxed);   // UI: Tempo knob shows the effective BPM
+
+    // Always-advancing beat clock for tempo-synced LFOs: snap to the host's play position when it's
+    // playing (locks LFOs to the project + its loop brace), else free-run at the effective tempo so a
+    // synced LFO oscillates with or without a running transport.
+    if (hostPlaying && haveHostPpq) transportBeats = hostPpq;
+    else                            transportBeats += (double) numSamples / samplesPerBeat;
+    engine.setTransport (transportBeats, samplesPerBeat);
 
     // --- arpeggiator (R3, Group 2 = decoupled from the step grid): a pure arpeggiator of
     //     the held notes, playing every 16th at the gate length. HOLD sustains the chord

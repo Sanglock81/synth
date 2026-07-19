@@ -27,17 +27,32 @@ public:
         phase = 0.0;
     }
 
-    void setRate (double hz)     { phaseInc = hz / sampleRate; }
-    void setShape (Shape s)      { shape = s; }
+    void   setRate (double hz)   { phaseInc = hz / sampleRate; }
+    void   setShape (Shape s)    { shape = s; }
+    double currentPhase() const  { return phase; }        // for freezing on sync-off
 
-    // Advance by `numSamples` and return the current bipolar value [-1, 1].
+    // Advance by `numSamples` and return the current bipolar value [-1, 1] (free-running).
     float advance (int numSamples)
     {
         const double oldPhase = phase;
         phase += phaseInc * numSamples;
         while (phase >= 1.0)
             phase -= 1.0;
+        return valueForWrap (oldPhase);
+    }
 
+    // J1: set the phase ABSOLUTELY (for a tempo-synced, transport-position-derived LFO) and return
+    // its value. S&H latches a new value when the phase wraps past a cycle boundary.
+    float setPhase (double phase01)
+    {
+        const double oldPhase = phase;
+        phase = phase01 - std::floor (phase01);
+        return valueForWrap (oldPhase);
+    }
+
+private:
+    float valueForWrap (double oldPhase)
+    {
         switch (shape)
         {
             case Shape::Sine:     return static_cast<float> (std::sin (phase * 6.283185307179586));
@@ -51,7 +66,6 @@ public:
         return 0.0f;
     }
 
-private:
     Shape  shape = Shape::Triangle;
     double sampleRate = 44100.0;
     double phase = 0.0, phaseInc = 0.0;

@@ -240,6 +240,8 @@ public:
         const char* rateIds[]  { ID::lfoRate,  ID::lfo2Rate,  ID::lfo3Rate  };
         const char* depthIds[] { ID::lfoDepth, ID::lfo2Depth, ID::lfo3Depth };
         const char* shapeIds[] { ID::lfoShape, ID::lfo2Shape, ID::lfo3Shape };
+        const char* syncIds[]  { ID::lfoSync,  ID::lfo2Sync,  ID::lfo3Sync  };
+        const char* divIds[]   { ID::lfoDiv,   ID::lfo2Div,   ID::lfo3Div   };
         const juce::StringArray destLabels { "OFF", "PITCH", "CUTOFF", "PW" };
 
         for (int i = 0; i < 3; ++i)
@@ -247,10 +249,20 @@ public:
             auto& l = lfos[(size_t) i];
             l.dest  = std::make_unique<HSelector> (p.apvts, destIds[i], p.getMidiLearn(), destLabels);
             l.rate  = std::make_unique<RotaryKnob> (p.apvts, rateIds[i],  "RATE",  p.getMidiLearn());
+            l.div   = std::make_unique<RotaryKnob> (p.apvts, divIds[i],   "DIV",   p.getMidiLearn());
             l.depth = std::make_unique<RotaryKnob> (p.apvts, depthIds[i], "DEPTH", p.getMidiLearn());
             l.shape = std::make_unique<ShapeSelector> (p.apvts, shapeIds[i], p.getMidiLearn());
+            l.sync  = std::make_unique<PowerToggle> (p.apvts, syncIds[i], "SYNC");
             addAndMakeVisible (*l.dest);  addAndMakeVisible (*l.rate);
+            addChildComponent (*l.div);   // shown only when SYNC is on (swaps with RATE)
             addAndMakeVisible (*l.depth); addAndMakeVisible (*l.shape);
+            addAndMakeVisible (*l.sync);
+
+            // SYNC toggle morphs the RATE knob (free Hz) <-> DIV knob (note division).
+            auto* syncParam = p.apvts.getParameter (syncIds[i]);
+            l.syncAtt = std::make_unique<juce::ParameterAttachment> (
+                *syncParam, [this, i] (float v) { applySyncMode (i, v > 0.5f); });
+            l.syncAtt->sendInitialUpdate();
         }
     }
 
@@ -267,14 +279,26 @@ public:
         {
             auto c = chrome::subBoxContent (boxes[(size_t) i]);
             auto& l = lfos[(size_t) i];
-            l.dest->setBounds (c.removeFromTop (26)); c.removeFromTop (4);
+            auto top = c.removeFromTop (26); c.removeFromTop (4);
+            l.sync->setBounds (top.removeFromRight (46)); top.removeFromRight (5);
+            l.dest->setBounds (top);
             l.shape->setBounds (c.removeFromRight (40)); c.removeFromRight (5);
-            l.rate->setBounds (c.removeFromLeft (c.getWidth() / 2).reduced (2, 0));
+            auto rateSlot = c.removeFromLeft (c.getWidth() / 2).reduced (2, 0);
+            l.rate->setBounds (rateSlot);           // RATE and DIV share one slot; SYNC picks which
+            l.div->setBounds (rateSlot);
             l.depth->setBounds (c.reduced (2, 0));
         }
     }
 
 private:
+    // SYNC on -> show DIV (note division), hide RATE (free Hz); off -> the reverse.
+    void applySyncMode (int i, bool synced)
+    {
+        auto& l = lfos[(size_t) i];
+        if (l.rate) l.rate->setVisible (! synced);
+        if (l.div)  l.div->setVisible (synced);
+    }
+
     std::array<juce::Rectangle<int>, 3> boxRects() const
     {
         auto s = chrome::sectionContent (getLocalBounds());
@@ -287,8 +311,10 @@ private:
     struct Lfo
     {
         std::unique_ptr<HSelector> dest;
-        std::unique_ptr<RotaryKnob> rate, depth;
+        std::unique_ptr<RotaryKnob> rate, div, depth;
         std::unique_ptr<ShapeSelector> shape;
+        std::unique_ptr<PowerToggle> sync;
+        std::unique_ptr<juce::ParameterAttachment> syncAtt;
     };
     std::array<Lfo, 3> lfos;
 

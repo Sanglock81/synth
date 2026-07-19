@@ -23,7 +23,13 @@ a general-purpose synth that runs in any VST3 host or standalone.
   steal. The mod env drives the filter *and* **pitch** (`fltenv_to_pitch`, ±48 st) —
   the basis of the **drum** presets (808/punchy kicks, snare, hats, tom).
 - **Three LFOs per part** (tri/sine/square/S&H) → pitch / cutoff / PW, plus pitch-bend,
-  mod-wheel vibrato, and sustain-pedal handling.
+  mod-wheel vibrato, and sustain-pedal handling. Each LFO has a **SYNC** toggle: its RATE knob
+  morphs into a stepped **note-division** knob (4 bar…1/32, plus triplet + dotted), and the LFO
+  **phase-locks to the beat** with no clicks — bar-aligned even for triplet/dotted divisions.
+  Un-syncing returns the LFO to the RATE knob's setting (the knob always shows the live rate).
+- **Master tempo linking.** In a DAW the synth **follows the host tempo and transport** — the
+  arp, sequencer, looper, and synced LFOs all lock to the project BPM + play position; standalone
+  uses the internal **Tempo** knob.
 - **Reorderable stereo FX** (per part): chorus, ping-pong delay, Freeverb-style reverb,
   mid/side width — drag to reorder, click-free crossfade — followed by a fixed **5-band
   parametric EQ at the end of each part's chain**. The EQ is a mixing-desk section that
