@@ -355,6 +355,7 @@ static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& a
     p.resonance    = rp (apvts, ID::filterReso);
     p.filterEnvAmt = rp (apvts, ID::filterEnvAmt);
     p.keytrack     = rp (apvts, ID::filterKeytrack);
+    p.drive        = rp (apvts, ID::filterDrive);
 
     p.ampA = rp (apvts, ID::ampAttack);
     p.ampD = rp (apvts, ID::ampDecay);
@@ -391,7 +392,7 @@ static const juce::StringArray& perPartSoundIds()
         ID::osc1Phase, ID::osc2Phase, ID::osc3Phase, ID::analog,   // Tier 1 phase policy + analog drift
         ID::oscMix, ID::noiseLevel, ID::osc1Level, ID::osc2Level, ID::osc3Level, ID::osc1On, ID::osc2On, ID::osc3On,
         ID::velToAmp, ID::velToCutoff,
-        ID::filterType, ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack,
+        ID::filterType, ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack, ID::filterDrive,
         ID::ampAttack, ID::ampDecay, ID::ampSustain, ID::ampRelease,
         ID::fltAttack, ID::fltDecay, ID::fltSustain, ID::fltRelease, ID::fltEnvToPitch, ID::glideTime,
         ID::lfoRate, ID::lfoDepth, ID::lfoShape, ID::lfoDest, ID::lfoSync, ID::lfoDiv,
@@ -1719,7 +1720,7 @@ void VASynthProcessor::applyFxOrderProperty()
 juce::StringArray VASynthProcessor::macroRoutableIDs()
 {
     namespace ID = ParamID;
-    return { ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack,
+    return { ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack, ID::filterDrive,
              ID::osc1Detune, ID::osc2Detune, ID::osc1PW, ID::osc2PW,
              ID::chorusMix, ID::chorusRate, ID::delayMix, ID::delayFeedback,
              ID::reverbMix, ID::reverbSize, ID::stereoWidth,

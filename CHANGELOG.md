@@ -9,6 +9,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Filter DRIVE (Musicality Pass, Tier 2 — the big one).** The state-variable filter gains an
+  in-loop **tanh saturation**: a new **DRIVE** knob (per part) soft-clips the signal entering the
+  filter loop and bounds the resonance-feedback path — the way the classic analog filters get their
+  growl (saturation *inside* the loop, not a waveshaper in front). Clean playing is untouched:
+  **drive 0 takes a bit-exact fast path that is literally the old linear code** (goldens hold, and
+  you pay for the tanh only when driven). The nonlinearity uses a fast rational tanh (pinned within
+  ~0.024 of `std::tanh` by the DSP suite); driven output is makeup-matched to stay within ~2 dB of
+  clean across the range, and the drive amount is **smoothed** so knob/automation/macro moves don't
+  click. DRIVE is macro-routable. (Next Tier-2 increments: resonance to self-oscillation + loudness
+  compensation, then 2× oversampling for the driven path.)
 - **Analog life for the oscillators (Musicality Pass, Tier 1).** Each oscillator gains a
   **start-phase policy** — **RESET** (today's bit-identical alignment), **RANDOM** (a fresh phase
   per note, so detuned stacks and chords bloom differently every strike), or **FREE** (the

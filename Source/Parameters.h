@@ -63,6 +63,7 @@ namespace ParamID
     inline constexpr auto filterReso    = "filter_reso";
     inline constexpr auto filterEnvAmt  = "filter_env_amt";// bipolar, semitone-ish sweep
     inline constexpr auto filterKeytrack= "filter_keytrack";
+    inline constexpr auto filterDrive   = "filter_drive";  // Tier 2: in-loop saturation (0 = clean fast path)
 
     // Envelopes
     inline constexpr auto ampAttack   = "amp_attack";
@@ -280,6 +281,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::filterReso, 1},   "Resonance", juce::NormalisableRange<float>(0.0f, 1.0f), 0.1f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::filterEnvAmt, 1}, "Filter Env Amt", juce::NormalisableRange<float>(-1.0f, 1.0f), 0.3f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::filterKeytrack, 1},"Keytrack", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::filterDrive, 1},  "Filter Drive", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
 
     // --- Envelopes ----------------------------------------------------------
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::ampAttack, 1},  "Amp Attack",  timeRange, 0.005f, juce::AudioParameterFloatAttributes().withLabel ("s")));

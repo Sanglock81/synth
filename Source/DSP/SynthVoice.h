@@ -52,6 +52,7 @@ struct VoiceParams
     float  cutoffHz = 2000.0f, resonance = 0.1f;
     float  filterEnvAmt = 0.3f;                // -1..1
     float  keytrack = 0.0f;                    // 0..1
+    float  drive    = 0.0f;                    // Tier 2: in-loop filter saturation (0 = clean/bit-exact)
 
     // envelopes
     float  ampA = 0.005f, ampD = 0.1f, ampS = 0.8f, ampR = 0.15f;
@@ -284,6 +285,7 @@ private:
         osc3.setPulseWidth (std::clamp (p.osc3PW + p.pwMod + extraPwMod + dpw, 0.05f, 0.95f));
 
         filter.setType (static_cast<SVFilter::Type> (p.filterType));
+        filter.setDrive (p.drive);                     // Tier 2: 0 -> bit-exact linear fast path
         ampEnv.setParameters (p.ampA, p.ampD, p.ampS, p.ampR);
         fltEnv.setParameters (p.fltA, p.fltD, p.fltS, p.fltR);
     }

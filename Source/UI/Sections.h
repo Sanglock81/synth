@@ -122,6 +122,7 @@ public:
         struct KD { const char* pid; const char* name; };
         const KD kd[] {
             { ID::filterCutoff,   "CUTOFF"  }, { ID::filterReso, "RESO" },
+            { ID::filterDrive,    "DRIVE"   },
             { ID::filterEnvAmt,   "ENV AMT" }, { ID::filterKeytrack, "KEYTRK" },
             { ID::velToCutoff,    "VEL>CUT" } };
         for (auto& d : kd)

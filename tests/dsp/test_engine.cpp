@@ -232,6 +232,29 @@ TEST_CASE ("percussive retrigger (808 kick, two in a row) does not pop", "[engin
     REQUIRE (atRetrig <= natural * 1.5f);               // no pop: within the onset's own ceiling
 }
 
+TEST_CASE ("filter drive automation is click-free (smoothed)", "[engine][drive][click]")
+{
+    // Jumping the DRIVE param 0 -> 1 in one block (a macro/automation/preset move) must not
+    // click: the engine smooths drive like cutoff/resonance. A raw jump in the filter alone
+    // steps ~4x the signal's own delta (measured); the smoothing spreads it over ~8 ms.
+    SynthEngine e; e.prepare (kSR);
+    VoiceParams clean = sineParams();
+    clean.cutoffHz = 1500.0f; clean.resonance = 0.4f; clean.drive = 0.0f;
+    VoiceParams driven = clean; driven.drive = 1.0f;
+
+    const int half = int (kSR * 0.5);
+    std::vector<float> out ((std::size_t) half * 2, 0.0f);
+    e.noteOn (60, 0.8f);
+    e.render (out.data(),            half, clean,  2.0f, 0, 0.0f, 0);   // drive target 0
+    e.render (out.data() + half,     half, driven, 2.0f, 0, 0.0f, 0);   // target -> 1 (smoothed ramp)
+
+    const float pre = maxDeltaRange (out, half - 4096, half - 64);
+    const float at  = maxDeltaRange (out, half - 8,    half + 2048);    // spans the ramp
+    INFO ("pre=" << pre << " at-drive-jump=" << at);
+    REQUIRE (tu::allFinite (out));
+    REQUIRE (at <= pre + 0.02f);                                        // gentle: no click at the jump
+}
+
 TEST_CASE ("locked part renders with its baked params, not the live part", "[engine][7c][parts]")
 {
     VoiceParams live = sineParams();                 // part 0: sine at the note
