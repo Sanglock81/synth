@@ -497,7 +497,7 @@ void VASynthProcessor::engageSceneFlip (int from, int to, bool chordOn)
 
     for (int L = 0; L < SynthEngine::maxParts; ++L)
     {
-        if (loopRecording[(std::size_t) L]) continue;    // in-flight recording carries into scene `to`
+        if (loopRecording[(std::size_t) L]) continue;    // defensive: a switch never engages mid-record
         S.lanes[(std::size_t) L] = looper.laneContent (L);          // save outgoing clip
         looper.setLaneContent (L, D.lanes[(std::size_t) L]);        // load incoming clip
         flushLoopNotesForPart (L, chordOn);                         // release anything the old clip held
@@ -508,6 +508,12 @@ void VASynthProcessor::engageSceneFlip (int from, int to, bool chordOn)
     // transport: snapshot outgoing live params, request the incoming ones be restored (message thread)
     captureLiveTransportInto (S);
     S.has = liveHasContent();
+
+    // J3 feedback: a newly-activated scene starts from the BEGINNING — rewind the loop transport to
+    // its downbeat and re-anchor the drum sequencer, so nothing resumes mid-phrase.
+    looper.rewind();
+    sceneLastBar = 0; sceneClockPrimed = false;   // re-prime the launch-quantum bar tracker at the new origin
+    if (seq.enabled()) seq.realign();
 
     activeSceneAudio = to;
     activeSceneDisp.store (to, std::memory_order_relaxed);
@@ -2168,15 +2174,22 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     //     (before the seq config + looper block below, so the swapped pattern/clips take effect now).
     serviceSceneCommands (chordOn);
     {
-        const int  bar    = (int) std::floor (transportBeats / 4.0);
+        // Bars are counted on the LOOP clock (which rewinds to 0 on each scene switch), so a
+        // quantum lands on the new scene's own grid rather than the free-running song bar.
+        const double barLen = juce::jmax (1.0, samplesPerBeat * 4.0);
+        const int  bar    = (int) (looper.position() / barLen);
         const bool newBar = sceneClockPrimed && bar != sceneLastBar;   // first block primes (no false boundary)
         sceneLastBar = bar; sceneClockPrimed = true;
         const int pend = pendingScene.load (std::memory_order_acquire);
-        if (pend >= 0 && pend != activeSceneAudio)
+        // A scene never switches while any part is still recording — a single tap waits until ALL
+        // parts (the drum pattern AND every loop, including an in-flight take) have finished.
+        bool anyRecording = false;
+        for (int L = 0; L < SynthEngine::maxParts; ++L) anyRecording |= loopRecording[(std::size_t) L];
+        if (pend >= 0 && pend != activeSceneAudio && ! anyRecording)
         {
-            const int q = (int) rp (apvts, ID::sceneQuant);   // 0..3 = 1/2/4/8 bar, 4 = Loop end
+            const int q = (int) rp (apvts, ID::sceneQuant);   // 0..3 = 1/2/4/8 bar, 4 = Loop end (default)
             bool boundary = false;
-            if (q >= 4)   // Loop end: engage when the longest PLAYING lane hits its own downbeat
+            if (q >= 4)   // Loop end: wait for the LONGEST playing loop to reach its downbeat
             {
                 int longest = -1, longestLen = 0;
                 for (int L = 0; L < SynthEngine::maxParts; ++L)

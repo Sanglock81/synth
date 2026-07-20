@@ -330,11 +330,13 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   `scenes[active]`; the other 7 slots hold snapshots. No store gesture — edits accumulate in the
   active scene. `SceneSlot` = {4 looper lanes, seq cells/vel/notes/mutes, per-lane transport}.
 - **Launch:** `launchScene(i)` arms `pendingScene`; `processBlock` engages it at the `scene_quant`
-  boundary — 1/2/4/8 bar (off the J1 `transportBeats` bar clock, with a priming flag so the first
-  block isn't a false boundary) or **Loop end** (the longest playing lane's wrap). Flip snapshots
-  live→outgoing, loads incoming→live, **skipping recording lanes** so an in-flight take completes
-  into the new scene (the edge rule), and flushes held loop notes (anti-click). Re-tapping a pending
-  or the active scene cancels.
+  boundary — 1/2/4/8 bar or **Loop end (default)**. Bars count on the LOOP clock (`looper.position()`,
+  which rewinds per switch) with a priming flag so the first block isn't a false boundary; Loop-end
+  waits for the longest playing lane's wrap. **A switch never engages while any lane is recording** —
+  a single tap waits for ALL parts (drum pattern + every loop + any in-flight take) to finish. On
+  engage the flip loads the incoming clips + pattern, flushes held loop notes (anti-click), and
+  **`looper.rewind()`s + re-anchors the sequencer so the new scene starts from its downbeat** (per
+  hands-on feedback — no resuming mid-phrase). Re-tapping a pending or the active scene cancels.
 - **Transport params** restore via `juce::AsyncUpdater` (setValueNotifyingHost off the audio
   thread); clips + pattern flip sample-accurately, params settle one message-cycle later.
 - **Commands:** long-press → *Copy active scene here* / *Clear scene*, posted as atomics and run on

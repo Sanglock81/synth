@@ -435,7 +435,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         params.push_back(std::make_unique<Pc>(juce::ParameterID{bb, 1}, juce::String (bb), loopBarChoices, 0));
     // J3: scene launch quantum — when a tapped scene actually switches (aligned to the master bar clock).
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::sceneQuant, 1}, "Scene Launch",
-                                          juce::StringArray{ "1 bar", "2 bar", "4 bar", "8 bar", "Loop end" }, 0));
+                                          juce::StringArray{ "1 bar", "2 bar", "4 bar", "8 bar", "Loop end" }, 4));   // default: wait for the longest loop
     for (auto* q : { ID::loopQuant, ID::loopQuant2, ID::loopQuant3, ID::loopQuant4 })   // 1/32 quantize, default ON
         params.push_back(std::make_unique<Pb>(juce::ParameterID{q, 1}, juce::String (q), true));
 

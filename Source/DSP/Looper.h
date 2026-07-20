@@ -64,6 +64,10 @@ public:
     bool playing   (int part) const { return part >= 0 && part < kParts && playing_[(std::size_t) part]; }
     bool anyPlaying() const { for (bool b : playing_) if (b) return true; return false; }
 
+    // J3: restart every lane from its downbeat (scene switch) — position 0, all events armed so a
+    // freshly-activated scene plays from the top rather than resuming mid-loop.
+    void rewind() { loopPos = 0; for (int p = 0; p < kParts; ++p) armLane (p); }
+
     void clear (int part) { if (part >= 0 && part < kParts) parts[(std::size_t) part].count = 0; }   // wipe ONE lane
     void clearAll() { for (auto& p : parts) p.count = 0; loopPos = 0; }
     void reset() { clearAll(); for (int i = 0; i < kParts; ++i) { recording_[(std::size_t) i] = false; playing_[(std::size_t) i] = false; } }

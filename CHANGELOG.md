@@ -12,13 +12,15 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
 - **Scenes (J3).** Eight arrangement snapshots — **loop clips + drum pattern + per-lane
   transport** — as a row of numbered buttons in the looper section. The **active scene is the live
   state**: recordings and pattern edits write into it automatically (no "store" step). **Tap** a
-  scene to launch it; the switch is **quantized** to a selectable boundary — **1 / 2 / 4 / 8 bar**
-  or **Loop end** (waits for the longest playing loop to finish) — and lands phase-locked with no
-  click (held loop notes are flushed at the flip). **Long-press** a scene for a menu: *Copy active
-  scene here* (clone) or *Clear scene*. Launching an empty scene is a valid blank canvas. A
-  recording that crosses a scene switch completes into the new scene. Buttons show empty (outline),
-  filled (has content), pending (blinking), and active (solid). Audio loops aren't captured into
-  scenes in v1 (memory); scene content is session-runtime (exported via MIDI/WAV as before).
+  scene to launch it; the switch is **quantized** and, by default (**Loop end**), waits for the
+  **longest loop in the current scene to finish** so a single tap never cuts a phrase short — and it
+  won't switch until any in-progress **recording** has completed too. A newly-activated scene
+  **starts from its beginning** (the loops rewind to the downbeat rather than resuming mid-phrase),
+  and the flip is click-free (held loop notes are flushed). A shorter quantum (**1 / 2 / 4 / 8 bar**)
+  is selectable if you want faster switches. **Long-press** a scene for a menu: *Copy active scene
+  here* (clone) or *Clear scene*. Launching an empty scene is a valid blank canvas. Buttons show
+  empty (outline), filled (has content), pending (blinking), and active (solid). Audio loops aren't
+  captured into scenes in v1 (memory); scene content is session-runtime (exported via MIDI/WAV).
 - **Hover help tooltips.** Resting the mouse on any control for ~1 s now shows its full name
   (e.g. hovering the looper **R** button shows "Loop Rec", a knob shows "Filter Cutoff"). The
   label comes from the control's parameter, so every knob, selector, and toggle is covered.

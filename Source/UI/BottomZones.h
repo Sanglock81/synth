@@ -449,14 +449,17 @@ public:
     void resized() override
     {
         auto c = chrome::sectionContent (getLocalBounds());
-        // Top bar: [SCENE 1..8]  [launch quantum]  ......  [MIDI][WAV].
-        auto top = c.removeFromTop (26); c.removeFromTop (5);
-        expoWav.setBounds (top.removeFromRight (46).reduced (2, 2)); top.removeFromRight (3);
-        expo.setBounds    (top.removeFromRight (46).reduced (2, 2));
+        // Top bar: [SCENE 1..8]  [launch quantum]  ......  [MIDI][WAV]. Taller + wider than the lane
+        // rows so the scenes read as the primary control (the rows below give up ~10% of their height).
+        auto top = c.removeFromTop (42); c.removeFromTop (5);
+        auto exports = top.removeFromRight (98); exports.removeFromTop (exports.getHeight() / 2 - 12);
+        expoWav.setBounds (exports.removeFromRight (46).reduced (2, 2)); exports.removeFromRight (3);
+        expo.setBounds    (exports.removeFromRight (46).reduced (2, 2));
         for (int i = 0; i < VASynthProcessor::kScenes; ++i)
-            sceneBtn[(std::size_t) i]->setBounds (top.removeFromLeft (26).reduced (1, 1));
-        top.removeFromLeft (8);
-        sceneQuant->setBounds (top.removeFromLeft (juce::jmin (155, juce::jmax (60, top.getWidth()))).reduced (2, 2));
+            sceneBtn[(std::size_t) i]->setBounds (top.removeFromLeft (40).reduced (2, 1));
+        top.removeFromLeft (10);
+        auto q = top; q.removeFromTop (q.getHeight() / 2 - 13);
+        sceneQuant->setBounds (q.removeFromLeft (juce::jmin (155, juce::jmax (60, q.getWidth()))).reduced (2, 2));
 
         // Four lane rows: [P# label] [R][P] [MIDI/AUD] [BARS] [Q] [x] [content strip].
         const int rh = juce::jmax (22, (c.getHeight() - (kLanes - 1) * 4) / kLanes);

@@ -124,40 +124,52 @@ TEST_CASE ("scene: re-tapping a pending scene cancels the switch", "[plugin][sce
     REQUIRE (p.activeScene() == 0);                  // never switched
 }
 
-TEST_CASE ("scene edge rule: a recording crossing the flip lands in the NEW scene", "[plugin][scene][j3][edge]")
+TEST_CASE ("scene: a switch waits for an in-progress recording to finish (all parts complete)", "[plugin][scene][j3][edge]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
     setVal (p, ParamID::tempo, 240.0f);              // bar = 48000/128 = 375 blocks; keeps the take short
-    setVal (p, ParamID::sceneQuant, 0.0f);           // 1-bar launch quantum
+    setVal (p, ParamID::sceneQuant, 0.0f);           // even at the 1-bar quantum, a take defers the switch
     p.apvts.getParameter (ParamID::loopBars)->setValueNotifyingHost (
-        p.apvts.getParameter (ParamID::loopBars)->convertTo0to1 (1.0f));   // lane 0 = choice index 1 == 2 bars
+        p.apvts.getParameter (ParamID::loopBars)->convertTo0to1 (1.0f));   // lane 0 = 2 bars
     Driver d (p); d.run (10);
 
-    // Arm a 2-bar recording on lane 0 and wait for the one-shot to actually ENGAGE (at the lane's
-    // 2-bar downbeat). loopRecDisplayState: 0 idle, 1 armed, 2 recording.
+    // Roll a 2-bar take on lane 0.
     set01 (p, ParamID::loopRec, 1.0f);
     int guard = 0;
     while (p.loopRecDisplayState (0) != 2 && guard++ < 4000) d.run (1);
-    REQUIRE (p.loopRecDisplayState (0) == 2);         // take is rolling
-    p.routeNoteOn (60, 0.9f, 0); d.run (4); p.routeNoteOff (60, 0);   // a note early in the take
-    INFO ("after note: events=" << p.loopLaneEventCount (0) << " recState=" << p.loopRecDisplayState (0));
-    REQUIRE (p.loopLaneEventCount (0) > 0);            // the note was captured into the take
+    REQUIRE (p.loopRecDisplayState (0) == 2);
+    p.routeNoteOn (60, 0.9f, 0); d.run (4); p.routeNoteOff (60, 0);
+    REQUIRE (p.loopLaneEventCount (0) > 0);
 
-    // Launch scene 1: with a 1-bar quantum inside a 2-bar take, the flip lands MID-take.
+    // Launch scene 1 mid-take: the switch must NOT happen while the take is still recording.
     p.launchScene (1);
-    guard = 0;
-    while (p.activeScene() != 1 && guard++ < 4000) d.run (1);
-    REQUIRE (p.activeScene() == 1);                   // switched during the recording
-    INFO ("after flip: events=" << p.loopLaneEventCount (0) << " recState=" << p.loopRecDisplayState (0));
-
-    // Let the take finish (one-shot auto-stops at the 2-bar boundary, after the flip).
-    guard = 0;
-    while (p.loopRecDisplayState (0) == 2 && guard++ < 4000) d.run (1);
-    d.run (5);
-    INFO ("after complete: events=" << p.loopLaneEventCount (0));
-    // The completed take is in the NEW scene (1), and did NOT split back into scene 0.
-    REQUIRE (p.loopLaneHasContent (0));
-    p.launchScene (0); d.run (2 * kBlocksPerBar);     // (kBlocksPerBar computed @120; ample at 240)
+    d.run (200);                                      // still recording -> no switch yet
+    REQUIRE (p.loopRecDisplayState (0) == 2);
     REQUIRE (p.activeScene() == 0);
-    REQUIRE_FALSE (p.loopLaneHasContent (0));          // scene 0 never received the crossing take
+
+    // Once the take finishes (in scene 0), the deferred switch engages.
+    guard = 0;
+    while (p.activeScene() != 1 && guard++ < 6000) d.run (1);
+    REQUIRE (p.activeScene() == 1);
+    // The take stayed in the scene it was recorded in (0), not the one we switched to.
+    p.launchScene (0); d.run (3 * kBlocksPerBar);
+    REQUIRE (p.activeScene() == 0);
+    REQUIRE (p.loopLaneHasContent (0));
+}
+
+TEST_CASE ("scene: a newly-activated scene starts from the beginning (loop rewinds)", "[plugin][scene][j3]")
+{
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    setVal (p, ParamID::tempo, 120.0f);
+    setVal (p, ParamID::sceneQuant, 0.0f);           // 1-bar quantum for a deterministic engage
+    Driver d (p);
+    d.run (300);                                      // advance well into a bar so the phase is non-zero
+    REQUIRE (p.loopPlayhead (0) > 0.1f);              // mid-loop before the switch
+
+    p.launchScene (1);
+    int guard = 0;
+    while (p.activeScene() != 1 && guard++ < 2000) d.run (1);
+    REQUIRE (p.activeScene() == 1);
+    d.run (1);
+    REQUIRE (p.loopPlayhead (0) < 0.02f);            // the new scene begins at its downbeat, not mid-loop
 }
