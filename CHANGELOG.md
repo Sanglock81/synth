@@ -142,6 +142,15 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
 - **808 / Punchy kick voicing:** amp attack softened 1 ms → 2 ms for a defined transient.
 
 ### Fixed / investigated
+- **808 kick "double-hit pop" (two kicks in a row).** Re-striking a percussive sound while its
+  tail still sounded re-attacked the voice **in place**, which clicked: the amp re-attack corner
+  **and** the mod-envelope pitch restart (Kick 808 sweeps pitch **+22 st**) both landed as slope
+  discontinuities against the live tail — the worst inter-sample step of the whole render, ~2.6×
+  the kick's own onset. A percussive voice (amp env with no sustain) now **re-strikes from silence**
+  instead: the old tail gets a quick fade and the new hit starts on a fresh voice (phase 0,
+  envelopes from 0), so both corners vanish and the brief overlap is smooth. Sustained sounds are
+  unchanged (they still retrigger in place, which is click-free for them). Regression-tested in the
+  DSP suite (the re-struck step must stay within the onset's own ceiling).
 - **A matched controller profile is now authoritative.** Plugging in a Launchkey re-asserts
   its 8 pots (CC 21–28) onto the 8 macros on connect, overriding any stale/learned binding an
   old session left on those CCs — so the pots always drive the macros with no manual step. The

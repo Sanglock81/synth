@@ -155,10 +155,26 @@ public:
         const auto& pp = paramsFor (part, soundSlot);
         const int pm1 = pp.osc1Phase, pm2 = pp.osc2Phase, pm3 = pp.osc3Phase;
 
-        // Reuse a voice already playing this (note, part) — retrigger.
+        // Reuse a voice already playing this (note, part) — retrigger in place (keeps
+        // oscillator/filter state; the amp env re-attacks from its current level).
+        //
+        // EXCEPT for a PERCUSSIVE sound — an amp env with no sustain, i.e. a drum. There,
+        // re-attacking in place is an audible "double-hit pop": the amp re-attack corner
+        // AND the mod-env pitch restart (e.g. Kick 808's +22 st sweep) both land as slope
+        // discontinuities against the still-sounding tail. Instead, fade the old tail with
+        // a quick release (~4 ms) and let the new hit start from SILENCE on a fresh voice
+        // below (phase 0, envelopes from 0) — a clean, drum-machine-style re-strike whose
+        // brief overlap with the fading tail is smooth. All matching tails are faded so a
+        // fast roll can't pile up voices.
+        const bool percussive = pp.ampS < 0.02f;
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
             if (voices[i].isActive() && voices[i].getNote() == note && voices[i].getPart() == part)
-                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3); return; }
+            {
+                sustained[i] = false;
+                if (percussive) { voices[i].steal(); continue; }   // fade tail, fall through to a fresh voice
+                voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3);
+                return;
+            }
 
         // Otherwise find a free voice...
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)

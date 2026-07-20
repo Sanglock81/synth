@@ -53,6 +53,22 @@ namespace
         p.ampA = 0.002f; p.ampD = 0.05f; p.ampS = 0.9f; p.ampR = 0.1f;
         return p;
     }
+
+    // The factory "Kick 808" sound: a sine dropped an octave, a fast mod-env sweeping
+    // pitch up +22 st, and a percussive amp env (NO sustain). This is the sound whose
+    // in-place retrigger produced the "double-hit pop".
+    VoiceParams kick808Params()
+    {
+        VoiceParams p;
+        p.osc1Wave = 3; p.osc1Octave = -1.0f;                                  // sine, -1 oct
+        p.osc2Level = 0.0f; p.osc3Level = 0.0f; p.noiseLevel = 0.0f; p.osc1Level = 0.8f;
+        p.filterType = 0; p.cutoffHz = 600.0f; p.resonance = 0.0f; p.filterEnvAmt = 0.0f;
+        p.fltEnvToPitch = 22.0f;
+        p.fltA = 0.001f; p.fltD = 0.055f; p.fltS = 0.0f; p.fltR = 0.05f;
+        p.ampA = 0.002f; p.ampD = 0.38f; p.ampS = 0.0f; p.ampR = 0.1f;         // percussive
+        p.velToAmp = 0.4f;
+        return p;
+    }
 }
 
 TEST_CASE ("engine render is deterministic (bit-exact across two runs)", "[engine][determinism]")
@@ -184,6 +200,36 @@ TEST_CASE ("mod env -> pitch: +12 st is an octave, decaying to note pitch", "[en
         REQUIRE (tu::zeroCrossHz (out, int (kSR * 0.02), int (kSR * 0.4), kSR)
                  == Catch::Approx (440.0).margin (6.0));
     }
+}
+
+TEST_CASE ("percussive retrigger (808 kick, two in a row) does not pop", "[engine][retrigger][drums]")
+{
+    // A drum re-struck while its tail still sounds must NOT introduce a step meaningfully
+    // larger than the sound's own onset transient. In-place re-attack used to: the amp
+    // re-attack corner + the mod-env pitch restart both landed against the live tail
+    // (max inter-sample step ~2.6x the natural onset). The percussive re-strike path
+    // (fade the old tail, start the new hit from silence) removes it.
+    VoiceParams p = kick808Params();
+    const int reAt = int (kSR * 0.060);                 // second kick at 60 ms — tail still up
+
+    // Reference: the natural onset transient of one clean hit (no retrigger).
+    SynthEngine ref; ref.prepare (kSR);
+    auto single = renderScript (ref, p, int (kSR * 0.30), {
+        { 0, [](SynthEngine& en){ en.noteOn (36, 1.0f); } },
+    });
+    const float natural = maxDeltaRange (single, 1, int (single.size()));
+
+    // Two kicks in a row on the same note.
+    SynthEngine e; e.prepare (kSR);
+    auto out = renderScript (e, p, int (kSR * 0.30), {
+        { 0,    [](SynthEngine& en){ en.noteOn (36, 1.0f); } },
+        { reAt, [](SynthEngine& en){ en.noteOn (36, 1.0f); } },
+    });
+    const float atRetrig = maxDeltaRange (out, reAt - 8, reAt + 512);
+
+    INFO ("natural onset step=" << natural << "  at-retrigger step=" << atRetrig);
+    REQUIRE (tu::allFinite (out));
+    REQUIRE (atRetrig <= natural * 1.5f);               // no pop: within the onset's own ceiling
 }
 
 TEST_CASE ("locked part renders with its baked params, not the live part", "[engine][7c][parts]")
