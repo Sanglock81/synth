@@ -349,9 +349,26 @@ focus loss-regain" — for BOTH QWERTY and MIDI controllers (user clarified: any
   under a playing loop, ~0.12 vs the 0.35 ceiling), `plugin/test_ui_smoke` (tap arms pending +
   screenshot). Audio loops excluded from scenes in v1 (RAM); scene content is session-runtime.
 
-### Committed follow-on — MIDI clock OUT (the synth as clock MASTER)
+### Follow-on — MIDI clock OUT (the synth as clock MASTER) — DONE (task #85)
 
-**Not part of J1 (which is host-*follow*), tracked as its own item (task #85).** Transmit MIDI
-clock (`0xF8` @ 24 ppqn + Start/Stop/Continue) from the internal transport out to external gear
-(the Aeros looper, Chase Bliss pedals) so they lock to the synth's tempo. Standing commitment —
-to be built after J1, from the same `transportBeats`/`effectiveBpm` clock this phase established.
+Transmit **24-ppq MIDI clock + start/stop** from the transport (`transportBeats`/`samplesPerBeat`)
+to external gear (Aeros, Chase Bliss) so they lock to the synth. **Standalone** sends the internal
+tempo; in a **DAW** it relays the host tempo + play state (`producesMidi() = true`; clock rides the
+plugin's MIDI out). `MidiClockGenerator` (JUCE-free) places ticks at sample-accurate offsets
+(absolute-sample rounding) — **jitter ≤ 1 sample**; a transport jump re-aligns rather than bursting.
+The instrument's MIDI OUT carries only the clock (input notes are never echoed). Standalone opens a
+selectable `juce::MidiOutput` (`VASynthClockOutput`, hot-plug + persisted); the **OUTPUTS** dialog
+(top bar) has the enable toggle + device picker. Tests: `dsp/test_midi_clock` (spacing/jitter,
+start/stop, jump), `plugin/test_clock_out` (standalone master + DAW relay + no note echo),
+`plugin/test_ui_smoke` (OUTPUTS toggle).
+
+### J3 addendum — per-scene AUDIO loops (hands-on fix)
+
+Scenes now also isolate **audio** loop recordings (the earlier v1 exclusion was hit in practice).
+Kept as one live ring per lane (the record target); on a scene switch the outgoing scene's recorded
+region is snapshotted into a heap buffer and the incoming scene's audio recalled — **lazy + compact**
+(memory scales with what was recorded, capped at 512 MB with a "scene memory full" toast). All heap
+work runs on the message thread (`AsyncUpdater`); a per-lane guard makes the audio thread skip a ring
+mid-overwrite (brief silence, no xrun). `SceneSlot` stays heap-free so the audio-thread reset is
+RT-safe. Tests: `dsp/test_audioloop` (snapshot/reload round-trip), `plugin/test_scenes` (audio
+isolation across switches).

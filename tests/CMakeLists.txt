@@ -44,6 +44,7 @@ add_executable(dsp_tests
     dsp/test_eq.cpp
     dsp/test_sample_voice.cpp
     dsp/test_lfo_sync.cpp
+    dsp/test_midi_clock.cpp
     dsp/test_arp.cpp
     dsp/test_stepseq.cpp
     dsp/test_clock_align.cpp
@@ -127,6 +128,7 @@ add_executable(plugin_tests
     plugin/test_looper_focus.cpp
     plugin/test_looper_lengths.cpp
     plugin/test_scenes.cpp
+    plugin/test_clock_out.cpp
     plugin/test_perpart_mono.cpp
     plugin/test_click_torture.cpp
     plugin/test_editfocus.cpp

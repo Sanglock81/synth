@@ -17,6 +17,7 @@
 #include "UI/Widgets.h"
 #include "UI/Sections.h"
 #include "UI/BottomZones.h"
+#include "UI/OutputsDialog.h"
 #include "UI/ModMatrixPanel.h"
 #include "ModDestRegistry.h"
 #include "VersionInfo.h"
@@ -359,6 +360,25 @@ TEST_CASE ("J3: tapping a scene button arms it (pending); the row renders (#J3)"
     REQUIRE (panel != nullptr);
     panel->repaint();
     snapshot (*panel, "scenes.png");
+}
+
+// --- #85: the OUTPUTS dialog's enable toggle is bound to the clock_out param ------------
+TEST_CASE ("OUTPUTS dialog: the MIDI-clock enable toggle round-trips the param (#85)", "[plugin][smoke][clockout]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+
+    p.apvts.getParameter (ParamID::clockOut)->setValueNotifyingHost (1.0f);   // enabled before the dialog opens
+    OutputsDialog dlg (p);                                                     // constructs + attaches
+    juce::ToggleButton* enable = nullptr;
+    std::function<void (juce::Component&)> find = [&] (juce::Component& c)
+    { if (auto* t = dynamic_cast<juce::ToggleButton*> (&c)) enable = t; for (auto* ch : c.getChildren()) find (*ch); };
+    find (dlg);
+    REQUIRE (enable != nullptr);
+    REQUIRE (enable->getToggleState());                     // reflects the enabled param
+
+    p.apvts.getParameter (ParamID::clockOut)->setValueNotifyingHost (0.0f);
+    REQUIRE_FALSE (enable->getToggleState());               // and follows it live
 }
 
 // --- screenshot artifacts for the gate (human eyeball; also proves both paint) ---------

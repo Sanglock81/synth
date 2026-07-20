@@ -15,8 +15,13 @@
 #include "DSP/StepSequencer.h"
 #include "DSP/Looper.h"
 #include "DSP/AudioLoop.h"
+#include "DSP/MidiClock.h"
 #include "Observability/AudioHealthLogger.h"
 #include <atomic>
+#include <functional>
+#include <vector>
+
+namespace juce { class MidiOutput; }   // #85: only a pointer is held here (full type used in the .cpp)
 
 // ============================================================================
 // The AudioProcessor is the seam between JUCE-land and our engine:
@@ -60,7 +65,7 @@ public:
     // -- boilerplate -------------------------------------------------------------
     const juce::String getName() const override { return "synth"; }
     bool acceptsMidi() const override  { return true; }
-    bool producesMidi() const override { return false; }
+    bool producesMidi() const override { return true; }   // #85: MIDI clock out (VST3 host / standalone)
     double getTailLengthSeconds() const override { return 0.0; }
 
     int getNumPrograms() override { return 1; }
@@ -253,6 +258,18 @@ public:
     std::uint32_t noteSeq()    const { return lastAnyNoteSeq.load (std::memory_order_relaxed); }
     // J1: the effective tempo actually driving the transport (host BPM in a DAW, else the knob).
     float         effectiveBpm() const { return publishedBpm.load (std::memory_order_relaxed); }
+
+    // -- #85 MIDI clock out ---------------------------------------------------
+    // Standalone: the app opens the chosen MIDI output and hands the raw pointer here (it keeps
+    // ownership + lifetime); the audio thread sends 24-ppq clock + start/stop through it. In a VST3
+    // the clock also rides the plugin's MIDI output buffer to the host. Enable via ID::clockOut.
+    void          setClockMidiOutput (juce::MidiOutput* out) { clockMidiOut.store (out, std::memory_order_release); }
+    // The output device the UI has requested (message thread); the standalone app opens it and
+    // calls setClockMidiOutput. Empty id = none.
+    void          setRequestedClockDeviceId (const juce::String& id)
+                  { requestedClockDeviceId = id; if (onClockDeviceChanged) onClockDeviceChanged(); }
+    juce::String  requestedClockDeviceId_() const { return requestedClockDeviceId; }
+    std::function<void()> onClockDeviceChanged;   // the app installs this to (re)open the chosen output
     // The trigger note a kit part last fired (pad flicker in the editor).
     int           partLastTrigger (int part) const
     { return (part >= 0 && part < SynthEngine::maxParts) ? partLastTrig[(std::size_t) part].load (std::memory_order_relaxed) : -1; }
@@ -638,6 +655,9 @@ public:
     int   activeScene()  const { return activeSceneDisp.load (std::memory_order_relaxed); }
     int   pendingSceneIndex() const { return pendingSceneDisp.load (std::memory_order_relaxed); }
     bool  sceneHasContent (int i) const { return i >= 0 && i < kScenes && sceneContentDisp[(std::size_t) i].load (std::memory_order_relaxed); }
+    // Test seam: run the message-thread scene work (audio swap / copy / clear) synchronously — the
+    // real app drives this via the AsyncUpdater message loop, which a headless test doesn't run.
+    void  pumpSceneWorkForTest() { handleAsyncUpdate(); }
     // Write the recorded loops to a Standard MIDI File (one track per part). Returns false
     // if there's nothing recorded or the write fails.
     bool  exportLoopsToMidiFile (const juce::File& file) const;
@@ -920,6 +940,11 @@ private:
     std::array<bool, SynthEngine::maxParts> loopRecJustEngaged {};   // engage block (don't count its wrap)
     std::array<bool, SynthEngine::maxParts> loopPlayWasOn {};    // MIDI-lane playback edge, to flush on stop
     std::array<bool, SynthEngine::maxParts> loopLaneWrapped {};   // per-lane: this lane wrapped on the previous block
+
+    // #85 MIDI clock out (audio thread + an app-owned output pointer).
+    MidiClockGenerator midiClock;
+    std::atomic<juce::MidiOutput*> clockMidiOut { nullptr };      // app-owned; may be null (VST3 / disabled)
+    juce::String requestedClockDeviceId;                          // message-thread only
     std::array<std::array<bool, 128>, SynthEngine::maxParts> loopNoteHeld {};   // notes the loop turned on (release on stop/clear)
 
     // -- J3 scenes (audio-thread owned state; UI posts commands via atomics) ---
@@ -932,8 +957,11 @@ private:
         std::array<float, SynthEngine::maxParts> tBars {}, tMode {}, tPlay {}; // per-lane transport
         std::array<float, SynthEngine::maxParts> tQuant { { 1.0f, 1.0f, 1.0f, 1.0f } };
         bool has = false;                                                      // holds a non-empty arrangement
-    };
-    std::array<SceneSlot, kScenes> scenes {};
+    };                                                                         // (fixed-size only: NO heap -> the
+    std::array<SceneSlot, kScenes> scenes {};                                  //  audio-thread reset stays RT-safe)
+    // Per-scene AUDIO loop content lives OUTSIDE SceneSlot and is touched ONLY on the message
+    // thread (heap). Lazy + compact: only the recorded region per lane, empty until captured.
+    std::array<std::array<std::vector<float>, SynthEngine::maxParts>, kScenes> sceneAudioL {}, sceneAudioR {};
     int  activeSceneAudio = 0;                       // audio-thread active index (live == scenes[active])
     int  sceneLastBar = 0;                           // bar-boundary edge detect for the launch quantum
     bool sceneClockPrimed = false;                   // first block primes sceneLastBar (no false boundary)
@@ -942,7 +970,16 @@ private:
     std::atomic<int> restoreTransportScene { -1 };   // audio -> message: transport params to restore (AsyncUpdater)
     std::atomic<int> activeSceneDisp { 0 }, pendingSceneDisp { -1 };          // UI display mirrors
     std::array<std::atomic<bool>, kScenes> sceneContentDisp {};
-    void handleAsyncUpdate() override;               // write restoreTransportScene's transport into the APVTS
+    // Per-scene AUDIO: the flip snapshots/loads audio content off the audio thread (AsyncUpdater),
+    // guarding each lane so the audio thread never plays a ring mid-overwrite.
+    std::atomic<int> pendingAudioSwapFrom { -1 }, pendingAudioSwapTo { -1 };
+    std::atomic<int> pendingAudioCopyToScene { -1 }, pendingAudioClearScene { -1 };   // copy-here / clear (menu)
+    std::array<std::atomic<bool>, SynthEngine::maxParts> audioSwapGuard {};   // audio thread skips a guarded lane
+    std::atomic<std::size_t> sceneAudioBytes { 0 };                          // total heap held by scene audio
+    static constexpr std::size_t kMaxSceneAudioBytes = 512ull * 1024 * 1024; // generous cap -> "scene memory full"
+    void handleAsyncUpdate() override;               // message thread: transport restore + all scene-audio heap work
+    void doSceneAudioSwap();                          // snapshot outgoing / recall incoming audio (message thread)
+    std::size_t sceneAudioLaneBytes (int scene, int lane) const;   // helper for the running memory total
     void engageSceneFlip (int from, int to, bool chordOn);   // audio thread: swap clips+seq, flush, set active
     void serviceSceneCommands (bool chordOn);        // clear / copy-here commands (audio thread)
     void captureLiveTransportInto (SceneSlot& s) const;      // read the live APVTS transport into a slot

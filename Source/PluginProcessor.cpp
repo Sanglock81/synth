@@ -4,6 +4,7 @@
 #include "PluginEditor.h"
 #include "AppInfo.h"
 #include "DSP/SoftClip.h"
+#include <juce_audio_devices/juce_audio_devices.h>   // #85: juce::MidiOutput for the standalone clock send
 #include <BinaryData.h>
 #include <chrono>
 #include <algorithm>
@@ -452,7 +453,8 @@ void VASynthProcessor::clearScene       (int i) { if (i >= 0 && i < kScenes) sce
 
 bool VASynthProcessor::liveHasContent() const
 {
-    for (int p = 0; p < SynthEngine::maxParts; ++p) if (looper.hasContent (p)) return true;
+    for (int p = 0; p < SynthEngine::maxParts; ++p)
+        if (looper.hasContent (p) || audioLoops[(std::size_t) p].hasContent()) return true;
     for (auto& row : seqCells) for (unsigned char c : row) if (c) return true;
     return false;
 }
@@ -472,17 +474,85 @@ void VASynthProcessor::captureLiveTransportInto (SceneSlot& s) const
 // and the DSP agree. A one-message-cycle lag behind the (sample-accurate) clip/pattern flip.
 void VASynthProcessor::handleAsyncUpdate()
 {
+    // 1) Restore the just-engaged scene's transport params into the APVTS (flip only).
     const int to = restoreTransportScene.exchange (-1, std::memory_order_acquire);
-    if (to < 0 || to >= kScenes) return;
-    const auto& s = scenes[(std::size_t) to];
-    auto set = [this] (const char* id, float norm)
-    { if (auto* p = apvts.getParameter (id)) p->setValueNotifyingHost (p->convertTo0to1 (norm)); };
+    if (to >= 0 && to < kScenes)
+    {
+        const auto& s = scenes[(std::size_t) to];
+        auto set = [this] (const char* id, float norm)
+        { if (auto* p = apvts.getParameter (id)) p->setValueNotifyingHost (p->convertTo0to1 (norm)); };
+        for (int L = 0; L < SynthEngine::maxParts; ++L)
+        {
+            set (kBarsIds[L],  s.tBars[(std::size_t) L]);
+            set (kModeIds[L],  s.tMode[(std::size_t) L]);
+            set (kPlayIds[L],  s.tPlay[(std::size_t) L]);
+            set (kQuantIds[L], s.tQuant[(std::size_t) L]);
+        }
+    }
+
+    // 2) All scene-AUDIO heap work happens here on the message thread: flip swap, copy-here, clear.
+    doSceneAudioSwap();
+
+    const int copyTo = pendingAudioCopyToScene.exchange (-1, std::memory_order_acquire);
+    if (copyTo >= 0 && copyTo < kScenes)                 // clone the live audio into a slot
+        for (int L = 0; L < SynthEngine::maxParts; ++L)
+        {
+            const std::size_t oldB = sceneAudioLaneBytes (copyTo, L);
+            audioLoops[(std::size_t) L].snapshotInto (sceneAudioL[(std::size_t) copyTo][(std::size_t) L],
+                                                      sceneAudioR[(std::size_t) copyTo][(std::size_t) L]);
+            std::size_t total = sceneAudioBytes.load (std::memory_order_relaxed) - oldB + sceneAudioLaneBytes (copyTo, L);
+            if (total > kMaxSceneAudioBytes)
+            { sceneAudioL[(std::size_t) copyTo][(std::size_t) L] = {}; sceneAudioR[(std::size_t) copyTo][(std::size_t) L] = {};
+              total = sceneAudioBytes.load (std::memory_order_relaxed) - oldB; postToast ("Scene memory full - audio not saved"); }
+            sceneAudioBytes.store (total, std::memory_order_relaxed);
+        }
+
+    const int clr = pendingAudioClearScene.exchange (-1, std::memory_order_acquire);
+    if (clr >= 0 && clr < kScenes)                       // free a wiped slot's audio
+        for (int L = 0; L < SynthEngine::maxParts; ++L)
+        {
+            sceneAudioBytes.fetch_sub (sceneAudioLaneBytes (clr, L), std::memory_order_relaxed);
+            sceneAudioL[(std::size_t) clr][(std::size_t) L] = {};
+            sceneAudioR[(std::size_t) clr][(std::size_t) L] = {};
+        }
+}
+
+std::size_t VASynthProcessor::sceneAudioLaneBytes (int scene, int lane) const
+{
+    return (sceneAudioL[(std::size_t) scene][(std::size_t) lane].size()
+          + sceneAudioR[(std::size_t) scene][(std::size_t) lane].size()) * sizeof (float);
+}
+
+// Message thread: snapshot the current live AUDIO loop into a scene's heap buffer, tracking a
+// running memory total and refusing (loudly) past the cap rather than growing without bound.
+static void snapshotAudioLane (AudioLoop& al, std::vector<float>& dstL, std::vector<float>& dstR) { al.snapshotInto (dstL, dstR); }
+
+// Message thread: snapshot the outgoing scene's live AUDIO into its heap buffers and recall the
+// incoming scene's audio into the live rings. Each lane is guarded (the audio thread skips it) so
+// there is no race while we overwrite the ring. Compact: only the recorded region is held.
+void VASynthProcessor::doSceneAudioSwap()
+{
+    const int from = pendingAudioSwapFrom.exchange (-1, std::memory_order_acquire);
+    const int to   = pendingAudioSwapTo.exchange   (-1, std::memory_order_acquire);
+    if (from < 0 || to < 0 || from >= kScenes || to >= kScenes) return;
+
     for (int L = 0; L < SynthEngine::maxParts; ++L)
     {
-        set (kBarsIds[L],  s.tBars[(std::size_t) L]);
-        set (kModeIds[L],  s.tMode[(std::size_t) L]);
-        set (kPlayIds[L],  s.tPlay[(std::size_t) L]);
-        set (kQuantIds[L], s.tQuant[(std::size_t) L]);
+        auto& al = audioLoops[(std::size_t) L];
+        const std::size_t oldBytes = sceneAudioLaneBytes (from, L);
+        snapshotAudioLane (al, sceneAudioL[(std::size_t) from][(std::size_t) L], sceneAudioR[(std::size_t) from][(std::size_t) L]);
+        std::size_t total = sceneAudioBytes.load (std::memory_order_relaxed) - oldBytes + sceneAudioLaneBytes (from, L);
+        if (total > kMaxSceneAudioBytes)   // over budget: drop this snapshot, warn loudly
+        {
+            sceneAudioL[(std::size_t) from][(std::size_t) L] = {};
+            sceneAudioR[(std::size_t) from][(std::size_t) L] = {};
+            total = sceneAudioBytes.load (std::memory_order_relaxed) - oldBytes;
+            postToast ("Scene memory full - audio not saved");
+        }
+        sceneAudioBytes.store (total, std::memory_order_relaxed);
+
+        al.loadFrom (sceneAudioL[(std::size_t) to][(std::size_t) L], sceneAudioR[(std::size_t) to][(std::size_t) L]);
+        audioSwapGuard[(std::size_t) L].store (false, std::memory_order_release);   // ring is safe again
     }
 }
 
@@ -520,6 +590,13 @@ void VASynthProcessor::engageSceneFlip (int from, int to, bool chordOn)
     pendingScene.store (-1, std::memory_order_relaxed);
     pendingSceneDisp.store (-1, std::memory_order_relaxed);
     sceneContentDisp[(std::size_t) from].store (S.has, std::memory_order_relaxed);
+
+    // Audio loops are heavy to copy, so the swap runs off the audio thread (below). Guard every
+    // lane now so the audio looper block skips it (brief silence) until the swap completes.
+    for (int L = 0; L < SynthEngine::maxParts; ++L) audioSwapGuard[(std::size_t) L].store (true, std::memory_order_release);
+    pendingAudioSwapFrom.store (from, std::memory_order_relaxed);
+    pendingAudioSwapTo.store   (to,   std::memory_order_release);
+
     restoreTransportScene.store (to, std::memory_order_release);
     triggerAsyncUpdate();
 }
@@ -536,6 +613,8 @@ void VASynthProcessor::serviceSceneCommands (bool chordOn)
         captureLiveTransportInto (D);
         D.has = liveHasContent();
         sceneContentDisp[(std::size_t) copyTo].store (D.has, std::memory_order_relaxed);
+        pendingAudioCopyToScene.store (copyTo, std::memory_order_release);   // audio: cloned on the message thread
+        triggerAsyncUpdate();
     }
 
     const int clr = sceneClearCmd.exchange (-1, std::memory_order_acquire);
@@ -546,8 +625,10 @@ void VASynthProcessor::serviceSceneCommands (bool chordOn)
             for (int L = 0; L < SynthEngine::maxParts; ++L) { looper.clear (L); audioLoops[(std::size_t) L].clear(); flushLoopNotesForPart (L, chordOn); }
             seqCells = {}; seqVel = {}; for (auto& m : seqMutes) m = false;
         }
-        scenes[(std::size_t) clr] = SceneSlot{};   // reset to an empty blank canvas
+        scenes[(std::size_t) clr] = SceneSlot{};   // reset to a blank canvas (SceneSlot is heap-free -> RT-safe)
         sceneContentDisp[(std::size_t) clr].store (false, std::memory_order_relaxed);
+        pendingAudioClearScene.store (clr, std::memory_order_release);       // audio: freed on the message thread
+        triggerAsyncUpdate();
     }
 }
 
@@ -2506,6 +2587,9 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     //     part's post-FX tap (capture-by-lane, NOT by focus — the whole point of #47).
     for (int lane = 0; lane < SynthEngine::maxParts; ++lane)
     {
+        // J3: while a scene-audio swap is in flight for this lane, skip it (brief silence) so the
+        // message thread can overwrite the ring without a data race — resumes when the swap clears.
+        if (audioSwapGuard[(std::size_t) lane].load (std::memory_order_acquire)) continue;
         auto& al = audioLoops[(std::size_t) lane];
         al.playBlock (L, R, numSamples);
         al.recordBlock (engine.capturePartL (lane), engine.capturePartR (lane), numSamples);
@@ -2566,6 +2650,32 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     health.logSteals ((int) (steals - lastSteals));
     lastSteals = steals;
     ++blockIndex;
+
+    // --- #85: MIDI clock OUT. The synth is an instrument, so its MIDI OUT carries ONLY the clock
+    //     (never echoes the input notes). 24-ppq clock + start/stop derived from the SAME transport
+    //     as everything else (host tempo in a DAW, else the internal Tempo knob). In a DAW the clock
+    //     follows the host play state; standalone runs whenever enabled so external gear (Aeros /
+    //     Chase Bliss) locks to the internal tempo. Placed here, after input MIDI has been consumed.
+    midi.clear();
+    {
+        const bool clockEnabled = rp (apvts, ID::clockOut) > 0.5f;
+        const bool running = haveHostPpq ? hostPlaying : true;   // DAW: follow transport; standalone: always
+        juce::MidiBuffer clockBuf;
+        midiClock.process (transportBeats, samplesPerBeat, numSamples, clockEnabled, running,
+            [&] (int off, int kind)
+            {
+                const auto m = kind == MidiClockGenerator::Start ? juce::MidiMessage::midiStart()
+                             : kind == MidiClockGenerator::Stop  ? juce::MidiMessage::midiStop()
+                                                                 : juce::MidiMessage::midiClock();
+                clockBuf.addEvent (m, off);
+            });
+        if (! clockBuf.isEmpty())
+        {
+            midi.addEvents (clockBuf, 0, numSamples, 0);         // VST3: to the host's MIDI output
+            if (auto* out = clockMidiOut.load (std::memory_order_acquire))
+                out->sendBlockOfMessages (clockBuf, juce::Time::getMillisecondCounterHiRes(), getSampleRate());  // standalone device
+        }
+    }
 }
 
 // --- state ---------------------------------------------------------------

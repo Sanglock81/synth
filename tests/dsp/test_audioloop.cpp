@@ -7,6 +7,31 @@
 #include "AudioLoop.h"
 #include <vector>
 
+TEST_CASE ("AudioLoop snapshot + reload round-trips the recorded region (J3 scenes)", "[audioloop][scene]")
+{
+    AudioLoop lp; lp.prepare (1000); lp.setLoopLength (200); lp.setRecording (true);
+    std::vector<float> inL (128, 0.5f), inR (128, -0.3f);
+    lp.recordBlock (inL.data(), inR.data(), 128);
+    REQUIRE (lp.hasContent());
+
+    std::vector<float> sL, sR; lp.snapshotInto (sL, sR);
+    REQUIRE ((int) sL.size() == lp.contentLength());     // exactly the recorded region (loopLen = 200)
+    REQUIRE (sL[0] == Catch::Approx (0.5f));
+    REQUIRE (sR[0] == Catch::Approx (-0.3f));
+
+    lp.clear(); REQUIRE_FALSE (lp.hasContent());          // wipe...
+    lp.loadFrom (sL, sR);                                 // ...and recall from the snapshot
+    REQUIRE (lp.hasContent());
+    std::vector<float> outL (128, 0.0f), outR (128, 0.0f);
+    lp.setPlaying (true); lp.playBlock (outL.data(), outR.data(), 128);
+    REQUIRE (outL[0] == Catch::Approx (0.5f));
+    REQUIRE (outR[0] == Catch::Approx (-0.3f));
+
+    // An empty recall clears the lane.
+    lp.loadFrom ({}, {});
+    REQUIRE_FALSE (lp.hasContent());
+}
+
 TEST_CASE ("AudioLoop records a pass and plays it back at the same position", "[audioloop]")
 {
     AudioLoop lp;

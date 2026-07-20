@@ -78,6 +78,7 @@ TEST_CASE ("randomize never touches the performance/global exclusion list", "[pl
         { ParamID::loopBars3,   0.6f  },
         { ParamID::loopBars4,   0.2f  },
         { ParamID::sceneQuant,  0.5f  },   // J3: scene launch quantum is performance state
+        { ParamID::clockOut,    1.0f  },   // #85: MIDI clock transmit toggle
     };
     for (auto& kv : pinned) p.apvts.getParameter (kv.id)->setValueNotifyingHost (kv.norm);
     std::vector<float> want;

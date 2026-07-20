@@ -4,6 +4,7 @@
 #include "Widgets.h"
 #include "ModMatrixPanel.h"
 #include "InputsDialog.h"
+#include "OutputsDialog.h"
 #include "../PluginProcessor.h"
 #include "../PresetManager.h"
 
@@ -99,6 +100,10 @@ public:
         inputs.onClick = [this] { InputsDialog::show (proc, getTopLevelComponent(), [this] { if (restoreFocus) restoreFocus(); }); };
         addAndMakeVisible (inputs);
 
+        outputs.setButtonText ("OUTPUTS"); styleBtn (outputs);
+        outputs.onClick = [this] { OutputsDialog::show (proc, getTopLevelComponent(), [this] { if (restoreFocus) restoreFocus(); }); };
+        addAndMakeVisible (outputs);
+
         // The 8 macros live in the top bar (compact, with the preset + master). The
         // native title-bar gesture issue is handled by running fullscreen/kiosk (no title
         // bar) — see toggleFullscreen / the README live-mode note.
@@ -156,10 +161,11 @@ public:
         preset.removeFromTop (8);                                        // J4#3: nudge the action row down
         // Global-action row below the preset row: LINK | MOD | INPUTS on the right, VARY + CPU left.
         auto grow = preset.removeFromTop (26);
-        inputs.setBounds (grow.removeFromRight (68).reduced (2, 1));
-        mod.setBounds    (grow.removeFromRight (52).reduced (2, 1));
-        link.setBounds   (grow.removeFromRight (52).reduced (2, 1));
-        vary.setBounds   (grow.removeFromLeft (50).reduced (2, 1));
+        inputs.setBounds  (grow.removeFromRight (62).reduced (2, 1));
+        outputs.setBounds (grow.removeFromRight (70).reduced (2, 1));
+        mod.setBounds     (grow.removeFromRight (46).reduced (2, 1));
+        link.setBounds    (grow.removeFromRight (46).reduced (2, 1));
+        vary.setBounds    (grow.removeFromLeft (44).reduced (2, 1));
         statusArea = grow;
 
         auto help_ = tb.removeFromRight (34); tb.removeFromRight (4);
@@ -384,7 +390,7 @@ private:
 
     juce::TextButton presetBtn, save, random, clear, rec, full, help;
     juce::TextButton vary;                              // H5: perturb the current patch
-    juce::TextButton link, mod, inputs;                 // global-action row
+    juce::TextButton link, mod, inputs, outputs;        // global-action row
     juce::uint32 randDownMs = 0;
     bool randArmed = false, suppressRandClick = false;  // RANDOM long-press / mode-picker state
     bool linkWasArmed = false;

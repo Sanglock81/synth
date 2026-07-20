@@ -92,6 +92,25 @@ public:
     const float* dataL() const { return bufL.data(); }
     const float* dataR() const { return bufR.data(); }
 
+    // J3 scenes (message thread): snapshot the recorded region into heap buffers, and recall it.
+    // Compact: only the actually-recorded `contentLength()` samples are copied, so per-scene audio
+    // memory scales with what was recorded, not the full ring.
+    void snapshotInto (std::vector<float>& outL, std::vector<float>& outR) const
+    {
+        const int len = contentLength();
+        outL.assign (bufL.begin(), bufL.begin() + len);
+        outR.assign (bufR.begin(), bufR.begin() + len);
+    }
+    void loadFrom (const std::vector<float>& inL, const std::vector<float>& inR)
+    {
+        std::fill (bufL.begin(), bufL.end(), 0.0f);
+        std::fill (bufR.begin(), bufR.end(), 0.0f);
+        const int len = (int) std::min ({ inL.size(), inR.size(), (std::size_t) cap });
+        for (int i = 0; i < len; ++i) { bufL[(std::size_t) i] = inL[(std::size_t) i]; bufR[(std::size_t) i] = inR[(std::size_t) i]; }
+        content = (len > 0);
+        pos = 0;
+    }
+
 private:
     std::vector<float> bufL, bufR;
     int  cap = 0, loopLen = 1, pos = 0;

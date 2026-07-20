@@ -150,6 +150,59 @@ private:
     MidiDeviceListConnection connection;
 };
 
+// ---------------------------------------------------------------------------
+// #85 MIDI clock OUTPUT. Owns the juce::MidiOutput the processor sends its 24-ppq clock through.
+// The OUTPUTS dialog sets the requested device id on the processor; we (re)open it here, persist
+// the choice, and re-open on hot-plug. Old outputs are retired (kept alive) rather than destroyed
+// synchronously, so the audio thread never dereferences a freed device.
+class VASynthClockOutput
+{
+public:
+    VASynthClockOutput (::VASynthProcessor& p, PropertiesFile* settingsToUse)
+        : proc (p), settings (settingsToUse)
+    {
+        if (settings != nullptr)                         // restore the persisted choice
+            proc.setRequestedClockDeviceId (settings->getValue ("midiClockOutDevice", {}));
+        proc.onClockDeviceChanged = [this] { reopen(); };
+        connection = MidiDeviceListConnection::make ([this] { reopen(); });   // hot-plug
+        reopen();
+    }
+
+    ~VASynthClockOutput()
+    {
+        proc.onClockDeviceChanged = nullptr;
+        proc.setClockMidiOutput (nullptr);
+    }
+
+private:
+    void reopen()
+    {
+        const auto id = proc.requestedClockDeviceId_();
+        if (settings != nullptr) settings->setValue ("midiClockOutDevice", id);
+
+        proc.setClockMidiOutput (nullptr);               // audio thread stops using the old one first
+        if (current != nullptr) retired.push_back (std::move (current));   // keep it alive (no RT race)
+
+        if (id.isNotEmpty())
+        {
+            current = MidiOutput::openDevice (id);
+            if (current != nullptr)
+            {
+                proc.setClockMidiOutput (current.get());
+                Logger::writeToLog ("MIDI clock out -> '" + current->getName() + "'");
+            }
+            else
+                Logger::writeToLog ("MIDI clock out: could not open device '" + id + "'");
+        }
+    }
+
+    ::VASynthProcessor&      proc;
+    PropertiesFile*          settings;
+    std::unique_ptr<MidiOutput> current;
+    std::vector<std::unique_ptr<MidiOutput>> retired;    // former outputs, kept alive until shutdown
+    MidiDeviceListConnection connection;
+};
+
 // Watches the standalone AudioDeviceManager and logs device / MIDI-input state.
 class VASynthDeviceLogger final : private ChangeListener
 {
@@ -278,6 +331,9 @@ public:
             // through its own "QWERTY" surface zones (routeSurfaceMessage) the same way.
             dm.removeMidiInputDeviceCallback ({}, &mainWindow->pluginHolder->player);
             dm.addMidiInputDeviceCallback    ({}, midiHotplug.get());
+
+            // #85: MIDI clock output — open the chosen device and hand it to the processor.
+            clockOutput = std::make_unique<VASynthClockOutput> (*va, appProperties.getUserSettings());
         }
     }
 
@@ -285,6 +341,7 @@ public:
     {
         if (midiHotplug != nullptr && mainWindow != nullptr)
             mainWindow->getDeviceManager().removeMidiInputDeviceCallback ({}, midiHotplug.get());
+        clockOutput  = nullptr;   // #85: release the MIDI clock output before the processor goes
         midiHotplug  = nullptr;
         deviceLogger = nullptr;
         mainWindow   = nullptr;
@@ -303,6 +360,7 @@ private:
     std::unique_ptr<StandaloneFilterWindow> mainWindow;
     std::unique_ptr<VASynthDeviceLogger>    deviceLogger;
     std::unique_ptr<VASynthMidiHotplug>     midiHotplug;
+    std::unique_ptr<VASynthClockOutput>     clockOutput;   // #85
 };
 
 } // namespace juce

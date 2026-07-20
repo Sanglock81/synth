@@ -30,6 +30,9 @@ a general-purpose synth that runs in any VST3 host or standalone.
 - **Master tempo linking.** In a DAW the synth **follows the host tempo and transport** — the
   arp, sequencer, looper, and synced LFOs all lock to the project BPM + play position; standalone
   uses the internal **Tempo** knob.
+- **MIDI clock OUT** (the synth as clock master): transmits **24-ppq clock + start/stop** to a
+  selectable MIDI output (standalone) or the host (DAW), with **≤ 1-sample jitter**, so external
+  loopers/pedals (Aeros, Chase Bliss) lock to the synth. Enable + pick the device in **OUTPUTS**.
 - **Reorderable stereo FX** (per part): chorus, ping-pong delay, Freeverb-style reverb,
   mid/side width — drag to reorder, click-free crossfade — followed by a fixed **5-band
   parametric EQ at the end of each part's chain**. The EQ is a mixing-desk section that
@@ -76,7 +79,8 @@ a general-purpose synth that runs in any VST3 host or standalone.
   drum grid), and a clock-linked **looper** — four lanes (one per part), armed +
   measure-quantized, dual MIDI + AUDIO, WAV export, with **per-lane loop length 1–32 bars**
   (a short groove loops under a long progression, all locked to one downbeat).
-- **Scenes**: eight arrangement snapshots (loop clips + drum pattern + per-lane transport). The
+- **Scenes**: eight arrangement snapshots (loop clips — MIDI + audio — + drum pattern + per-lane
+  transport). The
   active scene is the live state (edits write straight in). **Tap to launch**; by default the switch
   waits for the current scene's longest loop (and any recording) to finish, then the new scene
   starts from its downbeat — click-free. A shorter quantum (1/2/4/8 bar) is selectable. Long-press

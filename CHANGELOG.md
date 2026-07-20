@@ -9,8 +9,15 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
-- **Scenes (J3).** Eight arrangement snapshots — **loop clips + drum pattern + per-lane
-  transport** — as a row of numbered buttons in the looper section. The **active scene is the live
+- **MIDI clock OUT (#85) — the synth as clock master.** Transmits **24-ppq MIDI clock + start/stop**
+  derived from the same transport as everything else: **standalone** sends the internal Tempo, and
+  in a **DAW** it relays the host tempo + play state. Enable it (and, in the standalone, pick the
+  MIDI output device) in the new **OUTPUTS** dialog, so external gear (Aeros looper, Chase Bliss
+  pedals) locks to the synth. Clock ticks are placed at sample-accurate offsets — jitter is **≤ 1
+  sample (~21 µs)**, far tighter than pedal loopers need. The instrument's MIDI output carries only
+  the clock (it never echoes played notes).
+- **Scenes (J3).** Eight arrangement snapshots — **loop clips (MIDI + audio) + drum pattern +
+  per-lane transport** — as a row of numbered buttons in the looper section. The **active scene is the live
   state**: recordings and pattern edits write into it automatically (no "store" step). **Tap** a
   scene to launch it; the switch is **quantized** and, by default (**Loop end**), waits for the
   **longest loop in the current scene to finish** so a single tap never cuts a phrase short — and it
@@ -19,8 +26,9 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   and the flip is click-free (held loop notes are flushed). A shorter quantum (**1 / 2 / 4 / 8 bar**)
   is selectable if you want faster switches. **Long-press** a scene for a menu: *Copy active scene
   here* (clone) or *Clear scene*. Launching an empty scene is a valid blank canvas. Buttons show
-  empty (outline), filled (has content), pending (blinking), and active (solid). Audio loops aren't
-  captured into scenes in v1 (memory); scene content is session-runtime (exported via MIDI/WAV).
+  empty (outline), filled (has content), pending (blinking), and active (solid). **Audio loop
+  recordings are per-scene too** — captured lazily (only the recorded region, so memory scales with
+  what you actually record); scene content is session-runtime (exported via MIDI/WAV).
 - **Hover help tooltips.** Resting the mouse on any control for ~1 s now shows its full name
   (e.g. hovering the looper **R** button shows "Loop Rec", a knob shows "Filter Cutoff"). The
   label comes from the control's parameter, so every knob, selector, and toggle is covered.

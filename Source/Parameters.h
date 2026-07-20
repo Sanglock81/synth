@@ -205,6 +205,7 @@ namespace ParamID
     inline constexpr auto loopMode2 = "loop_mode2", loopMode3 = "loop_mode3", loopMode4 = "loop_mode4";
     inline constexpr auto loopBars2 = "loop_bars2", loopBars3 = "loop_bars3", loopBars4 = "loop_bars4";   // per-lane length (P2-P4)
     inline constexpr auto sceneQuant = "scene_quant";   // J3: scene launch quantum (1/2/4/8 bar or loop-end)
+    inline constexpr auto clockOut   = "clock_out";     // #85: transmit 24-ppq MIDI clock + start/stop
     inline constexpr auto loopQuant = "loop_quant", loopQuant2 = "loop_quant2", loopQuant3 = "loop_quant3", loopQuant4 = "loop_quant4";   // per-lane 1/32 quantize (default on)
 
     // Step sequencer (R3 Group 2). 8-row drum grid; shares tempo/swing with the arp.
@@ -436,6 +437,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     // J3: scene launch quantum — when a tapped scene actually switches (aligned to the master bar clock).
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::sceneQuant, 1}, "Scene Launch",
                                           juce::StringArray{ "1 bar", "2 bar", "4 bar", "8 bar", "Loop end" }, 4));   // default: wait for the longest loop
+    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::clockOut, 1}, "Clock Out", false));   // #85: MIDI clock transmit
     for (auto* q : { ID::loopQuant, ID::loopQuant2, ID::loopQuant3, ID::loopQuant4 })   // 1/32 quantize, default ON
         params.push_back(std::make_unique<Pb>(juce::ParameterID{q, 1}, juce::String (q), true));
 

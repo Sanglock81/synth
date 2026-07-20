@@ -109,6 +109,51 @@ TEST_CASE ("scene: an empty scene launches as a blank canvas; clear wipes", "[pl
     REQUIRE (p.getSeqCell (0, 3) == 1);
 }
 
+TEST_CASE ("scene: disarming REC while a launch is pending lets it proceed at the next quantum", "[plugin][scene][j3][escape]")
+{
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    setVal (p, ParamID::tempo, 240.0f);
+    setVal (p, ParamID::sceneQuant, 0.0f);           // 1-bar quantum
+    p.apvts.getParameter (ParamID::loopBars)->setValueNotifyingHost (
+        p.apvts.getParameter (ParamID::loopBars)->convertTo0to1 (1.0f));   // lane 0 = 2 bars
+    Driver d (p); d.run (10);
+
+    set01 (p, ParamID::loopRec, 1.0f);               // roll a take
+    int guard = 0;
+    while (p.loopRecDisplayState (0) != 2 && guard++ < 4000) d.run (1);
+    REQUIRE (p.loopRecDisplayState (0) == 2);
+
+    p.launchScene (1);                               // pending, deferred while recording
+    d.run (200);
+    REQUIRE (p.activeScene() == 0);
+
+    set01 (p, ParamID::loopRec, 0.0f);               // DISARM REC -> the pending press was intent: proceed
+    guard = 0;
+    while (p.activeScene() != 1 && guard++ < 3000) d.run (1);
+    REQUIRE (p.activeScene() == 1);                  // engaged at the next quantum after the take stopped
+}
+
+TEST_CASE ("scene: edits during a pending switch write to the OUTGOING scene until the flip", "[plugin][scene][j3][edge]")
+{
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    setVal (p, ParamID::tempo, 120.0f);
+    setVal (p, ParamID::sceneQuant, 0.0f);           // 1-bar quantum
+    Driver d (p); d.run (10);
+
+    p.launchScene (1);                               // arm a switch to scene 1
+    d.run (50);                                      // still pending, mid first bar
+    REQUIRE (p.activeScene() == 0);
+    p.setSeqCell (6, 6, 1);                          // a non-recording edit WHILE pending -> outgoing (0)
+
+    d.run (kBlocksPerBar + 5);                        // the switch flips to scene 1
+    REQUIRE (p.activeScene() == 1);
+    REQUIRE (p.getSeqCell (6, 6) == 0);              // the edit did NOT land in the incoming scene
+
+    p.launchScene (0); d.run (kBlocksPerBar + 5);    // back to the scene that was live when we edited
+    REQUIRE (p.activeScene() == 0);
+    REQUIRE (p.getSeqCell (6, 6) == 1);              // it was captured into the outgoing scene
+}
+
 TEST_CASE ("scene: re-tapping a pending scene cancels the switch", "[plugin][scene][j3]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
@@ -155,6 +200,42 @@ TEST_CASE ("scene: a switch waits for an in-progress recording to finish (all pa
     p.launchScene (0); d.run (3 * kBlocksPerBar);
     REQUIRE (p.activeScene() == 0);
     REQUIRE (p.loopLaneHasContent (0));
+}
+
+TEST_CASE ("scene: AUDIO loops are isolated per scene (record -> switch away -> switch back)", "[plugin][scene][j3][audio]")
+{
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+    setVal (p, ParamID::tempo, 240.0f);              // short bars
+    setVal (p, ParamID::sceneQuant, 0.0f);           // 1-bar quantum
+    p.apvts.getParameter (ParamID::loopBars)->setValueNotifyingHost (
+        p.apvts.getParameter (ParamID::loopBars)->convertTo0to1 (0.0f));   // lane 0 = 1 bar
+    set01 (p, ParamID::loopMode, 1.0f);              // lane 0 AUDIO mode
+    Driver d (p); d.run (10);
+
+    // Record an AUDIO take on lane 0: hold a note (produces capturable audio) while a one-shot rolls.
+    p.routeNoteOn (60, 0.9f, 0);
+    set01 (p, ParamID::loopRec, 1.0f);
+    int guard = 0;
+    while (p.loopRecDisplayState (0) != 2 && guard++ < 6000) d.run (1);
+    guard = 0;
+    while (p.loopRecDisplayState (0) == 2 && guard++ < 6000) d.run (1);   // one-shot completes -> auto-play
+    p.routeNoteOff (60, 0);
+    REQUIRE (p.loopAudioHasContent (0));             // scene 0 captured audio
+
+    // Switch to the empty scene 1: its (empty) audio replaces the live ring.
+    p.launchScene (1);
+    guard = 0; while (p.activeScene() != 1 && guard++ < 6000) d.run (1);
+    p.pumpSceneWorkForTest();                        // run the deferred audio swap (message-thread work)
+    d.run (2);
+    REQUIRE_FALSE (p.loopAudioHasContent (0));       // scene 1 is a blank canvas
+
+    // Switch back to scene 0: its audio must return (not lost, not shared).
+    p.launchScene (0);
+    guard = 0; while (p.activeScene() != 0 && guard++ < 6000) d.run (1);
+    p.pumpSceneWorkForTest();
+    d.run (2);
+    REQUIRE (p.loopAudioHasContent (0));
 }
 
 TEST_CASE ("scene: a newly-activated scene starts from the beginning (loop rewinds)", "[plugin][scene][j3]")
