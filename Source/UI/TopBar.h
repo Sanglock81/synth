@@ -132,7 +132,8 @@ public:
         mode  = std::make_unique<HSelector> (proc.apvts, ParamID::polyMode, proc.getMidiLearn(),
                                              juce::StringArray { "POLY", "MONO", "LEG" });
         glide = std::make_unique<RotaryKnob> (proc.apvts, ParamID::glideTime, "GLIDE", proc.getMidiLearn());
-        addAndMakeVisible (*mode); addAndMakeVisible (*glide);
+        analog = std::make_unique<RotaryKnob> (proc.apvts, ParamID::analog, "ANALOG", proc.getMidiLearn());   // Tier 1b drift
+        addAndMakeVisible (*mode); addAndMakeVisible (*glide); addAndMakeVisible (*analog);
 
         refreshMacroLabels();
         startTimerHz (4);   // CPU readout + macro-label resync
@@ -176,7 +177,8 @@ public:
 
         // Voice group (poly/mono/legato + glide), just right of the preset area.
         mode->setBounds (tb.removeFromLeft (120).withSizeKeepingCentre (120, 30)); tb.removeFromLeft (6);
-        glide->setBounds (tb.removeFromLeft (52)); tb.removeFromLeft (10);
+        glide->setBounds  (tb.removeFromLeft (52)); tb.removeFromLeft (4);
+        analog->setBounds (tb.removeFromLeft (52)); tb.removeFromLeft (10);
 
         // 8 macro knobs, packed to 75% of the middle span (J4#1: closer together), centred.
         const int n = macros.size();
@@ -397,7 +399,7 @@ private:
     inline static const juce::Colour kLinkRing { 0xff4bb3c4 };   // LINK cyan (matches the knob armed ring)
     juce::OwnedArray<RotaryKnob> macros;
     juce::OwnedArray<juce::ParameterAttachment> macroAtt;
-    std::unique_ptr<RotaryKnob> master, glide;
+    std::unique_ptr<RotaryKnob> master, glide, analog;
     std::unique_ptr<HSelector> mode;
     bool voiceCtrlsDisabled = false;   // mode/glide greyed while a kit part is active
     juce::Rectangle<int> statusArea;

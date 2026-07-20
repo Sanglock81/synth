@@ -31,6 +31,11 @@ struct VoiceParams
     float  osc1Octave = 0, osc2Octave = 0, osc3Octave = 0;
     float  osc1Detune = 0, osc2Detune = 0, osc3Detune = 0;   // cents
     float  osc1PW = 0.5f, osc2PW = 0.5f, osc3PW = 0.5f;
+    // Musicality Tier 1a: per-oscillator start-phase policy (0 RESET / 1 RANDOM / 2 FREE).
+    // Default 0 (RESET) keeps every note's waveform alignment bit-identical (goldens hold).
+    int    osc1Phase = 0, osc2Phase = 0, osc3Phase = 0;
+    // Tier 1b: analog drift amount (0..1) — one per part. 0 = bit-exact (no drift). Default 0.
+    float  analog = 0.0f;
 
     // mixer: independent per-source levels (engine writes SMOOTHED effective
     // levels here — already folded in the on/off kill switch, so a level of ~0
@@ -91,7 +96,8 @@ public:
         fltEnv.prepare (newSampleRate);
     }
 
-    void noteOn (int note, float vel, std::uint64_t stamp, int partIndex = 0, int slot = 0, bool gen = false)
+    void noteOn (int note, float vel, std::uint64_t stamp, int partIndex = 0, int slot = 0, bool gen = false,
+                 int pm1 = 0, int pm2 = 0, int pm3 = 0)   // Tier 1a: per-osc start-phase policy (0 RESET default)
     {
         generator = gen;      // seq/arp/looper voices yield to live-played notes when stealing
         // Only clear DSP state for a genuinely fresh voice. On a retrigger or a
@@ -109,10 +115,11 @@ public:
 
         if (wasIdle)
         {
-            osc1.reset();
-            osc2.reset();
-            osc3.reset();
+            osc1.reset (startPhaseFor (pm1));   // RESET(0) is bit-exact; RANDOM draws; FREE keeps phase
+            osc2.reset (startPhaseFor (pm2));
+            osc3.reset (startPhaseFor (pm3));
             filter.reset();
+            drift1 = drift2 = drift3 = driftPw = 0.0f;   // Tier 1b: a fresh voice starts un-drifted
             glideNote = (float) note;      // fresh voice: no glide into the first note
         }
         ampEnv.noteOn();
@@ -248,15 +255,33 @@ private:
         // Pitch from the (glide-slewed) note plus pitch modulation (LFO + env->pitch).
         const double f0 = 440.0 * std::exp2 ((glideNote - 69.0f + p.pitchModSemis + extraPitchSemis) / 12.0);
 
+        // Tier 1b: analog drift — a slow, bounded per-oscillator random walk on pitch (+ a hair of
+        // PW), scaled by `analog`. HARD FAST PATH at analog<=0: no RNG, no math -> bit-exact + free.
+        float d1c = 0.0f, d2c = 0.0f, d3c = 0.0f, dpw = 0.0f;
+        if (p.analog > 0.0f)
+        {
+            auto walk = [this] (float& d)
+            {
+                driftRng ^= driftRng << 13; driftRng ^= driftRng >> 17; driftRng ^= driftRng << 5;
+                const float r = (float) (std::int32_t) driftRng / 2147483648.0f;   // [-1,1)
+                d = d * 0.999f + r * 0.012f;                    // leaky walk -> slow (~sub-Hz) wander
+                d = d < -1.0f ? -1.0f : (d > 1.0f ? 1.0f : d);  // bounded
+            };
+            walk (drift1); walk (drift2); walk (drift3); walk (driftPw);
+            const float cents = p.analog * kMaxDriftCents;      // +/- up to ~2 cents at analog = 1
+            d1c = drift1 * cents; d2c = drift2 * cents; d3c = drift3 * cents;
+            dpw = driftPw * p.analog * kMaxPwDrift;
+        }
+
         osc1.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc1Wave));
         osc2.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc2Wave));
         osc3.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc3Wave));
-        osc1.setFrequency (f0 * std::exp2 (p.osc1Octave + p.osc1Detune / 1200.0f));
-        osc2.setFrequency (f0 * std::exp2 (p.osc2Octave + p.osc2Detune / 1200.0f));
-        osc3.setFrequency (f0 * std::exp2 (p.osc3Octave + p.osc3Detune / 1200.0f));
-        osc1.setPulseWidth (std::clamp (p.osc1PW + p.pwMod + extraPwMod, 0.05f, 0.95f));
-        osc2.setPulseWidth (std::clamp (p.osc2PW + p.pwMod + extraPwMod, 0.05f, 0.95f));
-        osc3.setPulseWidth (std::clamp (p.osc3PW + p.pwMod + extraPwMod, 0.05f, 0.95f));
+        osc1.setFrequency (f0 * std::exp2 (p.osc1Octave + (p.osc1Detune + d1c) / 1200.0f));
+        osc2.setFrequency (f0 * std::exp2 (p.osc2Octave + (p.osc2Detune + d2c) / 1200.0f));
+        osc3.setFrequency (f0 * std::exp2 (p.osc3Octave + (p.osc3Detune + d3c) / 1200.0f));
+        osc1.setPulseWidth (std::clamp (p.osc1PW + p.pwMod + extraPwMod + dpw, 0.05f, 0.95f));
+        osc2.setPulseWidth (std::clamp (p.osc2PW + p.pwMod + extraPwMod + dpw, 0.05f, 0.95f));
+        osc3.setPulseWidth (std::clamp (p.osc3PW + p.pwMod + extraPwMod + dpw, 0.05f, 0.95f));
 
         filter.setType (static_cast<SVFilter::Type> (p.filterType));
         ampEnv.setParameters (p.ampA, p.ampD, p.ampS, p.ampR);
@@ -286,4 +311,18 @@ private:
     std::uint32_t nz = 0x12345678;
     float voiceRandom = 0.0f;      // per-note sample&hold (-1..1) — a mod-matrix source
     std::uint32_t rndState = 0x2545f491u;
+    std::uint32_t phaseRng = 0x9e3779b9u;   // Tier 1: dedicated RNG so start-phase/drift don't perturb voiceRandom
+    std::uint32_t driftRng = 0x1b56c4e9u;   // Tier 1b analog-drift RNG (only advances when analog > 0)
+    float drift1 = 0.0f, drift2 = 0.0f, drift3 = 0.0f, driftPw = 0.0f;   // per-osc drift state (normalized ±1)
+    static constexpr float kMaxDriftCents = 2.0f;   // pitch drift ceiling at analog = 1
+    static constexpr float kMaxPwDrift    = 0.01f;  // a hair of pulse-width drift
+
+    // Start phase for a policy. RESET/FREE never draw an RNG, so the default (RESET) path is
+    // bit-identical to before; only RANDOM consumes a value (a distinct stream from voiceRandom).
+    double startPhaseFor (int mode)
+    {
+        if (mode == 1) { phaseRng ^= phaseRng << 13; phaseRng ^= phaseRng >> 17; phaseRng ^= phaseRng << 5;
+                         return (double) phaseRng / 4294967296.0; }   // RANDOM in [0,1)
+        return mode == 2 ? -1.0 : 0.0;                                 // FREE keeps phase; RESET -> 0
+    }
 };

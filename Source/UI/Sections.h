@@ -41,20 +41,23 @@ public:
         const char* detIds[]  { ID::osc1Detune, ID::osc2Detune, ID::osc3Detune };
         const char* pwIds[]   { ID::osc1PW, ID::osc2PW, ID::osc3PW };
         const char* lvlIds[]  { ID::osc1Level, ID::osc2Level, ID::osc3Level };
+        const char* phIds[]   { ID::osc1Phase, ID::osc2Phase, ID::osc3Phase };
         const juce::StringArray waveLabels { "SAW", "SQR", "TRI", "SIN" };
+        const juce::StringArray phaseLabels { "RST", "RND", "FRE" };   // Tier 1a start-phase policy
 
         for (int i = 0; i < 3; ++i)
         {
             auto& o = oscs[(size_t) i];
             o.on   = std::make_unique<PowerToggle> (p.apvts, onIds[i], "ON");
             o.wave = std::make_unique<HSelector> (p.apvts, waveIds[i], p.getMidiLearn(), waveLabels);
+            o.phase = std::make_unique<HSelector> (p.apvts, phIds[i], p.getMidiLearn(), phaseLabels);
             o.k[0] = std::make_unique<RotaryKnob> (p.apvts, octIds[i], "OCTAVE", p.getMidiLearn());
             o.k[1] = std::make_unique<RotaryKnob> (p.apvts, detIds[i], "DETUNE", p.getMidiLearn());
             o.k[2] = std::make_unique<RotaryKnob> (p.apvts, pwIds[i],  "PW",     p.getMidiLearn());
             o.k[3] = std::make_unique<RotaryKnob> (p.apvts, lvlIds[i], "LEVEL",  p.getMidiLearn());
             // LINK targets + animation are wired centrally from the registry (editor::wireModTargets);
             // PW/level/cutoff/reso etc. no longer need per-knob wiring here.
-            addAndMakeVisible (*o.on);   addAndMakeVisible (*o.wave);
+            addAndMakeVisible (*o.on);   addAndMakeVisible (*o.wave); addAndMakeVisible (*o.phase);
             for (auto& k : o.k) addAndMakeVisible (*k);
         }
     }
@@ -74,6 +77,7 @@ public:
             auto& o = oscs[(size_t) i];
             auto top = c.removeFromTop (26); c.removeFromTop (4);
             o.on->setBounds (top.removeFromLeft (36)); top.removeFromLeft (5);
+            o.phase->setBounds (top.removeFromRight (82)); top.removeFromRight (5);   // Tier 1a phase policy
             o.wave->setBounds (top);
             const int kw = c.getWidth() / 4;
             for (int k = 0; k < 4; ++k)
@@ -94,7 +98,7 @@ private:
     struct Osc
     {
         std::unique_ptr<PowerToggle> on;
-        std::unique_ptr<HSelector> wave;
+        std::unique_ptr<HSelector> wave, phase;
         std::array<std::unique_ptr<RotaryKnob>, 4> k;
     };
     std::array<Osc, 3> oscs;

@@ -381,6 +381,23 @@ TEST_CASE ("OUTPUTS dialog: the MIDI-clock enable toggle round-trips the param (
     REQUIRE_FALSE (enable->getToggleState());               // and follows it live
 }
 
+// --- Musicality Tier 1: the per-osc phase selectors + the ANALOG knob are present + wired -----
+TEST_CASE ("Tier 1 UI: osc phase selectors + ANALOG knob are bound (#99)", "[plugin][smoke][musicality]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+
+    for (auto* id : { ParamID::osc1Phase, ParamID::osc2Phase, ParamID::osc3Phase })
+    { INFO ("missing phase selector: " << id); REQUIRE (findLearnable (*ed, id) != nullptr); }
+    REQUIRE (findKnob (*ed, ParamID::analog) != nullptr);
+
+    // Default is RESET / analog 0 (bit-exact); the selector reflects it.
+    REQUIRE (dynamic_cast<juce::AudioParameterChoice*> (p.apvts.getParameter (ParamID::osc1Phase))->getIndex() == 0);
+    REQUIRE (p.apvts.getParameter (ParamID::analog)->getValue() == Catch::Approx (0.0f));
+}
+
 // --- screenshot artifacts for the gate (human eyeball; also proves both paint) ---------
 TEST_CASE ("smoke screenshots: editor + mod overlay render for the gate (#56)",
            "[plugin][smoke][screenshot]")

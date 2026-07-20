@@ -334,6 +334,10 @@ static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& a
     p.osc1PW     = rp (apvts, ID::osc1PW);
     p.osc2PW     = rp (apvts, ID::osc2PW);
     p.osc3PW     = rp (apvts, ID::osc3PW);
+    p.osc1Phase  = (int) rp (apvts, ID::osc1Phase);   // Tier 1a start-phase policy (0 RESET default)
+    p.osc2Phase  = (int) rp (apvts, ID::osc2Phase);
+    p.osc3Phase  = (int) rp (apvts, ID::osc3Phase);
+    p.analog     = rp (apvts, ID::analog);            // Tier 1b analog drift depth (0 = bit-exact)
     p.oscMix     = rp (apvts, ID::oscMix);        // legacy; unused by the engine
     p.noiseLevel = rp (apvts, ID::noiseLevel);
 
@@ -384,6 +388,7 @@ static const juce::StringArray& perPartSoundIds()
     static const juce::StringArray ids {
         ID::osc1Wave, ID::osc2Wave, ID::osc3Wave, ID::osc1Octave, ID::osc2Octave, ID::osc3Octave,
         ID::osc1Detune, ID::osc2Detune, ID::osc3Detune, ID::osc1PW, ID::osc2PW, ID::osc3PW,
+        ID::osc1Phase, ID::osc2Phase, ID::osc3Phase, ID::analog,   // Tier 1 phase policy + analog drift
         ID::oscMix, ID::noiseLevel, ID::osc1Level, ID::osc2Level, ID::osc3Level, ID::osc1On, ID::osc2On, ID::osc3On,
         ID::velToAmp, ID::velToCutoff,
         ID::filterType, ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack,

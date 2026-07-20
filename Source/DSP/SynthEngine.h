@@ -151,15 +151,19 @@ public:
     {
         if (modeForPart (part) != 0) { monoNoteOn (note, velocity, part, soundSlot, generator); return; }
 
+        // Tier 1a: this part+pad's per-oscillator start-phase policy (only a fresh voice acts on it).
+        const auto& pp = paramsFor (part, soundSlot);
+        const int pm1 = pp.osc1Phase, pm2 = pp.osc2Phase, pm3 = pp.osc3Phase;
+
         // Reuse a voice already playing this (note, part) — retrigger.
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
             if (voices[i].isActive() && voices[i].getNote() == note && voices[i].getPart() == part)
-                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator); return; }
+                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3); return; }
 
         // Otherwise find a free voice...
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
             if (! voices[i].isActive())
-                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator); return; }
+                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3); return; }
 
         // ...or steal a voice. PER-PART ISOLATION, in priority order:
         //   1. the oldest GENERATOR voice (seq / arp / looper) — generators ALWAYS yield to
@@ -186,7 +190,7 @@ public:
 
         sustained[steal] = false;
         ++stealCounter;
-        voices[steal].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator);
+        voices[steal].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3);
     }
 
     // ---- observability accessors (const; for the processor's telemetry) ----
@@ -807,7 +811,11 @@ private:
         if (partPolyMode[pt] == 2 && hadNote && reuse)
             voices[(std::size_t) v].changeNote (note, ++eventCounter);
         else
-            voices[(std::size_t) v].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator);
+        {
+            const auto& pp = paramsFor (part, soundSlot);   // Tier 1a start-phase policy
+            voices[(std::size_t) v].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator,
+                                            pp.osc1Phase, pp.osc2Phase, pp.osc3Phase);
+        }
     }
 
     void monoNoteOff (int note, int part)

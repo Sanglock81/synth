@@ -70,9 +70,11 @@ public:
         reset();
     }
 
-    void reset()
+    // startPhase: 0 = RESET (today), in (0,1) = RANDOM start, < 0 = FREE (keep the running phase).
+    // The oversampling ring history is always cleared for a fresh voice (avoids stale FIR state).
+    void reset (double startPhase = 0.0)
     {
-        phase = 0.0;
+        if (startPhase >= 0.0) phase = startPhase - std::floor (startPhase);
         ring.fill (0.0);
         ringPos = 0;
     }

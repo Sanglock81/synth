@@ -9,6 +9,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Analog life for the oscillators (Musicality Pass, Tier 1).** Each oscillator gains a
+  **start-phase policy** — **RESET** (today's bit-identical alignment), **RANDOM** (a fresh phase
+  per note, so detuned stacks and chords bloom differently every strike), or **FREE** (the
+  oscillator runs continuously and a note picks up wherever the phase is). A global **ANALOG** knob
+  adds subtle per-voice pitch/PW **drift** (a slow bounded random walk) — the "alive" quality of
+  vintage polys. Both default to off (RESET / analog 0), so existing patches are bit-identical; the
+  new controls live in the oscillator rows (phase) and beside GLIDE (ANALOG).
 - **MIDI clock OUT (#85) — the synth as clock master.** Transmits **24-ppq MIDI clock + start/stop**
   derived from the same transport as everything else: **standalone** sends the internal Tempo, and
   in a **DAW** it relays the host tempo + play state. Enable it (and, in the standalone, pick the

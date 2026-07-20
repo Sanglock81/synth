@@ -37,6 +37,10 @@ namespace ParamID
     inline constexpr auto osc3Detune  = "osc3_detune";
     inline constexpr auto osc3PW      = "osc3_pw";
 
+    // Musicality Tier 1: per-osc start-phase policy (RESET/RANDOM/FREE) + one analog-drift amount.
+    inline constexpr auto osc1Phase = "osc1_phase", osc2Phase = "osc2_phase", osc3Phase = "osc3_phase";
+    inline constexpr auto analog    = "analog";          // 0..1 drift depth (0 = bit-exact)
+
     // Mixer. osc_mix is FROZEN (legacy crossfade) — kept registered for state
     // compatibility; the engine now uses independent per-source levels + kill
     // switches. Old patches migrate osc_mix -> osc1/2 levels on load.
@@ -248,6 +252,13 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Octave, 1},"Osc3 Octave", juce::NormalisableRange<float>(-2.0f, 2.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Detune, 1},"Osc3 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("ct")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3PW, 1},    "Osc3 PW", juce::NormalisableRange<float>(0.05f, 0.95f), 0.5f));
+
+    // Musicality Tier 1: per-osc start-phase policy (default RESET = bit-exact) + analog drift depth.
+    const juce::StringArray phaseModes { "Reset", "Random", "Free" };
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc1Phase, 1}, "Osc1 Phase", phaseModes, 0));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc2Phase, 1}, "Osc2 Phase", phaseModes, 0));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc3Phase, 1}, "Osc3 Phase", phaseModes, 0));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::analog, 1},    "Analog", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
 
     // --- Mixer -------------------------------------------------------------
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::oscMix, 1},     "Osc Mix", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));   // FROZEN legacy
