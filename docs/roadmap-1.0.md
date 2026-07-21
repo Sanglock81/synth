@@ -130,3 +130,13 @@ Widgets gained `HSelector`, `ShapeSelector`, `RotaryKnob` side-label. 8 macro pa
   the mixer (part level) + per-pad kit levels are the fix.
 - 2026-07-09 — Sub-phase 2 CPU gate marked provisional pending the ThinkPad report; the
   measured derate will replace the assumed ×3.5 everywhere.
+
+## Post-1.0 backlog (documented reservations, not accidental gaps)
+- **Noise COLOR selector (white / pink).** The NOISE 4th-source row (added in the UI audit pass)
+  deliberately leaves its middle column open. Post-1.0, a white/pink COLOR selector lands there,
+  beside the NOISE label and LEVEL knob — the vacancy is planned, not an orphaned layout. (DSP:
+  a one-pole pinking filter on the existing white-noise source; param `noise_color`, default white
+  = bit-identical.)
+- **WILD randomize into self-oscillation.** Randomize caps `filter_reso` at 0.6 (predates Tier 2B
+  self-osc). Post-2C, WILD (the deep-exploration tier) may occasionally enter the self-osc sliver.
+  (Tracked as an H5 follow-up.)

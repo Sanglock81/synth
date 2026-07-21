@@ -271,7 +271,7 @@ TEST_CASE ("Random leaves arp / sequencer / looper / tempo untouched", "[plugin]
     // Set the rhythm section to distinctive NON-default values.
     auto set01 = [&] (const char* id, float v) { p.apvts.getParameter (id)->setValueNotifyingHost (v); };
     const char* rhythmIds[] { ParamID::tempo, ParamID::arpOn, ParamID::arpMode, ParamID::arpOctaves,
-                              ParamID::arpGate, ParamID::arpSwing, ParamID::arpLatch, ParamID::arpHold,
+                              ParamID::arpGate, ParamID::arpSwing, ParamID::arpHold,
                               ParamID::loopRec, ParamID::loopPlay, ParamID::loopBars };
     for (auto* id : rhythmIds) set01 (id, 0.42f);
     p.setArpStep (3, 1.0f); p.setArpStepVel (3, 137);   // a distinctive on-step + velocity (#54)

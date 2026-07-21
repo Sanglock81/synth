@@ -68,7 +68,6 @@ TEST_CASE ("randomize never touches the performance/global exclusion list", "[pl
         { ParamID::arpOctaves,  0.66f },
         { ParamID::arpGate,     0.4f  },
         { ParamID::arpSwing,    0.3f  },
-        { ParamID::arpLatch,    1.0f  },
         { ParamID::arpHold,     1.0f  },
         { ParamID::loopRec,     1.0f  },
         { ParamID::loopPlay,    1.0f  },
@@ -110,7 +109,6 @@ TEST_CASE ("randomize touches ONLY the selected part sound - mixer / EQ / macros
         { ParamID::part0Level, 0.7f }, { ParamID::part0Pan, 0.3f },
         { ParamID::part1Level, 0.4f }, { ParamID::part1Pan, 0.8f },
         { ParamID::part2Level, 0.9f }, { ParamID::part3Pan, 0.2f },
-        { ParamID::eqLmGain,   0.75f }, { ParamID::eqHmFreq, 0.6f }, { ParamID::eqOn, 1.0f },
         { ParamID::macro1, 0.25f }, { ParamID::macro4, 0.65f }, { ParamID::macro8, 0.5f },
     };
     for (auto& kv : mix) p.apvts.getParameter (kv.id)->setValueNotifyingHost (kv.norm);

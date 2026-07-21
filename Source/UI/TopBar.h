@@ -112,7 +112,9 @@ public:
         for (int m = 0; m < 8; ++m)
         {
             auto* k = new RotaryKnob (proc.apvts, ids[m], "M" + juce::String (m + 1), proc.getMidiLearn());
-            k->setShowValue (false);                             // no number -> compact
+            k->setShowValue (false);                             // no number at rest -> compact
+            k->setNameLines (2);                                 // B1: full assignment name (2 lines, shrink-to-fit)
+            k->setTransientReadout (true);                       // B1: value appears only while adjusting
             k->setDragPixels ((kDragPixelsForFullRange * 10) / 27);   // ~2.7x responsive
             k->setBothAxisDrag();   // top-of-window: allow horizontal drag so touch needn't go up into the title bar
             macros.add (k); addAndMakeVisible (k);
@@ -133,6 +135,7 @@ public:
                                              juce::StringArray { "POLY", "MONO", "LEG" });
         glide = std::make_unique<RotaryKnob> (proc.apvts, ParamID::glideTime, "GLIDE", proc.getMidiLearn());
         analog = std::make_unique<RotaryKnob> (proc.apvts, ParamID::analog, "ANALOG", proc.getMidiLearn());   // Tier 1b drift
+        analog->setHelp ("Analog drift: subtle per-voice pitch & pulse-width wander for a livelier, vintage feel");
         addAndMakeVisible (*mode); addAndMakeVisible (*glide); addAndMakeVisible (*analog);
 
         refreshMacroLabels();
@@ -153,21 +156,21 @@ public:
     {
         auto tb = getLocalBounds().reduced (10, 7);
 
-        auto preset = tb.removeFromLeft (300); tb.removeFromLeft (30);   // J4#2: bigger gap before the voice group
+        auto preset = tb.removeFromLeft (326); tb.removeFromLeft (20);   // J4#2: gap before the voice group
         auto pTop = preset.removeFromTop (34);
-        presetBtn.setBounds (pTop.removeFromLeft (126).reduced (0, 1));
-        save.setBounds   (pTop.removeFromLeft (44).reduced (2, 1));
-        random.setBounds (pTop.removeFromLeft (66).reduced (2, 1));
+        presetBtn.setBounds (pTop.removeFromLeft (118).reduced (0, 1));
+        save.setBounds   (pTop.removeFromLeft (42).reduced (2, 1));
+        random.setBounds (pTop.removeFromLeft (62).reduced (2, 1));
+        vary.setBounds   (pTop.removeFromLeft (46).reduced (2, 1));      // reunited with RANDOM (NEW + NEIGHBOURHOOD)
         clear.setBounds  (pTop.reduced (2, 1));
         preset.removeFromTop (8);                                        // J4#3: nudge the action row down
-        // Global-action row below the preset row: LINK | MOD | INPUTS on the right, VARY + CPU left.
+        // Global-action row below the preset row: LINK | MOD | OUTPUTS | INPUTS on the right; CPU left.
         auto grow = preset.removeFromTop (26);
         inputs.setBounds  (grow.removeFromRight (62).reduced (2, 1));
         outputs.setBounds (grow.removeFromRight (70).reduced (2, 1));
         mod.setBounds     (grow.removeFromRight (46).reduced (2, 1));
         link.setBounds    (grow.removeFromRight (46).reduced (2, 1));
-        vary.setBounds    (grow.removeFromLeft (44).reduced (2, 1));
-        statusArea = grow;
+        statusArea = grow;   // CPU readout fills the space VARY vacated
 
         auto help_ = tb.removeFromRight (34); tb.removeFromRight (4);
         help.setBounds (help_.reduced (0, 16));

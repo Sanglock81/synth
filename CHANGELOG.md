@@ -9,6 +9,26 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **NOISE is now a visible control.** White noise was always a fourth sound source in the engine
+  but had **no knob** — you couldn't reach it. It now has a **LEVEL** knob in a fourth source row
+  beneath the three oscillators (aligned under their LEVEL column), a full mod destination (LINK,
+  automation, MIDI-learn, numeric entry). (Its COLOR — white/pink — is a documented post-1.0 slot.)
+
+### Changed
+- **UI audit + layout polish.** A full parameter-vs-control audit (every registered parameter now
+  has a control, or is intentionally hidden). Highlights: the **macro row** shows full assignment
+  names (no truncation) with the CC badge relocated so it never collides, and a **value readout that
+  appears only while you adjust** a knob (nothing at rest); **sequencer rows** show the pad name *and*
+  trigger note ("Snare D1", "Snare E1") so no two read alike; **VARY** sits next to RANDOM; the
+  **chord modifier** keys are now keycap badges; the **oscilloscope trace runs hotter** (fills the
+  panel, soft-clipped) and the EQ gets more room; **envelope values** are transient (ms/s, shown only
+  while dragging); and hover **tooltips + the help overlay** now explain the cryptic controls (osc
+  phase RS/RN/FR, ANALOG, DRIVE, LFO SYNC/DIV, NOISE).
+- **Removed 12 dead parameters** (the retired master EQ `eq_*` and `arp_latch`) — pre-1.0 cleanup of
+  never-functional params ahead of the ID freeze. Old sessions carrying them load cleanly (values
+  discarded). `osc_mix` is retained (it drives legacy osc-level migration, so it is not dead).
+
+### Added (cont.)
 - **Cleaner filter drive (Musicality Pass, Tier 2C — 2× oversampling).** The in-loop tanh
   saturation aliases at base rate — audible as harshness on high, hard-driven notes (measured
   −22 dB at note C7, drive/self-osc). The driven/self-oscillating filter now runs **2× oversampled**

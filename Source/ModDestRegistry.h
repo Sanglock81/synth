@@ -44,6 +44,7 @@ namespace moddest
             { ModMatrix::Osc1Level,  P::osc1Level,   "Osc 1 Level",  Osc },
             { ModMatrix::Osc2Level,  P::osc2Level,   "Osc 2 Level",  Osc },
             { ModMatrix::Osc3Level,  P::osc3Level,   "Osc 3 Level",  Osc },
+            { ModMatrix::NoiseLevel, P::noiseLevel,  "Noise Level",  Osc },
             { ModMatrix::Osc1Octave, P::osc1Octave,  "Osc 1 Octave", Osc },
             { ModMatrix::Osc1Detune, P::osc1Detune,  "Osc 1 Detune", Osc },
             { ModMatrix::Osc2Octave, P::osc2Octave,  "Osc 2 Octave", Osc },

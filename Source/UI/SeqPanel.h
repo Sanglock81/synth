@@ -50,7 +50,7 @@ public:
             g.drawText ("M", muteR, juce::Justification::centred, false);
             g.setColour (muted ? VASynthLookAndFeel::dim() : VASynthLookAndFeel::ink());
             g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold)));
-            g.drawText (noteLabel (proc.getSeqNote (r)), lab.reduced (4, 0), juce::Justification::centredLeft, false);
+            g.drawText (rowLabel (proc.getSeqNote (r)), lab.reduced (4, 0), juce::Justification::centredLeft, false);
 
             // 16 step cells
             const int cw = juce::jmax (1, row.getWidth() / VASynthProcessor::kSeqSteps);
@@ -188,6 +188,21 @@ private:
             case 49: return "Crash"; case 51: return "Ride";
             default: return juce::String (note);
         }
+    }
+
+    // Note name, e.g. 36 -> "C1" (middle C = C3 = MIDI 60).
+    static juce::String noteName (int note)
+    {
+        static const char* n[] { "C","C#","D","D#","E","F","F#","G","G#","A","A#","B" };
+        return juce::String (n[((note % 12) + 12) % 12]) + juce::String (note / 12 - 2);
+    }
+
+    // Row label: pad name + trigger note (e.g. "Snare D1", "Snare D#1") so no two rows read the
+    // same even when the GM name repeats. Unmapped triggers fall back to the note name alone.
+    static juce::String rowLabel (int note)
+    {
+        const juce::String gm = noteLabel (note);
+        return (gm == juce::String (note)) ? noteName (note) : (gm + " " + noteName (note));
     }
     void timerCallback() override
     {

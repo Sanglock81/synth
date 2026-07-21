@@ -70,6 +70,9 @@ public:
                   GlideTime, PartLevel, PartPan,
                   EqB4Gain,   // K1: appended (stable-order rule) though it groups with EqB1-3Gain
                   EqB5Gain,   // K1 tweak: 5th EQ band gain (also appended)
+                  NoiseLevel, // 4th-source noise level. APPENDED for state stability, but VOICE-applied
+                              // (evaluate() fills Offsets.noiseLevel; the voice reads it) — not a block
+                              // dest despite its numeric position, so blockOffsets() collects it harmlessly.
                   kNumDests };
     static constexpr int kFirstBlockDest = ChorusRate;
     static constexpr int kNumBlockDests  = kNumDests - kFirstBlockDest;
@@ -88,6 +91,7 @@ public:
         float osc1Level  = 0.0f;   // added to osc 1/2/3 level (0..1 domain)
         float osc2Level  = 0.0f;
         float osc3Level  = 0.0f;
+        float noiseLevel = 0.0f;   // added to noise level (0..1 domain)
     };
 
     // Full-scale destination ranges at |depth| = 1 and a full-scale source.
@@ -141,6 +145,7 @@ public:
                 case Osc1Level:  o.osc1Level  += v * kRangeOscLevel; break;
                 case Osc2Level:  o.osc2Level  += v * kRangeOscLevel; break;
                 case Osc3Level:  o.osc3Level  += v * kRangeOscLevel; break;
+                case NoiseLevel: o.noiseLevel += v * kRangeOscLevel; break;
                 default: break;
             }
         }

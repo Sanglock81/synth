@@ -155,15 +155,10 @@ namespace ParamID
     inline constexpr auto macro7 = "macro7";
     inline constexpr auto macro8 = "macro8";
 
-    // Master parametric EQ (R2): a 4-band shaper at the END of the signal chain
-    // (post per-part FX sum, pre master gain). Low shelf, two sweepable bells, high
-    // shelf. All gains default 0 dB and eq_on defaults false -> a true bypass, so the
-    // master output is bit-identical until the player dials it in. IDs appended last.
-    inline constexpr auto eqOn      = "eq_on";
-    inline constexpr auto eqLsFreq  = "eq_ls_freq";   inline constexpr auto eqLsGain = "eq_ls_gain";
-    inline constexpr auto eqLmFreq  = "eq_lm_freq";   inline constexpr auto eqLmGain = "eq_lm_gain";   inline constexpr auto eqLmQ = "eq_lm_q";
-    inline constexpr auto eqHmFreq  = "eq_hm_freq";   inline constexpr auto eqHmGain = "eq_hm_gain";   inline constexpr auto eqHmQ = "eq_hm_q";
-    inline constexpr auto eqHsFreq  = "eq_hs_freq";   inline constexpr auto eqHsGain = "eq_hs_gain";
+    // (The master parametric EQ eq_* params were removed pre-1.0: it was retired in K1/#77
+    // when the per-part 5-band EQ (peq_*) replaced it, and its params had no DSP, UI, or
+    // migration use. Documented one-time ID-freeze exception; old sessions carrying eq_*
+    // values load cleanly — replaceState ignores unknown IDs — with the values discarded.)
 
     // Per-part EQ (task #51): a 3-band fully-parametric (bell) EQ block in each part's
     // reorderable FX chain. Per-part (in perPartSoundIds); default flat + off => bypass.
@@ -191,7 +186,7 @@ namespace ParamID
     inline constexpr auto arpOctaves  = "arp_octaves";   // 1..4
     inline constexpr auto arpGate     = "arp_gate";      // 0..1 of a step
     inline constexpr auto arpSwing    = "arp_swing";     // 0..0.7
-    inline constexpr auto arpLatch    = "arp_latch";
+    // (arp_latch removed pre-1.0: retired earlier in favour of arp_hold; no DSP/UI use.)
     inline constexpr auto arpHold     = "arp_hold";
 
     // Per-part MIDI looper (R3). Transport bools + loop length in bars. Default off /
@@ -375,24 +370,13 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
                 "Macro " + juce::String (m + 1), juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
     }
 
-    // --- Master parametric EQ (R2): defaults flat + off => bit-identical bypass ---
+    // --- Per-part parametric EQ (5 bells): defaults flat + off => bit-identical bypass ---
+    // (The retired master EQ that used to live here — eq_* — was removed pre-1.0.)
     {
         const juce::NormalisableRange<float> gainR (-18.0f, 18.0f), qR (0.3f, 8.0f, 0.0f, 0.5f);
         const juce::NormalisableRange<float> fR (20.0f, 20000.0f, 0.0f, 0.25f);
         const auto hz = juce::AudioParameterFloatAttributes().withLabel ("Hz");
         const auto db = juce::AudioParameterFloatAttributes().withLabel ("dB");
-
-        params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::eqOn, 1}, "EQ On", false));
-        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqLsFreq, 1}, "EQ Low Freq",  fR, 120.0f,  hz));
-        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqLsGain, 1}, "EQ Low Gain",  gainR, 0.0f, db));
-        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqLmFreq, 1}, "EQ LoMid Freq", fR, 500.0f, hz));
-        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqLmGain, 1}, "EQ LoMid Gain", gainR, 0.0f, db));
-        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqLmQ, 1},    "EQ LoMid Q",   qR, 0.9f));
-        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHmFreq, 1}, "EQ HiMid Freq", fR, 3000.0f, hz));
-        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHmGain, 1}, "EQ HiMid Gain", gainR, 0.0f, db));
-        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHmQ, 1},    "EQ HiMid Q",   qR, 0.9f));
-        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHsFreq, 1}, "EQ High Freq", fR, 8000.0f, hz));
-        params.push_back(std::make_unique<P>(juce::ParameterID{ID::eqHsGain, 1}, "EQ High Gain", gainR, 0.0f, db));
 
         // Per-part EQ (task #51): 3 fully-parametric bells. Default flat + off => bypass.
         params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::peqOn, 1}, "Part EQ On", false));
@@ -427,7 +411,6 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::arpSwing, 1}, "Arp Swing", juce::NormalisableRange<float>(0.0f, 0.7f), 0.0f));
     // (#54) Arp velocity is now PER-STEP on the arp grid (state props arp_steps/arp_vel), not a
     // single APVTS knob — the brief "arp_vel" parameter added earlier in this cycle is retired.
-    params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::arpLatch, 1}, "Arp Latch", false));
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::arpHold, 1}, "Arp Hold", false));
 
     // --- Looper (R3) ---------------------------------------------------------

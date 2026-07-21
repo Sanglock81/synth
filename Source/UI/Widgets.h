@@ -68,6 +68,15 @@ public:
         }
     }
 
+    // Override the hover tooltip with a self-explanatory description (for cryptic controls:
+    // phase RS/RN/FR, ANALOG, DRIVE, LFO SYNC/DIV, ...). `inner` is the leaf the TooltipWindow
+    // reads under the cursor — pass the interactive child (a slider) so it carries the text too.
+    void setHelp (const juce::String& text, juce::Component* inner = nullptr)
+    {
+        setTooltip (text);
+        if (auto* ttc = dynamic_cast<juce::SettableTooltipClient*> (inner)) ttc->setTooltip (text);
+    }
+
     // Call from a subclass ctor after the inner control is added, passing it so
     // long-press/right-click on the control is captured here too.
     void listenForLearnGestures (juce::Component& inner)
@@ -149,8 +158,11 @@ public:
         const int cc = learn.getCCForParam (paramID);
         if (cc >= 0)
         {
-            const int bw = juce::jmin (getWidth() - 2, 34);
-            auto badge = getLocalBounds().removeFromTop (12).removeFromRight (bw).toFloat().reduced (0.5f);
+            // A compact CC chip. Placed top-right by default; for controls whose name needs the
+            // full top (two-line macros) it drops to the bottom-right so it never collides.
+            const int bw = juce::jmin (getWidth() - 2, ccBadgeAtBottom ? 30 : 34);
+            auto strip = ccBadgeAtBottom ? getLocalBounds().removeFromBottom (12) : getLocalBounds().removeFromTop (12);
+            auto badge = strip.removeFromRight (bw).toFloat().reduced (0.5f);
             g.setColour (VASynthLookAndFeel::accent().withAlpha (0.92f));
             g.fillRoundedRectangle (badge, 2.5f);
             g.setColour (juce::Colours::black);
@@ -190,6 +202,7 @@ public:
 protected:
     void enableNumericEntry (juce::RangedAudioParameter* p) { numParam = p; }
     virtual void modTargetAttached() {}   // subclass creates its animation indicator (knob arc / fader ghost)
+    bool ccBadgeAtBottom = false;         // move the CC chip to the bottom (two-line-name controls)
 
     // Mod-target state (shared by every registry control). Protected so ModSlider + subclass
     // indicators can read what they need through the public accessors above.
@@ -298,6 +311,8 @@ public:
         if (auto* p = apvts.getParameter (pid)) btn.setTooltip (p->getName (128));   // hover -> full name
         getProperties().set ("layoutFlex", 0.55);
     }
+
+    void setHelp (const juce::String& text) { btn.setTooltip (text); }   // custom hover help
     void resized() override { btn.setBounds (getLocalBounds().reduced (2)); }
 
 private:
@@ -337,6 +352,18 @@ public:
         setTooltipFromParam (apvts, &slider);      // hover -> full parameter name
     }
 
+    // Custom hover help (overrides the param name); routes to the inner slider (the leaf).
+    void setHelp (const juce::String& text) { LearnableComponent::setHelp (text, &slider); }
+
+    // Transient readout: the value shows ONLY while the fader is being dragged (nothing at rest).
+    // Used where several narrow faders share a row (the ADSR envelope) so the values don't crush.
+    void setTransientReadout (bool on)
+    {
+        transientReadout = on;
+        slider.onDragStart = [this] { dragging = true;  repaint(); };
+        slider.onDragEnd   = [this] { dragging = false; repaint(); };
+    }
+
     void paint (juce::Graphics& g) override
     {
         if (emphasis)
@@ -356,13 +383,16 @@ public:
         g.drawFittedText (emphasis ? name.toUpperCase() : name,
                           getLocalBounds().removeFromTop (labelH()), juce::Justification::centred, 1);
 
-        // Live value readout with the parameter's own units/text (auto-fit width),
-        // in the accent colour so the current setting is easy to read at a glance.
-        g.setColour (emphasis ? VASynthLookAndFeel::ink() : VASynthLookAndFeel::accent());
-        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
-                                                  emphasis ? 14.0f : 12.5f, juce::Font::bold)));
-        const juce::String text = formatParamValue (param);
-        g.drawFittedText (text, getLocalBounds().removeFromBottom (labelH()), juce::Justification::centred, 1);
+        // Live value readout with the parameter's own units/text (auto-fit width), in the accent
+        // colour. When transient, it appears only while dragging (nothing at rest); time params
+        // read in ms below 1 s, s above.
+        if (! transientReadout || dragging)
+        {
+            g.setColour (emphasis ? VASynthLookAndFeel::ink() : VASynthLookAndFeel::accent());
+            g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(),
+                                                      emphasis ? 14.0f : 12.5f, juce::Font::bold)));
+            g.drawFittedText (formatFaderValue(), getLocalBounds().removeFromBottom (labelH()), juce::Justification::centred, 1);
+        }
 
         paintLearnDecorations (g);
         paintModRing (g);
@@ -385,6 +415,20 @@ protected:
 
 private:
     int labelH() const { return emphasis ? 20 : 18; }
+
+    // Time params (label "s") read as ms below 1 s, s above; everything else uses the param text.
+    juce::String formatFaderValue() const
+    {
+        if (param != nullptr && param->getLabel() == "s")
+        {
+            const float sec = param->convertFrom0to1 (param->getValue());
+            return sec < 1.0f ? juce::String (juce::roundToInt (sec * 1000.0f)) + " ms"
+                              : juce::String (sec, 2) + " s";
+        }
+        return formatParamValue (param);
+    }
+
+    bool transientReadout = false, dragging = false;
 
     // Mouse-transparent ghost thumb at the modulated position (same colour language as the knob
     // arc), distinct from the base thumb. Repaints ~30 Hz only while the route is actually moving.
@@ -506,6 +550,9 @@ public:
         setTooltipFromParam (apvts, &slider);      // hover -> full parameter name
     }
 
+    // Custom hover help (overrides the param name); routes to the inner slider (the leaf).
+    void setHelp (const juce::String& text) { LearnableComponent::setHelp (text, &slider); }
+
     void paint (juce::Graphics& g) override
     {
         const juce::String text = formatParamValue (param);
@@ -523,11 +570,16 @@ public:
             return;
         }
 
+        // Name: shrink-to-fit (down to 0.55x) across up to nameLines lines, so a long macro
+        // assignment ("Resonance", "Filter Env Amt") reads in full rather than ellipsizing.
         g.setColour (VASynthLookAndFeel::ink());
-        g.setFont (juce::Font (juce::FontOptions (12.5f, juce::Font::bold)));
-        g.drawFittedText (name, getLocalBounds().removeFromTop (16), juce::Justification::centred, 1);
+        g.setFont (juce::Font (juce::FontOptions (nameLines > 1 ? 11.5f : 12.5f, juce::Font::bold)));
+        g.drawFittedText (name, getLocalBounds().removeFromTop (nameTopH()),
+                          juce::Justification::centredTop, nameLines, 0.55f);
 
-        if (showValue)
+        // Value: always for showValue knobs; for a transient readout, only while dragging (nothing
+        // at rest) — restores the macros' readout without the clutter.
+        if (showValue || (transientReadout && dragging))
         {
             g.setColour (VASynthLookAndFeel::accent());
             g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::bold)));
@@ -543,8 +595,20 @@ public:
         if (sideLabel)
             slider.setBounds (getLocalBounds().removeFromLeft (getHeight()));
         else
-            slider.setBounds (getLocalBounds().withTrimmedTop (17).withTrimmedBottom (showValue ? 16 : 2));
+            slider.setBounds (getLocalBounds().withTrimmedTop (nameTopH() + 1).withTrimmedBottom (showValue ? 16 : 2));
         if (overlay) { overlay->setBounds (slider.getBounds()); overlay->toFront (false); }
+    }
+
+    // Allow the name to wrap to N lines (macros use 2 so full assignment names fit). The CC chip
+    // moves to the bottom so it never overlaps the taller name.
+    void setNameLines (int n) { nameLines = juce::jmax (1, n); ccBadgeAtBottom = nameLines > 1; resized(); repaint(); }
+
+    // Transient value readout: the value shows only while the knob is being dragged (nothing at rest).
+    void setTransientReadout (bool on)
+    {
+        transientReadout = on;
+        slider.onDragStart = [this] { dragging = true;  repaint(); };
+        slider.onDragEnd   = [this] { dragging = false; repaint(); };
     }
 
     // Update the displayed name (e.g. a macro showing its assigned target).
@@ -574,6 +638,10 @@ protected:
     }
 
 private:
+    int  nameTopH() const { return nameLines > 1 ? 24 : 16; }
+    int  nameLines = 1;
+    bool transientReadout = false, dragging = false;
+
     // Moving tick + faint span showing the live LFO-modulated position on the knob arc.
     // Mouse-transparent (never blocks dragging); geometry mirrors VASynthLookAndFeel's rotary.
     struct ModOverlay : juce::Component, private juce::Timer

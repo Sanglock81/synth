@@ -155,15 +155,8 @@ TEST_CASE ("macro destination count = direct target + matrix routes as source (#
     REQUIRE (p.macroDestinationCount (5) == 0);
 }
 
-TEST_CASE ("EQ defaults keep the master output a true bypass", "[plugin][eq][state]")
-{
-    VASynthProcessor p;
-    // eq_on defaults false; a fresh processor must report it off so the chain is skipped.
-    REQUIRE (p.apvts.getRawParameterValue (ParamID::eqOn)->load() < 0.5f);
-    // all band gains default to 0 dB
-    for (auto* id : { ParamID::eqLsGain, ParamID::eqLmGain, ParamID::eqHmGain, ParamID::eqHsGain })
-        REQUIRE (p.apvts.getRawParameterValue (id)->load() == 0.0f);
-}
+// (The "master EQ defaults are a true bypass" test was removed with the eq_* params
+//  themselves, pre-1.0. The per-part EQ default-bypass is covered by test_eq_panel.)
 
 TEST_CASE ("per-part EQ is functional: enabling a low boost lifts a low note (K1)", "[plugin][eq]")
 {

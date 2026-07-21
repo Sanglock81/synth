@@ -77,7 +77,7 @@ public:
             // Rhythm section (R3): the arp / sequencer / looper + shared tempo are
             // PERFORMANCE state, not sound design — Random must leave them alone.
             ID::tempo,
-            ID::arpOn, ID::arpMode, ID::arpOctaves, ID::arpGate, ID::arpSwing, ID::arpLatch, ID::arpHold,
+            ID::arpOn, ID::arpMode, ID::arpOctaves, ID::arpGate, ID::arpSwing, ID::arpHold,
             ID::loopRec, ID::loopPlay, ID::loopBars, ID::loopMode,
             ID::loopBars2, ID::loopBars3, ID::loopBars4,  // J2: per-lane length is performance state
             ID::sceneQuant,                                // J3: scene launch quantum is performance state

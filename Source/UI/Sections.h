@@ -51,6 +51,7 @@ public:
             o.on   = std::make_unique<PowerToggle> (p.apvts, onIds[i], "ON");
             o.wave = std::make_unique<HSelector> (p.apvts, waveIds[i], p.getMidiLearn(), waveLabels);
             o.phase = std::make_unique<HSelector> (p.apvts, phIds[i], p.getMidiLearn(), phaseLabels);
+            o.phase->setHelp ("Start phase per note: RST reset / RND random / FRE free-run");
             o.k[0] = std::make_unique<RotaryKnob> (p.apvts, octIds[i], "OCTAVE", p.getMidiLearn());
             o.k[1] = std::make_unique<RotaryKnob> (p.apvts, detIds[i], "DETUNE", p.getMidiLearn());
             o.k[2] = std::make_unique<RotaryKnob> (p.apvts, pwIds[i],  "PW",     p.getMidiLearn());
@@ -60,12 +61,31 @@ public:
             addAndMakeVisible (*o.on);   addAndMakeVisible (*o.wave); addAndMakeVisible (*o.phase);
             for (auto& k : o.k) addAndMakeVisible (*k);
         }
+
+        // NOISE — the 4th sound source (white noise), given the SAME row anatomy as an oscillator
+        // at slim height: a tinted "NOISE" source label on the left (where the osc ON/wave headers
+        // sit) and a LEVEL knob aligned under the three oscillator LEVEL knobs (column alignment is
+        // what makes it read as part of the mixer, not an orphan). The open middle is reserved for
+        // the post-1.0 noise COLOR selector (white / pink) — see docs/roadmap.
+        noise = std::make_unique<RotaryKnob> (p.apvts, ID::noiseLevel, "LEVEL", p.getMidiLearn());
+        noise->setHelp ("White-noise source level (the 4th sound source)");
+        addAndMakeVisible (*noise);
     }
 
     void paint (juce::Graphics& g) override
     {
         chrome::section (g, getLocalBounds(), "Oscillators", sectiontint::osc());
         for (auto& b : boxRects()) chrome::subBox (g, b, sectiontint::osc());
+        chrome::subBox (g, noiseBox(), sectiontint::osc());
+
+        // "NOISE" source label (left), tinted like the osc rows — the 4th mixer source.
+        auto nb = chrome::subBoxContent (noiseBox());
+        auto lbl = nb.removeFromLeft (juce::jmin (76, nb.getWidth() / 2));
+        g.setColour (sectiontint::osc().withAlpha (0.22f));
+        g.fillRoundedRectangle (lbl.toFloat().reduced (1.0f), 4.0f);
+        g.setColour (sectiontint::osc().brighter (0.35f));
+        g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
+        g.drawText ("NOISE", lbl.reduced (8, 0), juce::Justification::centredLeft, false);
     }
 
     void resized() override
@@ -83,16 +103,28 @@ public:
             for (int k = 0; k < 4; ++k)
                 o.k[(size_t) k]->setBounds ((k < 3 ? c.removeFromLeft (kw) : c).reduced (2, 0));
         }
+        // NOISE knob aligned under the oscillators' LEVEL column (rightmost quarter).
+        auto nc = chrome::subBoxContent (noiseBox());
+        const int kw = nc.getWidth() / 4;
+        noise->setBounds (nc.removeFromRight (kw).reduced (2, 0));
     }
 
 private:
+    static constexpr int kNoiseStrip = 46;   // compact 4th-source row height
+
     std::array<juce::Rectangle<int>, 3> boxRects() const
     {
         auto s = chrome::sectionContent (getLocalBounds());
+        s.removeFromBottom (kNoiseStrip + 5);                       // reserve the NOISE strip + a gap
         const int gap = 5, bh = juce::jmax (10, (s.getHeight() - 2 * gap) / 3);
         std::array<juce::Rectangle<int>, 3> r;
         for (int i = 0; i < 3; ++i) { r[(size_t) i] = s.removeFromTop (bh); s.removeFromTop (gap); }
         return r;
+    }
+
+    juce::Rectangle<int> noiseBox() const
+    {
+        return chrome::sectionContent (getLocalBounds()).removeFromBottom (kNoiseStrip);
     }
 
     struct Osc
@@ -102,6 +134,7 @@ private:
         std::array<std::unique_ptr<RotaryKnob>, 4> k;
     };
     std::array<Osc, 3> oscs;
+    std::unique_ptr<RotaryKnob> noise;   // 4th source: white-noise level (noise_level)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OscSection)
 };
@@ -119,15 +152,18 @@ public:
                                             juce::StringArray { "LP", "HP", "BP", "NOTCH" });
         addAndMakeVisible (*type);
 
-        struct KD { const char* pid; const char* name; };
+        struct KD { const char* pid; const char* name; const char* help; };
         const KD kd[] {
-            { ID::filterCutoff,   "CUTOFF"  }, { ID::filterReso, "RESO" },
-            { ID::filterDrive,    "DRIVE"   },
-            { ID::filterEnvAmt,   "ENV AMT" }, { ID::filterKeytrack, "KEYTRK" },
-            { ID::velToCutoff,    "VEL>CUT" } };
+            { ID::filterCutoff,   "CUTOFF",  nullptr },
+            { ID::filterReso,     "RESO",    "Resonance. Past the top it self-oscillates into a sine at cutoff" },
+            { ID::filterDrive,    "DRIVE",   "Filter drive: analog-style saturation inside the filter loop" },
+            { ID::filterEnvAmt,   "ENV AMT", nullptr },
+            { ID::filterKeytrack, "KEYTRK",  nullptr },
+            { ID::velToCutoff,    "VEL>CUT", nullptr } };
         for (auto& d : kd)
         {
             auto* k = new RotaryKnob (p.apvts, d.pid, d.name, p.getMidiLearn(), /*sideLabel*/ true);
+            if (d.help != nullptr) k->setHelp (d.help);
             knobs.add (k); addAndMakeVisible (k);
             // LINK target + animation for cutoff/reso/env-amt/keytrack/vel are wired centrally
             // from the registry (editor::wireModTargets) — no per-knob wiring here.
@@ -171,6 +207,7 @@ public:
         {
             amp.add (new LabelledFader (p.apvts, ampIds[i], names[i], p.getMidiLearn()));
             mod.add (new LabelledFader (p.apvts, modIds[i], names[i], p.getMidiLearn()));
+            amp[i]->setTransientReadout (true); mod[i]->setTransientReadout (true);   // B3: value only while touched
             addAndMakeVisible (amp[i]); addChildComponent (mod[i]);
         }
         pitch = std::make_unique<RotaryKnob> (p.apvts, ID::fltEnvToPitch, "E>PCH", p.getMidiLearn());
@@ -255,9 +292,11 @@ public:
             l.dest  = std::make_unique<HSelector> (p.apvts, destIds[i], p.getMidiLearn(), destLabels);
             l.rate  = std::make_unique<RotaryKnob> (p.apvts, rateIds[i],  "RATE",  p.getMidiLearn());
             l.div   = std::make_unique<RotaryKnob> (p.apvts, divIds[i],   "DIV",   p.getMidiLearn());
+            l.div->setHelp ("Note division of the LFO when SYNC is on (1/4, 1/8, ...)");
             l.depth = std::make_unique<RotaryKnob> (p.apvts, depthIds[i], "DEPTH", p.getMidiLearn());
             l.shape = std::make_unique<ShapeSelector> (p.apvts, shapeIds[i], p.getMidiLearn());
             l.sync  = std::make_unique<PowerToggle> (p.apvts, syncIds[i], "SYNC");
+            l.sync->setHelp ("Lock the LFO rate to tempo (RATE knob becomes a note-division selector)");
             addAndMakeVisible (*l.dest);  addAndMakeVisible (*l.rate);
             addChildComponent (*l.div);   // shown only when SYNC is on (swaps with RATE)
             addAndMakeVisible (*l.depth); addAndMakeVisible (*l.shape);

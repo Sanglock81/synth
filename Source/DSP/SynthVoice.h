@@ -223,7 +223,8 @@ public:
         const bool o1 = l1 > 1.0e-4f;
         const bool o2 = l2 > 1.0e-4f;
         const bool o3 = l3 > 1.0e-4f;
-        const bool useNoise = p.noiseLevel > 1.0e-4f;
+        const float nl = std::clamp (p.noiseLevel + mm.noiseLevel, 0.0f, 1.0f);   // + mod-matrix noise level
+        const bool useNoise = nl > 1.0e-4f;
 
         for (int i = 0; i < numSamples; ++i)
         {
@@ -252,7 +253,7 @@ public:
             if (o1) s += osc1.nextSample() * l1;
             if (o2) s += osc2.nextSample() * l2;
             if (o3) s += osc3.nextSample() * l3;
-            if (useNoise) s += noise() * p.noiseLevel;
+            if (useNoise) s += noise() * nl;
 
             s = filter.process (s);
             out[i] += s * ampLevel * ampScale * ampMul * p.gain;   // p.gain == 1.0 for non-kit voices

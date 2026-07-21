@@ -56,12 +56,18 @@ public:
             g.setFont (juce::Font (juce::FontOptions (14.5f, juce::Font::bold)));
             g.drawText (ChordEngine::modifierName (i), cell, juce::Justification::centred, false);
 
-            // QWERTY shortcut hint (standalone): the physical key that triggers this chip,
-            // in the same left-to-right order as the keys c v b n m , . (top-left keycap).
+            // QWERTY shortcut hint (standalone): the physical key that triggers this chip, drawn
+            // as a small bordered KEYCAP badge (top-left) so the keyboard mapping teaches itself
+            // at arm's length. Same left-to-right order as the keys c v b n m , .
             static const char* kModKeys[ChordEngine::kNumModifiers] { "C", "V", "B", "N", "M", ",", "." };
-            g.setColour (lit ? juce::Colours::black.withAlpha (0.55f) : VASynthLookAndFeel::dim());
-            g.setFont (juce::Font (juce::FontOptions (9.5f, juce::Font::bold)));
-            g.drawText (kModKeys[i], cell.reduced (5, 3).removeFromTop (11), juce::Justification::topLeft, false);
+            auto keycap = cell.reduced (4, 3).removeFromTop (13).removeFromLeft (13).toFloat();
+            g.setColour ((lit ? juce::Colours::black : juce::Colours::white).withAlpha (0.10f));
+            g.fillRoundedRectangle (keycap, 3.0f);
+            g.setColour (lit ? juce::Colours::black.withAlpha (0.5f) : VASynthLookAndFeel::dim());
+            g.drawRoundedRectangle (keycap, 3.0f, 1.0f);
+            g.setColour (lit ? juce::Colours::black : VASynthLookAndFeel::ink());
+            g.setFont (juce::Font (juce::FontOptions (9.0f, juce::Font::bold)));
+            g.drawText (kModKeys[i], keycap, juce::Justification::centred, false);
 
             const int cc = proc.getModifierLearn().getCCForModifier (i);
             const int nn = proc.getModifierLearn().getNoteForModifier (i);

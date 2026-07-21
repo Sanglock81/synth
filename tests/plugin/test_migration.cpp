@@ -37,6 +37,34 @@ TEST_CASE ("legacy osc_mix migrates to per-source levels on load", "[plugin][6a]
     REQUIRE (dst.apvts.getParameter ("osc3_level")->getValue() == Catch::Approx (0.0f).margin (1e-4));
 }
 
+TEST_CASE ("state carrying removed params (eq_*, arp_latch) loads cleanly, values discarded", "[plugin][migration]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    // Simulate an OLD session that saved the now-removed master-EQ + arp-latch params.
+    VASynthProcessor src;
+    src.apvts.getParameter ("filter_cutoff")->setValueNotifyingHost (0.42f);   // a real param that must survive
+    auto tree = src.apvts.copyState();
+    auto addOld = [&] (const char* id, float v)
+    {
+        juce::ValueTree p ("PARAM"); p.setProperty ("id", id, nullptr); p.setProperty ("value", v, nullptr);
+        tree.appendChild (p, nullptr);
+    };
+    addOld ("eq_on", 1.0f); addOld ("eq_ls_gain", 12.0f); addOld ("eq_hm_freq", 3000.0f);
+    addOld ("eq_hs_gain", -6.0f); addOld ("arp_latch", 1.0f);
+
+    auto xml = tree.createXml();
+    juce::MemoryBlock blob;
+    VASynthProcessor::xmlToBinaryForTest (*xml, blob);
+
+    // Must not crash, and the unknown IDs must simply be ignored.
+    VASynthProcessor dst;
+    dst.setStateInformation (blob.getData(), (int) blob.getSize());
+    REQUIRE (dst.apvts.getParameter ("eq_on")   == nullptr);   // param no longer exists
+    REQUIRE (dst.apvts.getParameter ("arp_latch") == nullptr);
+    REQUIRE (dst.apvts.getParameter ("filter_cutoff")->getValue() == Catch::Approx (0.42f).margin (1e-4));  // real param survived
+}
+
 TEST_CASE ("modern state with levels round-trips unchanged (no spurious migration)", "[plugin][6a][migration]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

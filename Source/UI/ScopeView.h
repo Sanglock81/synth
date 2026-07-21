@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_dsp/juce_dsp.h>
+#include <cmath>
 #include "VASynthLookAndFeel.h"
 #include "PanelChrome.h"
 #include "../PluginProcessor.h"
@@ -36,9 +37,10 @@ public:
         for (int x = 0; x < sw; ++x)
         {
             const int idx = juce::jlimit (0, fftSize - 1, x * fftSize / sw);
-            // +40% vertical gain vs the raw 0.46 half-height (more visible at low levels),
-            // clamped so a hot signal still can't paint outside the scope box.
-            const float y = sc.getCentreY() - juce::jlimit (-0.98f, 0.98f, scope[(std::size_t) idx] * 1.4f) * sc.getHeight() * 0.46f;
+            // Vertical gain so a typical playing level fills ~70-80% of the scope box, then a
+            // tanh SOFT-CLIP folds hot peaks smoothly to the panel edge (never overdrawn).
+            const float v = std::tanh (scope[(std::size_t) idx] * kScopeGain);
+            const float y = sc.getCentreY() - v * sc.getHeight() * 0.46f;
             if (x == 0) w.startNewSubPath ((float) sc.getX(), y);
             else        w.lineTo ((float) (sc.getX() + x), y);
         }
@@ -83,6 +85,7 @@ private:
         repaint();
     }
 
+    static constexpr float kScopeGain = 3.6f;   // ~0.25 in -> ~0.7 of half-height (tanh soft-clipped)
     static constexpr int kBars    = 44;
     static constexpr int fftOrder = 10;
     static constexpr int fftSize  = 1 << fftOrder;
