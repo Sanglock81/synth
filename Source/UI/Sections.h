@@ -67,8 +67,8 @@ public:
         // sit) and a LEVEL knob aligned under the three oscillator LEVEL knobs (column alignment is
         // what makes it read as part of the mixer, not an orphan). The open middle is reserved for
         // the post-1.0 noise COLOR selector (white / pink) — see docs/roadmap.
-        noise = std::make_unique<RotaryKnob> (p.apvts, ID::noiseLevel, "LEVEL", p.getMidiLearn());
-        noise->setHelp ("White-noise source level (the 4th sound source)");
+        noise = std::make_unique<HBarControl> (p.apvts, ID::noiseLevel, "NOISE", p.getMidiLearn());
+        noise->setHelp ("White-noise source level (the 4th sound source) — drag the bar left/right");
         addAndMakeVisible (*noise);
     }
 
@@ -103,10 +103,11 @@ public:
             for (int k = 0; k < 4; ++k)
                 o.k[(size_t) k]->setBounds ((k < 3 ? c.removeFromLeft (kw) : c).reduced (2, 0));
         }
-        // NOISE knob aligned under the oscillators' LEVEL column (rightmost quarter).
+        // NOISE fill-bar: fills the row to the right of the "NOISE" source label (the open middle
+        // between them is the reserved post-1.0 COLOR-selector slot). The bar itself shows the level.
         auto nc = chrome::subBoxContent (noiseBox());
-        const int kw = nc.getWidth() / 4;
-        noise->setBounds (nc.removeFromRight (kw).reduced (2, 0));
+        nc.removeFromLeft (juce::jmin (76, nc.getWidth() / 2) + 10);   // clear the NOISE label + a gap
+        noise->setBounds (nc.reduced (2, 12));
     }
 
 private:
@@ -134,7 +135,7 @@ private:
         std::array<std::unique_ptr<RotaryKnob>, 4> k;
     };
     std::array<Osc, 3> oscs;
-    std::unique_ptr<RotaryKnob> noise;   // 4th source: white-noise level (noise_level)
+    std::unique_ptr<HBarControl> noise;   // 4th source: white-noise level (horizontal fill bar)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OscSection)
 };

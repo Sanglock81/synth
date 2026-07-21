@@ -467,6 +467,53 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// Horizontal fill-bar control: dragging/tapping left->right raises the value, and the FILLED BAR
+// itself is the level indicator. Learnable + a registry mod-target + numeric-entry like the knobs
+// and faders. Used for the NOISE source level.
+class HBarControl : public LearnableComponent
+{
+public:
+    HBarControl (juce::AudioProcessorValueTreeState& apvts, const juce::String& pid,
+                 juce::String displayName, MidiLearnManager& learnMgr)
+        : LearnableComponent (learnMgr, pid), name (std::move (displayName))
+    {
+        slider.setSliderStyle (juce::Slider::LinearBar);
+        slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        slider.setSliderSnapsToMousePosition (true);          // a fill bar: tap-to-position feels natural
+        slider.setColour (juce::Slider::trackColourId,      VASynthLookAndFeel::accent());   // the fill
+        slider.setColour (juce::Slider::backgroundColourId, VASynthLookAndFeel::track());    // the trough
+        slider.setWantsKeyboardFocus (false);
+        addAndMakeVisible (slider);
+        attachment = std::make_unique<juce::SliderParameterAttachment> (*apvts.getParameter (pid), slider);
+        param = apvts.getParameter (pid);
+        enableNumericEntry (param);
+        listenForLearnGestures (slider);
+        setTooltipFromParam (apvts, &slider);
+    }
+
+    void setHelp (const juce::String& text) { LearnableComponent::setHelp (text, &slider); }
+
+    void paint (juce::Graphics& g) override
+    {
+        // The LinearBar slider paints the fill; overlay the value on the right for a readout.
+        g.setColour (VASynthLookAndFeel::ink());
+        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 11.0f, juce::Font::bold)));
+        g.drawText (formatParamValue (param), getLocalBounds().reduced (7, 0), juce::Justification::centredRight, false);
+        paintLearnDecorations (g);
+        paintModRing (g);
+    }
+
+    void resized() override { slider.setBounds (getLocalBounds()); }
+
+private:
+    juce::String name;
+    ModSlider slider { *this };
+    juce::RangedAudioParameter* param = nullptr;
+    std::unique_ptr<juce::SliderParameterAttachment> attachment;
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HBarControl)
+};
+
+// ---------------------------------------------------------------------------
 // Transient toast notification (e.g. "Launchkey Mini connected"). Holds for ~2 s
 // then fades. Intercepts no input and refuses focus, so it never disturbs the
 // controls beneath it or the QWERTY note input.
