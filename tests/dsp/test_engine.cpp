@@ -255,6 +255,35 @@ TEST_CASE ("filter drive automation is click-free (smoothed)", "[engine][drive][
     REQUIRE (at <= pre + 0.02f);                                        // gentle: no click at the jump
 }
 
+TEST_CASE ("self-oscillation + keytrack plays in tune across the keyboard", "[engine][selfosc][pitch]")
+{
+    // Requirement 2: self-osc is an instrument. With the base cutoff at middle-C's pitch and
+    // full keytrack, a silent voice (no oscillators) must self-oscillate AT the note's pitch,
+    // within a few cents, across the range — proving keytrack (note -> cutoff) and the TPT
+    // prewarp (self-osc freq == cutoff) together.
+    VoiceParams p;
+    p.osc1Level = 0.0f; p.osc2Level = 0.0f; p.osc3Level = 0.0f; p.noiseLevel = 0.0f;  // silent: only self-osc sounds
+    p.filterType = 0; p.cutoffHz = 261.6256f;         // note 60 (middle C) frequency
+    p.resonance = 1.0f;                               // full -> self-oscillation
+    p.keytrack = 1.0f; p.filterEnvAmt = 0.0f; p.velToCutoff = 0.0f;
+    p.ampA = 0.005f; p.ampD = 0.1f; p.ampS = 1.0f; p.ampR = 0.1f;   // sustained
+
+    for (int note : { 36, 48, 60, 72, 84 })
+    {
+        SynthEngine e; e.prepare (kSR);
+        e.noteOn (note, 1.0f);
+        std::vector<float> out (int (kSR * 1.2), 0.0f);
+        e.render (out.data(), (int) out.size(), p, 2.0f, 0, 0.0f, 0);
+
+        const double want = 440.0 * std::exp2 ((note - 69) / 12.0);
+        const double hz   = tu::zeroCrossHz (out, int (kSR * 0.6), int (kSR * 0.5), kSR);
+        const double cents = 1200.0 * std::log2 (hz / want);
+        INFO ("note " << note << " want " << want << " Hz, self-osc " << hz << " Hz (" << cents << " cents)");
+        REQUIRE (std::isfinite (hz));
+        REQUIRE (std::abs (cents) < 8.0);             // a few cents across the keyboard
+    }
+}
+
 TEST_CASE ("locked part renders with its baked params, not the live part", "[engine][7c][parts]")
 {
     VoiceParams live = sineParams();                 // part 0: sine at the note

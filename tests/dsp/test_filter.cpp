@@ -184,3 +184,109 @@ TEST_CASE ("driven filter is stable at high resonance + full drive (noise soak)"
     REQUIRE (tu::allFinite (out));
     REQUIRE (tu::peak (out) < 2.0f);
 }
+
+// ============================================================================
+// Tier 2B — self-oscillation. The top sliver of resonance (> 0.98) opens the
+// saturator-bounded loop into a keytracked sine at cutoff: it blooms from
+// silence (seeded), plays in tune, leaves the historical range bit-exact, and
+// flushes denormals on decaying tails.
+// ============================================================================
+
+TEST_CASE ("resonance below the self-osc sliver is bit-exact with the legacy path", "[filter][selfosc][compat]")
+{
+    // Requirement 3 (ID freeze): an old preset at HIGH (pre-clamp) resonance must be unchanged.
+    // 0.95 is high but below the 0.98 sliver -> must equal the exact legacy SVF (k = 2 - 2*res).
+    SVFilter legacy;  legacy.prepare (kSR);  legacy.setType (SVFilter::Type::LowPass);
+    SVFilter now;     now.prepare (kSR);     now.setType (SVFilter::Type::LowPass); now.setDrive (0.0f);
+
+    auto rng = makeRng();
+    std::uniform_real_distribution<float> dist (-1.0f, 1.0f);
+    for (int i = 0; i < 40000; ++i)
+    {
+        legacy.setCutoff (1200.0, 0.95);
+        now.setCutoff (1200.0, 0.95);
+        const float x = dist (rng);
+        REQUIRE (legacy.process (x) == now.process (x));   // bit for bit
+    }
+}
+
+TEST_CASE ("self-oscillation blooms from silence (seeded), no input", "[filter][selfosc][bloom]")
+{
+    SVFilter f; f.prepare (kSR); f.setType (SVFilter::Type::LowPass); f.setDrive (0.0f);
+    const int N = int (kSR * 1.0);
+    std::vector<float> out ((std::size_t) N, 0.0f);
+    for (int i = 0; i < N; ++i) { f.setCutoff (220.0, 1.0); out[(std::size_t) i] = f.process (0.0f); }  // reso = 1, silent in
+
+    REQUIRE (tu::allFinite (out));
+    const float early = tu::peak ({ out.begin(), out.begin() + int (kSR * 0.02) });   // first 20 ms ~ silent
+    const float late  = tu::peak ({ out.begin() + int (kSR * 0.6), out.end() });      // settled
+    INFO ("bloom early peak=" << early << " late peak=" << late);
+    REQUIRE (early < 0.05f);            // starts quiet (seeded from ~-120 dB)
+    REQUIRE (late  > 0.2f);             // blooms into an audible sustained sine
+    REQUIRE (late  < 2.0f);             // and stays bounded
+}
+
+TEST_CASE ("self-oscillation plays in tune (freq == cutoff, TPT prewarp)", "[filter][selfosc][pitch]")
+{
+    // At the filter level the self-osc frequency is the cutoff; keytrack (note -> cutoff) is
+    // proven at the engine level. Across the audible range it must land within a few cents.
+    for (double fc : { 55.0, 110.0, 220.0, 440.0, 880.0, 1760.0 })
+    {
+        SVFilter f; f.prepare (kSR); f.setType (SVFilter::Type::LowPass); f.setDrive (0.0f);
+        const int N = int (kSR * 1.2);
+        std::vector<float> out ((std::size_t) N, 0.0f);
+        for (int i = 0; i < N; ++i) { f.setCutoff (fc, 1.0); out[(std::size_t) i] = f.process (0.0f); }
+        const double hz = tu::zeroCrossHz (out, int (kSR * 0.6), int (kSR * 0.5), kSR);
+        const double cents = 1200.0 * std::log2 (hz / fc);
+        INFO ("cutoff " << fc << " -> self-osc " << hz << " Hz (" << cents << " cents)");
+        REQUIRE (std::abs (cents) < 5.0);              // within a few cents (measured ~0.5)
+    }
+}
+
+TEST_CASE ("decaying self-osc tail is denormal-safe and settles", "[filter][selfosc][denormal]")
+{
+    SVFilter f; f.prepare (kSR); f.setType (SVFilter::Type::LowPass); f.setDrive (0.0f);
+    // bloom the self-osc...
+    for (int i = 0; i < int (kSR * 0.8); ++i) { f.setCutoff (220.0, 1.0); f.process (0.0f); }
+    // ...then collapse resonance to 0 (heavy damping) and feed silence: the tail must decay,
+    // stay finite, and not leave lingering subnormal (denormal) values in the output.
+    const int N = int (kSR * 1.0);
+    std::vector<float> tail ((std::size_t) N, 0.0f);
+    for (int i = 0; i < N; ++i) { f.setCutoff (220.0, 0.0); tail[(std::size_t) i] = f.process (0.0f); }
+
+    REQUIRE (tu::allFinite (tail));
+    int denormals = 0;
+    for (float v : tail) { const float a = std::abs (v); if (a > 0.0f && a < 1.0e-30f) ++denormals; }
+    INFO ("denormal samples in tail = " << denormals);
+    REQUIRE (denormals == 0);                          // flushed, not spinning on subnormals
+    REQUIRE (tu::peak ({ tail.end() - int (kSR * 0.1), tail.end() }) < 1.0e-6f);   // fully settled
+}
+
+TEST_CASE ("filter survives adversarial parameter fuzzing (finite + bounded)", "[filter][fuzz][selfosc]")
+{
+    // pluginval's parameter fuzzer jams type/cutoff/resonance/drive to random extremes mid-stream
+    // while self-oscillating. The filter must never emit a non-finite value (an inf/NaN can crash
+    // downstream int-conversion) and must stay bounded regardless of the state it is driven into.
+    std::mt19937 rng (0xBADF00D);
+    std::uniform_real_distribution<double> U (0.0, 1.0);
+    float worst = 0.0f;
+    for (int trial = 0; trial < 8; ++trial)
+    {
+        SVFilter f; f.prepare (kSR);
+        for (long i = 0; i < 300000; ++i)
+        {
+            if (i % 17 == 0) f.setType (SVFilter::Type (rng() % 4));
+            if (i % 13 == 0) f.setCutoff (20.0 * std::pow (1000.0, U (rng)), U (rng) < 0.3 ? 1.0 : U (rng));
+            if (i % 29 == 0) f.setDrive (U (rng) < 0.3 ? float (U (rng)) : 0.0f);
+            const double in = (U (rng) * 2.0 - 1.0) * (U (rng) < 0.2 ? 3.0 : 1.0) + (U (rng) < 0.1 ? 0.8 : 0.0);
+            const float o = f.process (float (in));
+            REQUIRE (std::isfinite (o));
+            worst = std::max (worst, std::abs (o));
+        }
+    }
+    INFO ("worst |out| under fuzz = " << worst);
+    // The crash-prevention guarantee is finiteness (asserted every sample above). Also confirm no
+    // runaway: the driven/self-osc path is clamped to kOutMax=8; the linear path is intentionally
+    // NOT clamped (bit-exact), so a resonant peak on a spike can reach ~13 — finite and sane.
+    REQUIRE (worst < 100.0f);
+}

@@ -9,6 +9,14 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Filter SELF-OSCILLATION (Musicality Pass, Tier 2B).** Push **RESO** past the top and the filter
+  blooms into a **pure, keytracked sine at the cutoff** — a playable voice (sine bass, whistles,
+  drones), the way a cranked analog filter sings. It **starts reliably even with no input**: the loop
+  carries an inaudible (~-120 dB) noise floor, the digital stand-in for analog thermal noise, so
+  silence always blooms (in ~0.2 s). It **plays in tune** — the self-oscillation lands within ~1.5
+  cents of the note across the whole keyboard at full keytrack. Old presets are safe: RESO's range is
+  unchanged and **only the very top sliver opens into self-osc** (everything below is bit-identical),
+  and randomize never reaches it. Decaying tails are denormal-safe.
 - **Filter DRIVE (Musicality Pass, Tier 2 — the big one).** The state-variable filter gains an
   in-loop **tanh saturation**: a new **DRIVE** knob (per part) soft-clips the signal entering the
   filter loop and bounds the resonance-feedback path — the way the classic analog filters get their
@@ -17,8 +25,8 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   you pay for the tanh only when driven). The nonlinearity uses a fast rational tanh (pinned within
   ~0.024 of `std::tanh` by the DSP suite); driven output is makeup-matched to stay within ~2 dB of
   clean across the range, and the drive amount is **smoothed** so knob/automation/macro moves don't
-  click. DRIVE is macro-routable. (Next Tier-2 increments: resonance to self-oscillation + loudness
-  compensation, then 2× oversampling for the driven path.)
+  click. DRIVE is macro-routable. (Next Tier-2 increment: 2× oversampling for the driven path +
+  aliasing test + ThinkPad bench.)
 - **Analog life for the oscillators (Musicality Pass, Tier 1).** Each oscillator gains a
   **start-phase policy** — **RESET** (today's bit-identical alignment), **RANDOM** (a fresh phase
   per note, so detuned stacks and chords bloom differently every strike), or **FREE** (the
