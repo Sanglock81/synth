@@ -2,6 +2,7 @@
 #include <cmath>
 #include <algorithm>
 #include <cstdint>
+#include <array>
 
 // ============================================================================
 // State-Variable Filter, TPT ("topology-preserving transform") form,
@@ -59,10 +60,17 @@ public:
     void prepare (double newSampleRate)
     {
         sampleRate = newSampleRate;
+        designHalfband();
         reset();
     }
 
-    void reset() { ic1eq = ic2eq = 0.0; }
+    void reset()
+    {
+        ic1eq = ic2eq = 0.0;
+        upPrev = 0.0;
+        downZ.fill (0.0);
+        downPos = 0;
+    }
 
     void setType (Type t) { type = t; }
 
@@ -103,56 +111,105 @@ public:
             selfOscComp = 1.0 + t * (kSelfOscMakeup - 1.0);
         }
 
-        g  = std::tan (pi * cutoffHz / sampleRate);
+        // Coefficients are computed at the ACTUAL processing rate: 2x when the voice has
+        // latched the oversampled path (see setOversample), else the base rate. The prewarp
+        // keeps the resonant peak / self-osc frequency at `cutoffHz` in both domains.
+        const double procSr = oversampled ? sampleRate * 2.0 : sampleRate;
+        g  = std::tan (pi * cutoffHz / procSr);
         a1 = 1.0 / (1.0 + g * (g + k));
         a2 = g * a1;
         a3 = g * a2;
     }
 
+    // Latch the oversampled path for this voice's note (see the header note on hysteresis).
+    // Toggling resets the resampler state + integrators — done only at note boundaries by the
+    // voice, so a rate-domain switch never happens mid-note. Coefficients pick up the new rate
+    // on the next setCutoff (the voice always sets it before rendering a chunk).
+    void setOversample (bool on)
+    {
+        if (on == oversampled) return;
+        oversampled = on;
+        reset();
+    }
+
     float process (float input)
     {
+        // A voice that latched oversampling runs the bounded core at 2x for the whole note
+        // (coeffs are at 2x). Its drive can dip to 0 mid-note — driveGain->1 makes the core
+        // nearly transparent — but the RATE never switches, so there is no discontinuity.
+        if (oversampled)
+        {
+            // 2x: linear-interp upsample (input is already band-limited), two nonlinear-core
+            // iterations, FIR half-band decimate. The makeup (driveComp * selfOscComp) is a
+            // linear scale, so applying it once after decimation is equivalent to per-sample.
+            const double u1 = static_cast<double> (input);
+            const double u0 = 0.5 * (upPrev + u1);
+            upPrev = u1;
+            const double y0 = coreBounded (u0);
+            const double y1 = coreBounded (u1);
+            downPush (y0);
+            const double out = downPush (y1);
+            return static_cast<float> (std::clamp (out * driveComp * selfOscComp, -kOutMax, kOutMax));
+        }
+
         if (! nonlinear && ! selfOsc)
             return processLinear (input);      // bit-exact legacy path (drive == 0, res <= sliver)
 
-        // --- driven and/or self-oscillating: in-loop nonlinearity ---------
-        // Soft-clip the driven input, run the TPT solve, then bound the bandpass
-        // integrator state (the resonance-feedback signal) through tanh. When self-
-        // oscillating, seed the loop with an inaudible (~-120 dB) noise floor so a
+        // Bounded but not latched to oversample (e.g. drive automated up mid-note on a voice
+        // that started clean): run the core once at base rate. Accepts a little aliasing for
+        // that one note rather than switching rate domains mid-note.
+        const double out = coreBounded (static_cast<double> (input));
+        return static_cast<float> (std::clamp (out * driveComp * selfOscComp, -kOutMax, kOutMax));
+    }
+
+private:
+    // One nonlinear TPT-SVF sample at the current coefficient rate, returning the type-selected
+    // output BEFORE makeup/clamp (so the oversampler can apply those once after decimation).
+    double coreBounded (double in)
+    {
+        // When self-oscillating, seed the loop with an inaudible (~-120 dB) noise floor so a
         // silent filter still blooms — the digital analogue of analog thermal noise.
-        // Integrator states are flushed to kill denormals on decaying tails.
-        double x = static_cast<double> (input);
+        double x = in;
         if (selfOsc) x += kSelfOscSeed * seedNoise();
         const double v0 = tanhFast (x * driveGain);
         const double v3 = v0 - ic2eq;
         const double v1 = a1 * ic1eq + a2 * v3;
         const double v2 = ic2eq + a2 * ic1eq + a3 * v3;
 
-        // ic1 (the bandpass / resonance state) is bounded by tanh. ic2 (the lowpass
-        // integrator) has NO damping when k < 0 (self-osc), so a pathological input can
-        // wind it up — clamp it well above any musical level (self-osc sits at ~1) so the
-        // whole bounded path is provably finite and can never feed inf/NaN downstream.
-        ic1eq = flushDenorm (tanhFast (2.0 * v1 - ic1eq));   // saturate the resonance path
+        // ic1 (bandpass / resonance state) is bounded by tanh. ic2 (lowpass integrator) has NO
+        // damping when k < 0 (self-osc), so clamp it well above any musical level -> the bounded
+        // path is provably finite and can never feed inf/NaN downstream. Denormals flushed too.
+        ic1eq = flushDenorm (tanhFast (2.0 * v1 - ic1eq));
         ic2eq = flushDenorm (std::clamp (2.0 * v2 - ic2eq, -kStateMax, kStateMax));
 
-        const double low   = v2;
-        const double band  = v1;
-        const double high  = v0 - k * v1 - v2;
-
-        double out = low;
+        const double low = v2, band = v1, high = v0 - k * v1 - v2;
         switch (type)
         {
-            case Type::LowPass:  out = low;            break;
-            case Type::HighPass: out = high;           break;
-            case Type::BandPass: out = band;           break;
-            case Type::Notch:    out = low + high;     break;
+            case Type::HighPass: return high;
+            case Type::BandPass: return band;
+            case Type::Notch:    return low + high;
+            case Type::LowPass:
+            default:             return low;
         }
-        // Final safety bound on the driven/self-osc path: musical output (self-osc ~0.5,
-        // drive < 2) is far below kOutMax, so this only caps pathological fuzz states and
-        // guarantees a sane, finite value reaches the rest of the chain.
-        return static_cast<float> (std::clamp (out * driveComp * selfOscComp, -kOutMax, kOutMax));
     }
 
-private:
+    // FIR half-band decimator: push one 2x-rate sample, return the filtered value. Half-band
+    // taps at even offsets (except the center) are zero, so only the odd taps + center cost a
+    // multiply. The voice keeps every SECOND return value (the decimated output).
+    double downPush (double x)
+    {
+        downZ[(std::size_t) downPos] = x;
+        double acc = hbCenter * downZ[(std::size_t) ((downPos - kHbCenterIdx + kHbLen) % kHbLen)];
+        for (int j = 0; j < kHbNumOdd; ++j)
+        {
+            const int off = 2 * j + 1;                                  // 1, 3, 5, ...
+            const int ia = (downPos - (kHbCenterIdx - off) + kHbLen) % kHbLen;
+            const int ib = (downPos - (kHbCenterIdx + off) + kHbLen) % kHbLen;
+            acc += hbOdd[(std::size_t) j] * (downZ[(std::size_t) ia] + downZ[(std::size_t) ib]);
+        }
+        downPos = (downPos + 1) % kHbLen;
+        return acc;
+    }
     // Kill subnormals (denormal floats are ~100x slower to process). Only touches values
     // below -300 dB, so it is inaudible; used only on the nonlinear/self-osc path so the
     // linear fast path stays bit-exact.
@@ -196,6 +253,24 @@ private:
         return static_cast<float> (out);
     }
 
+    // 2C: design the FIR half-band decimator taps (Hamming-windowed sinc, cutoff at a quarter
+    // of the 2x rate = base Nyquist). Half-band => even-offset taps are zero, so only the
+    // center + odd-offset taps are stored. Normalized to unity DC gain.
+    void designHalfband()
+    {
+        double h[kHbLen]; double sum = 0.0;
+        for (int n = 0; n < kHbLen; ++n)
+        {
+            const int m = n - kHbCenterIdx;
+            const double s = (m == 0) ? 0.5 : std::sin (pi * 0.5 * m) / (pi * m);
+            const double w = 0.54 - 0.46 * std::cos (2.0 * pi * n / (kHbLen - 1));
+            h[n] = s * w; sum += h[n];
+        }
+        for (int n = 0; n < kHbLen; ++n) h[n] /= sum;
+        hbCenter = h[kHbCenterIdx];
+        for (int j = 0; j < kHbNumOdd; ++j) hbOdd[(std::size_t) j] = h[kHbCenterIdx + (2 * j + 1)];
+    }
+
     static constexpr double pi = 3.141592653589793;
     static constexpr double kMaxDriveGain = 4.0;   // input gain at drive = 1 (~+12 dB into the saturator);
                                                    // chosen with the 1/driveGain makeup to keep a single-
@@ -219,4 +294,16 @@ private:
     bool   selfOsc   = false;          // resonance in the self-oscillation sliver
     double driveGain = 1.0, driveComp = 1.0, selfOscComp = 1.0;
     std::uint32_t seedRng = 0x2545F491u;
+
+    // 2C oversampling (latched per note by the voice). Contained 2x around JUST the filter:
+    // linear-interp upsample + FIR half-band decimate. drive == 0 voices never engage it, so
+    // the clean path stays bit-exact and pays nothing.
+    static constexpr int kHbLen       = 11;   // FIR half-band length
+    static constexpr int kHbCenterIdx = 5;    // (kHbLen-1)/2
+    static constexpr int kHbNumOdd    = 3;    // non-zero odd-offset taps: offsets 1, 3, 5
+    bool   oversampled = false;
+    double upPrev = 0.0;                       // linear-interp upsampler state
+    double hbCenter = 1.0, hbOdd[kHbNumOdd] = { 0.0, 0.0, 0.0 };
+    std::array<double, kHbLen> downZ { };      // decimator delay line
+    int    downPos = 0;
 };

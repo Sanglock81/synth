@@ -121,6 +121,7 @@ public:
             osc3.reset (startPhaseFor (pm3));
             filter.reset();
             drift1 = drift2 = drift3 = driftPw = 0.0f;   // Tier 1b: a fresh voice starts un-drifted
+            freshNote = true;              // Tier 2C: (re)decide filter oversampling at the first render
             glideNote = (float) note;      // fresh voice: no glide into the first note
         }
         ampEnv.noteOn();
@@ -161,6 +162,17 @@ public:
     {
         if (! active)
             return;
+
+        // Tier 2C: latch this note's filter oversampling at its first render. A driven or self-
+        // oscillating voice runs its filter at 2x for the whole note (removes the tanh's aliasing);
+        // a clean voice stays at base rate (bit-exact, pays nothing). Latching at the note boundary
+        // means the rate domain never switches mid-note — no discontinuity to click. 0.98 mirrors
+        // SVFilter's self-osc resonance threshold.
+        if (freshNote)
+        {
+            filter.setOversample (p.drive > 0.0f || p.resonance > 0.98f);
+            freshNote = false;
+        }
 
         // Glide/portamento: slew glideNote toward the target note over glideTime
         // (per render segment, so it's time-correct regardless of chunk size).
@@ -318,6 +330,7 @@ private:
     float drift1 = 0.0f, drift2 = 0.0f, drift3 = 0.0f, driftPw = 0.0f;   // per-osc drift state (normalized ±1)
     static constexpr float kMaxDriftCents = 2.0f;   // pitch drift ceiling at analog = 1
     static constexpr float kMaxPwDrift    = 0.01f;  // a hair of pulse-width drift
+    bool  freshNote = false;                        // Tier 2C: pending filter-oversampling latch for a new note
 
     // Start phase for a policy. RESET/FREE never draw an RNG, so the default (RESET) path is
     // bit-identical to before; only RANDOM consumes a value (a distinct stream from voiceRandom).

@@ -9,6 +9,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Cleaner filter drive (Musicality Pass, Tier 2C — 2× oversampling).** The in-loop tanh
+  saturation aliases at base rate — audible as harshness on high, hard-driven notes (measured
+  −22 dB at note C7, drive/self-osc). The driven/self-oscillating filter now runs **2× oversampled**
+  (a contained half-band around just the filter), cutting that aliasing by **~10–12 dB** at the
+  worst case. It engages **only when a voice is actually driven or self-oscillating** (a clean voice
+  stays on the bit-exact base-rate path and pays nothing), and it's **latched for the note's whole
+  life** so the rate never switches mid-note (no click). Self-oscillation stays in tune at 2× (±1.5
+  cents). Evaluated against folding into the oscillator oversampling domain and benched both:
+  the contained 2× wins on cost (half the added work) and diff size, and keeps the clean path
+  bit-exact. Active in both Efficient and HQ so the fix reaches the live machine.
 - **Filter SELF-OSCILLATION (Musicality Pass, Tier 2B).** Push **RESO** past the top and the filter
   blooms into a **pure, keytracked sine at the cutoff** — a playable voice (sine bass, whistles,
   drones), the way a cranked analog filter sings. It **starts reliably even with no input**: the loop
@@ -25,8 +35,7 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   you pay for the tanh only when driven). The nonlinearity uses a fast rational tanh (pinned within
   ~0.024 of `std::tanh` by the DSP suite); driven output is makeup-matched to stay within ~2 dB of
   clean across the range, and the drive amount is **smoothed** so knob/automation/macro moves don't
-  click. DRIVE is macro-routable. (Next Tier-2 increment: 2× oversampling for the driven path +
-  aliasing test + ThinkPad bench.)
+  click. DRIVE is macro-routable.
 - **Analog life for the oscillators (Musicality Pass, Tier 1).** Each oscillator gains a
   **start-phase policy** — **RESET** (today's bit-identical alignment), **RANDOM** (a fresh phase
   per note, so detuned stacks and chords bloom differently every strike), or **FREE** (the

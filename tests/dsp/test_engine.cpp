@@ -284,6 +284,29 @@ TEST_CASE ("self-oscillation + keytrack plays in tune across the keyboard", "[en
     }
 }
 
+TEST_CASE ("oversampled-voice note onset is click-free (2C boundary)", "[engine][oversample][click]")
+{
+    // 2C latches filter oversampling at note-on, so the only rate-domain transition is the note
+    // boundary itself. Torture it: a note that starts DRIVEN + self-oscillating (-> oversampled)
+    // must have a clean onset — no worse than a clean note's own attack transient.
+    auto onsetStep = [] (bool driven)
+    {
+        SynthEngine e; e.prepare (kSR);
+        VoiceParams p = sineParams();
+        p.cutoffHz = 1200.0f; p.resonance = driven ? 1.0f : 0.4f; p.drive = driven ? 1.0f : 0.0f;
+        p.ampA = 0.005f; p.ampD = 0.1f; p.ampS = 0.8f;
+        std::vector<float> out (int (kSR * 0.2), 0.0f);
+        e.noteOn (60, 0.9f);
+        e.render (out.data(), (int) out.size(), p, 2.0f, 0, 0.0f, 0);
+        REQUIRE (tu::allFinite (out));
+        return maxDeltaRange (out, 1, int (kSR * 0.05));   // within the onset
+    };
+    const float clean  = onsetStep (false);
+    const float driven = onsetStep (true);
+    INFO ("clean onset step=" << clean << "  driven(oversampled) onset step=" << driven);
+    REQUIRE (driven < clean + 0.05f);      // the oversampled onset introduces no extra click
+}
+
 TEST_CASE ("locked part renders with its baked params, not the live part", "[engine][7c][parts]")
 {
     VoiceParams live = sineParams();                 // part 0: sine at the note

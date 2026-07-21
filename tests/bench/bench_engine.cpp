@@ -33,7 +33,7 @@ namespace
     // Render `blocks` blocks of `voices` held notes; return median / p99 / max
     // block ms. p99 is the robust "worst-case" (max on a non-realtime dev box is
     // dominated by OS preemption outliers, not DSP cost).
-    Stat measure (PolyBlepOscillator::Quality q, int voices, int blocks, int oscsOn = 2)
+    Stat measure (PolyBlepOscillator::Quality q, int voices, int blocks, int oscsOn = 2, float drive = 0.0f)
     {
         SynthEngine engine;
         engine.setOscQuality (q);
@@ -46,6 +46,7 @@ namespace
         p.osc2Level = oscsOn >= 2 ? 0.8f : 0.0f;
         p.osc3Level = oscsOn >= 3 ? 0.8f : 0.0f;
         p.cutoffHz = 2000.0f; p.resonance = 0.4f; p.filterEnvAmt = 0.5f;
+        p.drive = drive;                     // 2C: >0 puts every voice's filter on the 2x oversampled path
         for (int i = 0; i < voices; ++i) engine.noteOn (36 + i, 0.7f);
 
         std::vector<float> out (kBlock, 0.0f);
@@ -255,6 +256,14 @@ int main()
     // A realistic heavy patch: fewer voices but lush FX (pad territory).
     std::printf ("\n6B realistic pad (6 voices, 3 osc, chorus+reverb):\n");
     row ("6 voice + cho+rev",   measureFull (6, 4000, 3, 1 | 4));
+
+    // 2C: filter DRIVE puts every voice on the 2x oversampled path (worst case for the driven
+    // filter). Compare clean vs driven to see the oversampling cost; the drive=0 fast path means
+    // ordinary patches pay nothing. This is the number the ThinkPad validation (#100) watches.
+    std::printf ("\n2C driven filter (2x oversampled path, 3 osc):\n");
+    row ("16v clean (drive 0)",  measure (PolyBlepOscillator::Quality::Efficient, 16, 4000, 3, 0.0f));
+    row ("16v driven (drive 1)", measure (PolyBlepOscillator::Quality::Efficient, 16, 4000, 3, 1.0f));
+    row ("24v driven (drive 1)", measure (PolyBlepOscillator::Quality::Efficient, 24, 4000, 3, 1.0f));
 
     // Sub-phase 1 gate: kit worst case (live chord + 12 sustained pads = 16 voices,
     // 12 through the Kit paramsFor branch), engine-only and + ALL FX.

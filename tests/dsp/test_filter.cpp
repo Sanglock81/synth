@@ -9,6 +9,7 @@
 #include <vector>
 #include <random>
 #include <cmath>
+#include <complex>
 
 namespace
 {
@@ -289,4 +290,66 @@ TEST_CASE ("filter survives adversarial parameter fuzzing (finite + bounded)", "
     // runaway: the driven/self-osc path is clamped to kOutMax=8; the linear path is intentionally
     // NOT clamped (bit-exact), so a resonant peak on a spike can reach ~13 — finite and sane.
     REQUIRE (worst < 100.0f);
+}
+
+// ============================================================================
+// Tier 2C — 2x oversampling of the driven/self-osc path. The in-loop tanh aliases
+// at base rate; oversampling the filter (contained half-band 2x) removes it. The
+// "soul" test hits the worst case on purpose: high drive + self-oscillation + a
+// high keytracked note. If that is clean, everything is.
+// ============================================================================
+
+namespace
+{
+    void fftMag (std::vector<std::complex<double>>& a)
+    {
+        const int n = (int) a.size();
+        for (int i = 1, j = 0; i < n; ++i) { int bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) std::swap (a[i], a[j]); }
+        for (int len = 2; len <= n; len <<= 1)
+        {
+            const double ang = -2.0 * tu::kTwoPi / (2 * len);   // -2pi/len
+            std::complex<double> wl (std::cos (ang), std::sin (ang));
+            for (int i = 0; i < n; i += len) { std::complex<double> w (1, 0); for (int k = 0; k < len / 2; ++k) { auto u = a[i + k]; auto v = a[i + k + len / 2] * w; a[i + k] = u + v; a[i + k + len / 2] = u - v; w *= wl; } }
+        }
+    }
+    // Aliased-energy / harmonic-energy in dB (higher = more aliasing). Bins within +/-4 of any
+    // harmonic k*f0 are "harmonic"; the rest is aliasing + noise.
+    double aliasDb (const std::vector<float>& y, double f0, double sr)
+    {
+        const int N = 1 << 15;
+        std::vector<std::complex<double>> X ((std::size_t) N);
+        for (int i = 0; i < N; ++i) { const double w = 0.5 - 0.5 * std::cos (tu::kTwoPi * i / (N - 1)); X[(std::size_t) i] = { (double) y[y.size() - (std::size_t) N + (std::size_t) i] * w, 0.0 }; }
+        fftMag (X);
+        const double binHz = sr / N;
+        std::vector<bool> harm ((std::size_t) (N / 2), false);
+        for (int k = 1; k * f0 < sr / 2; ++k) { const int cb = (int) std::round (k * f0 / binHz); for (int d = -4; d <= 4; ++d) { const int b = cb + d; if (b >= 0 && b < N / 2) harm[(std::size_t) b] = true; } }
+        double hE = 0, aE = 0;
+        for (int b = 2; b < N / 2; ++b) { const double p = std::norm (X[(std::size_t) b]); if (harm[(std::size_t) b]) hE += p; else aE += p; }
+        return 10.0 * std::log10 (aE / (hE + 1e-30));
+    }
+    // A bandlimited saw at f0 (rich harmonics up to Nyquist), for the "played into the filter" case.
+    float blSaw (double t, double f0, double sr) { double s = 0; for (int k = 1; k * f0 < sr * 0.5; ++k) s += std::sin (tu::kTwoPi * k * f0 * t) / k; return float (0.6 * (2.0 / 3.14159265358979) * s); }
+}
+
+TEST_CASE ("aliasing soul test: 2x oversampling cleans the driven/self-osc worst case", "[filter][oversample][soul]")
+{
+    const double f0 = 440.0 * std::exp2 ((96 - 69) / 12.0);   // note 96, ~2093 Hz (high keytracked note)
+    const int N = 1 << 16;
+
+    // Worst case per requirement: Notch (passes the most tanh harmonics) + full drive + self-osc.
+    for (auto type : { SVFilter::Type::Notch, SVFilter::Type::HighPass, SVFilter::Type::LowPass })
+    {
+        SVFilter base; base.prepare (kSR); base.setType (type); base.setDrive (1.0f);
+        std::vector<float> yb ((std::size_t) N);
+        for (int i = 0; i < N; ++i) { base.setCutoff (f0, 1.0); yb[(std::size_t) i] = base.process (blSaw (i / kSR, f0, kSR)); }
+
+        SVFilter os; os.prepare (kSR); os.setType (type); os.setDrive (1.0f); os.setOversample (true);
+        std::vector<float> yo ((std::size_t) N);
+        for (int i = 0; i < N; ++i) { os.setCutoff (f0, 1.0); yo[(std::size_t) i] = os.process (blSaw (i / kSR, f0, kSR)); }
+
+        const double ab = aliasDb (yb, f0, kSR), ao = aliasDb (yo, f0, kSR);
+        INFO ("type " << int (type) << " base=" << ab << " dB  2x=" << ao << " dB");
+        REQUIRE (tu::allFinite (yo));
+        REQUIRE (ao < ab - 8.0);        // at least 8 dB less aliasing (measured ~10-12 dB)
+    }
 }
