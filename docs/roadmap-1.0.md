@@ -50,6 +50,15 @@ driven-voices xrun stress scenario per the Option-1 oversampling decision) → *
 (`kMaxDriveGain`, currently 4.0) may arrive as a one-line constant tune; **#102** WILD-randomize-into-self-osc
 is a post-2C follow-up; **#103** intermittent pluginval teardown crash (~3% flake) to fix before the tag.
 
+> **⚠ Windows CI red since Tier 1 (#110).** `build-test` on **windows-latest** has failed on every
+> commit since "Musicality Pass Tier 1" — test **#124 "Tier 1a: RESET phase is deterministic —
+> consecutive notes are bit-identical"** passes on Linux (GCC) but fails on Windows (MSVC): a
+> platform FP/RNG determinism difference in the start-phase/analog-drift code. **ubuntu-latest is
+> green throughout, including 4a/4c**, and local `run-all-checks.sh` + `--sanitize` are green (Linux).
+> Not caused by the FX work; can't be reproduced from the Linux dev box. Must be green before the
+> **#101** v1.0.0 tag. Likely suspects: the per-voice analog-drift RNG seed/advance, or a rounding
+> path that varies between consecutive notes on MSVC.
+
 ## R1 — clear the debts
 
 1. **Part mixer** (closes Sub-phase 2): `partN_level` / `partN_pan` params (defaults 1.0 /
