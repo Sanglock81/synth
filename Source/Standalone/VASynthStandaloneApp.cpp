@@ -124,12 +124,22 @@ private:
     {
         auto avail = MidiInput::getAvailableDevices();
 
-        for (auto& d : avail)                              // newly connected
+        bool anyNew = false;
+        for (auto& d : avail)                              // newly connected (incl. reconnects)
             if (! containsId (known, d.identifier))
             {
+                // A device that disconnected then reconnected can come back with its "enabled"
+                // flag STILL SET from before, so JUCE reopens the ALSA port WITHOUT re-attaching
+                // our all-device MIDI callback — it reads as enabled yet delivers no MIDI (keys +
+                // knobs dead until an app restart). Force a clean disable->enable so a fresh
+                // MidiInput is opened WITH the callback attached. (JUCE's change broadcast is
+                // async, so this toggle runs atomically w.r.t. the change listener.)
+                dm.setMidiInputDeviceEnabled (d.identifier, false);
+                dm.setMidiInputDeviceEnabled (d.identifier, true);
                 proc.applyDeviceProfile (d.name);
                 proc.postToast (d.name + " connected");
-                Logger::writeToLog ("MIDI hot-plug: connected '" + d.name + "'");
+                Logger::writeToLog ("MIDI hot-plug: connected '" + d.name + "' (re-enabled to restore MIDI delivery)");
+                anyNew = true;
             }
 
         for (auto& d : known)                              // disconnected
@@ -142,6 +152,13 @@ private:
 
         known = avail;
         ensureAllInputsEnabled();                          // enable any newcomers
+
+        if (anyNew)
+        {
+            // Re-assert our all-device callback so it (re)attaches to every freshly-opened input.
+            dm.removeMidiInputDeviceCallback ({}, this);
+            dm.addMidiInputDeviceCallback    ({}, this);
+        }
     }
 
     AudioDeviceManager&      dm;
