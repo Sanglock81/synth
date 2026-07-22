@@ -85,6 +85,27 @@ public:
         proc.routeDeviceMessage (name, message);     // I1: splits pads (ch/note) to "<device> Pads"; else zone-resolves
     }
 
+    // Call ONCE at startup, right AFTER our all-device callback is attached. A controller
+    // present at launch is enabled (by this class's ctor, or restored from saved settings)
+    // BEFORE the callback swap in initialise() — and JUCE wires an all-device MIDI callback
+    // at device-OPEN time, so such an input reads as enabled yet delivers no MIDI until an
+    // app restart or an unplug/replug. Force a clean reopen of every already-enabled input so
+    // each one attaches to our routing callback, then re-assert the callback. Same mechanism
+    // as the hot-plug reconnect path (JUCE's change broadcast is async, so the toggle is
+    // atomic w.r.t. the change listener).
+    void reopenEnabledInputsForCallback()
+    {
+        for (auto& d : MidiInput::getAvailableDevices())
+            if (dm.isMidiInputDeviceEnabled (d.identifier))
+            {
+                dm.setMidiInputDeviceEnabled (d.identifier, false);
+                dm.setMidiInputDeviceEnabled (d.identifier, true);
+                Logger::writeToLog ("MIDI input reopened at startup to attach the routing callback: '" + d.name + "'");
+            }
+        dm.removeMidiInputDeviceCallback ({}, this);
+        dm.addMidiInputDeviceCallback    ({}, this);
+    }
+
 private:
     static bool containsId (const Array<MidiDeviceInfo>& list, const String& id)
     {
@@ -348,6 +369,10 @@ public:
             // through its own "QWERTY" surface zones (routeSurfaceMessage) the same way.
             dm.removeMidiInputDeviceCallback ({}, &mainWindow->pluginHolder->player);
             dm.addMidiInputDeviceCallback    ({}, midiHotplug.get());
+
+            // A controller already connected at launch was opened before this swap, so it is
+            // enabled but not wired to our callback — reopen it so it plays without an unplug.
+            midiHotplug->reopenEnabledInputsForCallback();
 
             // #85: MIDI clock output — open the chosen device and hand it to the processor.
             clockOutput = std::make_unique<VASynthClockOutput> (*va, appProperties.getUserSettings());
