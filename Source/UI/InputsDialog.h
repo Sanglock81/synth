@@ -166,12 +166,13 @@ private:
             setWantsKeyboardFocus (false);
 
             route.setWantsKeyboardFocus (false);
-            // Labels match the P1-P4 naming used everywhere else (part index 0..3 -> P1..P4);
-            // P1 is the LIVE part. (id = part + 1.)
-            route.addItem ("P1 (Live)", 1); route.addItem ("P2", 2); route.addItem ("P3", 3); route.addItem ("P4", 4);
+            // "Live" follows the focused part; Part 1-4 pin to a fixed part. Combo id = part + 2
+            // so Live (kLivePart = -1) is id 1 and Part 1..4 (part 0..3) are id 2..5.
+            route.addItem ("Live", 1);
+            route.addItem ("Part 1", 2); route.addItem ("Part 2", 3); route.addItem ("Part 3", 4); route.addItem ("Part 4", 5);
             route.onChange = [this]
             {
-                proc.setSurfaceRouting (name, route.getSelectedId() - 1);   // collapses any split
+                proc.setSurfaceRouting (name, route.getSelectedId() - 2);   // collapses any split
                 refresh(); if (relayout) relayout();
             };
             addAndMakeVisible (route);
@@ -220,7 +221,7 @@ private:
                 g.fillRoundedRectangle (cell.toFloat(), 2.0f);
                 g.setColour (juce::Colours::black.withAlpha (0.85f));
                 g.setFont (juce::Font (juce::FontOptions (10.0f, juce::Font::bold)));
-                g.drawText ("P" + juce::String (seg.part + 1) + (seg.part == 0 ? " Live" : ""),
+                g.drawText (seg.part < 0 ? juce::String ("Live") : "P" + juce::String (seg.part + 1),
                             cell, juce::Justification::centred, false);
             }
         }
@@ -282,7 +283,7 @@ private:
         {
             const bool split = proc.surfaceHasSplit (name);
             route.setEnabled (! split);                      // a split is edited in the zone list, not the combo
-            route.setSelectedId (split ? 0 : proc.getSurfaceRouting (name) + 1, juce::dontSendNotification);
+            route.setSelectedId (split ? 0 : proc.getSurfaceRouting (name) + 2, juce::dontSendNotification);
             const int prt = proc.getSurfaceRouting (name);
             preset.setEnabled (! split && prt >= 1);
             if (prt >= 1) preset.setText (proc.getPartPreset (prt), juce::dontSendNotification);
@@ -330,13 +331,14 @@ private:
             {
                 setWantsKeyboardFocus (false);
                 part.setWantsKeyboardFocus (false);
-                part.addItem ("P1 (Live)", 1); part.addItem ("P2", 2); part.addItem ("P3", 3); part.addItem ("P4", 4);
-                part.onChange = [this] { edit ([this] (VASynthProcessor::Zone& z) { z.part = part.getSelectedId() - 1; }); refreshPreset(); };
+                part.addItem ("Live", 1);   // combo id = part + 2 (Live = -1 -> id 1; Part 1..4 -> id 2..5)
+                part.addItem ("Part 1", 2); part.addItem ("Part 2", 3); part.addItem ("Part 3", 4); part.addItem ("Part 4", 5);
+                part.onChange = [this] { edit ([this] (VASynthProcessor::Zone& z) { z.part = part.getSelectedId() - 2; }); refreshPreset(); };
                 addAndMakeVisible (part);
 
                 fillPresets (proc, preset);
                 preset.setWantsKeyboardFocus (false);
-                preset.onChange = [this] { const int prt = part.getSelectedId() - 1; if (prt >= 1) proc.setPartPreset (prt, preset.getText()); };
+                preset.onChange = [this] { const int prt = part.getSelectedId() - 2; if (prt >= 1) proc.setPartPreset (prt, preset.getText()); };
                 addAndMakeVisible (preset);
 
                 transpose.setWantsKeyboardFocus (false);
@@ -359,13 +361,13 @@ private:
                 auto z = proc.getSurfaceZones (name);
                 if (index >= (int) z.size()) return;
                 const auto& me = z[(std::size_t) index];
-                part.setSelectedId (me.part + 1, juce::dontSendNotification);
+                part.setSelectedId (me.part + 2, juce::dontSendNotification);
                 transpose.setValue (me.transpose, juce::dontSendNotification);
                 refreshPreset();
             }
             void refreshPreset()
             {
-                const int prt = part.getSelectedId() - 1;
+                const int prt = part.getSelectedId() - 2;
                 preset.setEnabled (prt >= 1);
                 if (prt >= 1) preset.setText (proc.getPartPreset (prt), juce::dontSendNotification);
             }

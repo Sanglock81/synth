@@ -205,7 +205,11 @@ public:
     // of zones tiling [0,127]. Each zone routes its note range to a part and transposes
     // the sounding note by `transpose` semitones (the trigger note is unchanged; the
     // result is clamped to MIDI). Default (no config) = one full-range LIVE zone. POD.
-    struct Zone { int loNote = 0, hiNote = 127, part = 0, transpose = 0; };
+    // A surface routes to a part index 0..maxParts-1, or to kLivePart ("Live") which
+    // follows the edit/play focus at note time (resolved in drainRoutedMidi). The default
+    // for an un-routed surface is Live, so a fresh surface plays whatever part is in focus.
+    static constexpr int kLivePart = -1;
+    struct Zone { int loNote = 0, hiNote = 127, part = kLivePart, transpose = 0; };
 
     // A playing surface (QWERTY or a MIDI input by name) -> a part index (0 = LIVE).
     // Convenience over zones: assigns the WHOLE surface to one part (collapses any
@@ -424,7 +428,8 @@ public:
                                             : "bend " + juce::String (e.d1);
             // channel + note lead (the pad-vs-key tell); surface name trails so the clip, if any,
             // never hides the diagnostic bits.
-            out.add ("ch" + juce::String (e.chan) + " " + body + "  -> P" + juce::String (e.part + 1)
+            out.add ("ch" + juce::String (e.chan) + " " + body + "  -> "
+                     + (e.part < 0 ? juce::String ("Live") : "P" + juce::String (e.part + 1))
                      + "  [" + e.surface + "]");
         }
         return out;
@@ -728,16 +733,16 @@ private:
     // -- routed-MIDI FIFO (surfaces -> parts) ---------------------------------
     // Each event is a raw <=3-byte MIDI message + the routed part. Notes carry the
     // part; control messages are handled globally on drain.
-    struct RoutedEvent { std::uint8_t status, d1, d2, part; };
+    struct RoutedEvent { std::uint8_t status, d1, d2; std::int8_t part; };   // part signed: kLivePart = -1
     void pushRouted (int status, int d1, int d2, int part)   // producers (non-audio)
     {
-        if (part < 0 || part >= SynthEngine::maxParts) return;
+        if (part < kLivePart || part >= SynthEngine::maxParts) return;   // kLivePart (Live) .. maxParts-1
         const juce::SpinLock::ScopedLockType sl (routedPushLock);
         int start1, size1, start2, size2;
         routedFifo.prepareToWrite (1, start1, size1, start2, size2);
         if (size1 > 0)
         {
-            routedBuf[(std::size_t) start1] = { (std::uint8_t) status, (std::uint8_t) d1, (std::uint8_t) d2, (std::uint8_t) part };
+            routedBuf[(std::size_t) start1] = { (std::uint8_t) status, (std::uint8_t) d1, (std::uint8_t) d2, (std::int8_t) part };
             routedFifo.finishedWrite (1);
         }   // full -> drop (never blocks a producer)
     }

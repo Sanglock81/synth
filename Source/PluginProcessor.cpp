@@ -1104,7 +1104,7 @@ static std::vector<VASynthProcessor::Zone> normaliseZones (std::vector<VASynthPr
 {
     using Zone = VASynthProcessor::Zone;
     for (auto& e : z) { e.loNote = juce::jlimit (0, 127, e.loNote); e.hiNote = juce::jlimit (0, 127, e.hiNote);
-                        e.part = juce::jlimit (0, SynthEngine::maxParts - 1, e.part);
+                        e.part = juce::jlimit (VASynthProcessor::kLivePart, SynthEngine::maxParts - 1, e.part);  // keep Live (-1)
                         e.transpose = juce::jlimit (-60, 60, e.transpose); }
     z.erase (std::remove_if (z.begin(), z.end(), [] (const Zone& e) { return e.hiNote < e.loNote; }), z.end());
     if (z.empty()) return { Zone{} };
@@ -1196,8 +1196,8 @@ VASynthProcessor::Zone VASynthProcessor::resolveZone (const juce::String& surfac
 
 void VASynthProcessor::setSurfaceRouting (const juce::String& surface, int part)
 {
-    if (part < 0 || part >= SynthEngine::maxParts) return;
-    setSurfaceZones (surface, { Zone{ 0, 127, part, 0 } });   // whole surface -> one part
+    if (part < kLivePart || part >= SynthEngine::maxParts) return;   // kLivePart (Live) .. maxParts-1
+    setSurfaceZones (surface, { Zone{ 0, 127, part, 0 } });   // whole surface -> one part (or Live)
 }
 
 int VASynthProcessor::getSurfaceRouting (const juce::String& surface) const
@@ -1289,6 +1289,8 @@ juce::ValueTree VASynthProcessor::captureMultiState()
     {
         juce::ValueTree s ("SURFACE");
         s.setProperty ("name", sz.first, nullptr);
+        s.setProperty ("v", 2, nullptr);   // v2+: zone part 0 means pinned P1; a "Live" zone is part -1.
+                                           // (v1/absent: part 0 meant "Live" -- migrated on load.)
         for (auto& z : sz.second)
         {
             juce::ValueTree zt ("ZONE");
@@ -1357,11 +1359,19 @@ void VASynthProcessor::applyMultiState (const juce::ValueTree& multi)
         }
         else if (e.hasType ("SURFACE"))
         {
+            // v2+ stores a Live zone as part -1 (kLivePart) and part 0 as pinned P1. Legacy
+            // MULTIs (v1/absent) used part 0 to mean "Live" -- migrate those so they keep
+            // following focus rather than silently pinning to P1.
+            const int surfVer = (int) e.getProperty ("v", 1);
             std::vector<Zone> zones;
             for (auto zt : e)
                 if (zt.hasType ("ZONE"))
-                    zones.push_back ({ (int) zt.getProperty ("lo", 0),   (int) zt.getProperty ("hi", 127),
-                                       (int) zt.getProperty ("part", 0), (int) zt.getProperty ("transpose", 0) });
+                {
+                    int part = (int) zt.getProperty ("part", kLivePart);
+                    if (surfVer < 2 && part == 0) part = kLivePart;
+                    zones.push_back ({ (int) zt.getProperty ("lo", 0), (int) zt.getProperty ("hi", 127),
+                                       part, (int) zt.getProperty ("transpose", 0) });
+                }
 
             // A zone pointing at a part whose named preset was missing falls back to LIVE.
             for (auto& z : zones)
@@ -1369,7 +1379,7 @@ void VASynthProcessor::applyMultiState (const juce::ValueTree& multi)
                 {
                     juce::Logger::writeToLog ("MULTI: surface '" + e.getProperty ("name", juce::String()).toString()
                                               + "' zone on part " + juce::String (z.part) + " has no preset -> LIVE");
-                    z.part = 0;
+                    z.part = kLivePart;
                 }
             setSurfaceZones (e.getProperty ("name", juce::String()).toString(), std::move (zones));
         }
@@ -1640,10 +1650,10 @@ void VASynthProcessor::drainRoutedMidi (bool chordOn, int focus)
     {
         const auto& e = routedBuf[(std::size_t) idx];
         const juce::MidiMessage m (e.status, e.d1, e.d2);
-        // The LIVE zone resolves to part 0; edit-focus remaps it to the focused part so the
-        // main keyboard plays (and edits) whatever part is in focus (1.3). Surfaces routed
-        // to an explicit part are unaffected.
-        const int part = (e.part == 0) ? focus : e.part;
+        // A "Live" zone (kLivePart) remaps to the play-focused part so the surface plays (and
+        // edits) whatever part is in focus (1.3). Surfaces pinned to an explicit part 0..3 --
+        // including P1 -- are unaffected: the pin means "always this part, ignore focus".
+        const int part = (e.part == kLivePart) ? focus : e.part;
         // When the arp is on, the LIVE/focused part's played notes feed the arp instead of
         // sounding directly; it re-emits them on its clock. Locked parts + control unaffected.
         const bool arpCapture = arp.enabled() && part == focus;

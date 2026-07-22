@@ -189,6 +189,23 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
 - **808 / Punchy kick voicing:** amp attack softened 1 ms → 2 ms for a defined transient.
 
 ### Fixed / investigated
+- **INPUTS: "Live" and "Part 1" are now separate routing choices.** A surface's routing offered
+  *P1 (Live)*, P2, P3, P4 — but "P1" secretly meant **follow the focused part**, so you could
+  never *pin* a surface to Part 1 (it always chased whatever part was in focus). Each surface now
+  chooses **Live** (follows the edit/play focus — the default) **or** a fixed **Part 1–4** that
+  plays that part regardless of focus, exactly like Parts 2–4 already did. Implemented as a
+  `kLivePart` (-1) sentinel distinct from part index 0; the routed-event FIFO carries a *signed*
+  part so the sentinel survives (it was previously stored unsigned and any negative part was
+  silently dropped). MULTI files are version-stamped: a legacy layout that saved "P1 (Live)"
+  (part 0) still loads as **Live**, while newly-saved *Part 1* pins correctly. Behavioural test:
+  a Live surface follows the focus; a Part-1-pinned surface sounds on part 0 even with focus
+  elsewhere.
+- **Launchkey (any MIDI input) going dead after a hot-plug reconnect.** A controller worked at
+  startup but delivered nothing after a disconnect→reconnect (no notes, nothing in the F12
+  monitor) until an app restart. On reconnect JUCE reopened the device with its "enabled" flag
+  still set, so the all-device MIDI callback was never reattached — enabled yet silent. The
+  hot-plug watcher now forces a clean disable→enable on reconnect and re-asserts the all-device
+  callback, so a reconnected device delivers again. (Hardware-confirmed.)
 - **808 kick "double-hit pop" (two kicks in a row).** Re-striking a percussive sound while its
   tail still sounded re-attacked the voice **in place**, which clicked: the amp re-attack corner
   **and** the mod-envelope pitch restart (Kick 808 sweeps pitch **+22 st**) both landed as slope

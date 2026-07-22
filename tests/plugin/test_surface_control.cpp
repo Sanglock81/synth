@@ -86,7 +86,7 @@ TEST_CASE ("pitch bend is per-part: it bends the routed surface's part only (#56
     juce::ScopedJuceInitialiser_GUI juceInit;
 
     VASynthProcessor p;
-    p.setSurfaceRouting ("Ctrl A", 0);          // surface A -> live part
+    p.setSurfaceRouting ("Ctrl A", VASynthProcessor::kLivePart);   // surface A -> live (follows focus)
     p.setSurfaceRouting ("Ctrl B", 2);          // surface B -> part 2
     p.prepareToPlay (kSR, 512);
 
@@ -107,4 +107,35 @@ TEST_CASE ("mod wheel (CC1) through the surface path reaches the engine (#56/G6)
 
     REQUIRE (p.modWheelEventCount() >= 1);           // arrived
     REQUIRE (p.currentModWheel() == Catch::Approx (1.0f).margin (1e-3));   // and was applied
+}
+
+// A surface set to "Live" follows the focused part; a surface PINNED to a part (incl. Part 1
+// = index 0) plays that part no matter where the focus is. Before this fix, part 0 doubled as
+// the "Live" sentinel, so a surface could never be pinned to Part 1 -- it always chased focus.
+TEST_CASE ("routing: Live follows focus; a pinned part ignores focus (Part 1 pinnable)",
+           "[plugin][surface][routing][live]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    VASynthProcessor p;
+    makeSinePatch (p);
+    p.prepareToPlay (kSR, 256);
+    p.setEditFocus (2);                              // move live/play focus onto part 2 (a synth part)
+
+    juce::AudioBuffer<float> buf (2, 256); juce::MidiBuffer midi;
+    auto pump = [&] { buf.clear(); midi.clear(); p.processBlock (buf, midi); };
+
+    // Live surface -> the note follows the focus onto part 2, NOT the physical part 0.
+    p.setSurfaceRouting ("LiveSurf", VASynthProcessor::kLivePart);
+    p.routeSurfaceMessage ("LiveSurf", juce::MidiMessage::noteOn (1, 60, 0.8f));
+    pump();
+    REQUIRE (p.activeVoicesForPart (2) > 0);         // followed the focus
+    REQUIRE (p.activeVoicesForPart (0) == 0);        // and did NOT land on part 0
+    p.routeSurfaceMessage ("LiveSurf", juce::MidiMessage::noteOff (1, 60));
+
+    // Pinned Part 1 (index 0) -> plays part 0 even though the focus is on part 2.
+    p.setSurfaceRouting ("PinSurf", 0);
+    p.routeSurfaceMessage ("PinSurf", juce::MidiMessage::noteOn (1, 64, 0.8f));
+    pump();
+    REQUIRE (p.activeVoicesForPart (0) > 0);         // pinned: ignored the focus, sounded on Part 1
 }

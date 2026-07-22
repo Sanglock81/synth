@@ -156,10 +156,10 @@ TEST_CASE ("ordinary state persists SOUND but RESETS routing/parts (lifecycle ru
     // SOUND persists.
     REQUIRE (dst.apvts.getRawParameterValue (ParamID::filterCutoff)->load() == Catch::Approx (wantCutoff));
 
-    // ROUTING resets: every surface back to LIVE (part 0). Locked parts reset to the
+    // ROUTING resets: every surface back to LIVE. Locked parts reset to the
     // DEFAULT SCENE (not src's custom part-1 sound), proving the layout didn't persist.
-    REQUIRE (dst.getSurfaceRouting ("Korg B2") == 0);
-    REQUIRE (dst.getSurfaceRouting ("Launchkey Mini") == 0);
+    REQUIRE (dst.getSurfaceRouting ("Korg B2") == VASynthProcessor::kLivePart);
+    REQUIRE (dst.getSurfaceRouting ("Launchkey Mini") == VASynthProcessor::kLivePart);
     REQUIRE (dst.getPartPreset (1).isEmpty());        // P2 (part 1) is a spare again, not src's "Kick 808"
     REQUIRE (dst.getPartPreset (3) == "808 Basics");  // the default scene's kit is on P4
 }
@@ -230,7 +230,7 @@ TEST_CASE ("zones: unconfigured surface plays LIVE full-range", "[plugin][partsB
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
     REQUIRE (p.getSurfaceZones ("QWERTY").empty());        // implicit default
-    REQUIRE (p.getSurfaceRouting ("QWERTY") == 0);
+    REQUIRE (p.getSurfaceRouting ("QWERTY") == VASynthProcessor::kLivePart);
     REQUIRE_FALSE (p.surfaceHasSplit ("QWERTY"));
 
     p.setPartPreset (1, "Kick 808");
@@ -360,11 +360,11 @@ TEST_CASE ("zones: reset returns a surface (and all routing) to default", "[plug
 
     p.resetSurfaceZones ("K");
     REQUIRE_FALSE (p.surfaceHasSplit ("K"));
-    REQUIRE (p.getSurfaceRouting ("K") == 0);
+    REQUIRE (p.getSurfaceRouting ("K") == VASynthProcessor::kLivePart);
 
     p.resetAllRouting();
     REQUIRE (p.getSurfaceZones ("J").empty());
-    REQUIRE (p.getSurfaceRouting ("J") == 0);
+    REQUIRE (p.getSurfaceRouting ("J") == VASynthProcessor::kLivePart);
 }
 
 TEST_CASE ("zones: QWERTY is a splittable surface like any other (rule 5)", "[plugin][partsB][zones][qwerty]")
@@ -556,7 +556,7 @@ TEST_CASE ("MULTI apply repoints a zone off a missing preset to LIVE", "[plugin]
     surf.addChild (zone, -1, nullptr); multi.addChild (surf, -1, nullptr);
 
     p.applyMultiState (multi);
-    REQUIRE (p.getSurfaceRouting ("K") == 0);               // zone fell back to LIVE
+    REQUIRE (p.getSurfaceRouting ("K") == VASynthProcessor::kLivePart);   // zone fell back to LIVE
 }
 
 TEST_CASE ("MULTI apply clears parts/surfaces not named in the layout", "[plugin][partsB][multi]")
@@ -568,7 +568,7 @@ TEST_CASE ("MULTI apply clears parts/surfaces not named in the layout", "[plugin
 
     p.applyMultiState (juce::ValueTree ("MULTI"));           // empty layout
     REQUIRE (p.getPartPreset (2).isEmpty());
-    REQUIRE (p.getSurfaceRouting ("Old") == 0);
+    REQUIRE (p.getSurfaceRouting ("Old") == VASynthProcessor::kLivePart);   // reset back to LIVE default
 }
 
 TEST_CASE ("MULTI save/load round-trips through a file", "[plugin][partsB][multi][file]")

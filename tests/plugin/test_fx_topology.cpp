@@ -16,7 +16,7 @@ namespace
     Meas render (VASynthProcessor& p, int note)
     {
         juce::MidiBuffer m; juce::AudioBuffer<float> buf (2, 512);
-        p.routeNoteOn (note, 0.9f, 0);
+        p.routeNoteOn (note, 0.9f, VASynthProcessor::kLivePart);   // Live -> follows the edit/play focus
         double sL = 0, sLL = 0, sRR = 0, sLR = 0; int n = 0;
         for (int b = 0; b < 40; ++b)
         {
@@ -24,7 +24,7 @@ namespace
             const float* L = buf.getReadPointer (0); const float* R = buf.getReadPointer (1);
             for (int i = 0; i < 512; ++i) { sL += L[i]*L[i]; sLL += L[i]*L[i]; sRR += R[i]*R[i]; sLR += L[i]*R[i]; ++n; }
         }
-        p.routeNoteOff (note, 0);
+        p.routeNoteOff (note, VASynthProcessor::kLivePart);
         Meas r; r.rms = std::sqrt (sL / n);
         r.corr = (sLL > 1e-12 && sRR > 1e-12) ? sLR / std::sqrt (sLL * sRR) : 1.0;
         return r;

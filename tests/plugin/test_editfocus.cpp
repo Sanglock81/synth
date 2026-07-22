@@ -112,10 +112,10 @@ TEST_CASE ("edit-focus: playing a loaded kit triggers per-pad drums, not one pit
     auto rms = [&] (int trigNote, int blocks)
     {
         juce::AudioBuffer<float> buf (2, 128);
-        p.routeNoteOn (trigNote, 1.0f, 0);         // LIVE note -> play-focus (the kit)
+        p.routeNoteOn (trigNote, 1.0f, VASynthProcessor::kLivePart);   // Live note -> play-focus (the kit)
         double e = 0.0;
         for (int b = 0; b < blocks; ++b) { buf.clear(); juce::MidiBuffer m; p.processBlock (buf, m); e += buf.getRMSLevel (0, 0, 128); }
-        p.routeNoteOff (trigNote, 0);
+        p.routeNoteOff (trigNote, VASynthProcessor::kLivePart);
         return e;
     };
     // Two different kit trigger notes both make sound (different pads), proving the kit is

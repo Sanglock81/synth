@@ -12,7 +12,7 @@ namespace
     double padEnergy (VASynthProcessor& p, int kitPart, int trigNote, int blocks = 40)
     {
         p.setEditFocus (kitPart);                    // route the live keyboard to the kit part
-        p.routeNoteOn (trigNote, 0.9f, 0);           // surface 0 -> play-focus (the kit)
+        p.routeNoteOn (trigNote, 0.9f, VASynthProcessor::kLivePart);   // Live -> play-focus (the kit)
         juce::AudioBuffer<float> buf (2, 128); juce::MidiBuffer m; double e = 0.0;
         for (int b = 0; b < blocks; ++b) { buf.clear(); p.processBlock (buf, m); e += buf.getRMSLevel (0, 0, 128); }
         return e;
