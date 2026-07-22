@@ -109,13 +109,18 @@ TEST_CASE ("StereoWidth SAT: asymmetric drive adds even harmonics, DC-safe, sat=
         REQUIRE (la == lb); REQUIRE (ra == rb);
     }
 
-    SECTION ("full SAT adds even harmonics (tube colour) and blocks DC")
+    auto renderSat = [&] (float sat, double hz = 300.0)
     {
-        std::vector<float> L (N), R (N); fillMonoSine (L, R, 300.0, 0.5f);
-        StereoWidth fx; fx.prepare (kSR); fx.setWidth (1.0f); fx.setSat (1.0f); fx.reset();   // width=1: measure the shaper alone
+        std::vector<float> L (N), R (N); fillMonoSine (L, R, hz, 0.5f);
+        StereoWidth fx; fx.prepare (kSR); fx.setWidth (1.0f); fx.setSat (sat); fx.reset();   // width=1: shaper alone
         for (int i = 0; i < N; i += kBlock) fx.process (L.data()+i, R.data()+i, kBlock);
-        REQUIRE (tu::allFinite (L));
+        return L;
+    };
 
+    SECTION ("moderate SAT gives the tube even-harmonic colour, DC-safe")
+    {
+        const auto L = renderSat (0.35f);   // the tube sweet spot (heavy crank goes odd/fuzz, correctly)
+        REQUIRE (tu::allFinite (L));
         const std::size_t s = (std::size_t) (N / 2);
         const double fund = magAt (L, s, 8192, kSR, 300.0);
         const double h2   = magAt (L, s, 8192, kSR, 600.0);   // even
@@ -125,6 +130,24 @@ TEST_CASE ("StereoWidth SAT: asymmetric drive adds even harmonics, DC-safe, sat=
         REQUIRE (h2 > 0.10 * fund);     // asymmetry => a real 2nd harmonic (a symmetric shaper gives ~0)
         REQUIRE (h2 > 0.3 * h3);        // even harmonics are a major component, not a trace (tube colour)
         REQUIRE (dc < 0.01 * fund);     // the DC blocker removes the offset asymmetry creates
+    }
+
+    SECTION ("full SAT is an obvious, heavy saturation")
+    {
+        const auto clean = renderSat (0.0f);
+        const auto full  = renderSat (1.0f);
+        const std::size_t s = (std::size_t) (N / 2);
+        // Total harmonic energy (2nd..8th) relative to the fundamental: near-nil clean, large driven.
+        auto thd = [&] (const std::vector<float>& x)
+        {
+            const double f = magAt (x, s, 8192, kSR, 300.0);
+            double h = 0.0; for (int k = 2; k <= 8; ++k) { const double m = magAt (x, s, 8192, kSR, 300.0 * k); h += m * m; }
+            return f > 0 ? std::sqrt (h) / f : 0.0;
+        };
+        const double thdClean = thd (clean), thdFull = thd (full);
+        INFO ("THD  clean=" << thdClean << "  full=" << thdFull);
+        REQUIRE (thdClean < 0.01);      // clean path is essentially harmonic-free
+        REQUIRE (thdFull  > 0.3);       // full crank is unmistakably saturated (near-square, rich harmonics)
     }
 
     SECTION ("sweeping SAT live is click-free")

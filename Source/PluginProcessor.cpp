@@ -2710,6 +2710,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 void VASynthProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
+    state.setProperty ("stateV", kStateVersion, nullptr);   // for one-time load-time migrations
     midiLearn.saveToTree (state);                 // append MIDILEARN child
     modifierLearn.saveToTree (state);             // append MODIFIERLEARN child (7B)
 
@@ -2730,6 +2731,7 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
 
         // Detect pre-level-mixer states BEFORE replaceState back-fills the levels.
         const bool needsMigration = stateNeedsLevelMigration (tree);
+        const int  loadedV = (int) tree.getProperty ("stateV", 0);   // 0 = pre-versioning save
 
         midiLearn.loadFromTree (tree);            // read MIDILEARN child (if any)
         modifierLearn.loadFromTree (tree);        // read MODIFIERLEARN child (7B)
@@ -2741,6 +2743,18 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
 
         // Restore the FX chain order (state-tree property, not an APVTS param).
         applyFxOrderProperty();
+
+        // Migrate to the WIDTH-first default: a pre-versioning session that carries the OLD
+        // default order [0,1,2,3] never chose it deliberately (it was the default), so move it
+        // to the new default. A newer save (stateV >= 2) keeps whatever order the user set.
+        if (loadedV < 2)
+        {
+            int ord[kFxCount]; getFxOrder (ord);
+            const int oldDefault[kFxCount] { 0, 1, 2, 3, 4 };
+            bool isOldDefault = true;
+            for (int i = 0; i < kFxCount; ++i) if (ord[i] != oldDefault[i]) { isOldDefault = false; break; }
+            if (isOldDefault) { const int nd[kFxCount] { 3, 0, 1, 2, 4 }; setFxOrder (nd); }
+        }
         applyMacroMapProperty();       // restore macro->param routing
         applyMacroNamesProperty();     // restore user macro names (H3)
         applyModMatrixProperty();      // restore the per-part mod matrix (#56)

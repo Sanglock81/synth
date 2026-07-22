@@ -127,6 +127,7 @@ public:
     // saves/loads with presets. `order` must be a permutation of {0,1,2,3,4}
     // (0=chorus, 1=delay, 2=reverb, 3=width, 4=EQ); invalid input is ignored.
     static constexpr int kFxCount = 5;
+    static constexpr int kStateVersion = 2;   // bumped for the WIDTH-first fx_order migration
     void setFxOrder (const int order[kFxCount])
     {
         std::uint32_t packed = 0;

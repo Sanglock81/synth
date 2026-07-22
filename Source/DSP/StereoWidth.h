@@ -107,18 +107,23 @@ private:
     struct DCBlock { float x1 = 0.0f, y1 = 0.0f; };
     float saturate (float x, DCBlock& d) const
     {
+        // Pre-gain drives the signal into the tube curve. A high max so the knob's TOP is
+        // obviously distorted, and a wet mix that reaches FULL by ~8% so the rest of the
+        // sweep controls DRIVE (not dry/wet) — the knob "accelerates" into saturation.
         const float driveGain = 1.0f + smSat * (kMaxSat - 1.0f);
         float sh = satTanh (driveGain * x + kBias) - kTanhBias;     // asymmetric -> even harmonics
         sh *= kMakeup;
         const float y = sh - d.x1 + kDcR * d.y1;                    // one-pole DC blocker (~4 Hz)
         d.x1 = sh; d.y1 = y;
-        return x * (1.0f - smSat) + y * smSat;                      // clean -> saturated crossfade
+        const float wet = std::min (smSat * kWetRamp, 1.0f);        // 0 -> full wet by smSat ~ 0.08
+        return x * (1.0f - wet) + y * wet;                          // click-safe engage, then drive is the control
     }
 
-    static constexpr float kMaxSat   = 8.0f;        // drive gain at sat = 1
+    static constexpr float kMaxSat   = 20.0f;       // drive gain at sat = 1 (heavy tube overdrive)
+    static constexpr float kWetRamp  = 12.5f;       // wet reaches 1.0 by smSat = 0.08 (fast onset)
     static constexpr float kBias     = 0.60f;       // tube asymmetry (even-harmonic amount)
     static constexpr float kTanhBias = 0.54285714f; // satTanh(0.60) — removes the static offset (x=0 -> 0)
-    static constexpr float kMakeup   = 0.80f;       // level trim; the output safety clipper backstops
+    static constexpr float kMakeup   = 0.72f;       // level trim; the output safety clipper backstops
     static constexpr float kDcR      = 0.9995f;     // DC-blocker pole
 
     // First-order Schroeder allpass: H(z) = (a + z^-1) / (1 + a z^-1).

@@ -221,6 +221,18 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
 - **808 / Punchy kick voicing:** amp attack softened 1 ms → 2 ms for a defined transient.
 
 ### Fixed / investigated
+- **FX SAT is now obvious, and WIDTH-first reaches existing sessions.** Follow-up to the SAT
+  feature: the knob felt inert because most of its travel crossfaded dry/wet at low drive. It now
+  reaches **full wet by ~8 %** of the sweep, so the rest of the knob controls **drive** — a small
+  turn already bites and the top is heavy (drive range 8× → **20×**; measured THD ~0.38 at full
+  vs ~0 clean). The tube even-harmonic colour lives at moderate settings; cranked, it goes fuzzy
+  (odd), as a real tube does. Separately, the **WIDTH-first default** didn't reach anyone with a
+  saved session (the persisted `fx_order` restored the old order); a one-time, version-stamped
+  migration now moves a legacy session that carried the *old default* `[0,1,2,3]` to width-first,
+  while leaving any custom order — or a deliberate new save — alone.
+- **MIDI auto-detect at startup restored.** A controller present at launch played only after an
+  unplug/replug: it was enabled before our routing callback was attached (JUCE wires the callback
+  at device-open time). The app now reopens already-enabled inputs after attaching the callback.
 - **INPUTS: "Live" and "Part 1" are now separate routing choices.** A surface's routing offered
   *P1 (Live)*, P2, P3, P4 — but "P1" secretly meant **follow the focused part**, so you could
   never *pin* a surface to Part 1 (it always chased whatever part was in focus). Each surface now

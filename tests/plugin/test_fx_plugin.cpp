@@ -73,6 +73,58 @@ TEST_CASE ("fx_order: setFxOrder round-trips a permutation and rejects invalid i
     for (int i = 0; i < 5; ++i) REQUIRE (got[i] == good[i]);
 }
 
+TEST_CASE ("fx_order: a pre-versioning session on the OLD default migrates to WIDTH-first", "[plugin][6b][fxorder][state]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    // Hand-build a legacy state blob: an APVTS state with fx_order = old default and NO stateV.
+    auto legacy = [] (const char* fxOrder, bool stampVersion)
+    {
+        VASynthProcessor src;
+        const int ord[5] { 0, 1, 2, 3, 4 };
+        src.setFxOrder (ord);   // seeds the property; we overwrite it below
+        src.apvts.state.setProperty (ParamID::fxOrder, fxOrder, nullptr);
+        juce::MemoryBlock blob;
+        src.getStateInformation (blob);
+        // getStateInformation stamps stateV=2; strip it to fake a pre-versioning save.
+        if (! stampVersion)
+        {
+            auto xml = juce::AudioProcessor::getXmlFromBinary (blob.getData(), (int) blob.getSize());
+            auto tree = juce::ValueTree::fromXml (*xml);
+            tree.removeProperty ("stateV", nullptr);
+            tree.setProperty (ParamID::fxOrder, fxOrder, nullptr);
+            juce::MemoryBlock out; if (auto x = tree.createXml()) juce::AudioProcessor::copyXmlToBinary (*x, out);
+            return out;
+        }
+        return blob;
+    };
+
+    SECTION ("legacy old-default order is migrated to width-first")
+    {
+        auto blob = legacy ("0,1,2,3", false);
+        VASynthProcessor dst; dst.setStateInformation (blob.getData(), (int) blob.getSize());
+        int got[5]; dst.getFxOrder (got);
+        const int want[5] { 3, 0, 1, 2, 4 };
+        for (int i = 0; i < 5; ++i) REQUIRE (got[i] == want[i]);
+    }
+    SECTION ("a legacy CUSTOM order is left alone")
+    {
+        auto blob = legacy ("2,1,0,3", false);
+        VASynthProcessor dst; dst.setStateInformation (blob.getData(), (int) blob.getSize());
+        int got[5]; dst.getFxOrder (got);
+        const int want[5] { 2, 1, 0, 3, 4 };
+        for (int i = 0; i < 5; ++i) REQUIRE (got[i] == want[i]);
+    }
+    SECTION ("a NEW save that deliberately holds the old order is NOT migrated")
+    {
+        auto blob = legacy ("0,1,2,3", true);   // stateV=2 present
+        VASynthProcessor dst; dst.setStateInformation (blob.getData(), (int) blob.getSize());
+        int got[5]; dst.getFxOrder (got);
+        const int want[5] { 0, 1, 2, 3, 4 };
+        for (int i = 0; i < 5; ++i) REQUIRE (got[i] == want[i]);
+    }
+}
+
 TEST_CASE ("fx_order persists through save/load", "[plugin][6b][fxorder][state]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
