@@ -88,6 +88,7 @@ namespace moddest
             { ModMatrix::ReverbDamp,   P::reverbDamp,    "Reverb Damp",   Fx },
             { ModMatrix::ReverbWidth,  P::reverbWidth,   "Reverb Width",  Fx },
             { ModMatrix::ReverbMix,    P::reverbMix,     "Reverb Mix",    Fx },
+            { ModMatrix::ReverbMotion, P::reverbMotion,  "Reverb Motion", Fx },
             { ModMatrix::StereoWidth,  P::stereoWidth,   "Stereo Width",  Fx },
             { ModMatrix::EqB1Gain,     P::peqB1Gain,     "EQ Low Gain",    Fx },
             { ModMatrix::EqB2Gain,     P::peqB2Gain,     "EQ L-Mid Gain",  Fx },

@@ -74,7 +74,7 @@ private:
         if (diff) { layoutBlocks(); repaint(); }
     }
 
-    struct KnobDef  { const char* pid; const char* name; };
+    struct KnobDef  { const char* pid; const char* name; const char* help = nullptr; };
     struct BlockDef { const char* title; juce::Colour tint; const char* enablePid; std::vector<KnobDef> knobs; };
 
     static const std::array<BlockDef, kNumShown>& defs()
@@ -86,7 +86,9 @@ private:
             { "DELAY",  juce::Colour (0xff6ea8ff), ID::fxDelayOn,
               { { ID::delayTime, "TIME" }, { ID::delayFeedback, "FBK" }, { ID::delaySpread, "PNG" }, { ID::delayMix, "MIX" } } },
             { "REVERB", juce::Colour (0xffb07cff), ID::fxReverbOn,
-              { { ID::reverbSize, "SIZE" }, { ID::reverbDamp, "DAMP" }, { ID::reverbWidth, "WIDTH" }, { ID::reverbMix, "MIX" } } },
+              { { ID::reverbSize, "SIZE" }, { ID::reverbDamp, "DAMP" }, { ID::reverbWidth, "WIDTH" },
+                { ID::reverbMix, "MIX" },
+                { ID::reverbMotion, "MOTION", "slow tail modulation: smears the metallic ring so pads swim (0 = static)" } } },
             { "WIDTH",  juce::Colour (0xfff0a04b), ID::fxWidthOn,
               { { ID::stereoWidth, "WIDTH" } } },
         } };
@@ -106,6 +108,7 @@ private:
             for (auto& kd : def.knobs)
             {
                 auto* k = new RotaryKnob (p.apvts, kd.pid, kd.name, p.getMidiLearn());
+                if (kd.help) k->setHelp (kd.help);
                 knobs.add (k);
                 addAndMakeVisible (k);
             }

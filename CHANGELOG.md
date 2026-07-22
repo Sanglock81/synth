@@ -9,6 +9,18 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Reverb MOTION (Musicality Pass, Tier 4a — modulated tail).** Static reverb comb tunings ring
+  at fixed frequencies, which reads *metallic* on a long tail. A new per-part **MOTION** knob (in
+  the REVERB block) adds very slow, very small modulation to a subset of the reverb's **allpass
+  diffusers** — three of the four series allpass, each on its own slow LFO (0.13–0.29 Hz, so there
+  is no single coherent wobble), a few samples deep via interpolated reads. Wobbling the diffusion
+  continuously reshuffles the echo pattern and **smears the fixed coloration** — pads *swim* instead
+  of ringing. Chosen by measurement: modulating the parallel combs instead only *reinforced* the
+  resonant peaks, so the allpass (the classic Dattorro-plate approach) is modulated. Measured:
+  the time-averaged HF spectral crest drops ~19 % with motion at full depth (the peaks smear).
+  **Default 0 ⇒ the classic static reverb, bit-identical** (goldens hold). Zipper-safe on the knob,
+  denormal-safe on the modulated decay, and a full mod destination (LINK / automation / MIDI-learn).
+  Bench: +~0.004 ms/block (negligible — interpolated reads on three short lines).
 - **NOISE is now a visible control.** White noise was always a fourth sound source in the engine
   but had **no knob** — you couldn't reach it. It now has a **LEVEL** knob in a fourth source row
   beneath the three oscillators (aligned under their LEVEL column), a full mod destination (LINK,

@@ -400,7 +400,7 @@ static const juce::StringArray& perPartSoundIds()
         ID::lfo3Rate, ID::lfo3Depth, ID::lfo3Shape, ID::lfo3Dest, ID::lfo3Sync, ID::lfo3Div,
         ID::chorusRate, ID::chorusDepth, ID::chorusMix, ID::fxChorusOn,
         ID::delayTime, ID::delayFeedback, ID::delayMix, ID::delaySpread, ID::fxDelayOn,
-        ID::reverbSize, ID::reverbDamp, ID::reverbWidth, ID::reverbMix, ID::fxReverbOn,
+        ID::reverbSize, ID::reverbDamp, ID::reverbWidth, ID::reverbMix, ID::reverbMotion, ID::fxReverbOn,
         ID::stereoWidth, ID::fxWidthOn,
         ID::peqOn, ID::peqB1Freq, ID::peqB1Gain, ID::peqB1Q, ID::peqB1On,
         ID::peqB2Freq, ID::peqB2Gain, ID::peqB2Q, ID::peqB2On,
@@ -701,6 +701,7 @@ static FXParams fxParamsFrom (const juce::AudioProcessorValueTreeState& src)
     p.delayMix = rp (src, ID::delayMix);     p.delaySpread = rp (src, ID::delaySpread);
     p.reverbSize = rp (src, ID::reverbSize); p.reverbDamp = rp (src, ID::reverbDamp);
     p.reverbWidth = rp (src, ID::reverbWidth); p.reverbMix = rp (src, ID::reverbMix);
+    p.reverbMotion = rp (src, ID::reverbMotion);
     p.width = rp (src, ID::stereoWidth);
     p.eqBand1 = { rp (src, ID::peqB1Freq), rp (src, ID::peqB1Gain), rp (src, ID::peqB1Q), rp (src, ID::peqB1On) > 0.5f };
     p.eqBand2 = { rp (src, ID::peqB2Freq), rp (src, ID::peqB2Gain), rp (src, ID::peqB2Q), rp (src, ID::peqB2On) > 0.5f };
@@ -1603,6 +1604,7 @@ void VASynthProcessor::applyBlockMods (int part, VoiceParams& vp, FXParams& fx, 
     mod (ModMatrix::ReverbDamp,    ID::reverbDamp,    fx.reverbDamp);
     mod (ModMatrix::ReverbWidth,   ID::reverbWidth,   fx.reverbWidth);
     mod (ModMatrix::ReverbMix,     ID::reverbMix,     fx.reverbMix);
+    mod (ModMatrix::ReverbMotion,  ID::reverbMotion,  fx.reverbMotion);
     mod (ModMatrix::StereoWidth,   ID::stereoWidth,   fx.width);
     mod (ModMatrix::EqB1Gain,      ID::peqB1Gain,     fx.eqBand1.gainDb);
     mod (ModMatrix::EqB2Gain,      ID::peqB2Gain,     fx.eqBand2.gainDb);
@@ -1684,6 +1686,7 @@ FXParams VASynthProcessor::snapshotFXParams() const
     p.reverbDamp  = rp (apvts, ID::reverbDamp);
     p.reverbWidth = rp (apvts, ID::reverbWidth);
     p.reverbMix   = rp (apvts, ID::reverbMix);
+    p.reverbMotion = rp (apvts, ID::reverbMotion);
 
     p.width = rp (apvts, ID::stereoWidth);
 

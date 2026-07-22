@@ -137,6 +137,7 @@ namespace ParamID
     inline constexpr auto reverbDamp    = "reverb_damp";
     inline constexpr auto reverbWidth   = "reverb_width";
     inline constexpr auto reverbMix     = "reverb_mix";
+    inline constexpr auto reverbMotion  = "reverb_motion";   // Tier 4a: slow tail modulation (0 = static)
     inline constexpr auto fxWidthOn     = "fx_width_on";
     inline constexpr auto stereoWidth   = "stereo_width";    // 0=mono, 1=normal, 2=wide
 
@@ -357,6 +358,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::reverbDamp, 1},    "Reverb Damp", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::reverbWidth, 1},   "Reverb Width", juce::NormalisableRange<float>(0.0f, 1.0f), 1.0f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::reverbMix, 1},     "Reverb Mix", juce::NormalisableRange<float>(0.0f, 1.0f), 0.3f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::reverbMotion, 1},  "Reverb Motion", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
 
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::fxWidthOn, 1},     "Width On", false));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::stereoWidth, 1},   "Stereo Width", juce::NormalisableRange<float>(0.0f, 2.0f), 1.4f));

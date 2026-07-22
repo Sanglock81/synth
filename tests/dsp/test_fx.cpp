@@ -248,6 +248,132 @@ TEST_CASE ("Reverb: decaying tail, mix=0 identity, stable and finite", "[6b][fx]
     }
 }
 
+namespace
+{
+    // Peak-to-average magnitude of a windowed FFT of a decaying tail. A static Freeverb
+    // rings on a few sharp, fixed comb resonances -> high peak/avg (reads metallic). MOTION
+    // wanders those resonances, smearing them over the window -> lower peak/avg.
+    // Unit-norm magnitude spectrum over a band — the SHAPE of the tail's spectrum, decay
+    // envelope removed. Fixed comb resonances make this shape stationary; MOTION slowly
+    // wanders the peaks so the shape at t1 and t2 differs.
+    std::vector<double> normSpecBand (const std::vector<float>& mono, std::size_t start, int fftN,
+                                      double sr, double fLo, double fHi)
+    {
+        std::vector<float> w = tu::slice (mono, start, (std::size_t) fftN);
+        tu::blackmanHarris (w);
+        std::vector<std::complex<double>> a ((std::size_t) fftN);
+        for (int i = 0; i < fftN; ++i) a[(std::size_t) i] = { (double) w[(std::size_t) i], 0.0 };
+        tu::fft (a);
+        const int lo = std::max (1, (int) (fLo * fftN / sr));
+        const int hi = std::min (fftN / 2, (int) (fHi * fftN / sr));
+        std::vector<double> s; double e = 0.0;
+        for (int i = lo; i < hi; ++i) { const double m = std::abs (a[(std::size_t) i]); s.push_back (m); e += m * m; }
+        const double norm = std::sqrt (std::max (e, 1e-30));
+        for (auto& v : s) v /= norm;
+        return s;
+    }
+
+    // Crest (peak/mean) of the TIME-AVERAGED HF spectrum over the tail. Averaging many
+    // short frames: static comb peaks always land in the same bins -> they survive the
+    // average as sharp peaks (high crest); MOTION wanders them frame to frame -> they smear
+    // into broad humps (low crest). This is the classic "modulation smears the spectrum"
+    // and, being averaged over ~8 frames, does not depend on any single snapshot's LFO phase.
+    double tailAvgCrest (const std::vector<float>& mono, double sr)
+    {
+        std::vector<double> acc; int frames = 0;
+        for (double t = 1.0; t <= 7.0 + 1e-9; t += 0.10)
+        {
+            auto s = normSpecBand (mono, (std::size_t) (sr * t), 4096, sr, 2000.0, 12000.0);
+            if (acc.empty()) acc.assign (s.size(), 0.0);
+            for (std::size_t i = 0; i < s.size() && i < acc.size(); ++i) acc[i] += s[i];
+            ++frames;
+        }
+        double sum = 0.0, peak = 0.0;
+        for (double v : acc) { v /= frames; sum += v; peak = std::max (peak, v); }
+        return acc.empty() ? 0.0 : peak / (sum / (double) acc.size());
+    }
+
+    // A held excitation (short noise burst, then silence) so the tail is long and broadband;
+    // rendered long enough for the slow motion LFOs to complete cycles and wander the peaks.
+    std::vector<float> reverbTail (float motion, double seconds = 8.0, float size = 0.9f, float damp = 0.0f)
+    {
+        const int N = (int) (kSR * seconds);
+        std::vector<float> L ((std::size_t) N, 0.0f), R ((std::size_t) N, 0.0f);
+        for (int i = 0; i < (int) (kSR * 0.02); ++i)          // 20 ms broadband burst
+        { const float s = ((i * 2654435761u >> 8) & 1) ? 0.5f : -0.5f; L[(std::size_t) i] = s; R[(std::size_t) i] = s; }
+        Reverb fx; fx.prepare (kSR);
+        fx.setParams (size, damp, 1.0f, 1.0f, motion); fx.reset();
+        for (int i = 0; i < N; i += kBlock) fx.process (L.data() + i, R.data() + i, std::min (kBlock, N - i));
+        return L;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tier 4a — reverb MOTION: slow, small, per-line modulation of a subset of combs.
+TEST_CASE ("Reverb MOTION: smears the metallic tail, click-safe, default is bit-identical", "[6b][fx][reverb][motion]")
+{
+    SECTION ("motion=0 is bit-identical to the classic (un-modulated) path")
+    {
+        const int N = (int) (kSR * 0.5);
+        std::vector<float> L1 ((std::size_t) N, 0.0f), R1 ((std::size_t) N, 0.0f); L1[0] = R1[0] = 1.0f;
+        std::vector<float> L2 = L1, R2 = R1;
+        Reverb a; a.prepare (kSR); a.setParams (0.85f, 0.3f, 1.0f, 1.0f);       a.reset();   // classic 4-arg
+        Reverb b; b.prepare (kSR); b.setParams (0.85f, 0.3f, 1.0f, 1.0f, 0.0f); b.reset();   // explicit motion 0
+        for (int i = 0; i < N; i += kBlock)
+        {
+            const int n = std::min (kBlock, N - i);
+            a.process (L1.data() + i, R1.data() + i, n);
+            b.process (L2.data() + i, R2.data() + i, n);
+        }
+        REQUIRE (L1 == L2);   // sample-for-sample identical -> goldens hold
+        REQUIRE (R1 == R2);
+    }
+
+    SECTION ("motion smears the fixed comb peaks in the time-averaged spectrum")
+    {
+        // Average the HF spectrum over ~8 frames of the tail: static peaks sit in the same
+        // bins every frame and survive as sharp peaks (high crest); motion wanders them so
+        // they smear into broad humps (lower crest).
+        const auto tStatic = reverbTail (0.0f);
+        const auto tMotion = reverbTail (1.0f);
+        const double crestStatic = tailAvgCrest (tStatic, kSR);
+        const double crestMotion = tailAvgCrest (tMotion, kSR);
+        INFO ("rmsDiff(static,motion)=" << rmsDiff (tStatic, tMotion)
+              << "  time-avg HF crest  static=" << crestStatic << "  motion=" << crestMotion);
+        REQUIRE (crestMotion < crestStatic * 0.85);   // motion measurably smears the peaks (the cure)
+    }
+
+    SECTION ("sweeping MOTION live adds no click")
+    {
+        const int N = (int) (kSR * 1.0);
+        std::vector<float> L ((std::size_t) N), R ((std::size_t) N); fillMonoSine (L, R, 220.0);
+
+        auto Ls = L, Rs = R;   // static reference for a max-delta baseline
+        { Reverb s; s.prepare (kSR); s.setParams (0.85f, 0.3f, 1.0f, 0.5f, 0.0f); s.reset();
+          for (int i = 0; i < N; i += kBlock) s.process (Ls.data() + i, Rs.data() + i, std::min (kBlock, N - i)); }
+
+        auto Lm = L, Rm = R;   // sweep motion 0 -> 1 across the render
+        Reverb fx; fx.prepare (kSR); fx.reset();
+        for (int i = 0; i < N; i += kBlock)
+        {
+            fx.setParams (0.85f, 0.3f, 1.0f, 0.5f, (float) i / (float) N);
+            fx.process (Lm.data() + i, Rm.data() + i, std::min (kBlock, N - i));
+        }
+        REQUIRE (tu::allFinite (Lm));
+        REQUIRE (tu::maxDelta (Lm) < tu::maxDelta (Ls) * 1.5f + 1.0e-4f);   // a click would spike far past this
+    }
+
+    SECTION ("a fully modulated decay stays finite and settles (denormal-safe)")
+    {
+        const int N = (int) (kSR * 3.0);
+        std::vector<float> L ((std::size_t) N, 0.0f), R ((std::size_t) N, 0.0f); L[0] = R[0] = 1.0f;
+        Reverb fx; fx.prepare (kSR); fx.setParams (0.7f, 0.5f, 1.0f, 1.0f, 1.0f); fx.reset();
+        for (int i = 0; i < N; i += kBlock) fx.process (L.data() + i, R.data() + i, std::min (kBlock, N - i));
+        REQUIRE (tu::allFinite (L));
+        REQUIRE (tu::rms (tu::slice (L, (std::size_t) (kSR * 2.5), 8192)) < 1.0e-3);   // decays to silence, no stuck energy
+    }
+}
+
 // ---------------------------------------------------------------------------
 TEST_CASE ("FXChain: bypass identity, order matters, and reorder is click-free", "[6b][fx][chain]")
 {

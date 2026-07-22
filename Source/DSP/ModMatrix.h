@@ -73,6 +73,7 @@ public:
                   NoiseLevel, // 4th-source noise level. APPENDED for state stability, but VOICE-applied
                               // (evaluate() fills Offsets.noiseLevel; the voice reads it) — not a block
                               // dest despite its numeric position, so blockOffsets() collects it harmlessly.
+                  ReverbMotion, // Tier 4a: reverb tail modulation depth (block-tier, appended).
                   kNumDests };
     static constexpr int kFirstBlockDest = ChorusRate;
     static constexpr int kNumBlockDests  = kNumDests - kFirstBlockDest;
