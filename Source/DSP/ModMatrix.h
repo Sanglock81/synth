@@ -74,6 +74,7 @@ public:
                               // (evaluate() fills Offsets.noiseLevel; the voice reads it) — not a block
                               // dest despite its numeric position, so blockOffsets() collects it harmlessly.
                   ReverbMotion, // Tier 4a: reverb tail modulation depth (block-tier, appended).
+                  Saturation,   // FX SAT: tube saturation in the width block (block-tier, appended).
                   kNumDests };
     static constexpr int kFirstBlockDest = ChorusRate;
     static constexpr int kNumBlockDests  = kNumDests - kFirstBlockDest;

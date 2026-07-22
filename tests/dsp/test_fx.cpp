@@ -83,6 +83,65 @@ namespace
     }
 }
 
+// Tier 4c follow-on — FX SAT: asymmetric tube saturation in the WIDTH block.
+TEST_CASE ("StereoWidth SAT: asymmetric drive adds even harmonics, DC-safe, sat=0 bit-identical, click-safe", "[6b][fx][width][sat]")
+{
+    const int N = 16384;
+
+    auto magAt = [] (const std::vector<float>& x, std::size_t start, int fftN, double sr, double hz)
+    {
+        std::vector<float> w = tu::slice (x, start, (std::size_t) fftN);
+        tu::blackmanHarris (w);
+        std::vector<std::complex<double>> a ((std::size_t) fftN);
+        for (int i = 0; i < fftN; ++i) a[(std::size_t) i] = { (double) w[(std::size_t) i], 0.0 };
+        tu::fft (a);
+        const int bin = std::clamp ((int) std::lround (hz * fftN / sr), 0, fftN / 2);
+        return std::abs (a[(std::size_t) bin]);
+    };
+
+    SECTION ("sat=0 is bit-identical to the no-sat path")
+    {
+        std::vector<float> L (N), R (N); fillMonoSine (L, R, 220.0);
+        std::vector<float> la = L, ra = R, lb = L, rb = R;
+        StereoWidth a; a.prepare (kSR); a.setWidth (1.5f); a.setSat (0.0f); a.reset();
+        StereoWidth b; b.prepare (kSR); b.setWidth (1.5f);                 b.reset();   // sat defaults 0
+        for (int i = 0; i < N; i += kBlock) { a.process (la.data()+i, ra.data()+i, kBlock); b.process (lb.data()+i, rb.data()+i, kBlock); }
+        REQUIRE (la == lb); REQUIRE (ra == rb);
+    }
+
+    SECTION ("full SAT adds even harmonics (tube colour) and blocks DC")
+    {
+        std::vector<float> L (N), R (N); fillMonoSine (L, R, 300.0, 0.5f);
+        StereoWidth fx; fx.prepare (kSR); fx.setWidth (1.0f); fx.setSat (1.0f); fx.reset();   // width=1: measure the shaper alone
+        for (int i = 0; i < N; i += kBlock) fx.process (L.data()+i, R.data()+i, kBlock);
+        REQUIRE (tu::allFinite (L));
+
+        const std::size_t s = (std::size_t) (N / 2);
+        const double fund = magAt (L, s, 8192, kSR, 300.0);
+        const double h2   = magAt (L, s, 8192, kSR, 600.0);   // even
+        const double h3   = magAt (L, s, 8192, kSR, 900.0);   // odd
+        const double dc   = magAt (L, s, 8192, kSR, 0.0);
+        INFO ("fund=" << fund << " h2(even)=" << h2 << " h3(odd)=" << h3 << " dc=" << dc);
+        REQUIRE (h2 > 0.10 * fund);     // asymmetry => a real 2nd harmonic (a symmetric shaper gives ~0)
+        REQUIRE (h2 > 0.3 * h3);        // even harmonics are a major component, not a trace (tube colour)
+        REQUIRE (dc < 0.01 * fund);     // the DC blocker removes the offset asymmetry creates
+    }
+
+    SECTION ("sweeping SAT live is click-free")
+    {
+        std::vector<float> L (N), R (N); fillMonoSine (L, R, 220.0);
+        std::vector<float> ls = L, rs = R;   // FULL-sat steady baseline (saturation legitimately raises
+        { StereoWidth s; s.prepare (kSR); s.setWidth (1.3f); s.setSat (1.0f); s.reset();   // max-delta via harmonics)
+          for (int i = 0; i < N; i += kBlock) s.process (ls.data()+i, rs.data()+i, kBlock); }
+
+        std::vector<float> l = L, r = R;      // ramp sat 0 -> 1: max-delta must not EXCEED the steady full-sat
+        StereoWidth fx; fx.prepare (kSR); fx.setWidth (1.3f); fx.reset();
+        for (int i = 0; i < N; i += kBlock) { fx.setSat ((float) i / (float) N); fx.process (l.data()+i, r.data()+i, kBlock); }
+        REQUIRE (tu::allFinite (l));
+        REQUIRE (tu::maxDelta (l) < tu::maxDelta (ls) * 1.3f + 1.0e-3f);   // a sweep click would spike past full-sat
+    }
+}
+
 TEST_CASE ("StereoWidth: width>1 widens a DRY MONO source, mono-safe", "[6b][fx][width]")
 {
     const int N = 8192;

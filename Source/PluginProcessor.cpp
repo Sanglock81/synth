@@ -144,7 +144,7 @@ void VASynthProcessor::loadInitPreset()
     // Init resets the focused part's SOUND to defaults but keeps ALL global performance
     // state (sequencer, looper, tempo, macros, mixer, master, ...) and the other parts put.
     applyFocusedPartSound (juce::ValueTree());             // invalid tree -> Init baseline sound
-    const int def[kFxCount] { 0, 1, 2, 3, 4 };
+    const int def[kFxCount] { 3, 0, 1, 2, 4 };   // WIDTH (+SAT) first, EQ last
     setFxOrder (def);
 }
 
@@ -401,7 +401,7 @@ static const juce::StringArray& perPartSoundIds()
         ID::chorusRate, ID::chorusDepth, ID::chorusMix, ID::chorusVoices, ID::fxChorusOn,
         ID::delayTime, ID::delayFeedback, ID::delayMix, ID::delaySpread, ID::fxDelayOn,
         ID::reverbSize, ID::reverbDamp, ID::reverbWidth, ID::reverbMix, ID::reverbMotion, ID::fxReverbOn,
-        ID::stereoWidth, ID::fxWidthOn,
+        ID::stereoWidth, ID::fxSat, ID::fxWidthOn,
         ID::peqOn, ID::peqB1Freq, ID::peqB1Gain, ID::peqB1Q, ID::peqB1On,
         ID::peqB2Freq, ID::peqB2Gain, ID::peqB2Q, ID::peqB2On,
         ID::peqB3Freq, ID::peqB3Gain, ID::peqB3Q, ID::peqB3On,
@@ -704,6 +704,7 @@ static FXParams fxParamsFrom (const juce::AudioProcessorValueTreeState& src)
     p.reverbWidth = rp (src, ID::reverbWidth); p.reverbMix = rp (src, ID::reverbMix);
     p.reverbMotion = rp (src, ID::reverbMotion);
     p.width = rp (src, ID::stereoWidth);
+    p.sat   = rp (src, ID::fxSat);
     p.eqBand1 = { rp (src, ID::peqB1Freq), rp (src, ID::peqB1Gain), rp (src, ID::peqB1Q), rp (src, ID::peqB1On) > 0.5f };
     p.eqBand2 = { rp (src, ID::peqB2Freq), rp (src, ID::peqB2Gain), rp (src, ID::peqB2Q), rp (src, ID::peqB2On) > 0.5f };
     p.eqBand3 = { rp (src, ID::peqB3Freq), rp (src, ID::peqB3Gain), rp (src, ID::peqB3Q), rp (src, ID::peqB3On) > 0.5f };
@@ -1607,6 +1608,7 @@ void VASynthProcessor::applyBlockMods (int part, VoiceParams& vp, FXParams& fx, 
     mod (ModMatrix::ReverbMix,     ID::reverbMix,     fx.reverbMix);
     mod (ModMatrix::ReverbMotion,  ID::reverbMotion,  fx.reverbMotion);
     mod (ModMatrix::StereoWidth,   ID::stereoWidth,   fx.width);
+    mod (ModMatrix::Saturation,    ID::fxSat,         fx.sat);
     mod (ModMatrix::EqB1Gain,      ID::peqB1Gain,     fx.eqBand1.gainDb);
     mod (ModMatrix::EqB2Gain,      ID::peqB2Gain,     fx.eqBand2.gainDb);
     mod (ModMatrix::EqB3Gain,      ID::peqB3Gain,     fx.eqBand3.gainDb);
@@ -1691,6 +1693,7 @@ FXParams VASynthProcessor::snapshotFXParams() const
     p.reverbMotion = rp (apvts, ID::reverbMotion);
 
     p.width = rp (apvts, ID::stereoWidth);
+    p.sat   = rp (apvts, ID::fxSat);
 
     // K1: the per-part EQ (fixed last stage). The LIVE part reads it here — this was the
     // missing wiring: snapshotFXParams never carried the EQ, so the live part's EQ did

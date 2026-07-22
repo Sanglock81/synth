@@ -75,18 +75,18 @@ TEST_CASE ("loadFactoryPreset applies overrides; Init resets to defaults", "[plu
     REQUIRE (p.apvts.getRawParameterValue ("fx_reverb_on")->load() < 0.5f);   // back to default (off)
     REQUIRE (p.apvts.getRawParameterValue ("amp_attack")->load() == Catch::Approx (0.005f).margin (1e-4));
     int order[5]; p.getFxOrder (order);
-    REQUIRE (order[0] == 0); REQUIRE (order[3] == 3);                          // default chain order
+    REQUIRE (order[0] == 3); REQUIRE (order[1] == 0);                          // default chain order: WIDTH first
 }
 
 TEST_CASE ("a preset with an fxOrder sets the chain order", "[plugin][6d][presets][order]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
-    // Warm Pad declares "fxOrder":[0,1,2,3]; load a reordered state first to prove
-    // the preset actively sets it.
+    // Warm Pad declares "fxOrder":[3,0,1,2] (width first); load a reordered state first to
+    // prove the preset actively sets it.
     const int scrambled[5] { 4, 3, 2, 1, 0 };
     p.setFxOrder (scrambled);
     p.loadFactoryPreset ("Warm Pad");
     int order[5]; p.getFxOrder (order);
-    REQUIRE (order[0] == 0); REQUIRE (order[1] == 1); REQUIRE (order[2] == 2); REQUIRE (order[3] == 3);
+    REQUIRE (order[0] == 3); REQUIRE (order[1] == 0); REQUIRE (order[2] == 1); REQUIRE (order[3] == 2);
 }

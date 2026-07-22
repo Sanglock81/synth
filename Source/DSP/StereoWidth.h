@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 // ============================================================================
 // Stereo width (mid/side) with mono-safe widening. Hand-rolled, JUCE-free,
@@ -35,19 +36,38 @@ public:
     void reset()
     {
         smWidth = width;
+        smSat = sat;
         for (auto& s : ap) { s.x1 = 0.0f; s.y1 = 0.0f; }
+        for (auto& d : dc)  { d.x1 = 0.0f; d.y1 = 0.0f; }
     }
 
     // 0 = mono, 1 = unchanged, 2 = maximally wide (synthesized side at full gain).
     void setWidth (float w) { width = std::clamp (w, 0.0f, 2.0f); }
+
+    // SAT (Tier 4c follow-on): asymmetric tube-style saturation, applied per channel BEFORE
+    // the widening. 0 = clean (bit-exact bypass). The asymmetry (a small pre-bias into tanh)
+    // adds EVEN harmonics — the "tube" colour the symmetric filter DRIVE doesn't give — and a
+    // one-pole DC blocker removes the offset that asymmetry produces.
+    void setSat (float s01) { sat = std::clamp (s01, 0.0f, 1.0f); }
 
     void process (float* left, float* right, int numSamples)
     {
         for (int i = 0; i < numSamples; ++i)
         {
             smWidth += kSmoothCoef * (width - smWidth);
-            const float mid  = 0.5f * (left[i] + right[i]);
-            const float side = 0.5f * (left[i] - right[i]);
+            smSat   += kSmoothCoef * (sat   - smSat);       // zipper-safe drive engage
+
+            // Saturate each channel first (drive -> then widen). smSat 0 keeps the exact
+            // original signal (goldens bit-identical); the crossfade makes engaging click-free.
+            float l = left[i], r = right[i];
+            if (smSat > 1.0e-6f)
+            {
+                l = saturate (l, dc[0]);
+                r = saturate (r, dc[1]);
+            }
+
+            const float mid  = 0.5f * (l + r);
+            const float side = 0.5f * (l - r);
 
             // Decorrelate the mid through the allpass cascade (state runs always).
             float decorr = mid;
@@ -66,11 +86,40 @@ public:
 
     // For the reorder crossfade: adopt another instance's smoothing + filter state
     // so the freshly-activated chain copy continues seamlessly.
-    void copyStateFrom (const StereoWidth& other) { smWidth = other.smWidth; ap = other.ap; }
+    void copyStateFrom (const StereoWidth& other) { smWidth = other.smWidth; ap = other.ap; smSat = other.smSat; dc = other.dc; }
 
 private:
     static constexpr float kSmoothCoef = 0.002f;   // ~one-pole knob smoothing
     static constexpr float kDecorrGain = 0.9f;     // synthesized-side level at width = 2
+
+    // Asymmetric tube shaper. driveGain scales with smSat; the pre-bias makes the tanh
+    // asymmetric (even harmonics); the result is DC-blocked, then crossfaded in by smSat so
+    // engaging is click-free and smSat 0 is a true bypass.
+    // Cheap tanh (clamped Padé[3/2]) — no libm call in the audio loop; saturates hard past ±3.
+    static float satTanh (float x)
+    {
+        if (x >  3.0f) return  1.0f;
+        if (x < -3.0f) return -1.0f;
+        const float x2 = x * x;
+        return x * (27.0f + x2) / (27.0f + 9.0f * x2);
+    }
+
+    struct DCBlock { float x1 = 0.0f, y1 = 0.0f; };
+    float saturate (float x, DCBlock& d) const
+    {
+        const float driveGain = 1.0f + smSat * (kMaxSat - 1.0f);
+        float sh = satTanh (driveGain * x + kBias) - kTanhBias;     // asymmetric -> even harmonics
+        sh *= kMakeup;
+        const float y = sh - d.x1 + kDcR * d.y1;                    // one-pole DC blocker (~4 Hz)
+        d.x1 = sh; d.y1 = y;
+        return x * (1.0f - smSat) + y * smSat;                      // clean -> saturated crossfade
+    }
+
+    static constexpr float kMaxSat   = 8.0f;        // drive gain at sat = 1
+    static constexpr float kBias     = 0.60f;       // tube asymmetry (even-harmonic amount)
+    static constexpr float kTanhBias = 0.54285714f; // satTanh(0.60) — removes the static offset (x=0 -> 0)
+    static constexpr float kMakeup   = 0.80f;       // level trim; the output safety clipper backstops
+    static constexpr float kDcR      = 0.9995f;     // DC-blocker pole
 
     // First-order Schroeder allpass: H(z) = (a + z^-1) / (1 + a z^-1).
     struct Allpass
@@ -90,4 +139,7 @@ private:
 
     float width   = 1.0f;
     float smWidth = 1.0f;
+    float sat     = 0.0f;
+    float smSat   = 0.0f;
+    std::array<DCBlock, 2> dc {};   // per-channel DC blocker state (L, R)
 };

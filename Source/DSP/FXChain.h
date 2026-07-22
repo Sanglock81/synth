@@ -42,6 +42,7 @@ struct FXParams
     float delayTimeMs = 300.0f, delayFeedback = 0.35f, delayMix = 0.35f, delaySpread = 1.0f;
     float reverbSize = 0.5f, reverbDamp = 0.5f, reverbWidth = 1.0f, reverbMix = 0.3f, reverbMotion = 0.0f;
     float width = 1.4f;
+    float sat   = 0.0f;                               // tube saturation in the width block (0 = clean)
     PartEQ::Band eqBand1 { 180.0f,   0.0f, 0.9f };   // per-part EQ, 5 fully parametric bells (fixed last)
     PartEQ::Band eqBand2 { 1000.0f,  0.0f, 0.9f };
     PartEQ::Band eqBand3 { 5000.0f,  0.0f, 0.9f };
@@ -148,6 +149,7 @@ private:
             delay.setParams  (p.delayTimeMs, p.delayFeedback, p.delayMix, p.delaySpread);
             reverb.setParams (p.reverbSize, p.reverbDamp, p.reverbWidth, p.reverbMix, p.reverbMotion);
             width.setWidth   (p.width);
+            width.setSat     (p.sat);
             eq.setBands      (p.eqBand1, p.eqBand2, p.eqBand3, p.eqBand4, p.eqBand5);
         }
         void setConfig (const int ord[kNumFX], const bool en[kNumFX])

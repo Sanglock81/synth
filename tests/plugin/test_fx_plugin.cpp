@@ -53,8 +53,9 @@ TEST_CASE ("fx_order: setFxOrder round-trips a permutation and rejects invalid i
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
 
-    int def[5]; p.getFxOrder (def);             // 5 blocks now (chorus/delay/reverb/width/EQ)
-    for (int i = 0; i < 5; ++i) REQUIRE (def[i] == i);
+    int def[5]; p.getFxOrder (def);             // default: WIDTH first {3,0,1,2}, EQ last (4)
+    const int expectDef[5] { 3, 0, 1, 2, 4 };
+    for (int i = 0; i < 5; ++i) REQUIRE (def[i] == expectDef[i]);
 
     const int good[5] { 4, 3, 2, 1, 0 };
     p.setFxOrder (good);

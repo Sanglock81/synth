@@ -141,6 +141,7 @@ namespace ParamID
     inline constexpr auto reverbMotion  = "reverb_motion";   // Tier 4a: slow tail modulation (0 = static)
     inline constexpr auto fxWidthOn     = "fx_width_on";
     inline constexpr auto stereoWidth   = "stereo_width";    // 0=mono, 1=normal, 2=wide
+    inline constexpr auto fxSat         = "fx_sat";          // tube saturation in the width block (0 = clean)
 
     inline constexpr auto fxOrder       = "fx_order";        // state-tree property: "a,b,c,d"
 
@@ -364,6 +365,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::fxWidthOn, 1},     "Width On", false));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::stereoWidth, 1},   "Stereo Width", juce::NormalisableRange<float>(0.0f, 2.0f), 1.4f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::fxSat, 1},         "FX Saturation", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
 
     // --- Macros (R2): 8 performance knobs, default 0 (inert; routed in R3) -----
     {

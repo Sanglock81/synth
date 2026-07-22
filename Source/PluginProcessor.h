@@ -803,7 +803,9 @@ private:
     }
 
     // Default order 0,1,2,3,4 packed 4 bits per slot (slot i in nibble i).
-    static constexpr std::uint32_t kDefaultOrderPacked = 0x43210u;
+    // Default chain: WIDTH first (spatialize + SAT the dry signal), then chorus, delay,
+    // reverb; EQ is always applied last. Slots low->high nibble: {3,0,1,2,4}. Reorderable.
+    static constexpr std::uint32_t kDefaultOrderPacked = 0x42103u;
 
     SynthEngine        engine;          // owns the per-part voices + per-part FX (Sub-phase 2)
     ChordEngine        chordEngine;

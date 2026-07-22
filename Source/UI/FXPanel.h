@@ -90,8 +90,9 @@ private:
               { { ID::reverbSize, "SIZE" }, { ID::reverbDamp, "DAMP" }, { ID::reverbWidth, "WIDTH" },
                 { ID::reverbMix, "MIX" },
                 { ID::reverbMotion, "MOTION", "slow tail modulation: smears the metallic ring so pads swim (0 = static)" } } },
-            { "WIDTH",  juce::Colour (0xfff0a04b), ID::fxWidthOn,
-              { { ID::stereoWidth, "WIDTH" } } },
+            { "SAT + WIDTH", juce::Colour (0xfff0a04b), ID::fxWidthOn,
+              { { ID::fxSat, "SAT", "tube-style saturation, applied before widening" },
+                { ID::stereoWidth, "WIDTH" } } },
         } };
         return d;
     }

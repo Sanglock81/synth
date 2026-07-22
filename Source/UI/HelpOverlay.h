@@ -56,6 +56,7 @@ public:
             { "DRIVE knob (filter)", "analog-style saturation in the filter loop; RESO past the top self-oscillates" },
             { "MOTION knob (reverb)", "slow tail modulation: smears the metallic ring so pads swim (0 = static)" },
             { "VOICES 1|2 (chorus)", "2 adds a second decorrelated tap — thicker, wider chorus" },
+            { "SAT knob (FX width)", "tube-style saturation (even harmonics), applied before widening" },
             { "SYNC / DIV (LFO)", "lock the LFO to tempo; DIV sets the note division" },
             { "F11", "fullscreen (standalone)" },
             { "F12", "audio-health debug overlay" },
