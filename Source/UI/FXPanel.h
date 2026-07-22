@@ -75,14 +75,15 @@ private:
     }
 
     struct KnobDef  { const char* pid; const char* name; const char* help = nullptr; };
-    struct BlockDef { const char* title; juce::Colour tint; const char* enablePid; std::vector<KnobDef> knobs; };
+    struct BlockDef { const char* title; juce::Colour tint; const char* enablePid; std::vector<KnobDef> knobs;
+                      const char* voicesPid = nullptr; };   // optional 1|2 selector (chorus)
 
     static const std::array<BlockDef, kNumShown>& defs()
     {
         namespace ID = ParamID;
         static const std::array<BlockDef, kNumShown> d { {
             { "CHORUS", juce::Colour (0xff46c9b0), ID::fxChorusOn,
-              { { ID::chorusRate, "RATE" }, { ID::chorusDepth, "DEPTH" }, { ID::chorusMix, "MIX" } } },
+              { { ID::chorusRate, "RATE" }, { ID::chorusDepth, "DEPTH" }, { ID::chorusMix, "MIX" } }, ID::chorusVoices },
             { "DELAY",  juce::Colour (0xff6ea8ff), ID::fxDelayOn,
               { { ID::delayTime, "TIME" }, { ID::delayFeedback, "FBK" }, { ID::delaySpread, "PNG" }, { ID::delayMix, "MIX" } } },
             { "REVERB", juce::Colour (0xffb07cff), ID::fxReverbOn,
@@ -112,6 +113,12 @@ private:
                 knobs.add (k);
                 addAndMakeVisible (k);
             }
+            if (def.voicesPid != nullptr)
+            {
+                voices = std::make_unique<HSelector> (p.apvts, def.voicesPid, p.getMidiLearn(), juce::StringArray { "1", "2" });
+                voices->setHelp ("Chorus voices: 2 adds a second decorrelated tap (thicker, wider)");
+                addAndMakeVisible (*voices);
+            }
         }
 
         void paint (juce::Graphics& g) override
@@ -137,6 +144,13 @@ private:
             g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
             g.drawText (title, bar.withTrimmedLeft (2), juce::Justification::centredLeft, false);
 
+            if (voices)   // label above the 1|2 selector, matching the knob name style
+            {
+                g.setColour (VASynthLookAndFeel::dim());
+                g.setFont (juce::Font (juce::FontOptions (9.5f)));
+                g.drawText ("VOICES", voicesLabelArea.withHeight (13), juce::Justification::centred, false);
+            }
+
             if (dragging) { g.setColour (tint.withAlpha (0.9f)); g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 5.0f, 2.0f); }
         }
 
@@ -145,6 +159,11 @@ private:
             auto body = getLocalBounds().withTrimmedTop (kBarH + 3).reduced (5, 2);
             const int n = knobs.size();
             if (n == 0) return;
+            if (voices)   // reserve a narrow strip on the right for the 1|2 selector + its label
+            {
+                voicesLabelArea = body.removeFromRight (56);
+                voices->setBounds (voicesLabelArea.reduced (5, 2).withTrimmedTop (13));
+            }
             const int kw = body.getWidth() / n;
             for (int i = 0; i < n; ++i)
                 knobs[i]->setBounds ((i < n - 1 ? body.removeFromLeft (kw) : body).reduced (3, 0));
@@ -190,6 +209,8 @@ private:
         juce::AudioParameterBool* enableParam = nullptr;
         std::unique_ptr<juce::ParameterAttachment> enableAtt;
         juce::OwnedArray<RotaryKnob> knobs;
+        std::unique_ptr<HSelector> voices;              // optional 1|2 selector (chorus)
+        juce::Rectangle<int> voicesLabelArea;
     };
 
     // ---- drag-reorder -------------------------------------------------------

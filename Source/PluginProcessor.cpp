@@ -398,7 +398,7 @@ static const juce::StringArray& perPartSoundIds()
         ID::lfoRate, ID::lfoDepth, ID::lfoShape, ID::lfoDest, ID::lfoSync, ID::lfoDiv,
         ID::lfo2Rate, ID::lfo2Depth, ID::lfo2Shape, ID::lfo2Dest, ID::lfo2Sync, ID::lfo2Div,
         ID::lfo3Rate, ID::lfo3Depth, ID::lfo3Shape, ID::lfo3Dest, ID::lfo3Sync, ID::lfo3Div,
-        ID::chorusRate, ID::chorusDepth, ID::chorusMix, ID::fxChorusOn,
+        ID::chorusRate, ID::chorusDepth, ID::chorusMix, ID::chorusVoices, ID::fxChorusOn,
         ID::delayTime, ID::delayFeedback, ID::delayMix, ID::delaySpread, ID::fxDelayOn,
         ID::reverbSize, ID::reverbDamp, ID::reverbWidth, ID::reverbMix, ID::reverbMotion, ID::fxReverbOn,
         ID::stereoWidth, ID::fxWidthOn,
@@ -697,6 +697,7 @@ static FXParams fxParamsFrom (const juce::AudioProcessorValueTreeState& src)
 {
     namespace ID = ParamID; FXParams p;
     p.chorusRate = rp (src, ID::chorusRate); p.chorusDepth = rp (src, ID::chorusDepth); p.chorusMix = rp (src, ID::chorusMix);
+    p.chorusVoices = (int) rp (src, ID::chorusVoices) + 1;   // choice index 0/1 -> 1/2 voices
     p.delayTimeMs = rp (src, ID::delayTime); p.delayFeedback = rp (src, ID::delayFeedback);
     p.delayMix = rp (src, ID::delayMix);     p.delaySpread = rp (src, ID::delaySpread);
     p.reverbSize = rp (src, ID::reverbSize); p.reverbDamp = rp (src, ID::reverbDamp);
@@ -1676,6 +1677,7 @@ FXParams VASynthProcessor::snapshotFXParams() const
     p.chorusRate  = rp (apvts, ID::chorusRate);
     p.chorusDepth = rp (apvts, ID::chorusDepth);
     p.chorusMix   = rp (apvts, ID::chorusMix);
+    p.chorusVoices = (int) rp (apvts, ID::chorusVoices) + 1;   // choice index 0/1 -> 1/2 voices
 
     p.delayTimeMs   = rp (apvts, ID::delayTime);
     p.delayFeedback = rp (apvts, ID::delayFeedback);
@@ -2092,7 +2094,11 @@ namespace
         namespace ID = ParamID;
         setN (a, ID::osc1On, 1.0f);                                   // >=1 live oscillator...
         setN (a, ID::osc1Level, juce::jmax (0.4f, getN (a, ID::osc1Level)));   // ...at an audible level
-        setN (a, ID::ampAttack, juce::jmin (0.7f, getN (a, ID::ampAttack)));   // note actually starts in time
+        // Note actually starts in time: cap the attack by its NATURAL value (the range is
+        // heavily skewed, so a normalized 0.7 was ~3 s — a patch that reads as silent for
+        // seconds). 0.5 s still allows a gentle swell but is promptly audible.
+        if (auto* pa = a.getParameter (ID::ampAttack))
+            setN (a, ID::ampAttack, juce::jmin (pa->getNormalisableRange().convertTo0to1 (0.5f), getN (a, ID::ampAttack)));
         setN (a, ID::filterCutoff, juce::jmax (0.18f, getN (a, ID::filterCutoff)));   // not fully closed
         if (getN (a, ID::ampSustain) < 0.05f && getN (a, ID::ampDecay) < 0.2f) // silent env -> give it a decay tail
             setN (a, ID::ampDecay, 0.4f);

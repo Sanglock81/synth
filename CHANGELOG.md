@@ -9,6 +9,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Chorus VOICES 1|2 (Musicality Pass, Tier 4c — dual-tap thickening).** The CHORUS block gains a
+  small **1|2** selector. At **2** a second modulated tap is read per channel at a longer centre
+  delay (19 ms) with its LFO at 120°/240° — independent of the first tap's 0°/90° — so the two taps
+  give L and R genuinely different motion: a classic dimension-style **thicker, wider** chorus.
+  The two taps sum at half weight so the level stays controlled. **Default 1 ⇒ the single-tap chorus,
+  bit-identical** (goldens hold); toggling 1↔2 crossfades via a smoothed blend, so it is click-free
+  mid-note. Measured: voices=2 lowers L/R correlation and substantially changes the wet voice.
+  This completes the **Musicality Pass** (#99): Tier 1 (voicing) → Tier 2 (nonlinear filter: drive,
+  self-oscillation, oversampling) → Tier 4a (modulated reverb) → Tier 4c (dual-tap chorus). Tier 3
+  (unison character) lives in the unison work item.
 - **Reverb MOTION (Musicality Pass, Tier 4a — modulated tail).** Static reverb comb tunings ring
   at fixed frequencies, which reads *metallic* on a long tail. A new per-part **MOTION** knob (in
   the REVERB block) adds very slow, very small modulation to a subset of the reverb's **allpass

@@ -4,6 +4,12 @@
 > (phase policy modes, drive=0 fast path proven zero-cost, fast-tanh with tolerance test,
 > the oversampling evaluation, self-oscillation behavior). Restored to the repo 2026-07 after
 > it was lost to a compacted session.
+>
+> **STATUS — COMPLETE (#99).** Tier 1 (start-phase policy + analog drift) ✓ · Tier 2 (nonlinear
+> filter: linear fast path, in-loop tanh drive, self-oscillation + keytrack, 2× oversampling) ✓ ·
+> Tier 4a (modulated reverb tail — MOTION on the allpass diffusers) ✓ · Tier 4c (dual-tap chorus —
+> VOICES 1|2) ✓. **Tier 3 (unison character) is delivered by the unison work item (#96), as agreed.**
+> All items shipped off-by-default (goldens bit-identical) with the standing bench/click gates.
 
 Findings from a direct review of the shipped DSP (repo @ master) combined with the
 virtual-analog literature. Ordered by musical-value-per-effort. Every item preserves goldens via

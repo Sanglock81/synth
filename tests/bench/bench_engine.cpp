@@ -67,7 +67,7 @@ namespace
 
     // Full per-block path: engine render (mono) + duplicate to stereo + FX chain,
     // exactly as the processor runs it. `fxMask` bit 0..3 = chorus/delay/reverb/width.
-    Stat measureFull (int voices, int blocks, int oscsOn, int fxMask, float reverbMotion = 0.0f)
+    Stat measureFull (int voices, int blocks, int oscsOn, int fxMask, float reverbMotion = 0.0f, int chorusVoices = 1)
     {
         SynthEngine engine;
         engine.setOscQuality (PolyBlepOscillator::Quality::Efficient);
@@ -90,6 +90,7 @@ namespace
         fp.enabled[FXChain::Width_]  = (fxMask & 8) != 0;
         fp.chorusMix = 0.5f; fp.delayMix = 0.4f; fp.reverbMix = 0.4f; fp.width = 1.5f;
         fp.reverbMotion = reverbMotion;
+        fp.chorusVoices = chorusVoices;
         fx.setParams (fp);
 
         std::vector<float> mono (kBlock, 0.0f), L (kBlock, 0.0f), R (kBlock, 0.0f);
@@ -240,6 +241,7 @@ int main()
     std::printf ("\n6B full path (12 voices, 3 osc, Efficient + FX):\n");
     row ("engine only",         measureFull (12, 4000, 3, 0));
     row ("+ chorus",            measureFull (12, 4000, 3, 1));
+    row ("+ chorus (2 voices)", measureFull (12, 4000, 3, 1, 0.0f, 2));   // Tier 4c delta (second tap)
     row ("+ delay",             measureFull (12, 4000, 3, 2));
     row ("+ reverb",            measureFull (12, 4000, 3, 4));
     row ("+ reverb (motion)",   measureFull (12, 4000, 3, 4, 1.0f));   // Tier 4a delta (3 modulated allpass)

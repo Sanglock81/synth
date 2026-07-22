@@ -38,6 +38,7 @@ struct FXParams
 {
     // Continuous params (smoothed inside each effect — no crossfade needed).
     float chorusRate = 0.8f, chorusDepth = 0.5f, chorusMix = 0.5f;
+    int   chorusVoices = 1;                          // Tier 4c: 1 or 2 taps
     float delayTimeMs = 300.0f, delayFeedback = 0.35f, delayMix = 0.35f, delaySpread = 1.0f;
     float reverbSize = 0.5f, reverbDamp = 0.5f, reverbWidth = 1.0f, reverbMix = 0.3f, reverbMotion = 0.0f;
     float width = 1.4f;
@@ -143,7 +144,7 @@ private:
 
         void setContinuous (const FXParams& p)
         {
-            chorus.setParams (p.chorusRate, p.chorusDepth, p.chorusMix);
+            chorus.setParams (p.chorusRate, p.chorusDepth, p.chorusMix, p.chorusVoices);
             delay.setParams  (p.delayTimeMs, p.delayFeedback, p.delayMix, p.delaySpread);
             reverb.setParams (p.reverbSize, p.reverbDamp, p.reverbWidth, p.reverbMix, p.reverbMotion);
             width.setWidth   (p.width);

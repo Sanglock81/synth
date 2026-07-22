@@ -127,6 +127,7 @@ namespace ParamID
     inline constexpr auto chorusRate    = "chorus_rate";
     inline constexpr auto chorusDepth   = "chorus_depth";
     inline constexpr auto chorusMix     = "chorus_mix";
+    inline constexpr auto chorusVoices  = "chorus_voices";   // Tier 4c: 1 or 2 taps (default 1)
     inline constexpr auto fxDelayOn     = "fx_delay_on";
     inline constexpr auto delayTime     = "delay_time";      // ms
     inline constexpr auto delayFeedback = "delay_feedback";
@@ -346,6 +347,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::chorusRate, 1},    "Chorus Rate", juce::NormalisableRange<float>(0.05f, 8.0f, 0.0f, 0.4f), 0.8f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::chorusDepth, 1},   "Chorus Depth", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::chorusMix, 1},     "Chorus Mix", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::chorusVoices, 1},  "Chorus Voices", juce::StringArray { "1", "2" }, 0));
 
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::fxDelayOn, 1},     "Delay On", false));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::delayTime, 1},     "Delay Time", juce::NormalisableRange<float>(1.0f, 1500.0f, 0.0f, 0.4f), 300.0f, juce::AudioParameterFloatAttributes().withLabel ("ms")));

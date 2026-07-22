@@ -181,3 +181,4 @@ TEST_CASE ("torture: rapid RANDOM while a note sustains stays finite + bounded, 
     }
     (void) prevLast;
 }
+

@@ -171,6 +171,67 @@ TEST_CASE ("Chorus: decorrelates a mono source and mix=0 is identity", "[6b][fx]
 }
 
 // ---------------------------------------------------------------------------
+// Tier 4c — chorus VOICES: a second decorrelated tap per channel.
+TEST_CASE ("Chorus VOICES: dual-tap widens, voices=1 bit-identical, click-safe toggle", "[6b][fx][chorus][voices]")
+{
+    const int N = 16384;
+    std::vector<float> L (N), R (N); fillMonoSine (L, R, 330.0);
+
+    auto lrCorr = [] (const std::vector<float>& a, const std::vector<float>& b, std::size_t start, std::size_t len)
+    {
+        double ll = 0, rr = 0, lr = 0;
+        for (std::size_t i = start; i < start + len && i < a.size(); ++i) { ll += a[i]*a[i]; rr += b[i]*b[i]; lr += a[i]*b[i]; }
+        return (ll > 1e-12 && rr > 1e-12) ? lr / std::sqrt (ll * rr) : 1.0;
+    };
+    auto renderInto = [&] (int voices, std::vector<float>& l, std::vector<float>& r)
+    {
+        l = L; r = R;
+        Chorus fx; fx.prepare (kSR, kBlock); fx.setParams (0.8f, 0.7f, 1.0f, voices); fx.reset();
+        for (int i = 0; i < N; i += kBlock) fx.process (l.data() + i, r.data() + i, kBlock);
+    };
+
+    SECTION ("voices=1 is bit-identical to the legacy 3-arg call")
+    {
+        std::vector<float> la = L, ra = R, lb = L, rb = R;
+        Chorus a; a.prepare (kSR, kBlock); a.setParams (0.8f, 0.7f, 1.0f);    a.reset();
+        Chorus b; b.prepare (kSR, kBlock); b.setParams (0.8f, 0.7f, 1.0f, 1); b.reset();
+        for (int i = 0; i < N; i += kBlock) { a.process (la.data()+i, ra.data()+i, kBlock); b.process (lb.data()+i, rb.data()+i, kBlock); }
+        REQUIRE (la == lb); REQUIRE (ra == rb);
+    }
+
+    SECTION ("voices=2 decorrelates L/R more than voices=1")
+    {
+        // Broadband mono input: a single chorus tap leaves L/R fairly correlated, so a second
+        // decorrelated tap has room to widen (a pure sine is already near-zero correlation).
+        std::uint32_t s = 22222u;
+        for (int i = 0; i < N; ++i) { s = s * 1664525u + 1013904223u; const float v = (float) ((int) (s >> 9) & 0x3fff) / 8192.0f - 1.0f; L[(std::size_t) i] = 0.4f * v; R[(std::size_t) i] = L[(std::size_t) i]; }
+        std::vector<float> l1, r1, l2, r2;
+        renderInto (1, l1, r1);
+        renderInto (2, l2, r2);
+        const double c1 = lrCorr (l1, r1, (std::size_t) (N/2), (std::size_t) (N/2));
+        const double c2 = lrCorr (l2, r2, (std::size_t) (N/2), (std::size_t) (N/2));
+        const double changed = rmsDiff (tu::slice (l2, (std::size_t) (N/2), (std::size_t) (N/2)),
+                                        tu::slice (l1, (std::size_t) (N/2), (std::size_t) (N/2)));
+        INFO ("L/R correlation  voices1=" << c1 << "  voices2=" << c2 << "  rmsDiff(v1,v2)=" << changed);
+        REQUIRE (c2 < c1 - 0.015);   // the second tap lowers L/R correlation (widens)
+        REQUIRE (changed > 0.03);    // and it is a real, substantial second voice (thickening)
+    }
+
+    SECTION ("toggling voices mid-note is click-free")
+    {
+        std::vector<float> l = L, r = R;
+        Chorus fx; fx.prepare (kSR, kBlock); fx.reset();
+        for (int i = 0; i < N; i += kBlock) { fx.setParams (0.8f, 0.7f, 1.0f, (i < N/2) ? 1 : 2); fx.process (l.data()+i, r.data()+i, kBlock); }
+
+        std::vector<float> ls = L, rs = R;   // single-tap baseline for a max-delta bound
+        { Chorus s; s.prepare (kSR, kBlock); s.setParams (0.8f, 0.7f, 1.0f, 1); s.reset();
+          for (int i = 0; i < N; i += kBlock) s.process (ls.data()+i, rs.data()+i, kBlock); }
+        REQUIRE (tu::allFinite (l));
+        REQUIRE (tu::maxDelta (l) < tu::maxDelta (ls) * 1.5f + 1.0e-4f);   // the toggle crossfades, no click
+    }
+}
+
+// ---------------------------------------------------------------------------
 TEST_CASE ("StereoDelay: echo timing, feedback repeats, ping-pong, stability", "[6b][fx][delay]")
 {
     const int N = (int) (kSR * 0.6);
