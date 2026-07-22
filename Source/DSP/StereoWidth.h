@@ -31,23 +31,31 @@
 class StereoWidth
 {
 public:
-    void prepare (double /*sampleRate*/) { reset(); }
+    void prepare (double /*sampleRate*/) { designHalfband(); reset(); }
 
     void reset()
     {
         smWidth = width;
         smSat = sat;
-        for (auto& s : ap) { s.x1 = 0.0f; s.y1 = 0.0f; }
-        for (auto& d : dc)  { d.x1 = 0.0f; d.y1 = 0.0f; }
+        for (auto& s : ap)    { s.x1 = 0.0f; s.y1 = 0.0f; }
+        for (auto& s : satCh) s = SatChannel {};
     }
 
     // 0 = mono, 1 = unchanged, 2 = maximally wide (synthesized side at full gain).
     void setWidth (float w) { width = std::clamp (w, 0.0f, 2.0f); }
 
-    // SAT (Tier 4c follow-on): asymmetric tube-style saturation, applied per channel BEFORE
-    // the widening. 0 = clean (bit-exact bypass). The asymmetry (a small pre-bias into tanh)
-    // adds EVEN harmonics — the "tube" colour the symmetric filter DRIVE doesn't give — and a
-    // one-pole DC blocker removes the offset that asymmetry produces.
+    // SAT: a VARIABLE-THRESHOLD soft/hard clipper, applied per channel BEFORE the widening.
+    // It is NOT a pre-gain-into-a-ceiling (that just makes everything loud) — the shaper has
+    // UNITY slope near zero, so a signal below the threshold passes ~unchanged and only what
+    // pokes above the threshold clips. The knob LOWERS the threshold (and hardens the knee):
+    //   sat 0   -> threshold high -> nothing clips (a true bit-exact bypass; goldens hold).
+    //   sat mid -> soft overdrive -> velocity-sensitive: quiet notes stay clean, loud notes clip.
+    //   sat 1   -> low threshold + hard knee -> hard clipping (a sine flattens toward a square).
+    // A small asymmetric bias adds EVEN harmonics (tube warmth); a DC blocker removes the offset.
+    // Loudness is kept ~constant across the sweep (reference-RMS-flat makeup, peak-guarded so it
+    // is never a hidden boost) — the per-part LEVEL at the end of the chain stays the volume.
+    // Runs 2x-oversampled while engaged (hard clipping aliases) — the wet crossfade folds the
+    // rate-domain handoff in/out click-free as sat crosses zero.
     void setSat (float s01) { sat = std::clamp (s01, 0.0f, 1.0f); }
 
     void process (float* left, float* right, int numSamples)
@@ -57,13 +65,16 @@ public:
             smWidth += kSmoothCoef * (width - smWidth);
             smSat   += kSmoothCoef * (sat   - smSat);       // zipper-safe drive engage
 
-            // Saturate each channel first (drive -> then widen). smSat 0 keeps the exact
-            // original signal (goldens bit-identical); the crossfade makes engaging click-free.
+            // Clip each channel first (drive -> then widen). smSat 0 keeps the exact original
+            // signal (goldens bit-identical); the wet crossfade makes engaging click-free.
             float l = left[i], r = right[i];
             if (smSat > 1.0e-6f)
             {
-                l = saturate (l, dc[0]);
-                r = saturate (r, dc[1]);
+                const float T   = kThi / (1.0f + smSat * kTSlope);   // threshold lowers with sat
+                const float h   = smSat;                             // knee hardens: soft -> hard
+                const float wet = std::min (smSat * kWetRamp, 1.0f); // 0 -> full by smSat ~ 0.08
+                l = saturate (satCh[0], l, T, h, wet);
+                r = saturate (satCh[1], r, T, h, wet);
             }
 
             const float mid  = 0.5f * (l + r);
@@ -86,16 +97,26 @@ public:
 
     // For the reorder crossfade: adopt another instance's smoothing + filter state
     // so the freshly-activated chain copy continues seamlessly.
-    void copyStateFrom (const StereoWidth& other) { smWidth = other.smWidth; ap = other.ap; smSat = other.smSat; dc = other.dc; }
+    void copyStateFrom (const StereoWidth& other) { smWidth = other.smWidth; ap = other.ap; smSat = other.smSat; satCh = other.satCh; }
 
 private:
     static constexpr float kSmoothCoef = 0.002f;   // ~one-pole knob smoothing
     static constexpr float kDecorrGain = 0.9f;     // synthesized-side level at width = 2
 
-    // Asymmetric tube shaper. driveGain scales with smSat; the pre-bias makes the tanh
-    // asymmetric (even harmonics); the result is DC-blocked, then crossfaded in by smSat so
-    // engaging is click-free and smSat 0 is a true bypass.
-    // Cheap tanh (clamped Padé[3/2]) — no libm call in the audio loop; saturates hard past ±3.
+    static constexpr int   kHbLen       = 11;      // FIR half-band length (matches the filter)
+    static constexpr int   kHbCenterIdx = 5;
+    static constexpr int   kHbNumOdd    = 3;       // non-zero odd-offset taps: 1, 3, 5
+
+    struct SatChannel                              // per-channel 2x oversampler + DC + level state
+    {
+        float upPrev = 0.0f;
+        std::array<float, kHbLen> downZ {};
+        int   downPos = 0;
+        float dcx1 = 0.0f, dcy1 = 0.0f;
+        float inEnv = 0.0f, outEnv = 0.0f;         // slow |amp| followers for the auto-makeup
+    };
+
+    // Cheap tanh (clamped Padé[3/2]) — the SOFT clipper shape; unity slope at 0, saturates ±1.
     static float satTanh (float x)
     {
         if (x >  3.0f) return  1.0f;
@@ -104,27 +125,90 @@ private:
         return x * (27.0f + x2) / (27.0f + 9.0f * x2);
     }
 
-    struct DCBlock { float x1 = 0.0f, y1 = 0.0f; };
-    float saturate (float x, DCBlock& d) const
+    // Threshold clipper at ONE (over)sample. `T` is the clip threshold, `h` the knee hardness
+    // (0 = soft tanh, 1 = hard clamp). Normalise to the threshold, add the asymmetry bias, blend
+    // soft->hard, rescale by T: small |x| -> ~x (unity, clean); large |x| -> ~±T (clipped). The
+    // static offset from the bias is a constant that the per-channel DC blocker removes.
+    static float clipCore (float x, float T, float h)
     {
-        // Pre-gain drives the signal into the tube curve. A high max so the knob's TOP is
-        // obviously distorted, and a wet mix that reaches FULL by ~8% so the rest of the
-        // sweep controls DRIVE (not dry/wet) — the knob "accelerates" into saturation.
-        const float driveGain = 1.0f + smSat * (kMaxSat - 1.0f);
-        float sh = satTanh (driveGain * x + kBias) - kTanhBias;     // asymmetric -> even harmonics
-        sh *= kMakeup;
-        const float y = sh - d.x1 + kDcR * d.y1;                    // one-pole DC blocker (~4 Hz)
-        d.x1 = sh; d.y1 = y;
-        const float wet = std::min (smSat * kWetRamp, 1.0f);        // 0 -> full wet by smSat ~ 0.08
-        return x * (1.0f - wet) + y * wet;                          // click-safe engage, then drive is the control
+        const float n    = x / T + kBias;
+        const float soft = satTanh (n);
+        const float hard = std::clamp (n, -1.0f, 1.0f);
+        return T * ((1.0f - h) * soft + h * hard);
     }
 
-    static constexpr float kMaxSat   = 20.0f;       // drive gain at sat = 1 (heavy tube overdrive)
-    static constexpr float kWetRamp  = 12.5f;       // wet reaches 1.0 by smSat = 0.08 (fast onset)
-    static constexpr float kBias     = 0.60f;       // tube asymmetry (even-harmonic amount)
-    static constexpr float kTanhBias = 0.54285714f; // satTanh(0.60) — removes the static offset (x=0 -> 0)
-    static constexpr float kMakeup   = 0.72f;       // level trim; the output safety clipper backstops
-    static constexpr float kDcR      = 0.9995f;     // DC-blocker pole
+    // Per-channel 2x-oversampled clip: linear-interp upsample (the input is already band-limited),
+    // clip both sub-samples, FIR half-band decimate, then an ENVELOPE-following makeup + DC block
+    // at base rate, then the wet crossfade (click-safe engage as sat crosses zero).
+    //
+    // The makeup restores each note to its OWN input loudness (inEnv/outEnv, slow followers): the
+    // clip removes level, the makeup puts it back, so loudness stays flat across the SAT sweep AND
+    // across velocity — the part LEVEL stays the volume control. Because clipping lowers the crest
+    // factor, restoring the RMS can never push the peak above the input peak, so it is never a
+    // hidden boost. Clamped to [1, kMaxMakeup] (only ever restores, never attenuates or runs away).
+    float saturate (SatChannel& s, float x, float T, float h, float wet) const
+    {
+        const float u1 = x;
+        const float u0 = 0.5f * (s.upPrev + u1);
+        s.upPrev = u1;
+        pushDown (s, clipCore (u0, T, h));
+        const float dec = pushDown (s, clipCore (u1, T, h));
+
+        s.inEnv  += kEnvCoef * (std::abs (x)   - s.inEnv);
+        s.outEnv += kEnvCoef * (std::abs (dec) - s.outEnv);
+        const float makeup = (s.outEnv > 1.0e-5f) ? std::clamp (s.inEnv / s.outEnv, 1.0f, kMaxMakeup) : 1.0f;
+
+        const float m = dec * makeup;
+        const float y = m - s.dcx1 + kDcR * s.dcy1;        // one-pole DC blocker (~4 Hz)
+        s.dcx1 = m; s.dcy1 = y;
+        return x * (1.0f - wet) + y * wet;
+    }
+
+    // FIR half-band decimator (mirrors the filter's 2C oversampler): push one 2x sample, return
+    // the filtered value. Even-offset taps (bar the centre) are zero, so only centre + odd taps
+    // cost a multiply. The caller keeps the value returned on the SECOND push (the decimated one).
+    float pushDown (SatChannel& s, float x) const
+    {
+        s.downZ[(std::size_t) s.downPos] = x;
+        float acc = hbCenter * s.downZ[(std::size_t) ((s.downPos - kHbCenterIdx + kHbLen) % kHbLen)];
+        for (int j = 0; j < kHbNumOdd; ++j)
+        {
+            const int off = 2 * j + 1;
+            const int ia = (s.downPos - (kHbCenterIdx - off) + kHbLen) % kHbLen;
+            const int ib = (s.downPos - (kHbCenterIdx + off) + kHbLen) % kHbLen;
+            acc += hbOdd[(std::size_t) j] * (s.downZ[(std::size_t) ia] + s.downZ[(std::size_t) ib]);
+        }
+        s.downPos = (s.downPos + 1) % kHbLen;
+        return acc;
+    }
+
+    void designHalfband()
+    {
+        constexpr double pi = 3.14159265358979323846;
+        double h[kHbLen]; double sum = 0.0;
+        for (int n = 0; n < kHbLen; ++n)
+        {
+            const int m = n - kHbCenterIdx;
+            const double sinc = (m == 0) ? 0.5 : std::sin (0.5 * pi * m) / (pi * m);   // fc = 0.25 (halfband)
+            const double w    = 0.54 - 0.46 * std::cos (2.0 * pi * n / (kHbLen - 1));  // Hamming
+            h[n] = sinc * w; sum += h[n];
+        }
+        for (int n = 0; n < kHbLen; ++n) h[n] /= sum;                                   // unity DC gain
+        hbCenter = (float) h[kHbCenterIdx];
+        for (int j = 0; j < kHbNumOdd; ++j) hbOdd[(std::size_t) j] = (float) h[kHbCenterIdx + (2 * j + 1)];
+    }
+
+    static constexpr float kWetRamp   = 12.5f;     // wet reaches 1.0 by smSat = 0.08 (fast onset)
+    static constexpr float kThi       = 4.0f;      // threshold at sat -> 0 (>1: nothing clips)
+    static constexpr float kTSlope    = 39.0f;     // sat -> 1 gives T = kThi/40 = 0.10 (aggressive)
+    static constexpr float kBias      = 0.35f;     // asymmetry -> even harmonics (tube warmth)
+    static constexpr float kDcR       = 0.9995f;   // DC-blocker pole
+    static constexpr float kEnvCoef   = 0.0007f;   // ~30 ms |amp| follower for the auto-makeup
+    static constexpr float kMaxMakeup = 4.0f;      // makeup ceiling (safety; never runs away)
+
+    std::array<SatChannel, 2> satCh {};            // per-channel oversampler + DC state (L, R)
+    float hbCenter = 0.5f;
+    std::array<float, kHbNumOdd> hbOdd {};
 
     // First-order Schroeder allpass: H(z) = (a + z^-1) / (1 + a z^-1).
     struct Allpass
@@ -146,5 +230,4 @@ private:
     float smWidth = 1.0f;
     float sat     = 0.0f;
     float smSat   = 0.0f;
-    std::array<DCBlock, 2> dc {};   // per-channel DC blocker state (L, R)
 };

@@ -83,8 +83,8 @@ namespace
     }
 }
 
-// Tier 4c follow-on — FX SAT: asymmetric tube saturation in the WIDTH block.
-TEST_CASE ("StereoWidth SAT: asymmetric drive adds even harmonics, DC-safe, sat=0 bit-identical, click-safe", "[6b][fx][width][sat]")
+// FX SAT: a variable-threshold soft/hard clipper (velocity-sensitive), 2x-oversampled.
+TEST_CASE ("StereoWidth SAT: threshold clipper — velocity-sensitive, level-neutral, warm, clean", "[6b][fx][width][sat]")
 {
     const int N = 16384;
 
@@ -98,70 +98,127 @@ TEST_CASE ("StereoWidth SAT: asymmetric drive adds even harmonics, DC-safe, sat=
         const int bin = std::clamp ((int) std::lround (hz * fftN / sr), 0, fftN / 2);
         return std::abs (a[(std::size_t) bin]);
     };
+    // Render a mono sine of amplitude `amp` at `hz` through SAT (width=1: shaper alone).
+    auto render = [&] (float sat, double hz, float amp)
+    {
+        std::vector<float> L (N), R (N); fillMonoSine (L, R, hz, amp);
+        StereoWidth fx; fx.prepare (kSR); fx.setWidth (1.0f); fx.setSat (sat); fx.reset();
+        for (int i = 0; i < N; i += kBlock) fx.process (L.data()+i, R.data()+i, kBlock);
+        return L;
+    };
+    auto thd = [&] (const std::vector<float>& x, double f0)
+    {
+        const std::size_t s = (std::size_t) (N / 2);
+        const double f = magAt (x, s, 8192, kSR, f0);
+        double h = 0.0; for (int k = 2; k <= 10; ++k) { const double m = magAt (x, s, 8192, kSR, f0 * k); h += m * m; }
+        return f > 1e-9 ? std::sqrt (h) / f : 0.0;
+    };
 
     SECTION ("sat=0 is bit-identical to the no-sat path")
     {
         std::vector<float> L (N), R (N); fillMonoSine (L, R, 220.0);
         std::vector<float> la = L, ra = R, lb = L, rb = R;
         StereoWidth a; a.prepare (kSR); a.setWidth (1.5f); a.setSat (0.0f); a.reset();
-        StereoWidth b; b.prepare (kSR); b.setWidth (1.5f);                 b.reset();   // sat defaults 0
+        StereoWidth b; b.prepare (kSR); b.setWidth (1.5f);                 b.reset();
         for (int i = 0; i < N; i += kBlock) { a.process (la.data()+i, ra.data()+i, kBlock); b.process (lb.data()+i, rb.data()+i, kBlock); }
         REQUIRE (la == lb); REQUIRE (ra == rb);
     }
 
-    auto renderSat = [&] (float sat, double hz = 300.0)
+    SECTION ("velocity-sensitive: at one SAT, a quiet note stays clean but a loud note clips")
     {
-        std::vector<float> L (N), R (N); fillMonoSine (L, R, hz, 0.5f);
-        StereoWidth fx; fx.prepare (kSR); fx.setWidth (1.0f); fx.setSat (sat); fx.reset();   // width=1: shaper alone
-        for (int i = 0; i < N; i += kBlock) fx.process (L.data()+i, R.data()+i, kBlock);
-        return L;
-    };
+        const double quietThd = thd (render (0.5f, 300.0, 0.10f), 300.0);   // below threshold -> ~clean
+        const double loudThd  = thd (render (0.5f, 300.0, 0.80f), 300.0);   // above threshold -> clips
+        INFO ("THD @ sat=0.5  quiet(0.10)=" << quietThd << "  loud(0.80)=" << loudThd);
+        REQUIRE (loudThd > quietThd * 3.0);   // the CORE of the spec: harder playing -> more distortion
+        REQUIRE (quietThd < 0.10);            // a quiet note is barely touched at a mid setting
+    }
 
     SECTION ("moderate SAT gives the tube even-harmonic colour, DC-safe")
     {
-        const auto L = renderSat (0.35f);   // the tube sweet spot (heavy crank goes odd/fuzz, correctly)
+        const auto L = render (0.5f, 300.0, 0.6f);
         REQUIRE (tu::allFinite (L));
         const std::size_t s = (std::size_t) (N / 2);
         const double fund = magAt (L, s, 8192, kSR, 300.0);
-        const double h2   = magAt (L, s, 8192, kSR, 600.0);   // even
-        const double h3   = magAt (L, s, 8192, kSR, 900.0);   // odd
+        const double h2   = magAt (L, s, 8192, kSR, 600.0);
+        const double h3   = magAt (L, s, 8192, kSR, 900.0);
         const double dc   = magAt (L, s, 8192, kSR, 0.0);
-        INFO ("fund=" << fund << " h2(even)=" << h2 << " h3(odd)=" << h3 << " dc=" << dc);
-        REQUIRE (h2 > 0.10 * fund);     // asymmetry => a real 2nd harmonic (a symmetric shaper gives ~0)
-        REQUIRE (h2 > 0.3 * h3);        // even harmonics are a major component, not a trace (tube colour)
-        REQUIRE (dc < 0.01 * fund);     // the DC blocker removes the offset asymmetry creates
+        INFO ("fund=" << fund << " h2=" << h2 << " h3=" << h3 << " dc=" << dc);
+        REQUIRE (h2 > 0.08 * fund);   // a real even harmonic (tube warmth)
+        REQUIRE (dc < 0.01 * fund);   // DC blocker holds
     }
 
-    SECTION ("full SAT is an obvious, heavy saturation")
+    SECTION ("full SAT is a hard clip (sine -> square, rich harmonics)")
     {
-        const auto clean = renderSat (0.0f);
-        const auto full  = renderSat (1.0f);
-        const std::size_t s = (std::size_t) (N / 2);
-        // Total harmonic energy (2nd..8th) relative to the fundamental: near-nil clean, large driven.
-        auto thd = [&] (const std::vector<float>& x)
-        {
-            const double f = magAt (x, s, 8192, kSR, 300.0);
-            double h = 0.0; for (int k = 2; k <= 8; ++k) { const double m = magAt (x, s, 8192, kSR, 300.0 * k); h += m * m; }
-            return f > 0 ? std::sqrt (h) / f : 0.0;
-        };
-        const double thdClean = thd (clean), thdFull = thd (full);
-        INFO ("THD  clean=" << thdClean << "  full=" << thdFull);
-        REQUIRE (thdClean < 0.01);      // clean path is essentially harmonic-free
-        REQUIRE (thdFull  > 0.3);       // full crank is unmistakably saturated (near-square, rich harmonics)
+        INFO ("THD  clean=" << thd (render (0.0f, 300.0, 0.6f), 300.0) << "  full=" << thd (render (1.0f, 300.0, 0.6f), 300.0));
+        REQUIRE (thd (render (0.0f, 300.0, 0.6f), 300.0) < 0.01);
+        REQUIRE (thd (render (1.0f, 300.0, 0.6f), 300.0) > 0.35);
     }
 
-    SECTION ("sweeping SAT live is click-free")
+    SECTION ("loudness stays ~flat across the sweep (SAT is tonal, not a volume knob)")
+    {
+        // A steady tone at a realistic level; RMS should not swing much as SAT rises.
+        double lo = 1e9, hi = 0.0;
+        for (float sat : { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f })
+        {
+            const double r = tu::rms (tu::slice (render (sat, 300.0, 0.5f), (std::size_t) (N/2), (std::size_t) (N/2)));
+            INFO ("sat=" << sat << " rms=" << r);
+            lo = std::min (lo, r); hi = std::max (hi, r);
+        }
+        REQUIRE (hi / lo < 1.6);   // within ~4 dB across the whole sweep (level-neutral)
+    }
+
+    SECTION ("makeup is never a hidden boost: output peak never exceeds input peak")
+    {
+        // Real-ish material: a two-tone chord at a healthy level, held at each SAT setting long
+        // enough for the auto-makeup to settle (a real knob turn is slow vs the ~30 ms follower).
+        std::vector<float> L (N), R (N);
+        for (int i = 0; i < N; ++i)
+        { const float v = 0.35f * (float) (std::sin (tu::kTwoPi * 220.0 * i / kSR) + std::sin (tu::kTwoPi * 330.0 * i / kSR));
+          L[(std::size_t) i] = v; R[(std::size_t) i] = v; }
+        const float inPeak = tu::peak (L);
+        for (float sat : { 0.25f, 0.5f, 0.75f, 1.0f })
+        {
+            auto l = L, r = R;
+            StereoWidth fx; fx.prepare (kSR); fx.setWidth (1.0f); fx.setSat (sat); fx.reset();
+            for (int i = 0; i < N; i += kBlock) fx.process (l.data()+i, r.data()+i, kBlock);
+            const float outPeak = tu::peak (tu::slice (l, (std::size_t) (N/2), (std::size_t) (N/2)));   // settled
+            INFO ("sat=" << sat << " in peak=" << inPeak << " out peak=" << outPeak);
+            REQUIRE (outPeak < inPeak * 1.05f);   // clipping only reduces the peak; makeup never boosts past input
+        }
+    }
+
+    SECTION ("2x oversampling keeps a hard-clipped HIGH note clean (low aliasing)")
+    {
+        const double f0 = 5000.0;                               // worst case: high note + hard knee
+        const int    fftN = 8192;
+        const auto   L = render (1.0f, f0, 0.5f);
+        std::vector<float> w = tu::slice (L, (std::size_t) (N/2), (std::size_t) fftN);
+        tu::blackmanHarris (w);
+        std::vector<std::complex<double>> a ((std::size_t) fftN);
+        for (int i = 0; i < fftN; ++i) a[(std::size_t) i] = { (double) w[(std::size_t) i], 0.0 };
+        tu::fft (a);
+        // Harmonic bins of 5 kHz below Nyquist (5/10/15/20 k); a Blackman-Harris line spreads ~8 bins.
+        std::vector<int> harmBin; for (int k = 1; k * f0 < kSR * 0.5; ++k) harmBin.push_back ((int) std::lround (f0 * k * fftN / kSR));
+        auto nearHarm = [&] (int b) { for (int hb : harmBin) if (std::abs (b - hb) <= 8) return true; return false; };
+        double harm = 0.0, alias = 0.0;
+        for (int b = 2; b < fftN / 2; ++b) { const double e = std::norm (a[(std::size_t) b]); (nearHarm (b) ? harm : alias) += e; }
+        const double aliasFrac = (harm + alias) > 0 ? alias / (harm + alias) : 0.0;
+        INFO ("alias energy fraction = " << aliasFrac);
+        REQUIRE (tu::allFinite (L));
+        REQUIRE (aliasFrac < 0.05);   // 2x + half-band keeps folded aliases well below the real harmonics
+    }
+
+    SECTION ("sweeping SAT live (incl. the engage across zero) is click-free")
     {
         std::vector<float> L (N), R (N); fillMonoSine (L, R, 220.0);
-        std::vector<float> ls = L, rs = R;   // FULL-sat steady baseline (saturation legitimately raises
-        { StereoWidth s; s.prepare (kSR); s.setWidth (1.3f); s.setSat (1.0f); s.reset();   // max-delta via harmonics)
+        std::vector<float> ls = L, rs = R;
+        { StereoWidth s; s.prepare (kSR); s.setWidth (1.3f); s.setSat (1.0f); s.reset();
           for (int i = 0; i < N; i += kBlock) s.process (ls.data()+i, rs.data()+i, kBlock); }
-
-        std::vector<float> l = L, r = R;      // ramp sat 0 -> 1: max-delta must not EXCEED the steady full-sat
+        std::vector<float> l = L, r = R;
         StereoWidth fx; fx.prepare (kSR); fx.setWidth (1.3f); fx.reset();
         for (int i = 0; i < N; i += kBlock) { fx.setSat ((float) i / (float) N); fx.process (l.data()+i, r.data()+i, kBlock); }
         REQUIRE (tu::allFinite (l));
-        REQUIRE (tu::maxDelta (l) < tu::maxDelta (ls) * 1.3f + 1.0e-3f);   // a sweep click would spike past full-sat
+        REQUIRE (tu::maxDelta (l) < tu::maxDelta (ls) * 1.3f + 1.0e-3f);
     }
 }
 

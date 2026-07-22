@@ -9,16 +9,23 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
-- **FX SAT — tube saturation, and WIDTH now runs first.** The WIDTH FX block gains a **SAT** knob:
-  an **asymmetric tube-style waveshaper** applied per channel *before* the widening, adding **even
-  harmonics** (the "tube" colour the symmetric filter DRIVE doesn't give) with a DC blocker to
-  remove the offset the asymmetry creates. Measured ~13 % 2nd-harmonic at full drive. `sat = 0` is a
-  **clean, bit-exact bypass** (goldens hold); engaging crossfades so it's click-free; it's a full mod
-  destination (an LFO can lean on the saturation). Distinct from the filter panel's DRIVE (this is an
-  output-stage overdrive). The block is relabelled **SAT + WIDTH**. And the **default FX chain now
-  runs WIDTH first** — you spatialize (and saturate) the dry signal, then delay/reverb bloom over the
-  wide field, which is more powerful; the chain stays drag-reorderable, so the old order is one drag
-  away. (Cheap Padé tanh: +~0.002 ms/block with SAT on.)
+- **FX SAT — a real overdrive/fuzz (variable-threshold clipper), and WIDTH now runs first.** The
+  WIDTH FX block gains a **SAT** knob: a **variable-threshold soft/hard clipper** applied per channel
+  *before* the widening — modelled on how overdrive/fuzz pedals actually work, not a volume boost.
+  The shaper has **unity gain near zero**, so a signal below the threshold passes ~unchanged and only
+  what pokes above clips. Turning SAT up **lowers the clipping threshold** (and hardens the knee): at
+  minimum nothing clips; at mid it's a **velocity-sensitive overdrive** — quiet notes stay clean, and
+  the harder you play, the more the note clips; at maximum it's a **hard clip** (a sine flattens toward
+  a square). A small asymmetric bias adds **even harmonics** (tube warmth) with a DC blocker. Loudness
+  stays flat across the sweep and across velocity via an **envelope-following auto-makeup** that
+  restores each note to its own input level (never a hidden boost — the output peak only ever drops),
+  so the per-part **LEVEL** stays the volume control. Runs **2× oversampled** while engaged, so even a
+  hard-clipped high note stays clean (measured ~0.5 % aliasing); the wet crossfade folds the
+  oversampling in/out click-free as SAT crosses zero. `sat = 0` is a **bit-exact bypass** (goldens
+  hold); it's a full mod destination (an LFO can lean on it). Distinct from the filter panel's DRIVE.
+  The block is relabelled **SAT + WIDTH**, and the **default FX chain now runs WIDTH first** — you
+  clip/spatialize the dry signal, then delay/reverb bloom over it; still drag-reorderable. (+~0.004
+  ms/block with SAT on.)
 - **Chorus VOICES 1|2 (Musicality Pass, Tier 4c — dual-tap thickening).** The CHORUS block gains a
   small **1|2** selector. At **2** a second modulated tap is read per channel at a longer centre
   delay (19 ms) with its LFO at 120°/240° — independent of the first tap's 0°/90° — so the two taps
