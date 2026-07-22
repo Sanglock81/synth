@@ -37,6 +37,18 @@ standing acceptance test.
 | R2 — GUI overhaul (+ help overlay) | touch reliability done (hardware-confirmed); layout mockup signed off; **functional layout WIRED + gated** (see below); awaiting user review of the built editor |
 | R3 — 1.0 feature set | **COMPLETE + gated.** Shipped: master parametric EQ; macro routing (+ Launchkey pots -> macros); **arp + 8-row step sequencer** (Group 2); **looper** — clock-linked/armed, dual MIDI+AUDIO lanes, WAV export (Group 3); **chord engine + QWERTY/CC/note modifiers**; Group 4 (double-tap numeric entry, LFO->knob mod animation, CLEAR); noise-cleanliness click-torture suite (ear-confirmed clean); edit-focus panel swap + MULTI capture + revert (1.3); **kit per-pad synth editing**; Random excludes the rhythm section; poly/mono/legato + glide. **This session (2026-07-12/13):** full per-part isolation (generator-yields-to-live voice steal; kit-edit live-pad); **voices 16 -> 24** (trim decoupled, goldens bit-identical); **load isolation** (patch loads are sound-only, never disturb seq/looper/globals/other parts); **default startup scene** (P1 lead / P2 spare / P3 bass / P4 808 kit = seq target). v2 backlog (NOT v1, per README): mod matrix, osc cross/ring-mod, wavetable, MIDI-clock sync, unison, filter drive, QWERTY v2, audio-stem export. |
 | R4 — release engineering (v1.0.0) | **not started** — the remaining v1 work: (1) ThinkPad deployment validation (the one open v1 gate, now urgent after the 24-voice bump: derated worst case ~109%, confirm no xruns / adjust cap); (2) versioning + CHANGELOG + packaging/install docs; (3) refresh stale docs + editor.png. |
+| **Musicality Pass (#99)** | **COMPLETE + gated + pushed.** Tier 1 (start-phase policy + analog drift) · Tier 2 (nonlinear filter: linear fast path, in-loop tanh drive, self-oscillation + keytrack, 2× oversampling) · Tier 4a (modulated reverb tail — MOTION on the allpass diffusers) · Tier 4c (dual-tap chorus — VOICES 1\|2). All off-by-default (goldens bit-identical); measurables + click/denormal gates + negligible bench. **Tier 3 (unison) delivered by #96.** See `docs/musicality-pass.md`. |
+
+### v1.0 remaining line (as of 2026-07-21, after #99)
+
+Ordered: **#95 wavetable** (5th wave "WT" — plan committed at `docs/plans/95-wavetable.md`, sub-phased
+3a engine / 3b content+seeded-randomizer / 3c UI; randomized tables persist **by seed**) → **#96 unison**
+(delivers Musicality Tier 3; pre-agreed default-off / Efficient-cap contingency) → **#97 QWERTY v2** →
+**#98 session export** → **#100 ThinkPad deployment validation** (the pre-tag gate; must include the
+driven-voices xrun stress scenario per the Option-1 oversampling decision) → **#101 tag v1.0.0**
+(version + CHANGELOG + package). Carried standing items: the Tier 2 **drive-character verdict**
+(`kMaxDriveGain`, currently 4.0) may arrive as a one-line constant tune; **#102** WILD-randomize-into-self-osc
+is a post-2C follow-up; **#103** intermittent pluginval teardown crash (~3% flake) to fix before the tag.
 
 ## R1 — clear the debts
 
