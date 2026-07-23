@@ -287,7 +287,7 @@ namespace
                 for (int k = 0; k < 4; ++k) { auto cell = shapes.removeFromTop (ih); shapes.removeFromTop (3); shapeIcon (g, cell, k, k == 1); } } }
 
             // FX: real draggable panel - Chorus / Delay / Reverb / Width, knobs + values.
-            { auto s = section (g, centre, "FX  -  drag to reorder", tFx);
+            { auto s = section (g, centre, "FX", tFx);
               struct K { const char* l; const char* v; float p; };
               struct B { const char* name; bool on; std::vector<K> k; };
               std::vector<B> blocks = {

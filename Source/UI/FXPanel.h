@@ -7,24 +7,26 @@
 #include <vector>
 
 // ============================================================================
-// FX panel — a centre section (signal-flow order). Four reorderable effect blocks
-// (chorus / delay / reverb / width), each a knob strip beneath a backlit NAME BAR:
-// the bar glows in the FX tint when the effect is on and darkens when off (tap it to
-// toggle) — the on/off IS the label, no separate switch. Drag a block by its bar
-// (finger or mouse) to reorder; on drop the new chain order is committed and the
-// audio chain crossfades click-free. Knobs are MIDI-learnable and refuse keyboard
-// focus, so QWERTY note input keeps working.
+// FX panel — a centre section (signal-flow order). Four effect blocks
+// (SAT+WIDTH / chorus / delay / reverb), each a knob strip beneath a backlit NAME
+// BAR: the bar glows in the FX tint when the effect is on and darkens when off
+// (tap it to toggle) — the on/off IS the label, no separate switch. Knobs are
+// MIDI-learnable and refuse keyboard focus, so QWERTY note input keeps working.
 //
-// K1: the per-part EQ is NO LONGER in this reorderable chain — it is a fixed final
-// stage with its own dedicated section (EQPanel). This panel manages only the four
-// reorderable FX; the processor's 5-slot order[] keeps the EQ slot pinned last.
+// The chain runs in a FIXED order (WIDTH first, EQ always last) — the blocks are
+// laid out in that processing order but do NOT reorder, so grabbing a knob never
+// nudges a block. (The processor still keeps a 5-slot order[] so factory presets /
+// old sessions load correctly; there is just no drag-to-reorder in the UI.)
+//
+// K1: the per-part EQ is NOT one of these blocks — it is a fixed final stage with
+// its own dedicated section (EQPanel).
 // ============================================================================
 
 class FXPanel : public juce::Component,
                 private juce::Timer
 {
 public:
-    static constexpr int kNumShown = 4;   // chorus/delay/reverb/width (EQ excluded — fixed last)
+    static constexpr int kNumShown = 4;   // SAT+WIDTH/chorus/delay/reverb (EQ excluded — fixed last)
 
     explicit FXPanel (VASynthProcessor& p) : proc (p)
     {
@@ -32,20 +34,20 @@ public:
 
         for (int i = 0; i < kNumShown; ++i)
         {
-            blocks[(size_t) i] = std::make_unique<FXBlock> (proc, i, defs()[(size_t) i], *this);
+            blocks[(size_t) i] = std::make_unique<FXBlock> (proc, i, defs()[(size_t) i]);
             addAndMakeVisible (*blocks[(size_t) i]);
         }
-        startTimerHz (15);      // resync the visual order if it changes elsewhere (e.g. preset load)
+        startTimerHz (8);      // resync the visual order if the chain order changes (e.g. preset load)
     }
 
     void paint (juce::Graphics& g) override
-    { chrome::section (g, getLocalBounds(), "FX  -  drag to reorder", tint); }
+    { chrome::section (g, getLocalBounds(), "FX", tint); }
 
     void resized() override { layoutBlocks(); }
 
 private:
-    // Read the processor's 5-slot order and project it to the 4 reorderable FX in
-    // display order (EQ_ = 4 is dropped; it always runs last regardless of position).
+    // Read the processor's 5-slot order and project it to the 4 shown FX in display
+    // order (EQ_ = 4 is dropped; it always runs last regardless of position).
     void syncFromProc()
     {
         int full[5]; proc.getFxOrder (full);
@@ -55,18 +57,8 @@ private:
         for (; k < kNumShown; ++k) disp[k] = k;   // defensive fill (never expected)
     }
 
-    // Commit the 4-block display order back, pinning EQ last (its slot is inert in DSP).
-    void commit()
-    {
-        int full[5];
-        for (int i = 0; i < kNumShown; ++i) full[i] = disp[i];
-        full[kNumShown] = FXChain::EQ_;
-        proc.setFxOrder (full);
-    }
-
     void timerCallback() override
     {
-        if (draggingFx >= 0) return;
         int prev[kNumShown]; for (int i = 0; i < kNumShown; ++i) prev[i] = disp[i];
         syncFromProc();
         bool diff = false;
@@ -100,8 +92,8 @@ private:
     // ---- one effect block ---------------------------------------------------
     struct FXBlock : juce::Component
     {
-        FXBlock (VASynthProcessor& p, int fxIndex, const BlockDef& def, FXPanel& ownerPanel)
-            : fx (fxIndex), owner (ownerPanel), title (def.title), tint (def.tint)
+        FXBlock (VASynthProcessor& p, int fxIndex, const BlockDef& def)
+            : fx (fxIndex), title (def.title), tint (def.tint)
         {
             enableParam = dynamic_cast<juce::AudioParameterBool*> (p.apvts.getParameter (def.enablePid));
             // Repaint the bar whenever the enable changes (automation / preset load).
@@ -133,17 +125,9 @@ private:
             g.fillRoundedRectangle (bar.toFloat(), 4.0f);
             if (on) { g.setColour (tint.brighter (0.5f)); g.drawRoundedRectangle (bar.toFloat().reduced (0.7f), 4.0f, 1.0f); }
 
-            // grip dots (left) hint the bar is a drag handle
-            auto grip = bar.removeFromLeft (18);
-            g.setColour (on ? chrome::onTint().withAlpha (0.6f) : VASynthLookAndFeel::dim());
-            for (int col = 0; col < 2; ++col)
-                for (int row = 0; row < 3; ++row)
-                    g.fillEllipse ((float) grip.getCentreX() - 3.0f + (float) col * 4.0f,
-                                   (float) grip.getCentreY() - 6.0f + (float) row * 5.0f, 2.4f, 2.4f);
-
             g.setColour (on ? chrome::onTint() : VASynthLookAndFeel::dim());
             g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
-            g.drawText (title, bar.withTrimmedLeft (2), juce::Justification::centredLeft, false);
+            g.drawText (title, bar.withTrimmedLeft (8), juce::Justification::centredLeft, false);
 
             if (voices)   // label above the 1|2 selector, matching the knob name style
             {
@@ -151,8 +135,6 @@ private:
                 g.setFont (juce::Font (juce::FontOptions (9.5f)));
                 g.drawText ("VOICES", voicesLabelArea.withHeight (13), juce::Justification::centred, false);
             }
-
-            if (dragging) { g.setColour (tint.withAlpha (0.9f)); g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 5.0f, 2.0f); }
         }
 
         void resized() override
@@ -170,43 +152,24 @@ private:
                 knobs[i]->setBounds ((i < n - 1 ? body.removeFromLeft (kw) : body).reduced (3, 0));
         }
 
-        // Tap the bar toggles on/off; drag the bar reorders. Knobs (below) untouched.
-        void mouseDown (const juce::MouseEvent& e) override
+        // Tap the NAME BAR to toggle the effect on/off. (No drag-to-reorder — the blocks
+        // are fixed, so a slip while grabbing a knob can't nudge a block.) Knobs (below the
+        // bar) handle their own mouse events.
+        void mouseUp (const juce::MouseEvent& e) override
         {
-            dragArmed = e.getPosition().y < kBarH;
-            movedFar  = false;
-            if (dragArmed) owner.beginDrag (fx, owner.getLocalPoint (this, e.position).y);
-        }
-        void mouseDrag (const juce::MouseEvent& e) override
-        {
-            if (! dragArmed) return;
-            if (e.getDistanceFromDragStart() > 8) movedFar = true;
-            owner.dragTo (fx, owner.getLocalPoint (this, e.position).y);
-        }
-        void mouseUp (const juce::MouseEvent&) override
-        {
-            if (dragArmed)
+            if (e.getPosition().y < kBarH && e.getDistanceFromDragStart() < 8 && enableParam != nullptr)
             {
-                owner.endDrag();
-                if (! movedFar && enableParam != nullptr)     // a tap -> toggle on/off
-                {
-                    enableParam->beginChangeGesture();
-                    enableParam->setValueNotifyingHost (enableParam->get() ? 0.0f : 1.0f);
-                    enableParam->endChangeGesture();
-                }
+                enableParam->beginChangeGesture();
+                enableParam->setValueNotifyingHost (enableParam->get() ? 0.0f : 1.0f);
+                enableParam->endChangeGesture();
             }
-            dragArmed = false;
         }
 
         juce::Rectangle<int> barArea() const { return getLocalBounds().removeFromTop (kBarH); }
 
         int  fx;
-        FXPanel& owner;
         juce::String title;
         juce::Colour tint;
-        bool dragging  = false;
-        bool dragArmed = false;
-        bool movedFar  = false;
         juce::AudioParameterBool* enableParam = nullptr;
         std::unique_ptr<juce::ParameterAttachment> enableAtt;
         juce::OwnedArray<RotaryKnob> knobs;
@@ -214,72 +177,16 @@ private:
         juce::Rectangle<int> voicesLabelArea;
     };
 
-    // ---- drag-reorder -------------------------------------------------------
-    void beginDrag (int fx, float panelY)
-    {
-        draggingFx = fx;
-        dragY = panelY;
-        blocks[(size_t) fx]->dragging = true;
-        blocks[(size_t) fx]->toFront (false);
-        layoutBlocks();
-    }
-
-    void dragTo (int fx, float panelY)
-    {
-        if (draggingFx != fx) return;
-        dragY = panelY;
-        const auto content = contentBounds();
-        const int blockH = juce::jmax (1, content.getHeight() / kNumShown);
-        const int targetSlot = juce::jlimit (0, kNumShown - 1, (int) ((panelY - content.getY()) / blockH));
-        const int curSlot = slotOf (fx);
-        if (targetSlot != curSlot) moveInOrder (curSlot, targetSlot);
-        layoutBlocks();
-    }
-
-    void endDrag()
-    {
-        if (draggingFx < 0) return;
-        blocks[(size_t) draggingFx]->dragging = false;
-        draggingFx = -1;
-        commit();                     // commit -> audio chain crossfades to the new order
-        layoutBlocks();
-        repaint();
-    }
-
     void layoutBlocks()
     {
         const auto content = contentBounds();
         const int blockH = juce::jmax (1, (content.getHeight() - (kNumShown - 1) * kGap) / kNumShown);
         for (int slot = 0; slot < kNumShown; ++slot)
-        {
-            const int fx = disp[slot];
-            if (fx == draggingFx) continue;
-            blocks[(size_t) fx]->setBounds (content.getX(), content.getY() + slot * (blockH + kGap),
-                                            content.getWidth(), blockH);
-        }
-        if (draggingFx >= 0)
-        {
-            const int y = juce::jlimit (content.getY(), content.getBottom() - blockH,
-                                        (int) dragY - blockH / 2);
-            blocks[(size_t) draggingFx]->setBounds (content.getX(), y, content.getWidth(), blockH);
-            blocks[(size_t) draggingFx]->toFront (false);
-        }
+            blocks[(size_t) disp[slot]]->setBounds (content.getX(), content.getY() + slot * (blockH + kGap),
+                                                    content.getWidth(), blockH);
     }
 
     juce::Rectangle<int> contentBounds() const { return chrome::sectionContent (getLocalBounds()); }
-
-    int slotOf (int fx) const
-    {
-        for (int i = 0; i < kNumShown; ++i) if (disp[i] == fx) return i;
-        return 0;
-    }
-    void moveInOrder (int from, int to)
-    {
-        const int fx = disp[from];
-        if (from < to) for (int i = from; i < to; ++i) disp[i] = disp[i + 1];
-        else           for (int i = from; i > to; --i) disp[i] = disp[i - 1];
-        disp[to] = fx;
-    }
 
     static constexpr int kBarH = 26;
     static constexpr int kGap  = 5;
@@ -287,9 +194,7 @@ private:
     VASynthProcessor& proc;
     juce::Colour tint { 0xff5ecb8a };
     std::array<std::unique_ptr<FXBlock>, kNumShown> blocks;
-    int disp[kNumShown] { 0, 1, 2, 3 };   // the 4 reorderable FX in display order
-    int draggingFx = -1;
-    float dragY = 0.0f;
+    int disp[kNumShown] { 3, 0, 1, 2 };   // the 4 FX in display (= processing) order; WIDTH first
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FXPanel)
 };
