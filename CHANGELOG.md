@@ -15,15 +15,15 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   a signal below the threshold passes ~unchanged and only what pokes above clips; turning SAT up
   **lowers the threshold** across the whole range (progressively more clipping), while the knee and a
   smoothing filter split the sweep into **two musically distinct halves**:
-  - **0 → noon: a warm SOFT overdrive.** An asymmetric soft-clip knee, then **rounded by a smoothing
-    lowpass** so the drive is smooth, not fizzy. The asymmetry (both polarities unity-slope at zero,
-    the positive knee reached sooner) generates **even harmonics** only as a note is *driven* — so a
-    quiet note stays clean and it's genuinely **velocity-sensitive** (measured ~5× more distortion on
-    a hard note than a soft one at noon). The thresholds are tuned so it **bites single notes** by
-    noon rather than only chords, i.e. it engages early in the knob throw.
-  - **noon → max: hardening toward a FUZZ.** The knee hardens (soft → hard clamp), the smoothing
-    lowpass **opens up**, and the threshold keeps dropping, so the clip gets rawer and edgier toward a
-    hard square (measured ~27× more high-order harmonic content at the top than at the bottom).
+  - **0 → ~30 %: onset of a warm SOFT overdrive.** An asymmetric soft-clip knee, then **rounded by a
+    smoothing lowpass** so the drive is smooth, not fizzy. The asymmetry (both polarities unity-slope
+    at zero, the positive knee reached sooner) generates **even harmonics** only as a note is *driven*
+    — so a soft note stays clean and it's genuinely **velocity-sensitive** (measured ~5× more
+    distortion on a hard note than a soft one). Tuned so a **single note starts to break up by ~30 %**,
+    not only stacked chords.
+  - **~50 % → 90 %: hardening toward a FUZZ.** From noon the knee hardens (soft → hard clamp) and the
+    smoothing lowpass **opens up**, reaching a full hard square — a **fuzz — by 90 %** (holding there
+    to max), with the threshold diving in step so the clip gets rawer and edgier the higher you go.
 
   Loudness stays flat across the sweep and across velocity via an **envelope-following auto-makeup**
   that restores each note to its own input level *including* the lowpass loss (never a hidden boost —

@@ -65,15 +65,16 @@ public:
     {
         // Threshold + knee + smoothing follow the KNOB target (constant per block): the clipping
         // tracks the knob immediately, while the wet crossfade below handles click-safe engage.
-        //   top = the top-half progress (0 through sat<=0.5, then 0->1 over 0.5..1). It drives BOTH
-        //         the knee hardening AND the smoothing-lowpass opening, so the two move together.
+        //   top = the upper-half progress: 0 through sat<=0.5, then 0->1 over 0.5..0.9 (so the knee is
+        //         a full hard clamp — a FUZZ — by 90 %, holding there to 100 %). Drives BOTH the knee
+        //         hardening AND the smoothing-lowpass opening, so the two move together.
         //   T   = a two-segment exponential threshold: kThi (no clip) -> kTmid at the midpoint (a
-        //         solid soft overdrive) -> kTlo at the top (hard square). Monotonic: more clip as
-        //         the knob rises. pow() twice per block is cheap.
-        const float top = std::clamp ((sat - 0.5f) * 2.0f, 0.0f, 1.0f);
+        //         solid soft overdrive) -> kTlo by 90 % (hard square). Monotonic and tuned so a single
+        //         note starts to break up by ~30 %. pow() twice per block is cheap.
+        const float top = std::clamp ((sat - 0.5f) / 0.4f, 0.0f, 1.0f);
         const float T   = (sat <= 0.5f) ? kThi  * std::pow (kTmid / kThi, sat * 2.0f)
                                         : kTmid * std::pow (kTlo  / kTmid, top);
-        const float h   = top;                                     // soft (tanh) below mid, hardens above
+        const float h   = top;                                     // soft (tanh) below mid, hard by 90 %
         // Smoothing lowpass: low cutoff (rounds the soft clip -> warm) in the bottom half, opening
         // toward Nyquist (raw, edgy hard clip) in the top half. One-pole coefficient, per block.
         const float fc  = kLpMin + (kLpMax - kLpMin) * top;
@@ -234,15 +235,15 @@ private:
 
     static constexpr float kTwoPi     = 6.28318530717958647692f;
     static constexpr float kWetRamp   = 12.5f;     // wet reaches 1.0 by smSat = 0.08 (fast onset)
-    static constexpr float kThi       = 1.2f;      // threshold at sat -> 0 (>~peak: nothing clips near 0)
-    static constexpr float kTmid      = 0.13f;     // threshold at sat = 0.5 (bites single notes -> engages sooner)
-    static constexpr float kTlo       = 0.02f;     // threshold at sat -> 1 (harder square: more aggressive at max)
-    static constexpr float kAsymK     = 0.55f;     // soft-clip asymmetry: negative knee pushed out 1/k -> even harmonics
+    static constexpr float kThi       = 0.45f;     // threshold at sat -> 0 (single notes break up by ~30 %)
+    static constexpr float kTmid      = 0.06f;     // threshold at sat = 0.5 (well into soft overdrive)
+    static constexpr float kTlo       = 0.015f;    // threshold reached by 90 % (hard square -> fuzz)
+    static constexpr float kAsymK     = 0.42f;     // soft-clip asymmetry: negative knee pushed out 1/k -> even harmonics
     static constexpr float kLpMin     = 5500.0f;   // smoothing-lowpass cutoff at sat <= 0.5 (rounds the soft clip)
     static constexpr float kLpMax     = 19000.0f;  // ...opening to ~passthrough at sat = 1 (raw hard clip)
     static constexpr float kDcR       = 0.9995f;   // DC-blocker pole
     static constexpr float kEnvCoef   = 0.0007f;   // ~30 ms |amp| follower for the auto-makeup
-    static constexpr float kMaxMakeup = 16.0f;     // makeup ceiling — high enough to restore level after the aggressive max clip
+    static constexpr float kMaxMakeup = 24.0f;     // makeup ceiling — high enough to restore level after the aggressive fuzz clip
 
     std::array<SatChannel, 2> satCh {};            // per-channel oversampler + DC state (L, R)
     float hbCenter = 0.5f;
