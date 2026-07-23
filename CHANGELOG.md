@@ -71,6 +71,14 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   beneath the three oscillators (aligned under their LEVEL column), a full mod destination (LINK,
   automation, MIDI-learn, numeric entry). (Its COLOR — white/pink — is a documented post-1.0 slot.)
 
+### Fixed
+- **Windows CI green again (#110).** Two test-suite `TEST_CASE` names contained an **em-dash (—)**.
+  ctest re-invokes each test by name as a Catch2 filter; the UTF-8 em-dash round-trips on Linux but
+  mangles on the Windows console codepage, so the exe matched no test and ctest called it a failure —
+  Windows `build-test` had been red since the Musicality Pass Tier 1 for this reason (it was never a
+  DSP determinism bug; the audio was always bit-identical). Renamed the two tests to ASCII and added
+  an **ASCII-only-test-name guard to the gate** (`run-all-checks.sh`) so it can't recur.
+
 ### Changed
 - **UI audit + layout polish.** A full parameter-vs-control audit (every registered parameter now
   has a control, or is intentionally hidden). Highlights: the **macro row** shows full assignment

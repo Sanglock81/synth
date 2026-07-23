@@ -50,14 +50,14 @@ driven-voices xrun stress scenario per the Option-1 oversampling decision) → *
 (`kMaxDriveGain`, currently 4.0) may arrive as a one-line constant tune; **#102** WILD-randomize-into-self-osc
 is a post-2C follow-up; **#103** intermittent pluginval teardown crash (~3% flake) to fix before the tag.
 
-> **⚠ Windows CI red since Tier 1 (#110).** `build-test` on **windows-latest** has failed on every
-> commit since "Musicality Pass Tier 1" — test **#124 "Tier 1a: RESET phase is deterministic —
-> consecutive notes are bit-identical"** passes on Linux (GCC) but fails on Windows (MSVC): a
-> platform FP/RNG determinism difference in the start-phase/analog-drift code. **ubuntu-latest is
-> green throughout, including 4a/4c**, and local `run-all-checks.sh` + `--sanitize` are green (Linux).
-> Not caused by the FX work; can't be reproduced from the Linux dev box. Must be green before the
-> **#101** v1.0.0 tag. Likely suspects: the per-voice analog-drift RNG seed/advance, or a rounding
-> path that varies between consecutive notes on MSVC.
+> **✔ Windows CI fixed (#110).** Root cause was NOT a DSP determinism bug: the failing tests' NAMES
+> contained an **em-dash (—, U+2014)**. `catch_discover_tests` registers each TEST_CASE by name and
+> ctest re-invokes the exe with that name as a filter; the UTF-8 em-dash round-trips on Linux but
+> mangles on the Windows console codepage (`ΓÇö`), so the exe matches no test and ctest reports a
+> FAILURE. (The determinism was always fine — a garbage-fill placement-new repro on Linux found no
+> divergence, and the actual CI log showed `No test cases matched`.) Fixed by making the two offending
+> TEST_CASE names ASCII (`—` → `-`), and added an **ASCII-only-test-name guard to `run-all-checks.sh`**
+> so this can't recur (it had bitten Windows CI twice). This is the same class as the R1 em-dash fix.
 
 ## R1 — clear the debts
 

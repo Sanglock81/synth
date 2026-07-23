@@ -84,7 +84,7 @@ namespace
 }
 
 // FX SAT: a variable-threshold soft/hard clipper (velocity-sensitive), 2x-oversampled.
-TEST_CASE ("StereoWidth SAT: threshold clipper — velocity-sensitive, level-neutral, warm, clean", "[6b][fx][width][sat]")
+TEST_CASE ("StereoWidth SAT: threshold clipper - velocity-sensitive, level-neutral, warm, clean", "[6b][fx][width][sat]")
 {
     const int N = 16384;
 

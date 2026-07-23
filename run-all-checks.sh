@@ -31,6 +31,18 @@ if [[ -z "${DISPLAY:-}" ]] && command -v xvfb-run >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
+# Guard: ctest re-invokes each test BY NAME. A non-ASCII byte in a TEST_CASE name
+# (e.g. an em-dash) round-trips fine on Linux but mangles on the Windows CI console
+# codepage, so the exe matches no test and ctest calls it a FAILURE. This has bitten
+# Windows CI twice (#110) — keep TEST_CASE names ASCII-only.
+step "ASCII-only test names (Windows ctest name-filter safety)"
+BADNAMES="$(grep -rnP 'TEST_CASE\s*\(\s*"[^"]*[^\x00-\x7F]' tests/ || true)"
+if [[ -n "$BADNAMES" ]]; then
+    printf '%s\n' "$BADNAMES" >&2
+    fail "non-ASCII TEST_CASE name(s) above -> break Windows ctest name matching (keep names ASCII)"
+fi
+
+# ---------------------------------------------------------------------------
 if [[ $SANITIZE -eq 1 ]]; then
     # Sanitizer suite: unit + plugin tests + soak under ASan/LSan then UBSan.
     # pluginval is a prebuilt (uninstrumented) binary and the VST3 isn't built

@@ -43,7 +43,7 @@ namespace
     { if (a.size() != b.size()) return false; for (std::size_t i = 0; i < a.size(); ++i) if (a[i] != b[i]) return false; return true; }
 }
 
-TEST_CASE ("Tier 1a: RESET phase is deterministic — consecutive notes are bit-identical", "[dsp][musicality][phase]")
+TEST_CASE ("Tier 1a: RESET phase is deterministic - consecutive notes are bit-identical", "[dsp][musicality][phase]")
 {
     SynthVoice v; v.prepare (48000.0);
     auto p = sawPatch (0);   // RESET
