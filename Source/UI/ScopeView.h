@@ -36,11 +36,14 @@ public:
         const int sw = juce::jmax (1, sc.getWidth());
         for (int x = 0; x < sw; ++x)
         {
-            const int idx = juce::jlimit (0, fftSize - 1, x * fftSize / sw);
-            // Vertical gain so a typical playing level fills ~70-80% of the scope box, then a
-            // tanh SOFT-CLIP folds hot peaks smoothly to the panel edge (never overdrawn).
+            // X-zoom: draw only the first kScopeSpan samples of the window across the full width
+            // (a shorter window stretched wider), so the wave shape reads ~20% larger horizontally.
+            const int idx = juce::jlimit (0, fftSize - 1, x * kScopeSpan / sw);
+            // Vertical gain so a typical playing level fills most of the scope box, then a tanh
+            // SOFT-CLIP folds hot peaks smoothly to the panel edge (never overdrawn). kScopeGain is
+            // doubled from the original so the trace is ~2x taller and the wave shape is easy to read.
             const float v = std::tanh (scope[(std::size_t) idx] * kScopeGain);
-            const float y = sc.getCentreY() - v * sc.getHeight() * 0.46f;
+            const float y = sc.getCentreY() - v * sc.getHeight() * 0.48f;
             if (x == 0) w.startNewSubPath ((float) sc.getX(), y);
             else        w.lineTo ((float) (sc.getX() + x), y);
         }
@@ -85,10 +88,11 @@ private:
         repaint();
     }
 
-    static constexpr float kScopeGain = 3.6f;   // ~0.25 in -> ~0.7 of half-height (tanh soft-clipped)
+    static constexpr float kScopeGain = 7.2f;   // ~2x vertical: a typical level nearly fills the box (tanh-limited)
     static constexpr int kBars    = 44;
     static constexpr int fftOrder = 10;
     static constexpr int fftSize  = 1 << fftOrder;
+    static constexpr int kScopeSpan = fftSize * 4 / 5;   // draw 80% of the window -> ~20% horizontal zoom-in
 
     VASynthProcessor& proc;
     juce::dsp::FFT fft { fftOrder };

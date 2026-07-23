@@ -155,6 +155,26 @@ TEST_CASE ("StereoWidth SAT: threshold clipper — velocity-sensitive, level-neu
         REQUIRE (thd (render (1.0f, 300.0, 0.6f), 300.0) > 0.35);
     }
 
+    SECTION ("two-stage: the top half is edgier — more high-order harmonics than the smoothed low half")
+    {
+        // Same drive, same fundamental. The bottom half is a SOFT knee rounded by the smoothing
+        // lowpass (high harmonics roll off); the top half hardens toward a square AND opens the
+        // lowpass (high harmonics survive). So the high-order/low-order energy ratio must climb.
+        auto hiLoRatio = [&] (float sat)
+        {
+            const auto L = render (sat, 300.0, 0.6f);
+            const std::size_t s = (std::size_t) (N / 2);
+            double lo = 0.0, hi = 0.0;
+            for (int k = 2; k <= 4;  ++k) { const double m = magAt (L, s, 8192, kSR, 300.0 * k); lo += m * m; }
+            for (int k = 7; k <= 15; ++k) { const double m = magAt (L, s, 8192, kSR, 300.0 * k); hi += m * m; }
+            return std::sqrt (hi) / (std::sqrt (lo) + 1e-9);
+        };
+        const double soft = hiLoRatio (0.4f);   // soft + smoothed -> HF rolled off
+        const double hard = hiLoRatio (0.9f);   // hard  + open     -> edgy, HF-rich
+        INFO ("hi/lo harmonic ratio  soft(0.4)=" << soft << "  hard(0.9)=" << hard);
+        REQUIRE (hard > soft * 1.5);            // the top half is audibly harder/edgier than the bottom
+    }
+
     SECTION ("loudness stays ~flat across the sweep (SAT is tonal, not a volume knob)")
     {
         // A steady tone at a realistic level; RMS should not swing much as SAT rises.

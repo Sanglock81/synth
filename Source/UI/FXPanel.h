@@ -83,7 +83,7 @@ private:
                 { ID::reverbMix, "MIX" },
                 { ID::reverbMotion, "MOTION", "slow tail modulation: smears the metallic ring so pads swim (0 = static)" } } },
             { "SAT + WIDTH", juce::Colour (0xfff0a04b), ID::fxWidthOn,
-              { { ID::fxSat, "SAT", "tube-style saturation, applied before widening" },
+              { { ID::fxSat, "SAT", "tube saturation (velocity-sensitive): warm soft overdrive up to noon, hardening toward a fuzz above" },
                 { ID::stereoWidth, "WIDTH" } } },
         } };
         return d;

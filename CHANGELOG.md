@@ -9,23 +9,35 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
-- **FX SAT — a real overdrive/fuzz (variable-threshold clipper), and WIDTH now runs first.** The
-  WIDTH FX block gains a **SAT** knob: a **variable-threshold soft/hard clipper** applied per channel
-  *before* the widening — modelled on how overdrive/fuzz pedals actually work, not a volume boost.
-  The shaper has **unity gain near zero**, so a signal below the threshold passes ~unchanged and only
-  what pokes above clips. Turning SAT up **lowers the clipping threshold** (and hardens the knee): at
-  minimum nothing clips; at mid it's a **velocity-sensitive overdrive** — quiet notes stay clean, and
-  the harder you play, the more the note clips; at maximum it's a **hard clip** (a sine flattens toward
-  a square). A small asymmetric bias adds **even harmonics** (tube warmth) with a DC blocker. Loudness
-  stays flat across the sweep and across velocity via an **envelope-following auto-makeup** that
-  restores each note to its own input level (never a hidden boost — the output peak only ever drops),
-  so the per-part **LEVEL** stays the volume control. Runs **2× oversampled** while engaged, so even a
-  hard-clipped high note stays clean (measured ~0.5 % aliasing); the wet crossfade folds the
-  oversampling in/out click-free as SAT crosses zero. `sat = 0` is a **bit-exact bypass** (goldens
-  hold); it's a full mod destination (an LFO can lean on it). Distinct from the filter panel's DRIVE.
-  The block is relabelled **SAT + WIDTH**, and the **default FX chain now runs WIDTH first** — you
-  clip/spatialize the dry signal, then delay/reverb bloom over it; still drag-reorderable. (+~0.004
-  ms/block with SAT on.)
+- **FX SAT — a real overdrive/fuzz (two-stage clipper), and WIDTH now runs first.** The WIDTH FX
+  block gains a **SAT** knob: a per-channel clipper applied *before* the widening — modelled on how
+  overdrive/fuzz pedals actually work, not a volume boost. The shaper has **unity gain near zero**, so
+  a signal below the threshold passes ~unchanged and only what pokes above clips; turning SAT up
+  **lowers the threshold** across the whole range (progressively more clipping), while the knee and a
+  smoothing filter split the sweep into **two musically distinct halves**:
+  - **0 → noon: a warm SOFT overdrive.** An asymmetric soft-clip knee, then **rounded by a smoothing
+    lowpass** so the drive is smooth, not fizzy. The asymmetry (both polarities unity-slope at zero,
+    the positive knee reached sooner) generates **even harmonics** only as a note is *driven* — so a
+    quiet note stays clean and it's genuinely **velocity-sensitive** (measured ~7× more distortion on
+    a hard note than a soft one at noon).
+  - **noon → max: hardening toward a FUZZ.** The knee hardens (soft → hard clamp), the smoothing
+    lowpass **opens up**, and the threshold keeps dropping, so the clip gets rawer and edgier toward a
+    hard square (measured ~27× more high-order harmonic content at the top than at the bottom).
+
+  Loudness stays flat across the sweep and across velocity via an **envelope-following auto-makeup**
+  that restores each note to its own input level *including* the lowpass loss (never a hidden boost —
+  the output peak only ever drops), so the per-part **LEVEL** stays the volume control. Runs **2×
+  oversampled** while engaged, so even a hard-clipped high note stays clean (measured ~1 % aliasing);
+  the wet crossfade folds the oversampling in/out click-free as SAT crosses zero. `sat = 0` is a
+  **bit-exact bypass** (goldens hold); it's a full mod destination (an LFO can lean on it). Distinct
+  from the filter panel's DRIVE. The block is relabelled **SAT + WIDTH**, and the **default FX chain
+  now runs WIDTH first** — you clip/spatialize the dry signal, then delay/reverb bloom over it.
+- **Oscilloscope reads bigger.** The master scope's vertical gain is doubled and the horizontal window
+  is zoomed in ~20 %, so the waveform shape is easy to read at typical playing levels (hot peaks still
+  fold smoothly to the panel edge, never overdrawn).
+- **FX blocks no longer reorder by drag.** The four FX blocks sit in a fixed chain order (WIDTH first,
+  EQ always last) so grabbing a knob can't nudge a block; tapping a block's name bar still toggles it.
+  (The chain-order state + factory-preset order still load correctly — only the drag gesture is gone.)
 - **Chorus VOICES 1|2 (Musicality Pass, Tier 4c — dual-tap thickening).** The CHORUS block gains a
   small **1|2** selector. At **2** a second modulated tap is read per channel at a longer centre
   delay (19 ms) with its LFO at 120°/240° — independent of the first tap's 0°/90° — so the two taps

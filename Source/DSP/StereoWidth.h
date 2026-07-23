@@ -31,7 +31,7 @@
 class StereoWidth
 {
 public:
-    void prepare (double /*sampleRate*/) { designHalfband(); reset(); }
+    void prepare (double sampleRate) { sr = (sampleRate > 0.0) ? (float) sampleRate : 48000.0f; designHalfband(); reset(); }
 
     void reset()
     {
@@ -44,28 +44,40 @@ public:
     // 0 = mono, 1 = unchanged, 2 = maximally wide (synthesized side at full gain).
     void setWidth (float w) { width = std::clamp (w, 0.0f, 2.0f); }
 
-    // SAT: a VARIABLE-THRESHOLD soft/hard clipper, applied per channel BEFORE the widening.
-    // It is NOT a pre-gain-into-a-ceiling (that just makes everything loud) — the shaper has
-    // UNITY slope near zero, so a signal below the threshold passes ~unchanged and only what
-    // pokes above the threshold clips. The knob LOWERS the threshold (and hardens the knee):
-    //   sat 0   -> threshold high -> nothing clips (a true bit-exact bypass; goldens hold).
-    //   sat mid -> soft overdrive -> velocity-sensitive: quiet notes stay clean, loud notes clip.
-    //   sat 1   -> low threshold + hard knee -> hard clipping (a sine flattens toward a square).
+    // SAT: a TWO-STAGE variable-threshold clipper, applied per channel BEFORE the widening. It is
+    // NOT a pre-gain-into-a-ceiling (that just makes everything loud) — the shaper has UNITY slope
+    // near zero, so a signal below the threshold passes ~unchanged and only what pokes above it
+    // clips. The knob lowers the threshold across the WHOLE range (progressively more clipping) but
+    // the KNEE and a smoothing filter split the sweep into two musically distinct halves:
+    //   sat 0        -> threshold high -> nothing clips (a true bit-exact bypass; goldens hold).
+    //   sat 0..0.5   -> SOFT clip, driven progressively harder, then ROUNDED by a lowpass (warm,
+    //                   smooth overdrive). Velocity-sensitive: quiet notes stay clean, loud clip.
+    //   sat 0.5..1.0 -> the knee HARDENS (soft tanh -> hard clamp) and the smoothing lowpass OPENS
+    //                   up, so the clip gets rawer and edgier toward a hard square (fuzz) at the top.
     // A small asymmetric bias adds EVEN harmonics (tube warmth); a DC blocker removes the offset.
-    // Loudness is kept ~constant across the sweep (reference-RMS-flat makeup, peak-guarded so it
-    // is never a hidden boost) — the per-part LEVEL at the end of the chain stays the volume.
-    // Runs 2x-oversampled while engaged (hard clipping aliases) — the wet crossfade folds the
-    // rate-domain handoff in/out click-free as sat crosses zero.
+    // Loudness is kept ~constant across the sweep (reference-RMS-flat makeup, peak-guarded so it is
+    // never a hidden boost) — the per-part LEVEL at the end of the chain stays the volume. Runs
+    // 2x-oversampled while engaged (hard clipping aliases); the wet crossfade folds the rate-domain
+    // handoff in/out click-free as sat crosses zero.
     void setSat (float s01) { sat = std::clamp (s01, 0.0f, 1.0f); }
 
     void process (float* left, float* right, int numSamples)
     {
-        // Threshold + knee follow the KNOB target (constant per block): the clipping tracks the
-        // knob immediately, while the wet crossfade below handles click-safe engage. The map is
-        // EXPONENTIAL so the mid range stays gentle (velocity-sensitive) and the threshold only
-        // dives near the top (into a hard square). pow() once per block is cheap.
-        const float T = kThi * std::pow (kTlo / kThi, sat);   // sat 0 -> kThi (no clip), sat 1 -> kTlo
-        const float h = sat;                                  // knee hardens: soft tanh -> hard clamp
+        // Threshold + knee + smoothing follow the KNOB target (constant per block): the clipping
+        // tracks the knob immediately, while the wet crossfade below handles click-safe engage.
+        //   top = the top-half progress (0 through sat<=0.5, then 0->1 over 0.5..1). It drives BOTH
+        //         the knee hardening AND the smoothing-lowpass opening, so the two move together.
+        //   T   = a two-segment exponential threshold: kThi (no clip) -> kTmid at the midpoint (a
+        //         solid soft overdrive) -> kTlo at the top (hard square). Monotonic: more clip as
+        //         the knob rises. pow() twice per block is cheap.
+        const float top = std::clamp ((sat - 0.5f) * 2.0f, 0.0f, 1.0f);
+        const float T   = (sat <= 0.5f) ? kThi  * std::pow (kTmid / kThi, sat * 2.0f)
+                                        : kTmid * std::pow (kTlo  / kTmid, top);
+        const float h   = top;                                     // soft (tanh) below mid, hardens above
+        // Smoothing lowpass: low cutoff (rounds the soft clip -> warm) in the bottom half, opening
+        // toward Nyquist (raw, edgy hard clip) in the top half. One-pole coefficient, per block.
+        const float fc  = kLpMin + (kLpMax - kLpMin) * top;
+        const float lpA = 1.0f - std::exp (-kTwoPi * fc / sr);
 
         for (int i = 0; i < numSamples; ++i)
         {
@@ -78,8 +90,8 @@ public:
             if (smSat > 1.0e-6f)
             {
                 const float wet = std::min (smSat * kWetRamp, 1.0f); // 0 -> full by smSat ~ 0.08
-                l = saturate (satCh[0], l, T, h, wet);
-                r = saturate (satCh[1], r, T, h, wet);
+                l = saturate (satCh[0], l, T, h, lpA, wet);
+                r = saturate (satCh[1], r, T, h, lpA, wet);
             }
 
             const float mid  = 0.5f * (l + r);
@@ -119,6 +131,7 @@ private:
         int   downPos = 0;
         float dcx1 = 0.0f, dcy1 = 0.0f;
         float inEnv = 0.0f, outEnv = 0.0f;         // slow |amp| followers for the auto-makeup
+        float lp = 0.0f;                           // one-pole smoothing lowpass state (rounds the clip)
     };
 
     // Cheap tanh (clamped Padé[3/2]) — the SOFT clipper shape; unity slope at 0, saturates ±1.
@@ -130,14 +143,23 @@ private:
         return x * (27.0f + x2) / (27.0f + 9.0f * x2);
     }
 
+    // The SOFT clipper shape, ASYMMETRIC (tube-like): both polarities have UNITY slope at zero, so a
+    // sub-threshold signal passes clean (velocity sensitivity preserved, no distortion floor), but
+    // the positive side saturates sooner than the negative (kAsymK < 1 pushes the negative knee out).
+    // The two sides therefore diverge only as the signal is DRIVEN past the knee — that asymmetry is
+    // what generates the EVEN harmonics (warmth) and a drive-dependent DC the blocker removes.
+    static float softShape (float n)
+    {
+        return (n >= 0.0f) ? satTanh (n) : satTanh (n * kAsymK) * (1.0f / kAsymK);
+    }
+
     // Threshold clipper at ONE (over)sample. `T` is the clip threshold, `h` the knee hardness
-    // (0 = soft tanh, 1 = hard clamp). Normalise to the threshold, add the asymmetry bias, blend
-    // soft->hard, rescale by T: small |x| -> ~x (unity, clean); large |x| -> ~±T (clipped). The
-    // static offset from the bias is a constant that the per-channel DC blocker removes.
+    // (0 = asymmetric soft, 1 = hard clamp). Normalise to the threshold, blend soft->hard, rescale
+    // by T: small |x| -> ~x (unity, clean); large |x| -> clipped (asymmetric warmth, then square).
     static float clipCore (float x, float T, float h)
     {
-        const float n    = x / T + kBias;
-        const float soft = satTanh (n);
+        const float n    = x / T;
+        const float soft = softShape (n);
         const float hard = std::clamp (n, -1.0f, 1.0f);
         return T * ((1.0f - h) * soft + h * hard);
     }
@@ -151,7 +173,7 @@ private:
     // across velocity — the part LEVEL stays the volume control. Because clipping lowers the crest
     // factor, restoring the RMS can never push the peak above the input peak, so it is never a
     // hidden boost. Clamped to [1, kMaxMakeup] (only ever restores, never attenuates or runs away).
-    float saturate (SatChannel& s, float x, float T, float h, float wet) const
+    float saturate (SatChannel& s, float x, float T, float h, float lpA, float wet) const
     {
         const float u1 = x;
         const float u0 = 0.5f * (s.upPrev + u1);
@@ -159,11 +181,18 @@ private:
         pushDown (s, clipCore (u0, T, h));
         const float dec = pushDown (s, clipCore (u1, T, h));
 
-        s.inEnv  += kEnvCoef * (std::abs (x)   - s.inEnv);
-        s.outEnv += kEnvCoef * (std::abs (dec) - s.outEnv);
+        // Smoothing lowpass on the clipped signal: rounds the harsh clip edges (warm, soft) at low
+        // SAT; the coefficient opens toward passthrough at high SAT so the hard clip stays raw.
+        s.lp += lpA * (dec - s.lp);
+        const float sm = s.lp;
+
+        // Makeup measured on the SMOOTHED signal, so it restores the level lost to BOTH the clip and
+        // the lowpass (keeping SAT loudness-neutral even while it darkens the tone).
+        s.inEnv  += kEnvCoef * (std::abs (x)  - s.inEnv);
+        s.outEnv += kEnvCoef * (std::abs (sm) - s.outEnv);
         const float makeup = (s.outEnv > 1.0e-5f) ? std::clamp (s.inEnv / s.outEnv, 1.0f, kMaxMakeup) : 1.0f;
 
-        const float m = dec * makeup;
+        const float m = sm * makeup;
         const float y = m - s.dcx1 + kDcR * s.dcy1;        // one-pole DC blocker (~4 Hz)
         s.dcx1 = m; s.dcy1 = y;
         return x * (1.0f - wet) + y * wet;
@@ -203,10 +232,14 @@ private:
         for (int j = 0; j < kHbNumOdd; ++j) hbOdd[(std::size_t) j] = (float) h[kHbCenterIdx + (2 * j + 1)];
     }
 
+    static constexpr float kTwoPi     = 6.28318530717958647692f;
     static constexpr float kWetRamp   = 12.5f;     // wet reaches 1.0 by smSat = 0.08 (fast onset)
     static constexpr float kThi       = 3.0f;      // threshold at sat -> 0 (>1: nothing clips)
-    static constexpr float kTlo       = 0.04f;     // threshold at sat -> 1 (hard square on a normal signal)
-    static constexpr float kBias      = 0.35f;     // asymmetry -> even harmonics (tube warmth)
+    static constexpr float kTmid      = 0.18f;     // threshold at sat = 0.5 (a solid SOFT overdrive)
+    static constexpr float kTlo       = 0.03f;     // threshold at sat -> 1 (hard square on a normal signal)
+    static constexpr float kAsymK     = 0.55f;     // soft-clip asymmetry: negative knee pushed out 1/k -> even harmonics
+    static constexpr float kLpMin     = 5500.0f;   // smoothing-lowpass cutoff at sat <= 0.5 (rounds the soft clip)
+    static constexpr float kLpMax     = 19000.0f;  // ...opening to ~passthrough at sat = 1 (raw hard clip)
     static constexpr float kDcR       = 0.9995f;   // DC-blocker pole
     static constexpr float kEnvCoef   = 0.0007f;   // ~30 ms |amp| follower for the auto-makeup
     static constexpr float kMaxMakeup = 10.0f;     // makeup ceiling — high enough to restore level after a hard clip
@@ -231,6 +264,7 @@ private:
     // scramble across the spectrum. Not sample-rate critical (phase-only).
     std::array<Allpass, 5> ap { { { 0.70f }, { -0.62f }, { 0.53f }, { -0.44f }, { 0.35f } } };
 
+    float sr      = 48000.0f;   // base sample rate (for the smoothing-lowpass coefficient)
     float width   = 1.0f;
     float smWidth = 1.0f;
     float sat     = 0.0f;
