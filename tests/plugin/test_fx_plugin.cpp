@@ -186,3 +186,4 @@ TEST_CASE ("chorus makes the output genuinely stereo", "[plugin][6b][fx][stereo]
     REQUIRE (stereoSpread (false) < 1e-6);        // dry synth is mono (L == R)
     REQUIRE (stereoSpread (true)  > 0.01);        // chorus decorrelates into stereo
 }
+

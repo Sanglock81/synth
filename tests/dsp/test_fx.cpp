@@ -126,9 +126,10 @@ TEST_CASE ("StereoWidth SAT: threshold clipper — velocity-sensitive, level-neu
 
     SECTION ("velocity-sensitive: at one SAT, a quiet note stays clean but a loud note clips")
     {
-        const double quietThd = thd (render (0.5f, 300.0, 0.10f), 300.0);   // below threshold -> ~clean
-        const double loudThd  = thd (render (0.5f, 300.0, 0.80f), 300.0);   // above threshold -> clips
-        INFO ("THD @ sat=0.5  quiet(0.10)=" << quietThd << "  loud(0.80)=" << loudThd);
+        // Realistic per-part levels: a soft (low-velocity) note ~0.12, a hard note ~0.5.
+        const double quietThd = thd (render (0.5f, 300.0, 0.12f), 300.0);   // below threshold -> ~clean
+        const double loudThd  = thd (render (0.5f, 300.0, 0.50f), 300.0);   // above threshold -> clips
+        INFO ("THD @ sat=0.5  quiet(0.12)=" << quietThd << "  loud(0.50)=" << loudThd);
         REQUIRE (loudThd > quietThd * 3.0);   // the CORE of the spec: harder playing -> more distortion
         REQUIRE (quietThd < 0.10);            // a quiet note is barely touched at a mid setting
     }

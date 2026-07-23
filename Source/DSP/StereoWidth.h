@@ -60,18 +60,23 @@ public:
 
     void process (float* left, float* right, int numSamples)
     {
+        // Threshold + knee follow the KNOB target (constant per block): the clipping tracks the
+        // knob immediately, while the wet crossfade below handles click-safe engage. The map is
+        // EXPONENTIAL so the mid range stays gentle (velocity-sensitive) and the threshold only
+        // dives near the top (into a hard square). pow() once per block is cheap.
+        const float T = kThi * std::pow (kTlo / kThi, sat);   // sat 0 -> kThi (no clip), sat 1 -> kTlo
+        const float h = sat;                                  // knee hardens: soft tanh -> hard clamp
+
         for (int i = 0; i < numSamples; ++i)
         {
             smWidth += kSmoothCoef * (width - smWidth);
-            smSat   += kSmoothCoef * (sat   - smSat);       // zipper-safe drive engage
+            smSat   += kSmoothCoef * (sat   - smSat);       // zipper-safe engage
 
-            // Clip each channel first (drive -> then widen). smSat 0 keeps the exact original
+            // Clip each channel first (clip -> then widen). smSat 0 keeps the exact original
             // signal (goldens bit-identical); the wet crossfade makes engaging click-free.
             float l = left[i], r = right[i];
             if (smSat > 1.0e-6f)
             {
-                const float T   = kThi / (1.0f + smSat * kTSlope);   // threshold lowers with sat
-                const float h   = smSat;                             // knee hardens: soft -> hard
                 const float wet = std::min (smSat * kWetRamp, 1.0f); // 0 -> full by smSat ~ 0.08
                 l = saturate (satCh[0], l, T, h, wet);
                 r = saturate (satCh[1], r, T, h, wet);
@@ -199,12 +204,12 @@ private:
     }
 
     static constexpr float kWetRamp   = 12.5f;     // wet reaches 1.0 by smSat = 0.08 (fast onset)
-    static constexpr float kThi       = 4.0f;      // threshold at sat -> 0 (>1: nothing clips)
-    static constexpr float kTSlope    = 39.0f;     // sat -> 1 gives T = kThi/40 = 0.10 (aggressive)
+    static constexpr float kThi       = 3.0f;      // threshold at sat -> 0 (>1: nothing clips)
+    static constexpr float kTlo       = 0.04f;     // threshold at sat -> 1 (hard square on a normal signal)
     static constexpr float kBias      = 0.35f;     // asymmetry -> even harmonics (tube warmth)
     static constexpr float kDcR       = 0.9995f;   // DC-blocker pole
     static constexpr float kEnvCoef   = 0.0007f;   // ~30 ms |amp| follower for the auto-makeup
-    static constexpr float kMaxMakeup = 4.0f;      // makeup ceiling (safety; never runs away)
+    static constexpr float kMaxMakeup = 10.0f;     // makeup ceiling — high enough to restore level after a hard clip
 
     std::array<SatChannel, 2> satCh {};            // per-channel oversampler + DC state (L, R)
     float hbCenter = 0.5f;
