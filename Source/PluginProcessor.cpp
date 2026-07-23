@@ -124,11 +124,16 @@ void VASynthProcessor::loadFactoryPreset (const juce::String& name)
     bool ok = true; juce::ValueTree st;
     bakePresetParams (name, ok, nullptr, nullptr, &st);    // preset -> scratch SOUND state
     applyFocusedPartSound (st);                            // sound-only: globals + other parts untouched
-    // Factory FX order lives in the JSON (not the param set), so apply it explicitly.
-    // Factory fxOrder is a 4-block permutation (pre-EQ); append EQ (4) as the last slot.
-    int o[kFxCount] { 0, 1, 2, 3, 4 };
-    if (p->fxOrder.size() == 4) for (int i = 0; i < 4; ++i) o[i] = p->fxOrder[i];
-    setFxOrder (o);
+    // The FX chain ORDER is a global, user-controlled setting (reordered via the panel arrows) — a
+    // SOUND preset must NOT silently rearrange the blocks. Only honour an order a preset DELIBERATELY
+    // carries in its JSON; a preset without one leaves the current order exactly as the user set it.
+    // (Previously an order-less preset fell back to {0,1,2,3,4}, snapping WIDTH out of first place.)
+    if (p->fxOrder.size() == 4)
+    {
+        int o[kFxCount] { 0, 1, 2, 3, 4 };
+        for (int i = 0; i < 4; ++i) o[i] = p->fxOrder[i];
+        setFxOrder (o);
+    }
 }
 
 void VASynthProcessor::loadUserPreset (const juce::String& name)

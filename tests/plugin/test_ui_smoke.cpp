@@ -19,7 +19,9 @@
 #include "UI/BottomZones.h"
 #include "UI/OutputsDialog.h"
 #include "UI/ModMatrixPanel.h"
+#include "UI/FXPanel.h"
 #include "ModDestRegistry.h"
+#include <functional>
 #include "VersionInfo.h"
 #include <memory>
 
@@ -418,4 +420,44 @@ TEST_CASE ("smoke screenshots: editor + mod overlay render for the gate (#56)",
     p.armModLink (ModMatrix::Macro1);
     ed->repaint();
     snapshot (*ed, "editor-link-armed.png");
+}
+
+// --- FX reorder chevrons: the REAL mouse path moves a block in the processor chain ------
+// Guards the wiring the drag-removal replaced: a tap on a block's down-chevron must reach
+// FXPanel::moveBlock -> processor setFxOrder (not just the public method in isolation).
+TEST_CASE ("FX reorder chevron: tapping a block's down-arrow moves it one slot in the chain",
+           "[plugin][smoke][fx][reorder]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+
+    int before[5]; p.getFxOrder (before);                 // default width-first {3,0,1,2,4}
+
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);                             // real recursive layout -> real block bounds
+
+    FXPanel* fxp = nullptr;
+    std::function<void (juce::Component&)> find = [&] (juce::Component& c)
+    {
+        if (auto* f = dynamic_cast<FXPanel*> (&c)) fxp = f;
+        for (auto* ch : c.getChildren()) if (fxp == nullptr) find (*ch);
+    };
+    find (*ed);
+    REQUIRE (fxp != nullptr);
+    REQUIRE (fxp->getNumChildComponents() >= FXPanel::kNumShown);
+
+    // Child 0 is the CHORUS block (fx index 0), which sits at chain slot 1 by default. Its down
+    // arrow (right ~22 px of the 26 px name bar) must move it to slot 2: {3,0,1,2,4} -> {3,1,0,2,4}.
+    auto* block = fxp->getChildComponent (0);
+    REQUIRE (block != nullptr);
+    const auto pt = juce::Point<float> ((float) (block->getWidth() - 11), 13.0f);   // down-chevron centre
+    const auto now = juce::Time::getCurrentTime();
+    juce::MouseEvent e (juce::Desktop::getInstance().getMainMouseSource(), pt, juce::ModifierKeys(),
+                        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, block, block, now, pt, now, 1, false);
+    block->mouseUp (e);
+
+    int after[5]; p.getFxOrder (after);
+    const int want[5] { 3, 1, 0, 2, 4 };   // CHORUS (fx 0) moved from slot 1 to slot 2
+    for (int i = 0; i < 5; ++i) REQUIRE (after[i] == want[i]);
+    REQUIRE (want[1] != before[1]);        // sanity: this really is a different order than the default
 }

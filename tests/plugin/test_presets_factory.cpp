@@ -78,15 +78,16 @@ TEST_CASE ("loadFactoryPreset applies overrides; Init resets to defaults", "[plu
     REQUIRE (order[0] == 3); REQUIRE (order[1] == 0);                          // default chain order: WIDTH first
 }
 
-TEST_CASE ("a preset with an fxOrder sets the chain order", "[plugin][6d][presets][order]")
+TEST_CASE ("a SOUND preset does not rearrange the FX chain order", "[plugin][6d][presets][order]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
-    // Warm Pad declares "fxOrder":[3,0,1,2] (width first); load a reordered state first to
-    // prove the preset actively sets it.
-    const int scrambled[5] { 4, 3, 2, 1, 0 };
-    p.setFxOrder (scrambled);
+    // The chain order is a global, user-controlled setting (reordered via the panel chevrons). No
+    // factory preset carries an fxOrder, so loading one must leave whatever order the user set — the
+    // previous fallback to {0,1,2,3,4} snapped WIDTH out of first place on every order-less preset.
+    const int userOrder[5] { 1, 3, 0, 2, 4 };
+    p.setFxOrder (userOrder);
     p.loadFactoryPreset ("Warm Pad");
     int order[5]; p.getFxOrder (order);
-    REQUIRE (order[0] == 3); REQUIRE (order[1] == 0); REQUIRE (order[2] == 1); REQUIRE (order[3] == 2);
+    for (int i = 0; i < 5; ++i) REQUIRE (order[i] == userOrder[i]);   // untouched by the sound load
 }

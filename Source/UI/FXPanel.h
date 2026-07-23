@@ -9,17 +9,19 @@
 // ============================================================================
 // FX panel — a centre section (signal-flow order). Four effect blocks
 // (SAT+WIDTH / chorus / delay / reverb), each a knob strip beneath a backlit NAME
-// BAR: the bar glows in the FX tint when the effect is on and darkens when off
-// (tap it to toggle) — the on/off IS the label, no separate switch. Knobs are
-// MIDI-learnable and refuse keyboard focus, so QWERTY note input keeps working.
+// BAR. The bar glows in the FX tint when the effect is on and darkens when off —
+// the on/off IS the label, TAP the bar to toggle. Knobs are MIDI-learnable and
+// refuse keyboard focus, so QWERTY note input keeps working.
 //
-// The chain runs in a FIXED order (WIDTH first, EQ always last) — the blocks are
-// laid out in that processing order but do NOT reorder, so grabbing a knob never
-// nudges a block. (The processor still keeps a 5-slot order[] so factory presets /
-// old sessions load correctly; there is just no drag-to-reorder in the UI.)
+// REORDERING is by explicit up/down chevrons at the right of each name bar (tap
+// to move the block one slot earlier/later in the chain). There is deliberately
+// NO drag gesture: the chevrons are the only way to reorder, so grabbing a knob
+// can never nudge a block. EQ is not one of these blocks — it is a fixed final
+// stage with its own section (EQPanel), so the four blocks reorder ahead of it.
 //
-// K1: the per-part EQ is NOT one of these blocks — it is a fixed final stage with
-// its own dedicated section (EQPanel).
+// The chain order is a GLOBAL, user-controlled setting. A SOUND preset does not
+// rearrange it (only a preset that deliberately carries an fxOrder does); the
+// order the user picks with the chevrons persists in the session state.
 // ============================================================================
 
 class FXPanel : public juce::Component,
@@ -34,16 +36,39 @@ public:
 
         for (int i = 0; i < kNumShown; ++i)
         {
-            blocks[(size_t) i] = std::make_unique<FXBlock> (proc, i, defs()[(size_t) i]);
+            blocks[(size_t) i] = std::make_unique<FXBlock> (*this, proc, i, defs()[(size_t) i]);
             addAndMakeVisible (*blocks[(size_t) i]);
         }
-        startTimerHz (8);      // resync the visual order if the chain order changes (e.g. preset load)
+        startTimerHz (8);      // resync the visual order if the chain order changes (e.g. preset with an fxOrder)
     }
 
     void paint (juce::Graphics& g) override
     { chrome::section (g, getLocalBounds(), "FX", tint); }
 
     void resized() override { layoutBlocks(); }
+
+    // Move the block for FX `fxIndex` one slot earlier (dir -1) or later (dir +1) in the chain,
+    // then push the full 5-slot order (EQ always last) to the processor. Called by the chevrons.
+    void moveBlock (int fxIndex, int dir)
+    {
+        const int slot = slotOf (fxIndex);
+        const int ns   = slot + dir;
+        if (slot < 0 || ns < 0 || ns >= kNumShown) return;
+        std::swap (disp[slot], disp[ns]);
+
+        int full[5];
+        for (int i = 0; i < kNumShown; ++i) full[i] = disp[i];
+        full[kNumShown] = FXChain::EQ_;   // EQ always runs last
+        proc.setFxOrder (full);
+
+        layoutBlocks();
+        repaint();
+        for (auto& b : blocks) if (b) b->repaint();   // refresh chevron enabled-state on every block
+    }
+
+    int  slotOf (int fxIndex) const { for (int i = 0; i < kNumShown; ++i) if (disp[i] == fxIndex) return i; return -1; }
+    bool canMoveUp   (int fxIndex) const { return slotOf (fxIndex) > 0; }
+    bool canMoveDown (int fxIndex) const { const int s = slotOf (fxIndex); return s >= 0 && s < kNumShown - 1; }
 
 private:
     // Read the processor's 5-slot order and project it to the 4 shown FX in display
@@ -63,7 +88,7 @@ private:
         syncFromProc();
         bool diff = false;
         for (int i = 0; i < kNumShown; ++i) diff = diff || (prev[i] != disp[i]);
-        if (diff) { layoutBlocks(); repaint(); }
+        if (diff) { layoutBlocks(); repaint(); for (auto& b : blocks) if (b) b->repaint(); }
     }
 
     struct KnobDef  { const char* pid; const char* name; const char* help = nullptr; };
@@ -92,8 +117,8 @@ private:
     // ---- one effect block ---------------------------------------------------
     struct FXBlock : juce::Component
     {
-        FXBlock (VASynthProcessor& p, int fxIndex, const BlockDef& def)
-            : fx (fxIndex), title (def.title), tint (def.tint)
+        FXBlock (FXPanel& ownerPanel, VASynthProcessor& p, int fxIndex, const BlockDef& def)
+            : owner (ownerPanel), fx (fxIndex), title (def.title), tint (def.tint)
         {
             enableParam = dynamic_cast<juce::AudioParameterBool*> (p.apvts.getParameter (def.enablePid));
             // Repaint the bar whenever the enable changes (automation / preset load).
@@ -125,9 +150,14 @@ private:
             g.fillRoundedRectangle (bar.toFloat(), 4.0f);
             if (on) { g.setColour (tint.brighter (0.5f)); g.drawRoundedRectangle (bar.toFloat().reduced (0.7f), 4.0f, 1.0f); }
 
-            g.setColour (on ? chrome::onTint() : VASynthLookAndFeel::dim());
+            const auto fg = on ? chrome::onTint() : VASynthLookAndFeel::dim();
+            g.setColour (fg);
             g.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
-            g.drawText (title, bar.withTrimmedLeft (8), juce::Justification::centredLeft, false);
+            g.drawText (title, bar.withTrimmedLeft (8).withTrimmedRight (2 * kArrowW), juce::Justification::centredLeft, false);
+
+            // Reorder chevrons at the right of the bar; dimmed at the ends of the chain (can't move).
+            drawChevron (g, upArrowArea(),   true,  fg, owner.canMoveUp   (fx));
+            drawChevron (g, downArrowArea(), false, fg, owner.canMoveDown (fx));
 
             if (voices)   // label above the 1|2 selector, matching the knob name style
             {
@@ -135,6 +165,16 @@ private:
                 g.setFont (juce::Font (juce::FontOptions (9.5f)));
                 g.drawText ("VOICES", voicesLabelArea.withHeight (13), juce::Justification::centred, false);
             }
+        }
+
+        static void drawChevron (juce::Graphics& g, juce::Rectangle<int> r, bool up, juce::Colour c, bool enabled)
+        {
+            auto a = r.toFloat().reduced (7.0f, 8.0f);
+            juce::Path p;
+            if (up) { p.startNewSubPath (a.getX(), a.getBottom()); p.lineTo (a.getCentreX(), a.getY());      p.lineTo (a.getRight(), a.getBottom()); }
+            else    { p.startNewSubPath (a.getX(), a.getY());      p.lineTo (a.getCentreX(), a.getBottom()); p.lineTo (a.getRight(), a.getY()); }
+            g.setColour (c.withMultipliedAlpha (enabled ? 1.0f : 0.25f));
+            g.strokePath (p, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
 
         void resized() override
@@ -152,12 +192,17 @@ private:
                 knobs[i]->setBounds ((i < n - 1 ? body.removeFromLeft (kw) : body).reduced (3, 0));
         }
 
-        // Tap the NAME BAR to toggle the effect on/off. (No drag-to-reorder — the blocks
-        // are fixed, so a slip while grabbing a knob can't nudge a block.) Knobs (below the
-        // bar) handle their own mouse events.
+        // A click on the NAME BAR either reorders (chevrons) or toggles the effect. There is no drag
+        // gesture, so a slip while grabbing a knob (the knobs sit BELOW the bar and take their own
+        // mouse events) can never move a block. Ignore anything that travelled like a drag.
         void mouseUp (const juce::MouseEvent& e) override
         {
-            if (e.getPosition().y < kBarH && e.getDistanceFromDragStart() < 8 && enableParam != nullptr)
+            if (e.getDistanceFromDragStart() >= 8) return;
+            const auto pos = e.getPosition();
+            if (! barArea().contains (pos)) return;                        // below the bar -> knobs' territory
+            if (upArrowArea().contains (pos))   { owner.moveBlock (fx, -1); return; }
+            if (downArrowArea().contains (pos)) { owner.moveBlock (fx, +1); return; }
+            if (enableParam != nullptr)                                    // rest of the bar toggles on/off
             {
                 enableParam->beginChangeGesture();
                 enableParam->setValueNotifyingHost (enableParam->get() ? 0.0f : 1.0f);
@@ -165,8 +210,13 @@ private:
             }
         }
 
-        juce::Rectangle<int> barArea() const { return getLocalBounds().removeFromTop (kBarH); }
+        juce::Rectangle<int> barArea()    const { return getLocalBounds().removeFromTop (kBarH); }
+        juce::Rectangle<int> upArrowArea()   const { auto a = barArea().removeFromRight (2 * kArrowW); return a.removeFromLeft  (kArrowW); }
+        juce::Rectangle<int> downArrowArea() const { auto a = barArea().removeFromRight (2 * kArrowW); return a.removeFromRight (kArrowW); }
 
+        static constexpr int kArrowW = 22;
+
+        FXPanel& owner;
         int  fx;
         juce::String title;
         juce::Colour tint;

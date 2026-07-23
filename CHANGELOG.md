@@ -18,8 +18,9 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   - **0 → noon: a warm SOFT overdrive.** An asymmetric soft-clip knee, then **rounded by a smoothing
     lowpass** so the drive is smooth, not fizzy. The asymmetry (both polarities unity-slope at zero,
     the positive knee reached sooner) generates **even harmonics** only as a note is *driven* — so a
-    quiet note stays clean and it's genuinely **velocity-sensitive** (measured ~7× more distortion on
-    a hard note than a soft one at noon).
+    quiet note stays clean and it's genuinely **velocity-sensitive** (measured ~5× more distortion on
+    a hard note than a soft one at noon). The thresholds are tuned so it **bites single notes** by
+    noon rather than only chords, i.e. it engages early in the knob throw.
   - **noon → max: hardening toward a FUZZ.** The knee hardens (soft → hard clamp), the smoothing
     lowpass **opens up**, and the threshold keeps dropping, so the clip gets rawer and edgier toward a
     hard square (measured ~27× more high-order harmonic content at the top than at the bottom).
@@ -35,9 +36,14 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
 - **Oscilloscope reads bigger.** The master scope's vertical gain is doubled and the horizontal window
   is zoomed in ~20 %, so the waveform shape is easy to read at typical playing levels (hot peaks still
   fold smoothly to the panel edge, never overdrawn).
-- **FX blocks no longer reorder by drag.** The four FX blocks sit in a fixed chain order (WIDTH first,
-  EQ always last) so grabbing a knob can't nudge a block; tapping a block's name bar still toggles it.
-  (The chain-order state + factory-preset order still load correctly — only the drag gesture is gone.)
+- **FX blocks reorder by header chevrons, not drag; presets no longer rearrange them.** Each FX
+  block's name bar carries small **up/down chevrons** — tap them to move that effect one slot earlier
+  or later in the chain (EQ stays last). There is deliberately **no drag gesture**, so grabbing a
+  knob can never nudge a block; the chevrons are dimmed at the ends of the chain. The order is a
+  **global, user-controlled setting that persists in the session** and is **no longer clobbered by
+  loading a SOUND preset** — fixing a bug where every order-less factory preset silently reset the
+  chain to the old order (snapping WIDTH out of first place). Tapping the rest of the bar still
+  toggles the effect on/off.
 - **Chorus VOICES 1|2 (Musicality Pass, Tier 4c — dual-tap thickening).** The CHORUS block gains a
   small **1|2** selector. At **2** a second modulated tap is read per channel at a longer centre
   delay (19 ms) with its LFO at 120°/240° — independent of the first tap's 0°/90° — so the two taps

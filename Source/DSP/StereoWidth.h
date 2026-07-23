@@ -234,15 +234,15 @@ private:
 
     static constexpr float kTwoPi     = 6.28318530717958647692f;
     static constexpr float kWetRamp   = 12.5f;     // wet reaches 1.0 by smSat = 0.08 (fast onset)
-    static constexpr float kThi       = 3.0f;      // threshold at sat -> 0 (>1: nothing clips)
-    static constexpr float kTmid      = 0.18f;     // threshold at sat = 0.5 (a solid SOFT overdrive)
-    static constexpr float kTlo       = 0.03f;     // threshold at sat -> 1 (hard square on a normal signal)
+    static constexpr float kThi       = 1.2f;      // threshold at sat -> 0 (>~peak: nothing clips near 0)
+    static constexpr float kTmid      = 0.13f;     // threshold at sat = 0.5 (bites single notes -> engages sooner)
+    static constexpr float kTlo       = 0.02f;     // threshold at sat -> 1 (harder square: more aggressive at max)
     static constexpr float kAsymK     = 0.55f;     // soft-clip asymmetry: negative knee pushed out 1/k -> even harmonics
     static constexpr float kLpMin     = 5500.0f;   // smoothing-lowpass cutoff at sat <= 0.5 (rounds the soft clip)
     static constexpr float kLpMax     = 19000.0f;  // ...opening to ~passthrough at sat = 1 (raw hard clip)
     static constexpr float kDcR       = 0.9995f;   // DC-blocker pole
     static constexpr float kEnvCoef   = 0.0007f;   // ~30 ms |amp| follower for the auto-makeup
-    static constexpr float kMaxMakeup = 10.0f;     // makeup ceiling — high enough to restore level after a hard clip
+    static constexpr float kMaxMakeup = 16.0f;     // makeup ceiling — high enough to restore level after the aggressive max clip
 
     std::array<SatChannel, 2> satCh {};            // per-channel oversampler + DC state (L, R)
     float hbCenter = 0.5f;
