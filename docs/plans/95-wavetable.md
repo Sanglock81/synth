@@ -21,7 +21,16 @@
 - Aliasing "soul" test already exists in `tests/dsp/test_filter.cpp` (full radix-2 FFT, harmonic vs
   non-harmonic bin energy). Reuse that FFT harness for the WT aliasing test.
 
-## 3a — Engine (DSP)  ← start here next session
+## 3a — Engine (DSP)  ← DONE (commit pending)
+
+> **Boundary adjustment made during 3a:** the `osc*_wt_pos` params and the `"WT"` append to
+> `waveNames` were moved OUT of 3a into **3b**. Reason: appending a 5th choice shifts the
+> normalized→index mapping of the wave choice param, which several RANDOM/init sites rely on
+> (`setN(oscWave, 1.0f)` = "Sine, last of 4" at lines ~166/2088/2092 would become WT — silent
+> with no table bank yet). Params/`waveNames`/RANDOM-handling all belong with the bank wiring in
+> 3b so each sub-phase ships clean. 3a is therefore PURE DSP: `Wavetable.h` + the osc `Wave::Wavetable`
+> read + `VoiceParams` WT fields + tests, and WT is unreachable from the plugin (osc wave choice
+> still has 4 options), so goldens are trivially bit-identical.
 
 - New `Source/DSP/Wavetable.h` (JUCE-free, std-only, allocation-free after build):
   - A table = **N frames** (e.g. 64 or 256 samples/frame; a handful of frames for position morph).

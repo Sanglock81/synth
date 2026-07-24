@@ -36,6 +36,13 @@ struct VoiceParams
     int    osc1Phase = 0, osc2Phase = 0, osc3Phase = 0;
     // Tier 1b: analog drift amount (0..1) — one per part. 0 = bit-exact (no drift). Default 0.
     float  analog = 0.0f;
+    // #95 Wavetable (Wave::Wavetable = 4): per-osc frame POSITION (0..1) and the SHARED, const table
+    // this osc reads (owned by the engine's bank; null = the osc is silent in WT mode). Default 0 /
+    // null keeps non-WT patches bit-identical.
+    float  osc1WtPos = 0.0f, osc2WtPos = 0.0f, osc3WtPos = 0.0f;
+    const Wavetable* osc1WtTable = nullptr;
+    const Wavetable* osc2WtTable = nullptr;
+    const Wavetable* osc3WtTable = nullptr;
 
     // mixer: independent per-source levels (engine writes SMOOTHED effective
     // levels here — already folded in the on/off kill switch, so a level of ~0
@@ -203,7 +210,7 @@ public:
             src.random   = voiceRandom;
             mm = mtx->evaluate (src);
         }
-        applyParams (p, envPitchSemis + mm.pitchSemis, mm.pw);
+        applyParams (p, envPitchSemis + mm.pitchSemis, mm.pw, mm.wavePos);
 
         const float trackOct = p.keytrack * (midiNote - 60) / 12.0f;
         const float velOct   = p.velToCutoff * velocity * 3.0f;              // vel -> cutoff
@@ -264,7 +271,8 @@ private:
     // Filter-coefficient update interval (power of two for the bit mask).
     static constexpr int kCutoffInterval = 16;
 
-    void applyParams (const VoiceParams& p, float extraPitchSemis = 0.0f, float extraPwMod = 0.0f)
+    void applyParams (const VoiceParams& p, float extraPitchSemis = 0.0f, float extraPwMod = 0.0f,
+                      float wavePosMod = 0.0f)
     {
         // Pitch from the (glide-slewed) note plus pitch modulation (LFO + env->pitch).
         const double f0 = 440.0 * std::exp2 ((glideNote - 69.0f + p.pitchModSemis + extraPitchSemis) / 12.0);
@@ -290,12 +298,20 @@ private:
         osc1.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc1Wave));
         osc2.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc2Wave));
         osc3.setWave (static_cast<PolyBlepOscillator::Wave> (p.osc3Wave));
+        // WT source BEFORE setFrequency (the mip is picked from the pitch against the current table).
+        osc1.setWavetable (p.osc1WtTable);
+        osc2.setWavetable (p.osc2WtTable);
+        osc3.setWavetable (p.osc3WtTable);
         osc1.setFrequency (f0 * std::exp2 (p.osc1Octave + (p.osc1Detune + d1c) / 1200.0f));
         osc2.setFrequency (f0 * std::exp2 (p.osc2Octave + (p.osc2Detune + d2c) / 1200.0f));
         osc3.setFrequency (f0 * std::exp2 (p.osc3Octave + (p.osc3Detune + d3c) / 1200.0f));
         osc1.setPulseWidth (std::clamp (p.osc1PW + p.pwMod + extraPwMod + dpw, 0.05f, 0.95f));
         osc2.setPulseWidth (std::clamp (p.osc2PW + p.pwMod + extraPwMod + dpw, 0.05f, 0.95f));
         osc3.setPulseWidth (std::clamp (p.osc3PW + p.pwMod + extraPwMod + dpw, 0.05f, 0.95f));
+        // WT frame position: per-osc base + the shared WavePos mod (voice-tier), smoothed in the osc.
+        osc1.setWavePosition (p.osc1WtPos + wavePosMod);
+        osc2.setWavePosition (p.osc2WtPos + wavePosMod);
+        osc3.setWavePosition (p.osc3WtPos + wavePosMod);
 
         filter.setType (static_cast<SVFilter::Type> (p.filterType));
         filter.setDrive (p.drive);                     // Tier 2: 0 -> bit-exact linear fast path

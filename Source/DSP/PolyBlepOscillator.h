@@ -1,6 +1,8 @@
 #pragma once
 #include <cmath>
 #include <array>
+#include <algorithm>
+#include "Wavetable.h"
 
 // ============================================================================
 // PolyBLEP anti-aliased oscillator (hand-rolled), oversampled + decimated.
@@ -38,7 +40,8 @@
 class PolyBlepOscillator
 {
 public:
-    enum class Wave { Saw, Square, Triangle, Sine };
+    // APPEND-ONLY (choice values are frozen for state compatibility). Wavetable = 4.
+    enum class Wave { Saw, Square, Triangle, Sine, Wavetable };
 
     // None      — 1x, no decimation. Lowest CPU, audible aliasing (~-26 dB @ 3 kHz).
     //             The skeleton's original behaviour; a benchmark/extreme-CPU baseline.
@@ -77,11 +80,18 @@ public:
         if (startPhase >= 0.0) phase = startPhase - std::floor (startPhase);
         ring.fill (0.0);
         ringPos = 0;
+        wtSnap  = true;    // a fresh voice starts AT the WT position (no glide from the last note)
     }
 
-    void setFrequency (double hz)          { phaseInc = hz / osRate; }   // per oversample step
+    void setFrequency (double hz)          { phaseInc = hz / osRate; if (wt != nullptr) wtMip = wt->mipForFreq (hz); }
     void setWave (Wave w)                  { wave = w; }
     void setPulseWidth (double pw)         { pulseWidth = pw; }          // 0.05 .. 0.95
+
+    // Wavetable (Wave::Wavetable): a SHARED, const table (owned elsewhere; null = silent). The
+    // position selects/morphs the frame and is smoothed per oversample step so a moving WT POS (a
+    // knob or an LFO on the WavePos mod dest) never zippers.
+    void setWavetable (const Wavetable* t)  { wt = t; }
+    void setWavePosition (double p)         { wtPosTarget = p < 0.0 ? 0.0 : (p > 1.0 ? 1.0 : p); }
 
     // Render one base-rate sample. Called per-sample from the voice.
     float nextSample()
@@ -105,8 +115,9 @@ public:
     }
 
 private:
-    static constexpr double kTwoPi = 6.283185307179586;
-    static constexpr double kPi    = 3.141592653589793;
+    static constexpr double kTwoPi    = 6.283185307179586;
+    static constexpr double kPi       = 3.141592653589793;
+    static constexpr double kWtSmooth = 0.004;   // WT-position one-pole per oversample step (~1 ms)
 
     static double wrap (double x) { return x >= 1.0 ? x - 1.0 : x; }
 
@@ -140,6 +151,15 @@ private:
                 const double up  = phase / pulseWidth;
                 const double dn  = (1.0 - phase) / (1.0 - pulseWidth);
                 out = 2.0 * (phase < pulseWidth ? up : dn) - 1.0;
+                break;
+            }
+
+            case Wave::Wavetable:
+            {
+                // Smooth the position per oversample step (zipper-safe); snap on a fresh voice.
+                if (wtSnap) { wtPos = wtPosTarget; wtSnap = false; }
+                else        wtPos += kWtSmooth * (wtPosTarget - wtPos);
+                out = (wt != nullptr && wt->valid()) ? (double) wt->read (phase, (float) wtPos, wtMip) : 0.0;
                 break;
             }
 
@@ -232,6 +252,11 @@ private:
     double  pulseWidth = 0.5;
     int     oversample = 4;
     int     firLen     = 48;
+
+    const Wavetable* wt = nullptr;               // shared source for Wave::Wavetable (null = silent)
+    int     wtMip       = 0;                     // mip cached per setFrequency() (pitch-dependent)
+    double  wtPos       = 0.0, wtPosTarget = 0.0;// smoothed frame position in [0,1]
+    bool    wtSnap      = true;                  // snap wtPos to target on the next fresh render
 
     std::array<float,  kMaxFirLen>     h  {};            // decimation taps (symmetric, float MAC)
     std::array<double, kMaxFirLen>     hd {};            // design scratch (double, unused at RT)

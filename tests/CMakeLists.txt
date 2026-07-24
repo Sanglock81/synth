@@ -46,6 +46,7 @@ add_executable(dsp_tests
     dsp/test_lfo_sync.cpp
     dsp/test_midi_clock.cpp
     dsp/test_musicality.cpp
+    dsp/test_wavetable.cpp
     dsp/test_arp.cpp
     dsp/test_stepseq.cpp
     dsp/test_clock_align.cpp
