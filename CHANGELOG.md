@@ -72,6 +72,19 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   automation, MIDI-learn, numeric entry). (Its COLOR — white/pink — is a documented post-1.0 slot.)
 
 ### Fixed
+- **Arp no longer skips to its start at each bar.** With the shared clock, striking a key mid-bar
+  used to make the arpeggiator snap back to pattern step 0 at the next measure boundary — an audible
+  discontinuity. The bar re-lock now keeps the arp's **rhythm on the grid** (its steps still land on
+  the beat, drift bounded) but lets the **pattern free-run** from where you started instead of
+  resetting to step 0. So the arp stays locked to the sequencer/looper's beats without the skip.
+- **LFO can now be turned on without a fixed destination — "On" replaces "PW".** The LFO DEST used
+  to be Off / Pitch / Cutoff / **PW**, so the only way to enable an LFO was to hardwire it to Pitch,
+  Cutoff, or PW — you couldn't run it purely as a **LINK** (mod-matrix) source. DEST is now
+  Off / Pitch / Cutoff / **On**: **On** runs the LFO with **no fixed route** (route it anywhere via
+  LINK), **Off** genuinely turns it off (no longer a live source), and Pitch/Cutoff keep their
+  hardwired routes. The dropped fixed **PW** route is fully covered by LINK → PulseWidth. *(Migration:
+  an old LFO set to "PW" (index 3) now reads as "On"; a patch that linked an LFO left at "Off" should
+  set its DEST to "On".)*
 - **Velocity now shapes volume properly, and does so PERCEPTUALLY.** The default **VEL>AMP** was 0.7
   with a *linear* amp map, which left even the softest note at 70 % of full amplitude — velocity
   barely moved the level. Now the default is **0.9** and the curve is **dB-linear (logarithmic)**:

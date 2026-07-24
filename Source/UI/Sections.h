@@ -285,7 +285,7 @@ public:
         const char* shapeIds[] { ID::lfoShape, ID::lfo2Shape, ID::lfo3Shape };
         const char* syncIds[]  { ID::lfoSync,  ID::lfo2Sync,  ID::lfo3Sync  };
         const char* divIds[]   { ID::lfoDiv,   ID::lfo2Div,   ID::lfo3Div   };
-        const juce::StringArray destLabels { "OFF", "PITCH", "CUTOFF", "PW" };
+        const juce::StringArray destLabels { "OFF", "PITCH", "CUTOFF", "ON" };
 
         for (int i = 0; i < 3; ++i)
         {

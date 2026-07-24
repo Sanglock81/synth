@@ -456,8 +456,7 @@ public:
             {
                 case 1: modPitch     = lfoVal * 2.0f;  break;   // +/-2 semis
                 case 2: modCutoffOct = lfoVal * 3.0f;  break;   // +/-3 oct
-                case 3: modPw        = lfoVal * 0.45f; break;
-                default: break;
+                default: break;                                 // Off (0) + On (3): no fixed route
             }
             const float vibRaw = vibratoLFO.advance (chunk);   // advance once per chunk; scale per part below
 
@@ -626,14 +625,16 @@ public:
                         l.setRate (c.rate);
                         raw = l.advance (chunk);
                     }
-                    lfoRaw[(std::size_t) p][(std::size_t) k] = raw;
+                    // dest: 0 Off (inert — not even a matrix source), 1 Pitch, 2 Cutoff, 3 On (a live
+                    // LINK source with NO fixed route). Phase is advanced regardless (kept coherent),
+                    // but Off zeroes the published source so "Off" genuinely turns the LFO off.
+                    lfoRaw[(std::size_t) p][(std::size_t) k] = (c.dest == 0) ? 0.0f : raw;
                     const float v = raw * c.depth;
                     switch (c.dest)
                     {
-                        case 1: pPitch[(std::size_t) p] += v * 2.0f;  break;
-                        case 2: pCut  [(std::size_t) p] += v * 3.0f;  break;
-                        case 3: pPw   [(std::size_t) p] += v * 0.45f; break;
-                        default: break;
+                        case 1: pPitch[(std::size_t) p] += v * 2.0f;  break;   // Pitch (fixed route)
+                        case 2: pCut  [(std::size_t) p] += v * 3.0f;  break;   // Cutoff (fixed route)
+                        default: break;                                        // Off (0) + On (3): no fixed route
                     }
                 }
             }

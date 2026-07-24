@@ -121,7 +121,9 @@ TEST_CASE ("sweep: LFO sources produce a time-varying offset (#H4)", "[plugin][m
         VASynthProcessor p;
         const int rateId = lfo - ModMatrix::LFO1;
         const char* rate[] { ParamID::lfoRate, ParamID::lfo2Rate, ParamID::lfo3Rate };
+        const char* dest[] { ParamID::lfoDest, ParamID::lfo2Dest, ParamID::lfo3Dest };
         p.apvts.getParameter (rate[rateId])->setValueNotifyingHost (0.7f);   // brisk
+        p.apvts.getParameter (dest[rateId])->setValueNotifyingHost (1.0f);   // dest = On: enable as a LINK source
         p.linkModRoute (-1, lfo, ModMatrix::ReverbMix, 1.0f);
         p.prepareToPlay (48000.0, 128);
         float lo = 1.0e9f, hi = -1.0e9f;

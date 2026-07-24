@@ -1,8 +1,10 @@
 // ============================================================================
-// Shared-transport clock alignment (task #53). The processor re-anchors the sequencer and
-// arpeggiator to the looper's bar downbeat at every bar boundary (realign), so seq step-1,
-// the arp downbeat, and the looper boundary coincide within block tolerance — at bar 1 and
-// bar 100, and across a tempo change. This reproduces that owner logic at the DSP level.
+// Shared-transport clock alignment (task #53). The processor re-locks the sequencer and
+// arpeggiator to the looper's bar downbeat at every bar boundary (realign), so seq step-1 and
+// a fired arp step land on the looper boundary within block tolerance — at bar 1 and bar 100,
+// and across a tempo change. (The arp's step realign keeps its RHYTHM on the grid but no longer
+// resets the pattern index to 0 at the measure — see the arp free-run test.) This reproduces that
+// owner logic at the DSP level.
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
 #include "StepSequencer.h"
@@ -77,4 +79,28 @@ TEST_CASE ("clock: seq step-1, arp downbeat, looper boundary align over 100 bars
         ++checked;
     }
     REQUIRE (checked >= 100);   // verified at bar 1 .. bar 100, across the tempo change
+}
+
+TEST_CASE ("arp: a bar realign keeps the rhythm on-grid but does NOT reset the pattern to step 0",
+           "[dsp][clock][arp]")
+{
+    // The hands-on fix: striking a key mid-bar must not make the arp skip to its start at the next
+    // bar. realign() re-locks the step phase (fires the next step on the downbeat) but advances the
+    // pattern index normally rather than resetting it to 0.
+    Arpeggiator arp;
+    Arpeggiator::Config a; a.enabled = true; a.mode = 0; a.samplesPerStep = 1000.0;
+    for (auto& s : a.steps) s = 1.0f;                 // all steps on
+    arp.setConfig (a);
+    arp.noteOn (60, 0.9f);
+
+    const int block = 100;
+    for (int i = 0; i < 55; ++i) arp.process (block, [] (int, int, float, bool) {});   // ~5.5 steps in
+    const int before = arp.currentStep();
+    REQUIRE (before > 0);                             // genuinely mid-pattern, not at step 0
+
+    arp.realign();                                    // simulate the bar boundary
+    int firedStep = -1;
+    arp.process (block, [&] (int, int, float, bool on) { if (on && firedStep < 0) firedStep = arp.currentStep(); });
+    REQUIRE (firedStep == (before + 1) % Arpeggiator::kNumSteps);   // pattern CONTINUED (not reset to 0)
+    REQUIRE (firedStep != 0);                                       // and it did fire on the downbeat
 }

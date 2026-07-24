@@ -66,11 +66,13 @@ public:
         if (! cfg.latch) removeHeld (note);
     }
 
-    // Re-anchor to the shared transport downbeat (task #53): the next process() fires the
-    // next pattern note at offset 0 (phase reset; seqCursor/pattern position preserved).
-    // The owner calls this at each bar boundary so the arp downbeat coincides with the
-    // sequencer step-1 + the looper boundary. process()/swing/gate logic untouched.
-    void realign() { started = false; sampleInStep = 0.0; }
+    // Re-lock the step PHASE to the shared grid (task #53) WITHOUT resetting the pattern index.
+    // The owner calls this at each bar boundary: it forces the NEXT step to fire on the downbeat
+    // (setting sampleInStep to a full step so process() emits at offset 0), so the arp's steps stay
+    // on the beat grid with bounded drift. But it advances the pattern normally (stepIndex+1) — it
+    // does NOT snap back to step 0 at the measure. So striking a key mid-bar starts the arp there and
+    // it free-runs its pattern locked to the grid, instead of skipping to the start each bar.
+    void realign() { sampleInStep = stepLength(); }
 
     // Emit clock-accurate events for this block. emit(sampleOffset, note, velocity, isOn).
     template <typename Emit>

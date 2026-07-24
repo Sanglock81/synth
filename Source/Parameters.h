@@ -82,7 +82,7 @@ namespace ParamID
     inline constexpr auto lfoRate     = "lfo_rate";
     inline constexpr auto lfoDepth    = "lfo_depth";
     inline constexpr auto lfoShape    = "lfo_shape";     // tri / sine / square / s&h
-    inline constexpr auto lfoDest     = "lfo_dest";      // off / pitch / cutoff / pw
+    inline constexpr auto lfoDest     = "lfo_dest";      // off / pitch / cutoff / on (on = run as a LINK source, no fixed route)
     inline constexpr auto lfo2Rate    = "lfo2_rate";
     inline constexpr auto lfo2Depth   = "lfo2_depth";
     inline constexpr auto lfo2Shape   = "lfo2_shape";
@@ -297,16 +297,16 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::lfoRate, 1},  "LFO Rate", juce::NormalisableRange<float>(0.01f, 30.0f, 0.0f, 0.4f), 2.0f, juce::AudioParameterFloatAttributes().withLabel ("Hz")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::lfoDepth, 1}, "LFO Depth", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfoShape, 1}, "LFO Shape", juce::StringArray{ "Triangle", "Sine", "Square", "S&H" }, 0));
-    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfoDest, 1},  "LFO Dest",  juce::StringArray{ "Off", "Pitch", "Cutoff", "PW" }, 0));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfoDest, 1},  "LFO Dest",  juce::StringArray{ "Off", "Pitch", "Cutoff", "On" }, 0));
     // LFO 2 + 3 (Sub-phase 2). Default depth 0 / dest Off -> inert, so goldens hold.
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::lfo2Rate, 1},  "LFO2 Rate", juce::NormalisableRange<float>(0.01f, 30.0f, 0.0f, 0.4f), 2.0f, juce::AudioParameterFloatAttributes().withLabel ("Hz")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::lfo2Depth, 1}, "LFO2 Depth", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfo2Shape, 1}, "LFO2 Shape", juce::StringArray{ "Triangle", "Sine", "Square", "S&H" }, 0));
-    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfo2Dest, 1},  "LFO2 Dest",  juce::StringArray{ "Off", "Pitch", "Cutoff", "PW" }, 0));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfo2Dest, 1},  "LFO2 Dest",  juce::StringArray{ "Off", "Pitch", "Cutoff", "On" }, 0));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::lfo3Rate, 1},  "LFO3 Rate", juce::NormalisableRange<float>(0.01f, 30.0f, 0.0f, 0.4f), 2.0f, juce::AudioParameterFloatAttributes().withLabel ("Hz")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::lfo3Depth, 1}, "LFO3 Depth", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfo3Shape, 1}, "LFO3 Shape", juce::StringArray{ "Triangle", "Sine", "Square", "S&H" }, 0));
-    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfo3Dest, 1},  "LFO3 Dest",  juce::StringArray{ "Off", "Pitch", "Cutoff", "PW" }, 0));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::lfo3Dest, 1},  "LFO3 Dest",  juce::StringArray{ "Off", "Pitch", "Cutoff", "On" }, 0));
     // J1: per-LFO tempo sync (default OFF -> goldens hold) + note-division (default 1/8, index 5).
     {
         const juce::StringArray divs { "4 bar","2 bar","1/1","1/2","1/4","1/8","1/16","1/32","1/4T","1/8T","1/16T","1/4.","1/8.","1/16." };

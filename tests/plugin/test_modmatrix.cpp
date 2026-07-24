@@ -176,6 +176,7 @@ TEST_CASE ("block-tier: an LFO drives an FX dest and the offset varies over time
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
     p.setModSlot (-1, 0, ModMatrix::LFO1, ModMatrix::ReverbMix, 1.0f);   // LFO1 -> reverb mix
+    p.apvts.getParameter (ParamID::lfoDest)->setValueNotifyingHost (1.0f);   // dest = On: enable as a LINK source
     p.apvts.getParameter (ParamID::lfoRate)->setValueNotifyingHost (0.6f);   // audible LFO rate
     p.apvts.getParameter (ParamID::lfoDepth)->setValueNotifyingHost (0.5f);
     p.prepareToPlay (48000.0, 128);
@@ -193,6 +194,35 @@ TEST_CASE ("block-tier: an LFO drives an FX dest and the offset varies over time
         lo = std::min (lo, o); hi = std::max (hi, o);
     }
     REQUIRE (hi - lo > 0.2f);        // the LFO actually sweeps the reverb-mix offset
+}
+
+TEST_CASE ("LFO dest Off gates the source (inert); On enables it with no fixed route (#56)",
+           "[plugin][modmatrix][lfo]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    // Same LFO1 -> ReverbMix link; only the LFO's own DEST changes. Off must make it inert (dead
+    // matrix source); On must make it a live source (routed only via the link, no fixed route).
+    auto reverbSwing = [] (float destNorm)
+    {
+        VASynthProcessor p;
+        p.setModSlot (-1, 0, ModMatrix::LFO1, ModMatrix::ReverbMix, 1.0f);
+        p.apvts.getParameter (ParamID::lfoDest)->setValueNotifyingHost (destNorm);
+        p.apvts.getParameter (ParamID::lfoRate)->setValueNotifyingHost (0.6f);
+        p.apvts.getParameter (ParamID::lfoDepth)->setValueNotifyingHost (0.5f);
+        p.prepareToPlay (48000.0, 128);
+        float lo = 1.0e9f, hi = -1.0e9f;
+        for (int b = 0; b < 300; ++b)
+        {
+            juce::AudioBuffer<float> buf (2, 128); buf.clear();
+            juce::MidiBuffer m; if (b == 0) m.addEvent (juce::MidiMessage::noteOn (1, 60, 0.8f), 0);
+            p.processBlock (buf, m);
+            const float o = p.blockModOffset (ModMatrix::ReverbMix);
+            lo = std::min (lo, o); hi = std::max (hi, o);
+        }
+        return hi - lo;
+    };
+    REQUIRE (reverbSwing (0.0f) < 1.0e-4f);   // dest = Off -> LFO inert -> the linked route is dead
+    REQUIRE (reverbSwing (1.0f) > 0.2f);      // dest = On  -> LFO runs as a source (no fixed route)
 }
 
 TEST_CASE ("block-tier is inert with no block route (bit-identical) (#56 G4)", "[plugin][modmatrix][blocktier]")
