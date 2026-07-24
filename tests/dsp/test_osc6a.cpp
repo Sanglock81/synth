@@ -86,7 +86,7 @@ TEST_CASE ("kill switch: off == level 0, and skips oscillator work (cheaper)", "
 #endif
 }
 
-TEST_CASE ("velocity -> amp: scale = (1-v2a) + v2a*velocity", "[6a][velocity][amp]")
+TEST_CASE ("velocity -> amp: perceptual (dB-linear) scaling below unity", "[6a][velocity][amp]")
 {
     auto rmsAtVel = [] (float vel)
     {
@@ -98,10 +98,11 @@ TEST_CASE ("velocity -> amp: scale = (1-v2a) + v2a*velocity", "[6a][velocity][am
         return tu::rms (steady);
     };
     const double r0 = rmsAtVel (0.0f), r5 = rmsAtVel (0.5f), r8 = rmsAtVel (0.8f), r1 = rmsAtVel (1.0f);
-    // scale(v) = 0.3 + 0.7*v -> 0.3, 0.65, 0.86, 1.0. Compare ratios to vel=1.
-    REQUIRE (r0 / r1 == Catch::Approx (0.30).margin (0.02));
-    REQUIRE (r5 / r1 == Catch::Approx (0.65).margin (0.02));
-    REQUIRE (r8 / r1 == Catch::Approx (0.86).margin (0.02));
+    // Perceptual: scale(v) = 10^(v2a*(v-1)*40/20). v2a=0.7 -> v=0:0.040, 0.5:0.200, 0.8:0.525, 1:1.0.
+    // Equal velocity steps give equal dB steps (loudness is logarithmic), unlike the old linear map.
+    REQUIRE (r0 / r1 == Catch::Approx (0.040).margin (0.010));
+    REQUIRE (r5 / r1 == Catch::Approx (0.200).margin (0.020));
+    REQUIRE (r8 / r1 == Catch::Approx (0.525).margin (0.030));
 }
 
 TEST_CASE ("velocity -> cutoff: higher velocity opens the filter", "[6a][velocity][cutoff]")

@@ -51,7 +51,7 @@ struct VoiceParams
     float  osc1Level = 0.8f, osc2Level = 0.8f, osc3Level = 0.0f;
 
     // velocity routing
-    float  velToAmp    = 0.9f;                  // amp = (1-v2a) + v2a*velocity (0.9: soft notes are clearly quieter)
+    float  velToAmp    = 0.9f;                  // vel->amp depth: PERCEPTUAL (dB-linear) below unity (0.9: soft notes clearly quieter)
     float  velToCutoff = 0.0f;                  // adds up to +3 oct at vel=1
 
     // filter
@@ -214,7 +214,13 @@ public:
 
         const float trackOct = p.keytrack * (midiNote - 60) / 12.0f;
         const float velOct   = p.velToCutoff * velocity * 3.0f;              // vel -> cutoff
-        const float ampScale = (1.0f - p.velToAmp) + p.velToAmp * velocity;  // vel -> amp
+        // vel -> amp, PERCEPTUAL (loudness is logarithmic): map velocity to amplitude in dB, so equal
+        // velocity steps give equal loudness (dB) steps below unity; a gentle LINEAR boost handles
+        // >1.0 accents (an exponential there would explode). velToAmp scales the depth (0 = inert),
+        // velocity 1.0 = unity. std::pow once per render chunk is cheap.
+        const float ampScale = (velocity <= 1.0f)
+            ? std::pow (10.0f, p.velToAmp * (velocity - 1.0f) * (kVelAmpMaxDb / 20.0f))
+            : 1.0f + p.velToAmp * (velocity - 1.0f) * kVelAccentGain;
         const float ampMul   = std::clamp (1.0f + mm.amp, 0.0f, 2.0f);       // matrix -> amp
 
         // Effective per-source levels, folding in any matrix osc-level modulation. Used for
@@ -347,6 +353,8 @@ private:
     float drift1 = 0.0f, drift2 = 0.0f, drift3 = 0.0f, driftPw = 0.0f;   // per-osc drift state (normalized ±1)
     static constexpr float kMaxDriftCents = 2.0f;   // pitch drift ceiling at analog = 1
     static constexpr float kMaxPwDrift    = 0.01f;  // a hair of pulse-width drift
+    static constexpr float kVelAmpMaxDb   = 40.0f;  // vel->amp perceptual depth (dB) at velToAmp = 1
+    static constexpr float kVelAccentGain = 1.0f;   // gentle linear amp boost per unit velocity above 1.0
     bool  freshNote = false;                        // Tier 2C: pending filter-oversampling latch for a new note
 
     // Start phase for a policy. RESET/FREE never draw an RNG, so the default (RESET) path is

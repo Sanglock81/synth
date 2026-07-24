@@ -34,8 +34,8 @@ namespace
         p.filterType = 0;                          // LP
         p.resonance = 0.4f; p.filterEnvAmt = 0.0f; p.keytrack = 0.0f;
         p.ampA = 0.005f; p.ampD = 0.2f; p.ampS = 0.8f; p.ampR = 0.2f;
-        // vel_to_amp default 0.9 (raised from 0.7 so soft notes are clearly quieter): at velocity
-        // 0.8 the amp scale is 0.82. The golden was regenerated for this intended velocity change.
+        // vel_to_amp default 0.9 with a PERCEPTUAL (dB-linear) vel->amp curve: at velocity 0.8 the
+        // amp scale is ~0.44 (-7.2 dB). The golden was regenerated for this intended velocity change.
 
         const int total = int (kSR * 2.0);
         const int block = 256;

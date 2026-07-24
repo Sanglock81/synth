@@ -72,10 +72,13 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   automation, MIDI-learn, numeric entry). (Its COLOR — white/pink — is a documented post-1.0 slot.)
 
 ### Fixed
-- **Velocity now shapes volume properly.** The default **VEL>AMP** was 0.7, which left even the
-  softest note at 70 % of full amplitude — velocity barely moved the level. Raised the default to
-  **0.9** so soft notes are clearly quieter (a wider, more playable dynamic range); velocity's other
-  routings (cutoff, etc.) are unchanged. The render golden was regenerated for this intended change.
+- **Velocity now shapes volume properly, and does so PERCEPTUALLY.** The default **VEL>AMP** was 0.7
+  with a *linear* amp map, which left even the softest note at 70 % of full amplitude — velocity
+  barely moved the level. Now the default is **0.9** and the curve is **dB-linear (logarithmic)**:
+  equal velocity steps give equal loudness (dB) steps below unity, matching how hearing works, so
+  soft notes are genuinely quiet and dynamics feel even across the range (>1.0 accents get a gentle
+  linear boost). velocity's other routings (cutoff, etc.) are unchanged. The render golden was
+  regenerated for this intended change.
 - **Turning a sequencer/arp step off is now a single tap.** A step used to require a *double-tap* to
   silence (a stray single tap was ignored), which was fiddly — the double-tap window was tight and a
   slightly-long press slid into velocity mode instead. Now **a single quick tap toggles** a step
