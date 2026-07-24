@@ -8,8 +8,8 @@
 // ============================================================================
 // STEP SEQUENCER panel (R3 Group 2): an 8-row x 16-step drum grid. Header carries the
 // SEQ on/off, the target part (P1-P4) and gate. Each row shows its trigger note (tap to
-// pick) + a mute. Step grammar (shared with the arp, #54): single tap a dark cell turns it
-// on; double-tap a lit cell turns it off; touch-and-hold + vertical drag sets its velocity.
+// pick) + a mute. Step grammar (shared with the arp, #54): a single tap TOGGLES a cell
+// (dark->on, lit->off); touch-and-hold + vertical drag sets its velocity.
 // A playhead column tracks the running step. The pattern lives in the processor state
 // (saved with presets/MULTIs). Refuses keyboard focus.
 // ============================================================================
@@ -98,11 +98,11 @@ public:
     }
 
     // One grammar for the step cells (shared with the arp):
-    //   - single TAP a DARK cell -> turn it ON
-    //   - double-tap a LIT cell   -> turn it OFF   (a stray single tap never silences a step)
+    //   - single TAP a cell       -> TOGGLE it (dark -> on, lit -> off)
     //   - touch-and-HOLD a cell   -> velocity mode, then drag UP louder / DOWN quieter
-    // The label column keeps its mute toggle + note-picker. Hold is detected by time
-    // (kLongPressMs) OR a clear vertical drag; releasing a hold never toggles the cell.
+    // A quick tap toggles; only a deliberate hold (kLongPressMs) or a clear vertical drag enters
+    // velocity mode, and releasing a hold never toggles — so turning a step off is a single tap,
+    // and adjusting velocity can't happen by accident. The label column keeps its mute + note-picker.
     void mouseDown (const juce::MouseEvent& e) override
     {
         pressMode = Idle; dragR = dragS = -1; velR = velS = -1;
@@ -133,21 +133,9 @@ public:
     }
     void mouseUp (const juce::MouseEvent&) override
     {
-        if (pressMode == Pressed && dragR >= 0 && ! dragWasOn)         // a plain tap on a dark cell
-            proc.setSeqCell (dragR, dragS, 1);                         // -> turn it ON (never off)
-        pressMode = Idle; dragR = dragS = -1; velR = velS = -1; repaint();
-    }
-    void mouseDoubleClick (const juce::MouseEvent& e) override
-    {
-        for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
-        {
-            auto row = rowRects[(std::size_t) r];
-            if (! row.contains (e.getPosition())) continue;
-            if (! row.withTrimmedLeft (kLabelW).contains (e.getPosition())) break;   // label column: ignore
-            const int s = colAt (row, e);
-            if (proc.getSeqCell (r, s) != 0) proc.setSeqCell (r, s, 0);              // double-tap a lit cell -> OFF
-            break;
-        }
+        // A quick tap (never promoted to velocity-hold, no drag) TOGGLES the cell: dark -> on, lit -> off.
+        if (pressMode == Pressed && dragR >= 0)
+            proc.setSeqCell (dragR, dragS, dragWasOn ? 0 : 1);
         pressMode = Idle; dragR = dragS = -1; velR = velS = -1; repaint();
     }
 

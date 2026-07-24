@@ -1,8 +1,7 @@
 // ============================================================================
 // SeqPanel UI interaction (#54): the step-sequencer cells share ONE grammar with the
-// arp — single tap a DARK cell turns it on; double-tap a LIT cell turns it off (a stray
-// single tap never silences a step); touch-and-hold + vertical drag sets its velocity %.
-// Driven through the real mouse handlers.
+// arp — a single tap TOGGLES a cell (dark->on, lit->off); touch-and-hold + vertical drag
+// sets its velocity %. Driven through the real mouse handlers.
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -29,7 +28,7 @@ namespace
     }
 }
 
-TEST_CASE ("seq UI: single tap turns a dark cell on; a tap on a lit cell keeps it on", "[plugin][seq][ui]")
+TEST_CASE ("seq UI: single tap toggles a cell on then off", "[plugin][seq][ui]")
 {
     juce::ScopedJuceInitialiser_GUI init;
     VASynthProcessor proc;
@@ -42,10 +41,10 @@ TEST_CASE ("seq UI: single tap turns a dark cell on; a tap on a lit cell keeps i
     REQUIRE (proc.getSeqCell (1, 2) != 0);          // dark -> ON
 
     tap (panel, 1, 2);
-    REQUIRE (proc.getSeqCell (1, 2) != 0);          // tap on a LIT cell must NOT turn it off
+    REQUIRE (proc.getSeqCell (1, 2) == 0);          // a second tap on the LIT cell turns it OFF
 }
 
-TEST_CASE ("seq UI: double-tap a lit cell turns it off", "[plugin][seq][ui]")
+TEST_CASE ("seq UI: a single tap on a lit cell turns it off", "[plugin][seq][ui]")
 {
     juce::ScopedJuceInitialiser_GUI init;
     VASynthProcessor proc;
@@ -53,8 +52,7 @@ TEST_CASE ("seq UI: double-tap a lit cell turns it off", "[plugin][seq][ui]")
     panel.setSize (900, 300);
 
     proc.setSeqCell (2, 5, 1);
-    const auto c = cell (panel, 2, 5);
-    panel.mouseDoubleClick (evt (panel, c, c, false));
+    tap (panel, 2, 5);                              // one quick tap silences the step (no double-tap needed)
     REQUIRE (proc.getSeqCell (2, 5) == 0);
 }
 

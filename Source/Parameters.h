@@ -270,7 +270,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::osc3On, 1},    "Osc3 On", false));
 
     // --- Velocity ----------------------------------------------------------
-    params.push_back(std::make_unique<P>(juce::ParameterID{ID::velToAmp, 1},    "Vel->Amp", juce::NormalisableRange<float>(0.0f, 1.0f), 0.7f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::velToAmp, 1},    "Vel->Amp", juce::NormalisableRange<float>(0.0f, 1.0f), 0.9f));
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::velToCutoff, 1}, "Vel->Cutoff", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
 
     // --- Filter ------------------------------------------------------------

@@ -212,11 +212,10 @@ public:
     }
 
     // One grammar for the step boxes (shared with the sequencer):
-    //   - single TAP a DARK box  -> turn it ON
-    //   - double-tap a LIT box    -> turn it OFF   (a stray single tap never silences a step)
-    //   - touch-and-HOLD a box    -> enter velocity mode, then drag UP louder / DOWN quieter
-    // The hold is detected by time (kLongPressMs) OR by a clear vertical drag, so a motionless
-    // finger-hold still engages — releasing a hold does NOT toggle the step.
+    //   - single TAP a box       -> TOGGLE it (dark -> on, lit -> off)
+    //   - touch-and-HOLD a box   -> enter velocity mode, then drag UP louder / DOWN quieter
+    // A quick tap toggles; only a deliberate hold (kLongPressMs) or a clear vertical drag enters
+    // velocity mode, and releasing a hold does NOT toggle — so turning a step off is a single tap.
     void mouseDown (const juce::MouseEvent& e) override
     {
         pressMode = Idle; pressStep = -1; velStep = -1;
@@ -241,17 +240,9 @@ public:
     }
     void mouseUp (const juce::MouseEvent&) override
     {
-        if (pressMode == Pressed && pressStep >= 0 && ! pressWasOn)     // a plain tap on a dark box
-            proc.setArpStep (pressStep, 1.0f);                          // -> turn it ON (never off)
-        pressMode = Idle; pressStep = -1; velStep = -1; repaint();
-    }
-    void mouseDoubleClick (const juce::MouseEvent& e) override
-    {
-        if (gridArea.contains (e.getPosition()))
-        {
-            const int s = colAt (e);
-            if (proc.getArpStep (s) > 0.5f) proc.setArpStep (s, 0.0f);  // double-tap a lit box -> OFF
-        }
+        // A quick tap (no hold-to-velocity, no drag) TOGGLES the box: dark -> on, lit -> off.
+        if (pressMode == Pressed && pressStep >= 0)
+            proc.setArpStep (pressStep, pressWasOn ? 0.0f : 1.0f);
         pressMode = Idle; pressStep = -1; velStep = -1; repaint();
     }
 

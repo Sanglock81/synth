@@ -51,7 +51,7 @@ struct VoiceParams
     float  osc1Level = 0.8f, osc2Level = 0.8f, osc3Level = 0.0f;
 
     // velocity routing
-    float  velToAmp    = 0.7f;                  // amp = (1-v2a) + v2a*velocity
+    float  velToAmp    = 0.9f;                  // amp = (1-v2a) + v2a*velocity (0.9: soft notes are clearly quieter)
     float  velToCutoff = 0.0f;                  // adds up to +3 oct at vel=1
 
     // filter

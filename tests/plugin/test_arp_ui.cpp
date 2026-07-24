@@ -1,8 +1,7 @@
 // ============================================================================
 // ArpBar UI interaction (#54): the arp's 16 step boxes use ONE grammar (shared with
-// the step sequencer) — single tap a DARK box turns it on; double-tap a LIT box turns
-// it off (a stray single tap never silences a step); touch-and-hold + vertical drag
-// sets that step's velocity %. Driven through the real mouse handlers.
+// the step sequencer) — a single tap TOGGLES a box (dark->on, lit->off); touch-and-hold
+// + vertical drag sets that step's velocity %. Driven through the real mouse handlers.
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
@@ -45,16 +44,12 @@ TEST_CASE ("arp UI: single tap turns a DARK box on; a tap on a lit box leaves it
 
     REQUIRE (proc.getArpStep (3) > 0.5f);          // fresh default: all steps on
     tap (bar, 3);
-    REQUIRE (proc.getArpStep (3) > 0.5f);          // a single tap on a LIT box must NOT turn it off
-
-    const auto p = cellCentre (bar, 3);            // turn it off (double-tap) then tap it back on
-    bar.mouseDoubleClick (evt (bar, p, p, false));
-    REQUIRE (proc.getArpStep (3) < 0.5f);
+    REQUIRE (proc.getArpStep (3) < 0.5f);          // a single tap on a LIT box turns it OFF
     tap (bar, 3);
-    REQUIRE (proc.getArpStep (3) > 0.5f);          // single tap on a DARK box -> ON
+    REQUIRE (proc.getArpStep (3) > 0.5f);          // tap again -> back ON (toggle)
 }
 
-TEST_CASE ("arp UI: double-tap a lit box turns it off", "[plugin][arp][ui]")
+TEST_CASE ("arp UI: a single tap on a lit box turns it off", "[plugin][arp][ui]")
 {
     juce::ScopedJuceInitialiser_GUI init;
     VASynthProcessor proc;
@@ -62,8 +57,7 @@ TEST_CASE ("arp UI: double-tap a lit box turns it off", "[plugin][arp][ui]")
     bar.setSize (1200, 120);
 
     REQUIRE (proc.getArpStep (5) > 0.5f);
-    const auto p = cellCentre (bar, 5);
-    bar.mouseDoubleClick (evt (bar, p, p, false));
+    tap (bar, 5);                                  // one quick tap silences the step (no double-tap needed)
     REQUIRE (proc.getArpStep (5) < 0.5f);
 }
 

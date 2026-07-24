@@ -72,6 +72,18 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   automation, MIDI-learn, numeric entry). (Its COLOR — white/pink — is a documented post-1.0 slot.)
 
 ### Fixed
+- **Velocity now shapes volume properly.** The default **VEL>AMP** was 0.7, which left even the
+  softest note at 70 % of full amplitude — velocity barely moved the level. Raised the default to
+  **0.9** so soft notes are clearly quieter (a wider, more playable dynamic range); velocity's other
+  routings (cutoff, etc.) are unchanged. The render golden was regenerated for this intended change.
+- **Turning a sequencer/arp step off is now a single tap.** A step used to require a *double-tap* to
+  silence (a stray single tap was ignored), which was fiddly — the double-tap window was tight and a
+  slightly-long press slid into velocity mode instead. Now **a single quick tap toggles** a step
+  (dark→on, lit→off); only a deliberate hold or a clear vertical drag enters velocity mode, so
+  turning steps off is easy and velocity edits still can't happen by accident. (Applies to both the
+  step sequencer and the arp gate row.)
+
+### Fixed (earlier)
 - **Windows CI green again (#110).** Two test-suite `TEST_CASE` names contained an **em-dash (—)**.
   ctest re-invokes each test by name as a Catch2 filter; the UTF-8 em-dash round-trips on Linux but
   mangles on the Windows console codepage, so the exe matched no test and ctest called it a failure —
