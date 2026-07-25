@@ -52,23 +52,23 @@ TEST_CASE ("stepseq fires a row's note on its on-steps", "[dsp][stepseq]")
 TEST_CASE ("stepseq layers independent rows", "[dsp][stepseq]")
 {
     StepSequencer s; auto c = baseCfg();
-    c.cells[0][0] = StepSequencer::On;             // kick on step 0
-    c.cells[2][0] = StepSequencer::On;             // snare row on step 0 too
+    c.cells[0][0] = StepSequencer::On;             // kick (row 0 = note 36) on step 0
+    c.cells[2][0] = StepSequencer::On;             // clap (row 2 = note 40) on step 0 too
     s.setConfig (c);
     auto e = run (s, 200, 200);
-    bool kick = false, snare = false;
-    for (auto& x : e) if (x.on) { if (x.note == 36) kick = true; if (x.note == 38) snare = true; }
-    REQUIRE (kick); REQUIRE (snare);
+    bool kick = false, clap = false;
+    for (auto& x : e) if (x.on) { if (x.note == 36) kick = true; if (x.note == 40) clap = true; }
+    REQUIRE (kick); REQUIRE (clap);
 }
 
 TEST_CASE ("stepseq mute silences a row", "[dsp][stepseq]")
 {
     StepSequencer s; auto c = baseCfg();
     c.cells[0][0] = StepSequencer::On; c.mute[0] = true;
-    c.cells[1][0] = StepSequencer::On;             // row 1 (note 37) still plays
+    c.cells[1][0] = StepSequencer::On;             // row 1 (note 38) still plays
     s.setConfig (c);
     auto e = run (s, 200, 200);
-    for (auto& x : e) if (x.on) REQUIRE (x.note == 37);
+    for (auto& x : e) if (x.on) REQUIRE (x.note == 38);
 }
 
 TEST_CASE ("stepseq accent raises velocity", "[dsp][stepseq]")

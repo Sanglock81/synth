@@ -29,7 +29,7 @@ pick the same one again.
 | Winds   | Soft Flute |
 | Organ   | Full Organ |
 | FX      | Noise Riser, Dark Drone |
-| Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom |
+| Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom, Clap, Rimshot, Clave, Cowbell, Splash, Crash, Ride |
 
 ### Drum recipes (7A)
 
@@ -107,9 +107,23 @@ Editor**. Per pad: set the trigger and sounding notes by **learn-by-play** (arm,
 press keys), pick the source preset, set level and choke group, and **Audition**. Kits
 save/load as their own presets (a **Kits** category) and are included in a **MULTI**.
 
-**Factory kits.** *808 Basics* — six drums on triggers 36–41 (Kick 808, Kick Punchy,
-Snare, Hat Closed, Hat Open, Tom), with the two hats in choke group 1. *Stab Board* —
+**Factory kits.** *808 Basics* — a full **16-pad** kit on triggers 36–51 (the Launchkey
+pad grid); the two hats choke each other (group 1), the cymbals ring free. *Stab Board* —
 four drums plus four tuned **minor-triad** chord pads (a plucky Synth Pluck at C/D/E/F).
+
+*808 Basics* pad map (pad = trigger − 36):
+
+| Trig | Pad | Trig | Pad | Trig | Pad | Trig | Pad |
+|------|-----|------|-----|------|-----|------|-----|
+| 36 | Kick 808 | 40 | Clap | 44 | Low Tom¹ | 48 | Cowbell |
+| 37 | Kick Punchy | 41 | Snare 2¹ | 45 | Mid Tom¹ | 49 | Crash² |
+| 38 | Snare | 42 | Hat Closed³ | 46 | High Tom¹ | 50 | Clave |
+| 39 | Rimshot | 43 | Hat Open³ | 47 | Splash² | 51 | Ride² |
+
+¹ the Snare / Tom preset re-tuned via the pad's sound-note (no extra preset). ² cymbals
+are **not** choked (group 0) so they wash over the groove. ³ the two hats share choke
+group 1. The step sequencer's 8 default rows map to kick · snare · clap · closed-hat ·
+open-hat · low-tom · crash · cowbell (trigger notes 36 · 38 · 40 · 42 · 43 · 44 · 49 · 48).
 
 **Kit seam note.** In this version every pad of a Kit part shares the part's one FX/LFO
 chain (per-part FX arrives with the full-multitimbral work); a "drums" split zone plays

@@ -1162,15 +1162,31 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
     KitDefinition def; def.name = name;
     auto drum = [] (int trig, const char* src, int choke)
     { return KitPadDef { trig, src, { trig, 0, 0, 0 }, 1, 1.0f, choke }; };
+    // A drum whose SOUND note differs from its trigger — re-tunes a shared preset (toms, snare 2)
+    // across pads without a new preset (the pad plays `src` at `sound`, triggered by `trig`).
+    auto tuned = [] (int trig, const char* src, int choke, int sound)
+    { return KitPadDef { trig, src, { sound, 0, 0, 0 }, 1, 1.0f, choke }; };
 
     if (name == "808 Basics")
     {
-        def.pads[0] = drum (36, "Kick 808",   0);
-        def.pads[1] = drum (37, "Kick Punchy", 0);
-        def.pads[2] = drum (38, "Snare",      0);
-        def.pads[3] = drum (39, "Hat Closed", 1);            // hats mutually choke
-        def.pads[4] = drum (40, "Hat Open",   1);
-        def.pads[5] = drum (41, "Tom",        0);
+        // Full 16-pad 808 kit, triggers 36..51 (the Launchkey pad surface). Hats mutually choke
+        // (group 1); cymbals (crash/splash/ride) ring FREE (group 0) so they wash over the groove.
+        def.pads[0]  = drum  (36, "Kick 808",    0);
+        def.pads[1]  = drum  (37, "Kick Punchy", 0);
+        def.pads[2]  = drum  (38, "Snare",       0);
+        def.pads[3]  = drum  (39, "Rimshot",     0);
+        def.pads[4]  = drum  (40, "Clap",        0);
+        def.pads[5]  = tuned (41, "Snare",       0, 48);     // Snare 2 — the snare tuned up (tighter)
+        def.pads[6]  = drum  (42, "Hat Closed",  1);
+        def.pads[7]  = drum  (43, "Hat Open",    1);
+        def.pads[8]  = tuned (44, "Tom",         0, 40);     // Low Tom  (the Tom preset re-tuned x3)
+        def.pads[9]  = tuned (45, "Tom",         0, 46);     // Mid Tom
+        def.pads[10] = tuned (46, "Tom",         0, 52);     // High Tom
+        def.pads[11] = drum  (47, "Splash",      0);
+        def.pads[12] = drum  (48, "Cowbell",     0);
+        def.pads[13] = drum  (49, "Crash",       0);
+        def.pads[14] = drum  (50, "Clave",       0);
+        def.pads[15] = drum  (51, "Ride",        0);
     }
     else if (name == "Stab Board")
     {

@@ -100,3 +100,52 @@ TEST_CASE ("Closed hat preset: highpassed noise, very short", "[plugin][7a][drum
     // Very short: essentially silent by 120 ms.
     REQUIRE (rmsRange (out, 48000, 0.0, 0.03) > rmsRange (out, 48000, 0.12, 0.3) * 15.0);
 }
+
+// --- 808 kit completion (Inc 1): the new cymbals + the dense-mash torture -----------------
+TEST_CASE ("Crash rings long, Splash is short (cymbal decay)", "[plugin][drums][808][cymbal]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+
+    auto crash  = renderPreset (p, "Crash",  57, 3.5);
+    auto splash = renderPreset (p, "Splash", 57, 3.5);
+    REQUIRE (tu::allFinite (crash));
+    REQUIRE (tu::allFinite (splash));
+
+    // Crash still ringing around 1 s; splash essentially gone by then.
+    REQUIRE (rmsRange (crash,  48000, 0.9, 1.2) > 0.005);                 // long tail
+    REQUIRE (rmsRange (splash, 48000, 0.9, 1.2) < rmsRange (crash, 48000, 0.9, 1.2) * 0.3);
+    REQUIRE (rmsRange (splash, 48000, 0.0, 0.1) > 0.02);                  // but splash is audible up front
+}
+
+TEST_CASE ("808 kit: a dense 16th mash including the crash stays clean + bounded", "[plugin][drums][808][torture]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);          // default scene: P4 = 808 kit, seq target P4
+
+    auto set = [&] (const char* id, float v) { auto* pp = p.apvts.getParameter (id); pp->setValueNotifyingHost (pp->convertTo0to1 (v)); };
+    set (ParamID::tempo, 180.0f);            // fast
+    for (int row = 0; row < 8; ++row)        // FULL grid: every default drum (incl. crash row) on every 16th
+        for (int step = 0; step < 16; ++step) p.setSeqCell (row, step, 1);
+    set (ParamID::seqOn, 1.0f);
+
+    float peak = 0.0f; bool finite = true;
+    for (int b = 0; b < 700; ++b)            // ~4 bars @ 180 BPM, 128-sample blocks
+    {
+        juce::AudioBuffer<float> buf (2, 128); buf.clear();
+        juce::MidiBuffer m;
+        p.processBlock (buf, m);
+        for (int ch = 0; ch < 2; ++ch)
+            for (int i = 0; i < 128; ++i)
+            {
+                const float s = buf.getSample (ch, i);
+                if (! std::isfinite (s)) finite = false;
+                peak = std::max (peak, std::abs (s));
+            }
+    }
+    INFO ("mash peak=" << peak);
+    REQUIRE (finite);                        // no NaN/Inf under a dense mash + a long ringing crash
+    REQUIRE (peak > 0.05f);                  // it's actually sounding
+    REQUIRE (peak <= 1.05f);                 // the safety clipper keeps it bounded — no runaway
+}

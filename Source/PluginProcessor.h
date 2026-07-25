@@ -807,7 +807,7 @@ private:
     // Step sequencer grid <-> "seq_cells" / "seq_notes" / "seq_mutes" state properties.
     std::array<std::array<unsigned char, kSeqSteps>, kSeqRows> seqCells { };
     std::array<std::array<unsigned char, kSeqSteps>, kSeqRows> seqVel { };   // per-step velocity % (0 = default 100)
-    std::array<int, kSeqRows>  seqNotes { { 36, 37, 38, 39, 40, 41, 42, 43 } };
+    std::array<int, kSeqRows>  seqNotes { { 36, 38, 40, 42, 43, 44, 49, 48 } };
     std::array<bool, kSeqRows> seqMutes { };
     void writeSeqProperty();
     void applySeqProperty();
@@ -1003,7 +1003,7 @@ private:
     {
         std::array<Looper::Lane, SynthEngine::maxParts> lanes {};              // per-lane MIDI loop clips
         std::array<std::array<unsigned char, kSeqSteps>, kSeqRows> cells {}, vel {};   // drum pattern
-        std::array<int, kSeqRows>  notes { { 36, 37, 38, 39, 40, 41, 42, 43 } };
+        std::array<int, kSeqRows>  notes { { 36, 38, 40, 42, 43, 44, 49, 48 } };
         std::array<bool, kSeqRows> mutes {};
         std::array<float, SynthEngine::maxParts> tBars {}, tMode {}, tPlay {}; // per-lane transport
         std::array<float, SynthEngine::maxParts> tQuant { { 1.0f, 1.0f, 1.0f, 1.0f } };

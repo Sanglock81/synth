@@ -9,6 +9,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **808 Basics is now a full 16-pad kit.** The factory drum kit fills all 16 pads (triggers 36–51,
+  the Launchkey grid): the existing kick/snare/hats/tom plus **seven new synthesized drums** — Clap,
+  Rimshot, Clave, Cowbell, Splash, Crash, Ride — with three toms and a tuned second snare voiced from
+  the existing presets. Hats choke each other; the cymbals ring free over the groove. The step
+  sequencer's default 8 rows now spread across the expanded kit (kick·snare·clap·closed-hat·open-hat·
+  low-tom·crash·cowbell). Clean under a dense 16th-note mash with the crash ringing (torture-tested).
 - **Session export — a DAW-handoff bounce (one folder).** A **BOUNCE** button (by the loop exports)
   renders the whole session **offline** into a folder your DAW can open: a **WAV stem per part**
   (each part through its full chain — voices → FX → EQ → level/pan), the **master WAV**, a **MIDI

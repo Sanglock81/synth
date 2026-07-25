@@ -32,7 +32,7 @@ public:
         // Per-step velocity PERCENT (task #54): 0 uses the default (100%); 10..200 sets it
         // explicitly (accent = >100). Emitted velocity = clamp(vel% / 100, 0..1).
         std::array<std::array<unsigned char, kSteps>, kRows> vel { };
-        std::array<int, kRows>  note { { 36, 37, 38, 39, 40, 41, 42, 43 } };   // 808 Basics 36..43
+        std::array<int, kRows>  note { { 36, 38, 40, 42, 43, 44, 49, 48 } };   // 808: kick snare clap CH OH loTom crash cowbell
         std::array<bool, kRows> mute { };
     };
 

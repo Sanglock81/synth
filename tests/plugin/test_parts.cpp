@@ -501,7 +501,7 @@ TEST_CASE ("kit: a kit part round-trips through MULTI", "[plugin][kitpart][multi
     dst.applyMultiState (multi);
     REQUIRE (dst.isPartKit (1));
     REQUIRE (dst.getPartKit (1).name == "808 Basics");
-    REQUIRE (dst.getPartKit (1).pads[3].chokeGroup == 1);         // hats choke survived
+    REQUIRE (dst.getPartKit (1).pads[6].chokeGroup == 1);         // hats (pad 6 = Hat Closed) choke survived
     REQUIRE (dst.surfaceHasSplit ("B2"));
 }
 
