@@ -356,8 +356,15 @@ keyboard — chromatic, one semitone per key, left to right (US layout):
   q w e r t y u i o p [ ]     C4 … B4   (MIDI 60–71)
   1 2 3 4 5 6 7 8 9 0 - =     C5 … B5   (MIDI 72–83)
 
-  z / x  = octave shift down / up   (extends to the full range for bass patches)
+  SHIFT + Q W E R T Y U I O P { }     C3 … B3   (top row, one octave LOWER)
+  SHIFT + ! @ # $ % ^ & * ( ) _ +     C6 … B6   (number row, one octave HIGHER)
+
+  z / x  = octave shift down / up   (moves the whole map; combines with SHIFT)
 ```
+
+Holding **Shift** stretches the reach to four octaves (C3 … B6) without leaving the
+home position — the top row drops an octave, the number row rises one. The octave is
+latched when the key is pressed, so releasing Shift mid-note never changes its pitch.
 
 Fixed velocity 0.8. OS auto-repeat is ignored (clean one note-on / one note-off
 per press). Notes merge into the same engine path as hardware MIDI and coexist

@@ -285,7 +285,8 @@ public:
         if (auto* f = juce::Component::getCurrentlyFocusedComponent())
             if (dynamic_cast<juce::TextEditor*> (f) != nullptr) { allNotesOff(); return false; }
         qwerty.update ([] (int kc) { return juce::KeyPress::isKeyCurrentlyDown (kc); },
-                       [this] (int note, bool on) { emitNote (note, on); });
+                       [this] (int note, bool on) { emitNote (note, on); },
+                       juce::ModifierKeys::getCurrentModifiers().isShiftDown());   // v2: shift extends the octave range
 
         // Chord modifiers on the reserved bottom row (7B): C=MAJ V=MIN B=7TH N=DOM7
         // M=SUS4 ,=SUS2 .=DIM /=spare. Published as a bitmask the processor diffs.

@@ -19,6 +19,39 @@ namespace
         kb.update ([&](int kc){ return down.find ((char) kc) != std::string::npos; },
                    [&](int note, bool on){ out.push_back ({ note, on }); });
     }
+    // Same, with SHIFT held (v2 octave extension).
+    void stepShift (QwertyKeyboard& kb, const std::string& down, std::vector<Ev>& out, bool shift)
+    {
+        kb.update ([&](int kc){ return down.find ((char) kc) != std::string::npos; },
+                   [&](int note, bool on){ out.push_back ({ note, on }); }, shift);
+    }
+}
+
+TEST_CASE ("v2: SHIFT drops the top row an octave, lifts the number row an octave", "[qwerty][v2][shift]")
+{
+    std::vector<Ev> ev;
+    { QwertyKeyboard kb; stepShift (kb, "q", ev, true);  REQUIRE (ev.size() == 1); REQUIRE (ev[0].note == 48); }  // C4 -> C3
+    ev.clear();
+    { QwertyKeyboard kb; stepShift (kb, "]", ev, true);  REQUIRE (ev.back().note == 59); }                        // B4 -> B3
+    ev.clear();
+    { QwertyKeyboard kb; stepShift (kb, "1", ev, true);  REQUIRE (ev.back().note == 84); }                        // C5 -> C6
+    ev.clear();
+    { QwertyKeyboard kb; stepShift (kb, "=", ev, true);  REQUIRE (ev.back().note == 95); }                        // B5 -> B6
+    ev.clear();
+    // Unshifted is unchanged (v1 behaviour).
+    { QwertyKeyboard kb; stepShift (kb, "q", ev, false); REQUIRE (ev.back().note == 60); }
+}
+
+TEST_CASE ("v2: the shifted note is LATCHED at press; release ignores a later shift change", "[qwerty][v2][shift]")
+{
+    QwertyKeyboard kb; std::vector<Ev> ev;
+    stepShift (kb, "q", ev, true);                       // press with shift -> C3 (48)
+    REQUIRE (ev.size() == 1); REQUIRE (ev[0].note == 48); REQUIRE (ev[0].on);
+    ev.clear();
+    stepShift (kb, "q", ev, false);                      // still held, shift released -> no new event
+    REQUIRE (ev.empty());
+    stepShift (kb, "", ev, false);                       // key up -> note-off carries the LATCHED C3
+    REQUIRE (ev.size() == 1); REQUIRE (ev[0].note == 48); REQUIRE_FALSE (ev[0].on);
 }
 
 TEST_CASE ("mapping table: all 24 keys map, both octaves, no duplicates", "[qwerty][map]")

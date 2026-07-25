@@ -9,6 +9,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **QWERTY: Shift extends the octave range.** Holding **Shift** while you play the standalone's
+  computer keyboard drops the top row an octave (`Shift+Q…}` → C3…B3) and lifts the number row an
+  octave (`Shift+!…+` → C6…B6) — four octaves (C3…B6) reachable from the home position, no `z`/`x`
+  needed. The octave is latched at key-down, so letting go of Shift mid-note never bends its pitch.
 - **Unison — a real supersaw.** Each note can stack up to **7 detuned voices** (a voice-wide **UNI**
   count, off by default). It's not a chorus: each stack voice gets a **random start phase** (so they
   don't collapse into one loud voice), a **non-uniform detune spread** (**DET**), an **independent

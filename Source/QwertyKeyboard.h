@@ -17,6 +17,14 @@
 //     q w e r t y u i o p [ ]   -> C4..B4  (MIDI 60..71)   [octave shift 0]
 //     1 2 3 4 5 6 7 8 9 0 - =   -> C5..B5  (MIDI 72..83)
 //
+//   SHIFT (v2): held while a key is pressed, it extends the range by one octave
+//   per row — the top row drops an octave, the number row rises one:
+//     SHIFT+ Q W E R T Y U I O P { }   -> C3..B3  (MIDI 48..59)   [top row, one LOWER]
+//     SHIFT+ ! @ # $ % ^ & * ( ) _ +   -> C6..B6  (MIDI 84..95)   [number row, one HIGHER]
+//   So the reachable span is four octaves (C3..B6) without touching z/x. Shift is
+//   read from the modifier at PRESS time and latched with the note (the note-off
+//   carries the note that actually sounded), matching the octave-shift semantics.
+//
 //   z / x  : octave shift down / up (edge-triggered). A shift affects notes
 //            pressed afterwards; already-held notes keep their pitch, and their
 //            note-off carries the note that was actually sounded.
@@ -45,7 +53,7 @@ public:
     // only on transitions. z/x shift the octave (edge-triggered too, so a held
     // z/x doesn't run the octave away under auto-repeat).
     template <class IsDown, class Emit>
-    void update (IsDown isDown, Emit emit)
+    void update (IsDown isDown, Emit emit, bool shiftDown = false)
     {
         const bool zNow = isDown ('z'), xNow = isDown ('x');
         if (zNow && ! zHeld) setOctaveShift (octaveShift - 1);
@@ -59,7 +67,12 @@ public:
 
             if (down && ! wasDown)
             {
-                const int note = kFirstNote + i + 12 * octaveShift;   // in-range by clamp
+                // v2: SHIFT drops the top row an octave, lifts the number row an octave (latched
+                // with the note at press time). The unshifted key char is still what's polled, so
+                // shift never hides a physically-held key.
+                const int shiftOff = shiftDown ? (i < 12 ? -12 : 12) : 0;
+                const int note = kFirstNote + i + shiftOff + 12 * octaveShift;
+                if (note < 0 || note > 127) continue;                 // out of range -> don't sound (no stuck note)
                 heldNote[(std::size_t) i] = note;
                 emit (note, true);
             }
