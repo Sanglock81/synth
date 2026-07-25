@@ -2087,6 +2087,112 @@ bool VASynthProcessor::exportLoopToWavFile (const juce::File& file) const
     return writer->writeFromAudioSampleBuffer (buf, 0, n);
 }
 
+// #98: bars until all active loop lanes realign. Lane lengths are 1/2/4/8/16/32 bars (powers of two,
+// all dividing 32) and the step-seq is one bar, so the cycle is just the longest ACTIVE lane. Only a
+// lane that actually has MIDI content extends it; default 1 bar.
+int VASynthProcessor::realignBars() const
+{
+    namespace ID = ParamID;
+    static const int barsForSel[] { 1, 2, 4, 8, 16, 32 };
+    const char* ids[] { ID::loopBars, ID::loopBars2, ID::loopBars3, ID::loopBars4 };
+    int m = 1;
+    for (int p = 0; p < SynthEngine::maxParts; ++p)
+        if (looper.hasContent (p))
+            m = std::max (m, barsForSel[juce::jlimit (0, 5, (int) rp (apvts, ids[p]))]);
+    return m;
+}
+
+// Write a stereo buffer to a 24-bit WAV. Shared by the bounce (master + stems).
+static bool writeWav24 (const juce::File& file, const juce::AudioBuffer<float>& buf, double sr)
+{
+    file.deleteFile();
+    auto os = file.createOutputStream();
+    if (os == nullptr) return false;
+    juce::WavAudioFormat wav;
+    std::unique_ptr<juce::AudioFormatWriter> writer (wav.createWriterFor (os.get(), sr, 2, 24, {}, 0));
+    if (writer == nullptr) return false;
+    os.release();
+    return writer->writeFromAudioSampleBuffer (buf, 0, buf.getNumSamples());
+}
+
+// #98 Session export = DAW-handoff BOUNCE. Renders the session OFFLINE (from a bar-1 origin) for
+// `bars` bars and writes master.wav + per-part stems + manifest.json into `dir`. Must be called with
+// the audio device suspended (no concurrent processBlock). Audio-loop RECORDINGS are excluded so
+// master == sum(stems). Stems are pre-master-bus (pre-clip); master.wav is post-clip.
+bool VASynthProcessor::bounceSession (const juce::File& dir, int bars)
+{
+    namespace ID = ParamID;
+    const double sr = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    if (bars <= 0) bars = realignBars();
+    bars = juce::jlimit (1, 256, bars);
+
+    const double bpm = std::max (20.0, (double) rp (apvts, ID::tempo));
+    const int barLen = (int) std::llround (sr * 60.0 / bpm * 4.0);
+    const int total  = bars * barLen;
+    if (total <= 0 || ! dir.createDirectory().wasOk()) return false;
+
+    // Clean bar-1 origin + isolate: kill sounding voices, rewind the transport, mute audio loops.
+    const double savedBeats = transportBeats;
+    const bool   savedMute  = bounceMuteAudioLoops;
+    bounceMuteAudioLoops = true;
+    engine.allNotesOff();
+    transportBeats = 0.0;
+    looper.rewind();
+
+    juce::AudioBuffer<float> master (2, total); master.clear();
+    std::array<juce::AudioBuffer<float>, SynthEngine::maxParts> stems;
+    for (auto& s : stems) { s.setSize (2, total); s.clear(); }
+
+    const int block = 512;
+    juce::AudioBuffer<float> buf (2, block);
+    juce::MidiBuffer midi;
+    for (int off = 0; off < total; off += block)
+    {
+        const int n = std::min (block, total - off);
+        buf.setSize (2, n, false, false, true);
+        buf.clear();
+        midi.clear();
+        processBlock (buf, midi);
+        master.copyFrom (0, off, buf, 0, 0, n);
+        master.copyFrom (1, off, buf, 1, 0, n);
+        for (int p = 0; p < SynthEngine::maxParts; ++p)
+        {
+            stems[(std::size_t) p].copyFrom (0, off, engine.capturePartL (p), n);
+            stems[(std::size_t) p].copyFrom (1, off, engine.capturePartR (p), n);
+        }
+    }
+
+    // Write master + each part that produced sound; build the manifest as we go.
+    bool ok = writeWav24 (dir.getChildFile ("master.wav"), master, sr);
+    juce::StringArray stemLines;
+    for (int p = 0; p < SynthEngine::maxParts; ++p)
+    {
+        if (stems[(std::size_t) p].getMagnitude (0, total) < 1.0e-6f) continue;   // silent part -> no stem
+        const auto name = juce::String ("part") + juce::String (p + 1) + ".wav";
+        ok = writeWav24 (dir.getChildFile (name), stems[(std::size_t) p], sr) && ok;
+        stemLines.add ("    { \"file\": \"" + name + "\", \"part\": " + juce::String (p + 1) + " }");
+    }
+
+    juce::String manifest;
+    manifest << "{\n"
+             << "  \"session\": \"" << dir.getFileNameWithoutExtension() << "\",\n"
+             << "  \"date\": \"" << juce::Time::getCurrentTime().toISO8601 (true) << "\",\n"
+             << "  \"app\": \"" << JucePlugin_Name << " " << JucePlugin_VersionString << "\",\n"
+             << "  \"sampleRate\": " << juce::String (sr, 1) << ",\n"
+             << "  \"bpm\": " << juce::String (bpm, 3) << ",\n"
+             << "  \"bars\": " << bars << ",\n"
+             << "  \"barLengthSamples\": " << barLen << ",\n"
+             << "  \"barLengthSeconds\": " << juce::String (barLen / sr, 4) << ",\n"
+             << "  \"master\": \"master.wav\",\n"
+             << "  \"note\": \"stems are pre-master-bus (pre-clip); master.wav is post-clip. audio-loop recordings are not stemmed.\",\n"
+             << "  \"stems\": [\n" << stemLines.joinIntoString (",\n") << "\n  ]\n}\n";
+    ok = dir.getChildFile ("manifest.json").replaceWithText (manifest) && ok;
+
+    transportBeats = savedBeats;         // restore the live clock; the looper stays rewound (a stopped export)
+    bounceMuteAudioLoops = savedMute;
+    return ok;
+}
+
 void VASynthProcessor::randomizeMacros (juce::Random& rng)
 {
     const auto routable = macroRoutableIDs();
@@ -2736,6 +2842,7 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     //     lane already dispatched at block start. Advance once per block, anchored to pos.
     //     Each of the 4 lanes plays its own AUDIO into the master, then records its OWN
     //     part's post-FX tap (capture-by-lane, NOT by focus — the whole point of #47).
+    if (! bounceMuteAudioLoops)   // #98: an offline bounce excludes audio-loop recordings (master == sum of synth stems)
     for (int lane = 0; lane < SynthEngine::maxParts; ++lane)
     {
         // J3: while a scene-audio swap is in flight for this lane, skip it (brief silence) so the

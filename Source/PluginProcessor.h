@@ -672,6 +672,14 @@ public:
     // empty or the write fails.
     bool  exportLoopToWavFile (const juce::File& file) const;
 
+    // #98 Session export = a DAW-handoff BOUNCE. Renders the session OFFLINE from a bar-1 origin for
+    // `bars` bars (0 = the realign cycle) and writes into `dir`: master.wav (post-clip), one
+    // partN.wav stem per active part (pre-clip, full-chain), and manifest.json. Audio-loop RECORDINGS
+    // are excluded so master == sum(stems). MUST be called with the audio device suspended (offline).
+    bool  bounceSession (const juce::File& dir, int bars = 0);
+    // Bars until all active loop lanes realign (longest active lane; step-seq is 1 bar, divides all).
+    int   realignBars() const;
+
     // Test seam: build the plugin's binary state format from an XML tree (so the
     // osc_mix->levels migration can be tested with a synthetic pre-level state).
     static void xmlToBinaryForTest (const juce::XmlElement& xml, juce::MemoryBlock& out)
@@ -962,6 +970,7 @@ private:
     // the loop boundary (a measure): REC arms, capture engages at the next wrap.
     Looper looper;
     std::array<AudioLoop, SynthEngine::maxParts> audioLoops;   // one AUDIO lane per part (#47)
+    bool   bounceMuteAudioLoops = false;   // #98: skip audio-loop playback/record during an offline bounce
     std::atomic<int>  loopClearMask { 0 };      // bit per lane: RT-safe per-lane CLEAR request
     std::atomic<int>  loopPosDisp { 0 };        // master loop position (mirrored for the UI)
     std::array<std::atomic<int>, SynthEngine::maxParts> loopLenDisp {};   // per-lane length (samples), for the playhead

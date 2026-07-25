@@ -85,6 +85,7 @@ add_executable(plugin_tests
     plugin/test_state.cpp
     plugin/test_wavetable_plugin.cpp
     plugin/test_unison_plugin.cpp
+    plugin/test_bounce.cpp
     plugin/test_midi_learn.cpp
     plugin/test_output_bounds.cpp
     plugin/test_device_curation.cpp
