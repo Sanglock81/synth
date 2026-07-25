@@ -2115,6 +2115,62 @@ static bool writeWav24 (const juce::File& file, const juce::AudioBuffer<float>& 
     return writer->writeFromAudioSampleBuffer (buf, 0, buf.getNumSamples());
 }
 
+// #98: one part's MIDI content for the bounce — the looper lane (tiled to fill the cycle) + the step
+// sequencer grid (when this part is the seq target), as a tempo-mapped SMF.
+bool VASynthProcessor::writePartMidiFile (const juce::File& file, int part, int totalSamples,
+                                          double samplesPerBeat, double bpm) const
+{
+    namespace ID = ParamID;
+    const bool loopActive = looper.hasContent (part);
+    const bool seqActive  = rp (apvts, ID::seqOn) > 0.5f && (int) rp (apvts, ID::seqTarget) == part;
+    if ((! loopActive && ! seqActive) || samplesPerBeat <= 0.0 || totalSamples <= 0) return false;
+
+    const int ppq = 960;
+    const auto toTicks = [&] (double samples) { return samples / samplesPerBeat * ppq; };
+
+    juce::MidiFile mf;
+    mf.setTicksPerQuarterNote (ppq);
+    { juce::MidiMessageSequence tempo; tempo.addEvent (juce::MidiMessage::tempoMetaEvent ((int) (60000000.0 / bpm)), 0.0); mf.addTrack (tempo); }
+
+    juce::MidiMessageSequence seq;
+    if (loopActive)                                     // looper events, tiled to fill the whole cycle
+    {
+        const int len = std::max (1, looper.loopLength (part));
+        for (int base = 0; base < totalSamples; base += len)
+            for (int i = 0; i < looper.eventCount (part); ++i)
+            {
+                const auto& e = looper.event (part, i);
+                const int t = base + e.t;
+                if (t >= totalSamples) continue;
+                seq.addEvent (e.on ? juce::MidiMessage::noteOn  (1, e.note, e.vel)
+                                   : juce::MidiMessage::noteOff (1, e.note), toTicks ((double) t));
+            }
+    }
+    if (seqActive)                                      // step-seq grid: a 16th per step, repeating every bar
+    {
+        const double stepLen = samplesPerBeat / 4.0;
+        for (int s = 0; (double) s * stepLen < (double) totalSamples; ++s)
+        {
+            const int step = s % kSeqSteps;
+            for (int row = 0; row < kSeqRows; ++row)
+            {
+                if (getSeqMute (row) || getSeqCell (row, step) == 0) continue;
+                const int   note = getSeqNote (row);
+                const float vel  = juce::jlimit (0.05f, 1.0f, (float) getSeqStepVel (row, step) / 100.0f);
+                const double on  = (double) s * stepLen;
+                seq.addEvent (juce::MidiMessage::noteOn  (1, note, vel), toTicks (on));
+                seq.addEvent (juce::MidiMessage::noteOff (1, note),      toTicks (on + 0.9 * stepLen));
+            }
+        }
+    }
+    seq.updateMatchedPairs();
+    mf.addTrack (seq);
+
+    file.deleteFile();
+    juce::FileOutputStream os (file);
+    return os.openedOk() && mf.writeTo (os);
+}
+
 // #98 Session export = DAW-handoff BOUNCE. Renders the session OFFLINE (from a bar-1 origin) for
 // `bars` bars and writes master.wav + per-part stems + manifest.json into `dir`. Must be called with
 // the audio device suspended (no concurrent processBlock). Audio-loop RECORDINGS are excluded so
@@ -2162,15 +2218,21 @@ bool VASynthProcessor::bounceSession (const juce::File& dir, int bars)
         }
     }
 
-    // Write master + each part that produced sound; build the manifest as we go.
+    // Write master + each part that produced sound + each part's MIDI; build the manifest as we go.
+    const double samplesPerBeat = sr * 60.0 / bpm;
     bool ok = writeWav24 (dir.getChildFile ("master.wav"), master, sr);
-    juce::StringArray stemLines;
+    juce::StringArray stemLines, midiLines;
     for (int p = 0; p < SynthEngine::maxParts; ++p)
     {
-        if (stems[(std::size_t) p].getMagnitude (0, total) < 1.0e-6f) continue;   // silent part -> no stem
-        const auto name = juce::String ("part") + juce::String (p + 1) + ".wav";
-        ok = writeWav24 (dir.getChildFile (name), stems[(std::size_t) p], sr) && ok;
-        stemLines.add ("    { \"file\": \"" + name + "\", \"part\": " + juce::String (p + 1) + " }");
+        if (stems[(std::size_t) p].getMagnitude (0, total) >= 1.0e-6f)             // silent part -> no stem
+        {
+            const auto name = juce::String ("part") + juce::String (p + 1) + ".wav";
+            ok = writeWav24 (dir.getChildFile (name), stems[(std::size_t) p], sr) && ok;
+            stemLines.add ("    { \"file\": \"" + name + "\", \"part\": " + juce::String (p + 1) + " }");
+        }
+        const auto midiName = juce::String ("part") + juce::String (p + 1) + ".mid";
+        if (writePartMidiFile (dir.getChildFile (midiName), p, total, samplesPerBeat, bpm))
+            midiLines.add ("    { \"file\": \"" + midiName + "\", \"part\": " + juce::String (p + 1) + " }");
     }
 
     juce::String manifest;
@@ -2185,7 +2247,8 @@ bool VASynthProcessor::bounceSession (const juce::File& dir, int bars)
              << "  \"barLengthSeconds\": " << juce::String (barLen / sr, 4) << ",\n"
              << "  \"master\": \"master.wav\",\n"
              << "  \"note\": \"stems are pre-master-bus (pre-clip); master.wav is post-clip. audio-loop recordings are not stemmed.\",\n"
-             << "  \"stems\": [\n" << stemLines.joinIntoString (",\n") << "\n  ]\n}\n";
+             << "  \"stems\": [\n" << stemLines.joinIntoString (",\n") << "\n  ],\n"
+             << "  \"midi\": [\n" << midiLines.joinIntoString (",\n") << "\n  ]\n}\n";
     ok = dir.getChildFile ("manifest.json").replaceWithText (manifest) && ok;
 
     transportBeats = savedBeats;         // restore the live clock; the looper stays rewound (a stopped export)

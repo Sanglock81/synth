@@ -76,6 +76,19 @@ TEST_CASE ("bounce: a seq session renders to master + stem + manifest, stems sum
     REQUIRE (manifest.contains ("\"bpm\": 120"));
     REQUIRE (manifest.contains ("\"bars\": 1"));
 
+    // The seq part's MIDI is emitted with the four hits (as note-on/off pairs).
+    auto midF = dir.getChildFile ("part1.mid");
+    REQUIRE (midF.existsAsFile());
+    juce::MidiFile mf;
+    juce::FileInputStream in (midF);
+    REQUIRE (mf.readFrom (in));
+    int noteOns = 0;
+    for (int t = 0; t < mf.getNumTracks(); ++t)
+        if (auto* trk = mf.getTrack (t))
+            for (int i = 0; i < trk->getNumEvents(); ++i)
+                if (trk->getEventPointer (i)->message.isNoteOn()) ++noteOns;
+    REQUIRE (noteOns == 4);          // four seq hits -> four note-ons
+
     dir.deleteRecursively();
 }
 

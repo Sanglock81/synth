@@ -679,6 +679,9 @@ public:
     bool  bounceSession (const juce::File& dir, int bars = 0);
     // Bars until all active loop lanes realign (longest active lane; step-seq is 1 bar, divides all).
     int   realignBars() const;
+    // #98: write one part's MIDI content (looper events tiled + step-seq notes) over the bounce cycle
+    // to an SMF. Returns false (writes nothing) if the part has no loop content and isn't the seq target.
+    bool  writePartMidiFile (const juce::File& file, int part, int totalSamples, double samplesPerBeat, double bpm) const;
 
     // Test seam: build the plugin's binary state format from an XML tree (so the
     // osc_mix->levels migration can be tested with a synthetic pre-level state).

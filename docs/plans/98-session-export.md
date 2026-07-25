@@ -50,10 +50,12 @@
   set + length (bars×barLen); **sum(stems) ≈ master** within clip tolerance on non-clipping material;
   a repeat bounce is bit-identical (determinism); goldens untouched (no default-path change).
 
-### Inc 2 — per-part MIDI (SMF)
-- Extend `exportLoopsToMidiFile` to also synthesize note on/off from the step-seq grid
-  (`seqCells/seqVel/seqNotes`) at 16th ticks; write one `.mid` per part into the folder. Test: a part
-  with a known seq pattern round-trips to the expected note count/positions.
+### Inc 2 — per-part MIDI (SMF)  ← DONE
+- `writePartMidiFile(dir/partN.mid, part, totalSamples, samplesPerBeat, bpm)`: the looper lane tiled
+  to fill the cycle + (when this part is the seq target) the step-seq grid synthesized as 16th-note
+  note-on/off pairs (`getSeqCell/getSeqStepVel/getSeqNote/getSeqMute`), each as a tempo-mapped SMF.
+  Wired into `bounceSession` (a `"midi"` list in the manifest). Test: a 4-hit seq pattern yields
+  exactly four note-ons in `part1.mid`. Included in the #98 Inc-1 gate cadence.
 
 ### Inc 3 — the export dialog (UI) + MP3
 - A modal (OutputsDialog template): choose folder, bar-count override (default = realignBars()),
