@@ -1,0 +1,9 @@
+{ "name":"WT Vowel Pad", "category":"Pad",
+  "params": { "osc1_wave":4, "osc1_wt_kind":2, "osc1_wt_pos":0.5,
+    "osc2_on":1, "osc2_wave":4, "osc2_wt_kind":2, "osc2_wt_pos":0.65, "osc2_octave":0, "osc2_detune":6, "osc2_level":0.5,
+    "osc3_on":0,
+    "filter_type":0, "filter_cutoff":4200, "filter_reso":0.1, "filter_env_amt":0.2,
+    "amp_attack":0.9, "amp_decay":0.7, "amp_sustain":0.8, "amp_release":1.6,
+    "lfo_dest":2, "lfo_rate":0.18, "lfo_depth":0.12,
+    "fx_reverb_on":1, "reverb_mix":0.4, "reverb_size":0.8, "reverb_damp":0.35,
+    "fx_width_on":1, "stereo_width":1.6, "master_gain":0.56 } }

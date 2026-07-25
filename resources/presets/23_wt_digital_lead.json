@@ -1,0 +1,8 @@
+{ "name":"WT Digital Lead", "category":"Lead",
+  "params": { "osc1_wave":4, "osc1_wt_kind":3, "osc1_wt_pos":0.35, "osc2_on":0, "osc3_on":0,
+    "filter_type":0, "filter_cutoff":6500, "filter_reso":0.18, "filter_env_amt":0.35, "vel_to_cutoff":0.25,
+    "amp_attack":0.005, "amp_decay":0.3, "amp_sustain":0.75, "amp_release":0.3,
+    "flt_attack":0.005, "flt_decay":0.35, "flt_sustain":0.4, "flt_release":0.3,
+    "poly_mode":1, "glide_time":0.04,
+    "fx_delay_on":1, "delay_mix":0.2, "delay_time":0.28, "delay_feedback":0.3,
+    "master_gain":0.6 } }

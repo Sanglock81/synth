@@ -283,15 +283,30 @@ TEST_CASE ("WT wave swaps the visible PW<->WT POS control (#95)", "[plugin][smok
     REQUIRE (pw    != nullptr);
     REQUIRE (wtpos != nullptr);
 
-    // Default wave (Saw) -> PW shows, WT POS hidden.
+    // Find the first DieButton descendant (the re-roll affordance; not parameter-bound).
+    std::function<DieButton*(juce::Component&)> findDie = [&] (juce::Component& c) -> DieButton*
+    {
+        for (auto* ch : c.getChildren())
+        {
+            if (auto* d = dynamic_cast<DieButton*> (ch)) return d;
+            if (auto* found = findDie (*ch)) return found;
+        }
+        return nullptr;
+    };
+    auto* die = findDie (*ed);
+    REQUIRE (die != nullptr);
+
+    // Default wave (Saw) -> PW shows, WT POS + die hidden.
     p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (0.0f);   // Saw
     REQUIRE (pw->isVisible());
     REQUIRE_FALSE (wtpos->isVisible());
+    REQUIRE_FALSE (die->isVisible());
 
-    // WT (index 4 of 5 -> normalized 1.0) -> WT POS shows in the same slot, PW hidden.
+    // WT (index 4 of 5 -> normalized 1.0) -> WT POS + die show, PW hidden.
     p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (1.0f);   // WT
     REQUIRE (wtpos->isVisible());
     REQUIRE_FALSE (pw->isVisible());
+    REQUIRE (die->isVisible());
 
     // A true morph: the two share one slot.
     REQUIRE (pw->getBounds() == wtpos->getBounds());
@@ -303,10 +318,11 @@ TEST_CASE ("WT wave swaps the visible PW<->WT POS control (#95)", "[plugin][smok
     REQUIRE (section != nullptr);
     snapshot (*section, "osc-wt.png");
 
-    // Back to a classic wave -> PW returns (idempotent swap).
+    // Back to a classic wave -> PW returns, die hidden (idempotent swap).
     p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (0.0f);   // Saw
     REQUIRE (pw->isVisible());
     REQUIRE_FALSE (wtpos->isVisible());
+    REQUIRE_FALSE (die->isVisible());
 }
 
 // --- J2: each looper lane has its OWN bars selector (per-part loop length) ---------------

@@ -110,9 +110,18 @@
 > audio on reload (determinism pin). Fixed a latent bug: the SR guard used `getSampleRate()` (0 when a
 > host calls prepareToPlay before the rate details are set) -> now a stored `wtSampleRate`. Release
 > 502 + --sanitize (ASan/UBSan, RT handoff clean) green.
-> **3c-C (remaining):** a VISIBLE one-tap die button (menu re-roll works today); 1-2 WT showcase
-> presets (the position-LFO evolving pad needs mod-matrix-in-preset support — the JSON format carries
-> only APVTS params, not LINK routes — so it's flagged, not shipped); CHANGELOG/README; screenshot sign-off.
+> **3c-C done (pending the user's screenshot sign-off).** A visible one-tap **die** button (a drawn
+> 5-pip face, no glyph-font dependency) sits in a reserved slot right of the wave selector, shown only
+> in WT mode (reserved always, so nothing shifts between modes). Two static WT showcase presets shipped
+> — **WT Digital Lead** (Digital table, mono, delay) and **WT Vowel Pad** (two Vowel-table oscs,
+> slow attack, reverb). The **position-LFO evolving pad was NOT shipped**: the factory-preset JSON
+> format carries only APVTS params, not mod-matrix LINK routes, so an LFO->WavePos preset isn't
+> expressible — flagged for a preset-format extension, not faked. CHANGELOG + README updated. UI smoke
+> test asserts the die shows/hides with WT mode + `osc-wt.png` snapshot for review.
+>
+> **Known limitation (noted for sign-off):** re-rolling the die swaps the table mid-note — an abrupt
+> waveform change like changing the osc wave (saw->square), not crossfaded. Equal-RMS keeps the level
+> steady; if hands-on finds it clicks, a short table crossfade is the follow-up (anti-click rule).
 
 
 - The osc wave row (`HSelector` SIN..) gains the **WT** option (append).

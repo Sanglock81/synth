@@ -26,6 +26,32 @@ namespace sectiontint
     inline juce::Colour fx()   { return juce::Colour (0xff5ecb8a); }
 }
 
+// A compact die: one tap re-rolls a random wavetable (#95 3c). Draws a 5-pip die face so it reads
+// as "randomize" without depending on a glyph font, and doesn't fight the MIDI-learn long-press.
+class DieButton : public juce::Button
+{
+public:
+    DieButton() : juce::Button ("die") { setWantsKeyboardFocus (false); }
+    void paintButton (juce::Graphics& g, bool over, bool down) override
+    {
+        auto r = getLocalBounds().toFloat().reduced (1.5f);
+        const auto base = VASynthLookAndFeel::track();
+        g.setColour (down ? VASynthLookAndFeel::accent()
+                          : (over ? base.brighter (0.35f) : base.brighter (0.15f)));
+        g.fillRoundedRectangle (r, 3.0f);
+        g.setColour (VASynthLookAndFeel::ink().withAlpha (0.6f));
+        g.drawRoundedRectangle (r, 3.0f, 1.0f);
+        const float cx = r.getCentreX(), cy = r.getCentreY();
+        const float dx = r.getWidth() * 0.26f, dy = r.getHeight() * 0.26f;
+        const float pr = juce::jmax (1.0f, r.getWidth() * 0.09f);
+        auto pip = [&] (float x, float y) { g.fillEllipse (x - pr, y - pr, pr * 2.0f, pr * 2.0f); };
+        g.setColour (down ? juce::Colours::black : VASynthLookAndFeel::ink());
+        pip (cx - dx, cy - dy); pip (cx + dx, cy - dy);
+        pip (cx, cy);
+        pip (cx - dx, cy + dy); pip (cx + dx, cy + dy);
+    }
+};
+
 // ---------------------------------------------------------------------------
 // OSCILLATORS: one sub-box per osc — [ON | wave selector] across the top, then
 // OCTAVE / DETUNE / PW / LEVEL knobs.
@@ -62,11 +88,15 @@ public:
             // same-bounds morph idiom as the LFO RATE<->DIV knob and the EnvSection AMP/MOD swap).
             o.wtpos = std::make_unique<RotaryKnob> (p.apvts, wtPosIds[i], "WT POS", p.getMidiLearn());
             o.wtpos->setHelp ("Wavetable position: morphs through the table's frames");
+            o.die = std::make_unique<DieButton>();   // one-tap re-roll of a random table (WT mode only)
+            o.die->setTooltip ("Re-roll a random wavetable (tap the WT label to choose a factory table)");
+            o.die->onClick = [this, i] { rollRandomTable (i); };
             // LINK targets + animation are wired centrally from the registry (editor::wireModTargets);
             // PW/level/cutoff/reso etc. no longer need per-knob wiring here.
             addAndMakeVisible (*o.on);   addAndMakeVisible (*o.wave); addAndMakeVisible (*o.phase);
             for (auto& k : o.k) addAndMakeVisible (*k);
             addChildComponent (*o.wtpos);   // shown only when this osc's wave == WT (swaps with PW)
+            addChildComponent (*o.die);     // shown only in WT mode (the re-roll affordance)
 
             // Second tap on the WT wave button (when already selected) opens the table picker.
             o.wave->onReselect = [this, i] (int idx) { if (idx == kWtWaveIndex) openTablePicker (i); };
@@ -113,6 +143,9 @@ public:
             auto top = c.removeFromTop (26); c.removeFromTop (4);
             o.on->setBounds (top.removeFromLeft (36)); top.removeFromLeft (5);
             o.phase->setBounds (top.removeFromRight (82)); top.removeFromRight (5);   // Tier 1a phase policy
+            // #95 3c: a reserved die slot sits just right of the wave selector (the picker), shown only
+            // in WT mode. Reserved always (not carved on mode change) so nothing shifts between modes.
+            o.die->setBounds (top.removeFromRight (22).reduced (0, 3)); top.removeFromRight (4);
             o.wave->setBounds (top);
             const int kw = c.getWidth() / 4;
             for (int k = 0; k < 4; ++k)
@@ -145,6 +178,7 @@ private:
         auto& o = oscs[(size_t) osc];
         if (o.k[2])  o.k[2]->setVisible (! wt);
         if (o.wtpos) o.wtpos->setVisible (wt);
+        if (o.die)   o.die->setVisible (wt);
     }
 
     // Second tap on a selected WT button -> pick a factory table or (re-)roll a random one.
@@ -218,6 +252,7 @@ private:
         std::unique_ptr<HSelector> wave, phase;
         std::array<std::unique_ptr<RotaryKnob>, 4> k;
         std::unique_ptr<RotaryKnob> wtpos;                    // shares the PW slot; visible only in WT mode
+        std::unique_ptr<DieButton>  die;                      // WT-mode re-roll affordance (right of the picker)
         std::unique_ptr<juce::ParameterAttachment> waveAtt;  // morphs PW <-> WT POS on wave change
     };
     std::array<Osc, 3> oscs;

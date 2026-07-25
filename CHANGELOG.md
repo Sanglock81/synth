@@ -9,6 +9,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Wavetable oscillator — a 5th wave, "WT".** Each of the three oscillators can select **WT**
+  alongside saw/square/triangle/sine. A wavetable is band-limited with **per-octave mip-maps** (built
+  off the audio thread), so high notes stay clean; playback picks the mip by pitch, interpolates within
+  the frame, and crossfades between frames by a **WT POS** position (a per-osc knob that shares the PW
+  slot — PW is meaningless for a wavetable — and is a mod destination, so an LFO/envelope can sweep it).
+  Four **factory tables** (Analog, Sweep, Vowel, Digital) plus a **random die**: one tap re-rolls a
+  fresh table. Tables are **equal-RMS normalized** through one shared build path (factory *and* random),
+  so switching or re-rolling never jumps the level. **Tap a selected WT to pick a table; tap the die to
+  re-roll.** Random tables persist **by seed** — compact, and byte-identical on every platform (an owned
+  fixed-seed generator, no `std` distributions, pinned by a committed golden) so a shared preset can
+  never silently fork. Two showcase presets ride along: **WT Digital Lead** and **WT Vowel Pad**.
+  (The random table build is handed to the audio thread lock-free — a double-buffered atomic pointer —
+  so re-rolling never allocates on the audio path.)
 - **FX SAT — a real overdrive/fuzz (two-stage clipper), and WIDTH now runs first.** The WIDTH FX
   block gains a **SAT** knob: a per-channel clipper applied *before* the widening — modelled on how
   overdrive/fuzz pedals actually work, not a volume boost. The shaper has **unity gain near zero**, so
