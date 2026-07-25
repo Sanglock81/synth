@@ -63,6 +63,13 @@ target_sources(VASynth PRIVATE
     Source/DSP/WavetableGen.cpp
     Source/Observability/AudioHealthLogger.cpp)
 
+# The wavetable generator MUST be contraction-free so seed->table bytes are bit-identical across
+# platforms (a table is persisted by seed). The #pragma STDC FP_CONTRACT OFF in the .cpp is ignored
+# by some GCC builds, so pin it with the real codegen flag on GCC/Clang (MSVC /fp:precise never
+# contracts). -Wno-unknown-pragmas silences the (now-belt-and-suspenders) pragma warning.
+set_source_files_properties(Source/DSP/WavetableGen.cpp PROPERTIES COMPILE_OPTIONS
+    "$<$<CXX_COMPILER_ID:GNU,Clang>:-ffp-contract=off;-Wno-unknown-pragmas>")
+
 # Embedded resources: factory MIDI device profiles + factory presets (JSON).
 # Linked PUBLIC so the plugin, the standalone, and plugin_tests all resolve
 # BinaryData::*. GLOB the presets so adding a JSON needs no CMake edit (configure

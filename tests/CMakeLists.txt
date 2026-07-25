@@ -61,6 +61,9 @@ add_executable(dsp_tests
     dsp/alloc_hook.cpp)
 
 find_package(Threads REQUIRED)
+# Keep the wavetable generator contraction-free here too (see the note in the root CMakeLists).
+set_source_files_properties(${CMAKE_SOURCE_DIR}/Source/DSP/WavetableGen.cpp PROPERTIES COMPILE_OPTIONS
+    "$<$<CXX_COMPILER_ID:GNU,Clang>:-ffp-contract=off;-Wno-unknown-pragmas>")
 target_include_directories(dsp_tests PRIVATE ${CMAKE_SOURCE_DIR}/Source/DSP)
 target_compile_features(dsp_tests PRIVATE cxx_std_17)
 target_link_libraries(dsp_tests PRIVATE Catch2::Catch2WithMain Threads::Threads)
