@@ -48,12 +48,14 @@ TEST_CASE ("kill switch: off == level 0, and skips oscillator work (cheaper)", "
     // 'Off' is folded to level 0 by the processor, so at the engine level off IS
     // level 0 -> bit-identical (covered by the level test). Here we prove the
     // voice actually SKIPS work for silent sources: 1 osc on renders faster than 3.
-#if defined(__SANITIZE_ADDRESS__)
-    // Under AddressSanitizer wall-clock timing is unrepresentative (instrumentation
-    // slowdown + noise), the same reason the alloc counters are disabled there. The
-    // functional "off == level 0 / silence" behaviour is covered by the silence and
-    // level tests; only the CPU comparison is skipped here.
-    SUCCEED ("kill-switch CPU comparison skipped under ASan (timing not representative)");
+#if defined(__SANITIZE_ADDRESS__) || defined(VASYNTH_UBSAN)
+    // Under a sanitizer, wall/CPU timing is unrepresentative (instrumentation slowdown
+    // + noise), the same reason the alloc counters are disabled there. Instrumentation
+    // dilates the shared per-voice work (filter/env) unevenly against the osc work, so
+    // the 1-osc vs 3-osc ratio is not stable under `ctest -jN` contention on either ASan
+    // or UBSan. The functional "off == level 0 / silence" behaviour is covered by the
+    // silence and level tests; only the CPU comparison is skipped here.
+    SUCCEED ("kill-switch CPU comparison skipped under sanitizer (timing not representative)");
 #else
     auto timeCfg = [] (int oscsOn)
     {

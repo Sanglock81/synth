@@ -82,6 +82,7 @@ target_compile_features(dsp_bench PRIVATE cxx_std_17)
 # --- Plugin-layer tests (need JUCE + the processor) -------------------------
 add_executable(plugin_tests
     plugin/test_state.cpp
+    plugin/test_wavetable_plugin.cpp
     plugin/test_midi_learn.cpp
     plugin/test_output_bounds.cpp
     plugin/test_device_curation.cpp

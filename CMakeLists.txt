@@ -28,6 +28,10 @@ endif()
 if (VASYNTH_UBSAN)
     add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer -g)
     add_link_options(-fsanitize=undefined)
+    # GCC/Clang define no predefined macro for UBSan (unlike __SANITIZE_ADDRESS__),
+    # so expose one for tests that must skip wall/CPU-time comparisons under any
+    # sanitizer instrumentation (see tests/dsp/test_osc6a.cpp kill-switch timing).
+    add_compile_definitions(VASYNTH_UBSAN=1)
 endif()
 
 # Fetch JUCE. Pin the tag so builds are reproducible; bump deliberately.

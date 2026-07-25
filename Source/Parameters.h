@@ -37,6 +37,11 @@ namespace ParamID
     inline constexpr auto osc3Detune  = "osc3_detune";
     inline constexpr auto osc3PW      = "osc3_pw";
 
+    // #95 Wavetable (only meaningful when the osc wave is "WT"): which table (factory index) + the
+    // frame position (0..1). Per-osc, per-part (plain APVTS params, so they swap/persist like the rest).
+    inline constexpr auto osc1WtKind = "osc1_wt_kind", osc2WtKind = "osc2_wt_kind", osc3WtKind = "osc3_wt_kind";
+    inline constexpr auto osc1WtPos  = "osc1_wt_pos",  osc2WtPos  = "osc2_wt_pos",  osc3WtPos  = "osc3_wt_pos";
+
     // Musicality Tier 1: per-osc start-phase policy (RESET/RANDOM/FREE) + one analog-drift amount.
     inline constexpr auto osc1Phase = "osc1_phase", osc2Phase = "osc2_phase", osc3Phase = "osc3_phase";
     inline constexpr auto analog    = "analog";          // 0..1 drift depth (0 = bit-exact)
@@ -227,7 +232,8 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    const juce::StringArray waveNames { "Saw", "Square", "Triangle", "Sine" };
+    const juce::StringArray waveNames    { "Saw", "Square", "Triangle", "Sine", "WT" };   // "WT" appended (#95, index 4)
+    const juce::StringArray wtKindNames  { "Analog", "Sweep", "Vowel", "Digital" };        // factory tables (match wtgen::factoryName)
 
     // A perceptually-sane time range: 1 ms .. 10 s with heavy skew toward
     // the short end, because that's where envelope precision matters.
@@ -251,6 +257,15 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Octave, 1},"Osc3 Octave", juce::NormalisableRange<float>(-2.0f, 2.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Detune, 1},"Osc3 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("ct")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3PW, 1},    "Osc3 PW", juce::NormalisableRange<float>(0.05f, 0.95f), 0.5f));
+
+    // #95 Wavetable: per-osc table choice (factory) + frame position. Only used when the osc wave is
+    // "WT"; defaults (Analog / pos 0) keep non-WT patches bit-identical.
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc1WtKind, 1}, "Osc1 WT Table", wtKindNames, 0));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc2WtKind, 1}, "Osc2 WT Table", wtKindNames, 0));
+    params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc3WtKind, 1}, "Osc3 WT Table", wtKindNames, 0));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc1WtPos, 1},  "Osc1 WT Pos", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2WtPos, 1},  "Osc2 WT Pos", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3WtPos, 1},  "Osc3 WT Pos", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
 
     // Musicality Tier 1: per-osc start-phase policy (default RESET = bit-exact) + analog drift depth.
     const juce::StringArray phaseModes { "Reset", "Random", "Free" };

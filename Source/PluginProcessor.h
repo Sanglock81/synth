@@ -8,6 +8,7 @@
 #include "FactoryPresets.h"
 #include "SampleStore.h"
 #include "DSP/SynthEngine.h"
+#include "DSP/WavetableGen.h"
 #include "DSP/ChordEngine.h"
 #include "DSP/FXChain.h"
 #include "DSP/ParametricEQ.h"
@@ -840,6 +841,11 @@ private:
     std::array<juce::String, SynthEngine::maxParts> partPresetName {};
     std::array<KitDefinition, SynthEngine::maxParts> partKits {};   // per-part kit definition (message thread)
     SampleStore sampleStore;                                        // I2: managed sample library (message thread)
+
+    // #95 Wavetable bank: the factory tables, built once in prepareToPlay. Const/stable pointers (an
+    // osc in WT mode reads one) so resolving a table in the audio path is just a lookup, allocation-free.
+    std::array<Wavetable, wtgen::kFactoryMax> wtFactory {};
+    void resolveWtTables (VoiceParams& p, const juce::AudioProcessorValueTreeState& src) const;
 
     // Edit focus (1.3). editFocusPart = the part the APVTS currently represents (panel +
     // engine live slot). partEditState holds the OTHER parts' full panel states; on a

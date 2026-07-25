@@ -163,7 +163,7 @@ void VASynthProcessor::clearFocusedPartToBlank()
         if (auto* w = dynamic_cast<juce::AudioProcessorParameterWithID*> (rp))
             if (soundDesignParamIDs().contains (w->paramID))
                 rp->setValueNotifyingHost (rp->getDefaultValue());
-    set01 (ID::osc1On, 1.0f); set01 (ID::osc1Wave, 1.0f);          // osc1 sine (last of saw/sqr/tri/sin)
+    set01 (ID::osc1On, 1.0f); set01 (ID::osc1Wave, 0.75f);         // osc1 sine (index 3 of saw/sqr/tri/sin/WT)
     set01 (ID::osc2On, 0.0f); set01 (ID::osc3On, 0.0f);            // single oscillator
     set01 (ID::noiseLevel, 0.0f);
     set01 (ID::fxChorusOn, 0.0f); set01 (ID::fxDelayOn, 0.0f);
@@ -256,6 +256,10 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     engine.setOscQuality (VASYNTH_OSC_QUALITY);
     engine.setMaxVoices (VASYNTH_MAX_VOICES);
     engine.prepare (sampleRate, juce::jmax (1, samplesPerBlock));   // sizes the per-part FX buffers too
+
+    // #95: (re)build the wavetable factory bank at this sample rate (message thread). The mip pitch
+    // selection is sample-rate dependent, so rebuild on every prepare; pointers stay stable for the run.
+    for (int id = 0; id < wtgen::kFactoryMax; ++id) wtFactory[(std::size_t) id] = wtgen::buildFactory (id, sampleRate);
     // Allocate the stereo master buffer ONCE, at the host's max block size. processBlock
     // never resizes it (JUCE guarantees numSamples <= this). Per-part mix buffers + FX
     // live in the engine now (Sub-phase 2).
@@ -342,6 +346,9 @@ static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& a
     p.osc1Phase  = (int) rp (apvts, ID::osc1Phase);   // Tier 1a start-phase policy (0 RESET default)
     p.osc2Phase  = (int) rp (apvts, ID::osc2Phase);
     p.osc3Phase  = (int) rp (apvts, ID::osc3Phase);
+    p.osc1WtPos  = rp (apvts, ID::osc1WtPos);          // #95 WT frame position (table pointer set by resolveWtTables)
+    p.osc2WtPos  = rp (apvts, ID::osc2WtPos);
+    p.osc3WtPos  = rp (apvts, ID::osc3WtPos);
     p.analog     = rp (apvts, ID::analog);            // Tier 1b analog drift depth (0 = bit-exact)
     p.oscMix     = rp (apvts, ID::oscMix);        // legacy; unused by the engine
     p.noiseLevel = rp (apvts, ID::noiseLevel);
@@ -379,7 +386,29 @@ static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& a
     return p;
 }
 
-VoiceParams VASynthProcessor::snapshotParams() const { return buildVoiceParams (apvts); }
+// #95: set each osc's WT table pointer from its wave + WT-table choice. Only oscs in WT mode get a
+// (stable, prebuilt) factory pointer; others stay null. Runs wherever VoiceParams is built (live +
+// baked), so a locked part / preset resolves its own table too.
+void VASynthProcessor::resolveWtTables (VoiceParams& p, const juce::AudioProcessorValueTreeState& src) const
+{
+    namespace ID = ParamID;
+    constexpr int kWtWave = 4;   // PolyBlepOscillator::Wave::Wavetable
+    auto table = [this] (int kind) -> const Wavetable*
+    {
+        const std::size_t k = (std::size_t) juce::jlimit (0, wtgen::kFactoryMax - 1, kind);
+        return wtFactory[k].valid() ? &wtFactory[k] : nullptr;
+    };
+    p.osc1WtTable = (p.osc1Wave == kWtWave) ? table ((int) rp (src, ID::osc1WtKind)) : nullptr;
+    p.osc2WtTable = (p.osc2Wave == kWtWave) ? table ((int) rp (src, ID::osc2WtKind)) : nullptr;
+    p.osc3WtTable = (p.osc3Wave == kWtWave) ? table ((int) rp (src, ID::osc3WtKind)) : nullptr;
+}
+
+VoiceParams VASynthProcessor::snapshotParams() const
+{
+    VoiceParams p = buildVoiceParams (apvts);
+    resolveWtTables (p, apvts);
+    return p;
+}
 
 // The per-part SOUND parameters — everything buildVoiceParams / fxParamsFrom / lfosFrom
 // read. Edit-focus swaps ONLY these between parts; global/performance params (master,
@@ -395,6 +424,7 @@ static const juce::StringArray& perPartSoundIds()
         ID::osc1Wave, ID::osc2Wave, ID::osc3Wave, ID::osc1Octave, ID::osc2Octave, ID::osc3Octave,
         ID::osc1Detune, ID::osc2Detune, ID::osc3Detune, ID::osc1PW, ID::osc2PW, ID::osc3PW,
         ID::osc1Phase, ID::osc2Phase, ID::osc3Phase, ID::analog,   // Tier 1 phase policy + analog drift
+        ID::osc1WtKind, ID::osc2WtKind, ID::osc3WtKind, ID::osc1WtPos, ID::osc2WtPos, ID::osc3WtPos,   // #95 WT
         ID::oscMix, ID::noiseLevel, ID::osc1Level, ID::osc2Level, ID::osc3Level, ID::osc1On, ID::osc2On, ID::osc3On,
         ID::velToAmp, ID::velToCutoff,
         ID::filterType, ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack, ID::filterDrive,
@@ -778,7 +808,9 @@ VoiceParams VASynthProcessor::bakePresetParams (const juce::String& name, bool& 
     if (fxOut    != nullptr) *fxOut    = fxParamsFrom (scratch.apvts);
     if (lfoOut   != nullptr) *lfoOut   = lfosFrom (scratch.apvts);
     if (stateOut != nullptr) *stateOut = scratch.apvts.copyState();   // full panel state (1.3 edit-focus)
-    return buildVoiceParams (scratch.apvts);
+    VoiceParams vp = buildVoiceParams (scratch.apvts);
+    resolveWtTables (vp, scratch.apvts);
+    return vp;
 }
 
 VoiceParams VASynthProcessor::bakeVoiceStateParams (const juce::ValueTree& state)
@@ -786,7 +818,9 @@ VoiceParams VASynthProcessor::bakeVoiceStateParams (const juce::ValueTree& state
     BakeProcessor scratch;
     if (state.isValid()) scratch.apvts.replaceState (state);          // an edited pad voice
     else                 bakeInitBaseline (scratch);
-    return buildVoiceParams (scratch.apvts);
+    VoiceParams vp = buildVoiceParams (scratch.apvts);
+    resolveWtTables (vp, scratch.apvts);
+    return vp;
 }
 
 // Bake an arbitrary panel state tree into a part's engine slot (1.3): the part plays
@@ -797,7 +831,9 @@ void VASynthProcessor::bakeStateToSlot (int part, const juce::ValueTree& state)
     BakeProcessor scratch;
     if (state.isValid()) scratch.apvts.replaceState (state.createCopy());
     else                 bakeInitBaseline (scratch);
-    engine.setLockedPartParams (part, buildVoiceParams (scratch.apvts),
+    VoiceParams vp = buildVoiceParams (scratch.apvts);
+    resolveWtTables (vp, scratch.apvts);
+    engine.setLockedPartParams (part, vp,
                                 fxParamsFrom (scratch.apvts), lfosFrom (scratch.apvts),
                                 partMatrix[(std::size_t) juce::jlimit (0, SynthEngine::maxParts - 1, part)]);
 }
@@ -2066,7 +2102,7 @@ namespace
         switch (which)
         {
             case 0: // BASS
-                setN (a, ID::osc1Wave, 0.0f); setN (a, ID::osc2Wave, 0.33f);          // saw + square
+                setN (a, ID::osc1Wave, 0.0f); setN (a, ID::osc2Wave, 0.25f);          // saw + square (indices 0,1 of 5)
                 setN (a, ID::osc2Octave, 0.25f);                                      // -1 oct sub
                 setN (a, ID::filterCutoff, rr (0.2f, 0.45f)); setN (a, ID::filterEnvAmt, rr (0.55f, 0.75f));
                 setN (a, ID::ampAttack, rr (0.0f, 0.1f)); setN (a, ID::ampDecay, rr (0.3f, 0.6f)); setN (a, ID::ampSustain, rr (0.3f, 0.6f)); setN (a, ID::ampRelease, rr (0.1f, 0.3f));
@@ -2080,16 +2116,16 @@ namespace
                 setN (a, ID::filterCutoff, rr (0.4f, 0.65f)); setN (a, ID::ampAttack, rr (0.55f, 0.8f)); setN (a, ID::ampRelease, rr (0.6f, 0.85f)); setN (a, ID::ampSustain, rr (0.7f, 0.95f));
                 setN (a, ID::reverbMix, rr (0.35f, 0.6f)); setN (a, ID::fxReverbOn, 1.0f); setN (a, ID::chorusMix, rr (0.3f, 0.5f)); setN (a, ID::fxChorusOn, 1.0f); break;
             case 3: // PLUCK
-                setN (a, ID::osc1Wave, rng.nextFloat() < 0.5f ? 0.0f : 0.33f);
+                setN (a, ID::osc1Wave, rng.nextFloat() < 0.5f ? 0.0f : 0.25f);   // saw or square (0 / 1 of 5)
                 setN (a, ID::filterCutoff, rr (0.35f, 0.6f)); setN (a, ID::filterEnvAmt, rr (0.5f, 0.8f));
                 setN (a, ID::ampAttack, 0.0f); setN (a, ID::ampDecay, rr (0.2f, 0.4f)); setN (a, ID::ampSustain, rr (0.0f, 0.15f)); setN (a, ID::ampRelease, rr (0.1f, 0.3f));
                 setN (a, ID::fltAttack, 0.0f); setN (a, ID::fltDecay, rr (0.15f, 0.35f)); setN (a, ID::delayMix, rr (0.15f, 0.3f)); break;
             case 4: // KEYS / EP
-                setN (a, ID::osc1Wave, 0.66f); setN (a, ID::osc2Wave, 1.0f);          // tri + sine
+                setN (a, ID::osc1Wave, 0.5f); setN (a, ID::osc2Wave, 0.75f);          // tri + sine (indices 2,3 of 5)
                 setN (a, ID::filterCutoff, rr (0.5f, 0.75f)); setN (a, ID::ampAttack, rr (0.0f, 0.1f)); setN (a, ID::ampDecay, rr (0.4f, 0.7f)); setN (a, ID::ampSustain, rr (0.3f, 0.6f));
                 setN (a, ID::chorusMix, rr (0.25f, 0.45f)); setN (a, ID::fxChorusOn, 1.0f); break;
             default: // 5: PERC
-                setN (a, ID::osc1Wave, 1.0f); setN (a, ID::osc2On, 0.0f); setN (a, ID::noiseLevel, rr (0.2f, 0.5f));
+                setN (a, ID::osc1Wave, 0.75f); setN (a, ID::osc2On, 0.0f); setN (a, ID::noiseLevel, rr (0.2f, 0.5f));   // sine (3 of 5)
                 setN (a, ID::filterCutoff, rr (0.4f, 0.8f)); setN (a, ID::fltEnvToPitch, rr (0.55f, 0.8f));
                 setN (a, ID::ampAttack, 0.0f); setN (a, ID::ampDecay, rr (0.1f, 0.3f)); setN (a, ID::ampSustain, 0.0f); setN (a, ID::ampRelease, rr (0.05f, 0.2f));
                 setN (a, ID::fltAttack, 0.0f); setN (a, ID::fltDecay, rr (0.05f, 0.2f)); break;
@@ -2100,6 +2136,11 @@ namespace
     void ensureAudibleParams (juce::AudioProcessorValueTreeState& a)
     {
         namespace ID = ParamID;
+        // #95: RANDOM/VARY never land an osc on WT — that needs a deliberate table pick, so cap any
+        // wave that landed on WT (index 4 of 5) back to a classic wave.
+        for (const char* wid : { ID::osc1Wave, ID::osc2Wave, ID::osc3Wave })
+            if (auto* w = a.getParameter (wid))
+                if ((int) std::lround (w->getValue() * 4.0f) == 4) w->setValueNotifyingHost (0.75f);   // -> Sine
         setN (a, ID::osc1On, 1.0f);                                   // >=1 live oscillator...
         setN (a, ID::osc1Level, juce::jmax (0.4f, getN (a, ID::osc1Level)));   // ...at an audible level
         // Note actually starts in time: cap the attack by its NATURAL value (the range is

@@ -21,7 +21,8 @@
 
 namespace wtgen
 {
-    constexpr int kFrameLen = 256;      // samples per frame (power of two)
+    constexpr int kFrameLen   = 256;    // samples per frame (power of two)
+    constexpr int kFactoryMax = 4;      // number of built-in tables (== factoryCount())
 
     int         factoryCount();                                  // number of built-in tables
     const char* factoryName (int id);                            // display name (ASCII)

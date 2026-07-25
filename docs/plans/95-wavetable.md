@@ -68,9 +68,16 @@
 > seed→bytes is **bit-identical across platforms** (pin 2). Proven by a committed content-hash golden
 > (`test_wavetable_gen.cpp`, tag `[gen][golden]`) that CI runs on Windows; verified locally identical
 > at -O0/-O2/-O3 -march=native/-flto. `Wavetable::adopt()` + `contentHash()` added. Aliasing ~0 at C8.
-> **Remaining 3b-plugin:** the bank (processor owns the generated tables), `osc*_wt_pos` params +
-> `"WT"` append to `waveNames` (WITH the normalized-value pin regression test) + RANDOM handling +
-> per-osc table-selection state + seed persistence round-trip.
+> **3b-plugin-A done (factory WT wired + the pin).** WT is a real 5th wave: `"WT"` appended to
+> `waveNames`; per-osc `osc*_wt_kind` (choice of the 4 factory tables) + `osc*_wt_pos` params (plain
+> APVTS -> per-part + persist for free). The processor holds a factory `wtFactory` bank (built in
+> prepare, stable pointers) and `resolveWtTables()` sets each WT osc's pointer wherever VoiceParams
+> is built (live + baked). The 5 RANDOM/init normalized-wave call sites were fixed for the shifted
+> mapping (`1.0f` Sine->WT hazard), RANDOM/VARY now cap any osc off WT (needs a deliberate pick), and
+> a **normalized-value pin test** locks 0/0.25/0.5/0.75/1.0 -> Saw/Sqr/Tri/Sine/WT + "RANDOM never
+> lands on WT". Tests: WT audible, table choice changes timbre, WT patch survives save/load; goldens
+> hold (WT off by default). **Deferred to 3c (couples with its UI):** the random **die + seed** (an
+> RT-safe regen handoff) and its seed-persistence round-trip; the tap/hold table PICKER + WT-POS knob.
 
 - **3–4 factory tables**, embedded like other factory content: analog-morph (saw→square-ish sweep),
   formant/vowel (a→e→i→o→u spectral peaks), bright-digital (harsh additive), harmonic-sweep (fundamental →

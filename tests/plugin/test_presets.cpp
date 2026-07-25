@@ -157,14 +157,14 @@ TEST_CASE ("CLEAR blanks the selected part to a single sine, leaving globals put
 
     p.clearFocusedPartToBlank();
 
-    // A clean single sine: osc1 on + sine (last choice), everything else off.
+    // A clean single sine: osc1 on + sine (index 3 of saw/sqr/tri/sin/WT), everything else off.
     REQUIRE (p.apvts.getRawParameterValue (ParamID::osc1On)->load() > 0.5f);
     REQUIRE (p.apvts.getRawParameterValue (ParamID::osc2On)->load() < 0.5f);
     REQUIRE (p.apvts.getRawParameterValue (ParamID::osc3On)->load() < 0.5f);
     REQUIRE (p.apvts.getRawParameterValue (ParamID::noiseLevel)->load() < 1e-4f);
     REQUIRE (p.apvts.getRawParameterValue (ParamID::fxReverbOn)->load() < 0.5f);
     REQUIRE (p.apvts.getRawParameterValue (ParamID::fxDelayOn)->load() < 0.5f);
-    REQUIRE (p.apvts.getParameter (ParamID::osc1Wave)->getValue() == Catch::Approx (1.0f).margin (1e-4));
+    REQUIRE (p.apvts.getParameter (ParamID::osc1Wave)->getValue() == Catch::Approx (0.75f).margin (1e-4));   // Sine (index 3 of 5)
     // Globals / mixer / macros untouched (same scope as RANDOM).
     REQUIRE (p.apvts.getParameter (ParamID::masterGain)->getValue()  == Catch::Approx (masterBefore).margin (1e-6));
     REQUIRE (p.apvts.getParameter (ParamID::part0Level)->getValue() == Catch::Approx (levelBefore).margin (1e-6));

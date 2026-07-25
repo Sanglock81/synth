@@ -94,7 +94,7 @@ TEST_CASE ("multi-surface contract: three parts sound at once with their own par
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
 
     // Part 0 (live) = a pure sine (no highs/sub of its own); parts 1/2 = kick / hat.
-    setP (p, ParamID::osc1Wave, 1.0f);        // choice index 3 (Sine) -> normalized 1.0
+    setP (p, ParamID::osc1Wave, 0.75f);       // choice index 3 (Sine) of 5 -> normalized 0.75
     setP (p, ParamID::osc2On, 0.0f); setP (p, ParamID::osc3On, 0.0f);
     p.setPartPreset (1, "Kick 808");
     p.setPartPreset (2, "Hat Closed");
@@ -215,7 +215,7 @@ namespace
     // a measurable pitch AND a hung voice (missed note-off) is unambiguous vs silence.
     void makeLiveSine (VASynthProcessor& p)
     {
-        setP (p, ParamID::osc1Wave, 1.0f);                 // Sine
+        setP (p, ParamID::osc1Wave, 0.75f);                // Sine (index 3 of 5)
         setP (p, ParamID::osc2On, 0.0f); setP (p, ParamID::osc3On, 0.0f);
         setP (p, ParamID::lfoDepth, 0.0f);
         setP (p, ParamID::ampRelease, 0.0f);               // near-instant release

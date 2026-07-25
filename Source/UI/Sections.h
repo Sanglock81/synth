@@ -42,7 +42,7 @@ public:
         const char* pwIds[]   { ID::osc1PW, ID::osc2PW, ID::osc3PW };
         const char* lvlIds[]  { ID::osc1Level, ID::osc2Level, ID::osc3Level };
         const char* phIds[]   { ID::osc1Phase, ID::osc2Phase, ID::osc3Phase };
-        const juce::StringArray waveLabels { "SAW", "SQR", "TRI", "SIN" };
+        const juce::StringArray waveLabels { "SAW", "SQR", "TRI", "SIN", "WT" };
         const juce::StringArray phaseLabels { "RST", "RND", "FRE" };   // Tier 1a start-phase policy
 
         for (int i = 0; i < 3; ++i)

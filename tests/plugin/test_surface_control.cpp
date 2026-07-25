@@ -19,7 +19,7 @@ namespace
     // A single pure-sine oscillator so the render is a clean single-pitch tone.
     void makeSinePatch (VASynthProcessor& p)
     {
-        p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (1.0f);   // last choice = SIN
+        p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (0.75f);  // SIN (index 3 of 5; WT is last now)
         p.apvts.getParameter (ParamID::osc2On)->setValueNotifyingHost (0.0f);
         p.apvts.getParameter (ParamID::osc3On)->setValueNotifyingHost (0.0f);
         p.apvts.getParameter (ParamID::noiseLevel)->setValueNotifyingHost (0.0f);
