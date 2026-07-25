@@ -325,6 +325,34 @@ TEST_CASE ("WT wave swaps the visible PW<->WT POS control (#95)", "[plugin][smok
     REQUIRE_FALSE (die->isVisible());
 }
 
+// --- #96: the unison controls (COUNT/DETUNE/WIDTH) are wired + render ---------------------
+TEST_CASE ("unison: UNI/DET/WID controls are bound and render (#96)", "[plugin][smoke][unison]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+
+    auto* uni = findKnob (*ed, ParamID::oscUnison);
+    auto* det = findKnob (*ed, ParamID::oscUnisonDetune);
+    auto* wid = findKnob (*ed, ParamID::oscUnisonWidth);
+    REQUIRE (uni != nullptr);
+    REQUIRE (det != nullptr);
+    REQUIRE (wid != nullptr);
+    REQUIRE (uni->isVisible());
+
+    // The count param drives the knob (7 = a full stack).
+    p.apvts.getParameter (ParamID::oscUnison)->setValueNotifyingHost (
+        p.apvts.getParameter (ParamID::oscUnison)->convertTo0to1 (7.0f));
+    REQUIRE ((int) p.apvts.getRawParameterValue (ParamID::oscUnison)->load() == 7);
+
+    juce::Component* bar = uni->getParentComponent();
+    while (bar != nullptr && dynamic_cast<TopBar*> (bar) == nullptr) bar = bar->getParentComponent();
+    REQUIRE (bar != nullptr);
+    bar->repaint();
+    snapshot (*bar, "unison-controls.png");
+}
+
 // --- J2: each looper lane has its OWN bars selector (per-part loop length) ---------------
 TEST_CASE ("J2: per-lane looper BARS selectors are wired + render (#J2)", "[plugin][smoke][looper][j2]")
 {

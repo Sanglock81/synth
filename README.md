@@ -16,7 +16,8 @@ a general-purpose synth that runs in any VST3 host or standalone.
 ## Features
 
 - **3 anti-aliased oscillators** (PolyBLEP saw/square-PWM/tri/sine + **WT** mip-mapped wavetable with a
-  sweepable position, factory tables + a seeded random die), 4× oversampled
+  sweepable position, factory tables + a seeded random die), 4× oversampled, with **unison** (up to a
+  7-voice detuned/panned/phase-decorrelated stack — a proper supersaw, off by default)
   with a selectable Efficient/HQ quality-vs-CPU tradeoff, per-osc level + kill switch.
 - **TPT state-variable filter** (LP/HP/BP/Notch), resonant and stable, with velocity
   and keytrack routing.

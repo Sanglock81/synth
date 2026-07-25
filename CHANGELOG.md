@@ -9,6 +9,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Unison — a real supersaw.** Each note can stack up to **7 detuned voices** (a voice-wide **UNI**
+  count, off by default). It's not a chorus: each stack voice gets a **random start phase** (so they
+  don't collapse into one loud voice), a **non-uniform detune spread** (**DET**), an **independent
+  analog drift**, and its own **place in the stereo field** (**WID**) — the thing that sounds
+  expensive. An equal-power level trim keeps the volume steady as you raise the count. Off (count 1)
+  is bit-identical to before. The live profile caps high counts to protect the CPU budget (studio
+  keeps all 7); a **Supersaw** preset ships to show it off.
 - **Wavetable oscillator — a 5th wave, "WT".** Each of the three oscillators can select **WT**
   alongside saw/square/triangle/sine. A wavetable is band-limited with **per-octave mip-maps** (built
   off the audio thread), so high notes stay clean; playback picks the mip by pitch, interpolates within

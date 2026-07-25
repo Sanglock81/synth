@@ -72,11 +72,10 @@ click-torture in the same commit, ThinkPad-derated bench proving count==1 free +
 - `buildVoiceParams` reads them; the engine clamps the count under Efficient (2–3) vs HQ (7).
 - Migration/persistence; golden hold (defaults off).
 
-### Inc 3 — UI
-- Unison controls (COUNT selector + DETUNE + WIDTH knobs) in the oscillator/mixer area; screenshot.
-
-### Inc 4 — presets + docs
-- 1–2 supersaw presets (count 7, wide); CHANGELOG + README; bench numbers.
+### Inc 2 — UI + presets + docs  ← DONE
+- UNI (count) / DET / WID knobs in the TopBar voice group (beside ANALOG); UI smoke test +
+  `unison-controls.png`. **Supersaw** factory preset (count 7, wide). CHANGELOG + README updated.
+  Bench scenario is deferred to the #100 ThinkPad prep (informational, not a ctest gate).
 
 ## Out of scope (post-1.0)
 - Per-osc independent unison; unison for the noise source; a "unison as its own voices" pool model.

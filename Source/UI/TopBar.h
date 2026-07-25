@@ -136,7 +136,15 @@ public:
         glide = std::make_unique<RotaryKnob> (proc.apvts, ParamID::glideTime, "GLIDE", proc.getMidiLearn());
         analog = std::make_unique<RotaryKnob> (proc.apvts, ParamID::analog, "ANALOG", proc.getMidiLearn());   // Tier 1b drift
         analog->setHelp ("Analog drift: subtle per-voice pitch & pulse-width wander for a livelier, vintage feel");
+        // #96 Unison: voice-wide stack. UNI count (1 = off), DETune spread, WIDth (stereo).
+        uni    = std::make_unique<RotaryKnob> (proc.apvts, ParamID::oscUnison,       "UNI", proc.getMidiLearn());
+        uni->setHelp ("Unison: stack this many detuned voices per note (1 = off). The live profile caps high counts.");
+        uniDet = std::make_unique<RotaryKnob> (proc.apvts, ParamID::oscUnisonDetune, "DET", proc.getMidiLearn());
+        uniDet->setHelp ("Unison detune: how far the stacked voices spread in pitch");
+        uniWid = std::make_unique<RotaryKnob> (proc.apvts, ParamID::oscUnisonWidth,  "WID", proc.getMidiLearn());
+        uniWid->setHelp ("Unison width: how far the stacked voices spread across the stereo field");
         addAndMakeVisible (*mode); addAndMakeVisible (*glide); addAndMakeVisible (*analog);
+        addAndMakeVisible (*uni); addAndMakeVisible (*uniDet); addAndMakeVisible (*uniWid);
 
         refreshMacroLabels();
         startTimerHz (4);   // CPU readout + macro-label resync
@@ -182,6 +190,10 @@ public:
         mode->setBounds (tb.removeFromLeft (120).withSizeKeepingCentre (120, 30)); tb.removeFromLeft (6);
         glide->setBounds  (tb.removeFromLeft (52)); tb.removeFromLeft (4);
         analog->setBounds (tb.removeFromLeft (52)); tb.removeFromLeft (10);
+        // #96 Unison: UNI (count) / DET / WID, just right of ANALOG.
+        uni->setBounds    (tb.removeFromLeft (46)); tb.removeFromLeft (3);
+        uniDet->setBounds (tb.removeFromLeft (46)); tb.removeFromLeft (3);
+        uniWid->setBounds (tb.removeFromLeft (46)); tb.removeFromLeft (10);
 
         // 8 macro knobs, packed to 75% of the middle span (J4#1: closer together), centred.
         const int n = macros.size();
@@ -402,7 +414,7 @@ private:
     inline static const juce::Colour kLinkRing { 0xff4bb3c4 };   // LINK cyan (matches the knob armed ring)
     juce::OwnedArray<RotaryKnob> macros;
     juce::OwnedArray<juce::ParameterAttachment> macroAtt;
-    std::unique_ptr<RotaryKnob> master, glide, analog;
+    std::unique_ptr<RotaryKnob> master, glide, analog, uni, uniDet, uniWid;
     std::unique_ptr<HSelector> mode;
     bool voiceCtrlsDisabled = false;   // mode/glide greyed while a kit part is active
     juce::Rectangle<int> statusArea;
