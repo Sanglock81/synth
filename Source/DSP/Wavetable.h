@@ -34,6 +34,18 @@ public:
 
     bool valid() const { return numFrames > 0 && tableLen > 0; }
     int  frames() const { return numFrames; }
+
+    // FNV-1a over the raw table bytes — a compact fingerprint for the cross-platform determinism
+    // golden (a seed must regenerate byte-identical bytes on every platform).
+    std::uint64_t contentHash() const
+    {
+        std::uint64_t h = 1469598103934665603ull;
+        const auto* p = reinterpret_cast<const unsigned char*> (flat.data());
+        const std::size_t n = flat.size() * sizeof (float);
+        for (std::size_t i = 0; i < n; ++i) { h ^= p[i]; h *= 1099511628211ull; }
+        return h;
+    }
+
     int  length() const { return tableLen; }
     int  mips()   const { return numMips; }
 
@@ -78,6 +90,17 @@ public:
         }
 
         if (equalRms) normalize();
+    }
+
+    // Populate from a pre-built mip stack (used by the deterministic WavetableGen, which builds the
+    // bytes with contraction-free math so they are bit-identical on every platform). The layout MUST
+    // match read(): `flatData` is [frame][mip][sample], length nFrames*nMips*len; `harm[m]` is the top
+    // harmonic count of mip m.
+    void adopt (std::vector<float> flatData, int len, int nFrames, int nMips,
+                std::vector<int> harm, double sampleRate)
+    {
+        flat = std::move (flatData); tableLen = len; numFrames = nFrames; numMips = nMips;
+        mipHarm = std::move (harm); sr = sampleRate > 0.0 ? sampleRate : 48000.0;
     }
 
     // Highest mip (most harmonics) whose top harmonic still lands below the BASE Nyquist for `f0Hz`.

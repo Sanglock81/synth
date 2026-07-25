@@ -56,6 +56,8 @@ add_executable(dsp_tests
     dsp/test_chord.cpp
     dsp/test_rt_safety.cpp
     dsp/test_rtlogring.cpp
+    dsp/test_wavetable_gen.cpp
+    ${CMAKE_SOURCE_DIR}/Source/DSP/WavetableGen.cpp
     dsp/alloc_hook.cpp)
 
 find_package(Threads REQUIRED)

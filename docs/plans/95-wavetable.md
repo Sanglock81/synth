@@ -60,6 +60,18 @@
 
 ## 3b — Content (factory tables + seeded randomizer)
 
+> **3b-DSP done (the deterministic generator + both pins).** `Source/DSP/WavetableGen.{h,cpp}`:
+> 4 factory tables (Analog saw→square, Sweep, Vowel, Digital) + a seeded randomizer, through ONE
+> shared additive build + **equal-RMS normalize** path (pin 1). The .cpp is compiled with
+> `#pragma STDC FP_CONTRACT OFF` and uses only +,-,*,/, `std::sqrt` (IEEE-exact) and a contraction-free
+> polynomial `detSin` (no `std::sin`/`pow`/`exp`) + an owned xorshift PRNG (no std distributions), so
+> seed→bytes is **bit-identical across platforms** (pin 2). Proven by a committed content-hash golden
+> (`test_wavetable_gen.cpp`, tag `[gen][golden]`) that CI runs on Windows; verified locally identical
+> at -O0/-O2/-O3 -march=native/-flto. `Wavetable::adopt()` + `contentHash()` added. Aliasing ~0 at C8.
+> **Remaining 3b-plugin:** the bank (processor owns the generated tables), `osc*_wt_pos` params +
+> `"WT"` append to `waveNames` (WITH the normalized-value pin regression test) + RANDOM handling +
+> per-osc table-selection state + seed persistence round-trip.
+
 - **3–4 factory tables**, embedded like other factory content: analog-morph (saw→square-ish sweep),
   formant/vowel (a→e→i→o→u spectral peaks), bright-digital (harsh additive), harmonic-sweep (fundamental →
   rich). Build their mips through the **same** path as the randomizer.

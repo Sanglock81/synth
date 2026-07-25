@@ -60,6 +60,7 @@ juce_add_plugin(VASynth
 target_sources(VASynth PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
+    Source/DSP/WavetableGen.cpp
     Source/Observability/AudioHealthLogger.cpp)
 
 # Embedded resources: factory MIDI device profiles + factory presets (JSON).
