@@ -57,6 +57,7 @@ add_executable(dsp_tests
     dsp/test_rt_safety.cpp
     dsp/test_rtlogring.cpp
     dsp/test_wavetable_gen.cpp
+    dsp/test_unison.cpp
     ${CMAKE_SOURCE_DIR}/Source/DSP/WavetableGen.cpp
     dsp/alloc_hook.cpp)
 
@@ -83,6 +84,7 @@ target_compile_features(dsp_bench PRIVATE cxx_std_17)
 add_executable(plugin_tests
     plugin/test_state.cpp
     plugin/test_wavetable_plugin.cpp
+    plugin/test_unison_plugin.cpp
     plugin/test_midi_learn.cpp
     plugin/test_output_bounds.cpp
     plugin/test_device_curation.cpp

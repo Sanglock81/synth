@@ -42,6 +42,7 @@ namespace ParamID
     inline constexpr auto osc1WtKind = "osc1_wt_kind", osc2WtKind = "osc2_wt_kind", osc3WtKind = "osc3_wt_kind";
     inline constexpr auto osc1WtPos  = "osc1_wt_pos",  osc2WtPos  = "osc2_wt_pos",  osc3WtPos  = "osc3_wt_pos";
     inline constexpr auto osc1WtSeed = "osc1_wt_seed", osc2WtSeed = "osc2_wt_seed", osc3WtSeed = "osc3_wt_seed";
+    inline constexpr auto oscUnison = "osc_unison", oscUnisonDetune = "osc_unison_detune", oscUnisonWidth = "osc_unison_width";   // #96
 
     // Musicality Tier 1: per-osc start-phase policy (RESET/RANDOM/FREE) + one analog-drift amount.
     inline constexpr auto osc1Phase = "osc1_phase", osc2Phase = "osc2_phase", osc3Phase = "osc3_phase";
@@ -274,6 +275,11 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID{ID::osc1WtSeed, 1}, "Osc1 WT Seed", 0, 1000000, 0, wtSeedAttr));
     params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID{ID::osc2WtSeed, 1}, "Osc2 WT Seed", 0, 1000000, 0, wtSeedAttr));
     params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID{ID::osc3WtSeed, 1}, "Osc3 WT Seed", 0, 1000000, 0, wtSeedAttr));
+    // #96 Unison: voice-wide stack count (1 = OFF, bit-identical) + detune spread + stereo width.
+    // Default 1 / 0.15 / 0.5. Ships off; the engine caps the count under the live/Efficient profile.
+    params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID{ID::oscUnison, 1}, "Unison", 1, 7, 1));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::oscUnisonDetune, 1}, "Unison Detune", juce::NormalisableRange<float>(0.0f, 1.0f), 0.15f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::oscUnisonWidth, 1},  "Unison Width",  juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
 
     // Musicality Tier 1: per-osc start-phase policy (default RESET = bit-exact) + analog drift depth.
     const juce::StringArray phaseModes { "Reset", "Random", "Free" };

@@ -71,6 +71,8 @@ public:
             partR[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
             partSampleL[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);   // I2: per-part sample bus
             partSampleR[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
+            partSynthL[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);    // #96: per-part unison bus
+            partSynthR[(std::size_t) p].assign ((std::size_t) maxBlock, 0.0f);
             fxSilentBlocks[(std::size_t) p] = kFxHoldBlocks;   // start idle
         }
         for (std::size_t p = 0; p < (std::size_t) maxParts; ++p)   // per-part looper capture taps
@@ -154,6 +156,7 @@ public:
         // Tier 1a: this part+pad's per-oscillator start-phase policy (only a fresh voice acts on it).
         const auto& pp = paramsFor (part, soundSlot);
         const int pm1 = pp.osc1Phase, pm2 = pp.osc2Phase, pm3 = pp.osc3Phase;
+        const int un  = unisonCapped (pp.unisonCount);   // #96: latched at note-on, capped by the quality profile
 
         // Reuse a voice already playing this (note, part) — retrigger in place (keeps
         // oscillator/filter state; the amp env re-attacks from its current level).
@@ -172,14 +175,14 @@ public:
             {
                 sustained[i] = false;
                 if (percussive) { voices[i].steal(); continue; }   // fade tail, fall through to a fresh voice
-                voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3);
+                voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3, un);
                 return;
             }
 
         // Otherwise find a free voice...
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
             if (! voices[i].isActive())
-                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3); return; }
+                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3, un); return; }
 
         // ...or steal a voice. PER-PART ISOLATION, in priority order:
         //   1. the oldest GENERATOR voice (seq / arp / looper) — generators ALWAYS yield to
@@ -206,7 +209,7 @@ public:
 
         sustained[steal] = false;
         ++stealCounter;
-        voices[steal].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3);
+        voices[steal].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3, un);
     }
 
     // ---- observability accessors (const; for the processor's telemetry) ----
@@ -396,6 +399,14 @@ public:
         return partParams[(std::size_t) p];
     }
 
+    // #96 Unison count for a note, capped by the quality/deployment profile (contingency):
+    // the live/Efficient profile caps to 3; studio/HQ keeps the full 7. Never below 1.
+    int unisonCapped (int requested) const
+    {
+        const int cap = (oscQuality == PolyBlepOscillator::Quality::HQ) ? SynthVoice::kMaxUnison : 3;
+        return std::clamp (requested, 1, cap);
+    }
+
     // Kit pad edit: route ONE kit pad's voice through the live panel params (‑1 = none).
     void setLiveKitPad (int part, int pad) { liveKitPart = part; liveKitPad = pad; }
 
@@ -517,6 +528,12 @@ public:
         if (focus != liveIndex) smoothPrimed = false;    // re-prime smoothing to the new focus
         liveIndex = focus;
 
+        // Make the focused part's params CURRENT before this block's noteOns (which run between here
+        // and renderParts). noteOn reads paramsFor(focus) for the start-phase policy AND the #96 unison
+        // count — both must reflect THIS block's live params, not the previous block's. renderParts
+        // re-assigns + smooths the audio fields per chunk, so the audible path is unchanged.
+        partParams[(std::size_t) focus] = liveParams;
+
         for (int pt = 0; pt < maxParts; ++pt)
             kitReadIdx[(std::size_t) pt] = kitSlots[(std::size_t) pt].idx.load (std::memory_order_acquire);
 
@@ -571,6 +588,8 @@ public:
             std::fill (partMono[(std::size_t) p].begin(),    partMono[(std::size_t) p].begin()    + numSamples, 0.0f);
             std::fill (partSampleL[(std::size_t) p].begin(), partSampleL[(std::size_t) p].begin() + numSamples, 0.0f);   // I2
             std::fill (partSampleR[(std::size_t) p].begin(), partSampleR[(std::size_t) p].begin() + numSamples, 0.0f);
+            std::fill (partSynthL[(std::size_t) p].begin(),  partSynthL[(std::size_t) p].begin()  + numSamples, 0.0f);   // #96
+            std::fill (partSynthR[(std::size_t) p].begin(),  partSynthR[(std::size_t) p].begin()  + numSamples, 0.0f);
         }
     }
 
@@ -676,9 +695,13 @@ public:
                 p.cutoffModOct   = pCut[(std::size_t) pt];
                 p.pwMod          = pPw[(std::size_t) pt];
                 const bool mtxOn = partMatrixUse[(std::size_t) pt].active();
-                v.render (partMono[(std::size_t) pt].data() + off, chunk, p,
-                          mtxOn ? &partMatrixUse[(std::size_t) pt] : nullptr,
-                          mtxOn ? &partSrc[(std::size_t) pt]       : nullptr);
+                auto* mtx = mtxOn ? &partMatrixUse[(std::size_t) pt] : nullptr;
+                auto* src = mtxOn ? &partSrc[(std::size_t) pt]       : nullptr;
+                if (v.isUnison())   // #96: a unison voice renders STEREO into the part's unison bus
+                    v.renderStereo (partSynthL[(std::size_t) pt].data() + off,
+                                    partSynthR[(std::size_t) pt].data() + off, chunk, p, mtx, src);
+                else
+                    v.render (partMono[(std::size_t) pt].data() + off, chunk, p, mtx, src);
             }
             // I2: sample-pad voices render (stereo) into their part's sample bus for THIS chunk.
             // No LFO/bend/matrix mods — a one-shot just plays; choke/steal handled on the voice.
@@ -757,13 +780,15 @@ public:
             float* sR = partR[(std::size_t) p].data();
             const float* smpL = partSampleL[(std::size_t) p].data();   // I2: this part's stereo sample bus
             const float* smpR = partSampleR[(std::size_t) p].data();
-            // Sample voices join the mono synth voices BEFORE the part FX (so they get the part's
-            // chorus/delay/reverb/width + EQ + pan). Same voiceTrim as synth voices for consistent
-            // loudness and bounded headroom.
+            const float* synL = partSynthL[(std::size_t) p].data();    // #96: this part's stereo unison bus
+            const float* synR = partSynthR[(std::size_t) p].data();
+            // Sample + unison (stereo) voices join the mono synth voices BEFORE the part FX (so they
+            // get the part's chorus/delay/reverb/width + EQ + pan). Same voiceTrim as the mono synth
+            // voices (m[] was already trimmed above) for consistent loudness and bounded headroom.
             for (int i = 0; i < numSamples; ++i)
             {
-                sL[i] = m[i] + smpL[i] * voiceTrim;
-                sR[i] = m[i] + smpR[i] * voiceTrim;
+                sL[i] = m[i] + (smpL[i] + synL[i]) * voiceTrim;
+                sR[i] = m[i] + (smpR[i] + synR[i]) * voiceTrim;
             }
             if (fxOn) { partFx[(std::size_t) p].setParams (partFxUse[(std::size_t) p]); partFx[(std::size_t) p].process (sL, sR, numSamples); }
 
@@ -839,7 +864,7 @@ private:
         {
             const auto& pp = paramsFor (part, soundSlot);   // Tier 1a start-phase policy
             voices[(std::size_t) v].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator,
-                                            pp.osc1Phase, pp.osc2Phase, pp.osc3Phase);
+                                            pp.osc1Phase, pp.osc2Phase, pp.osc3Phase, unisonCapped (pp.unisonCount));
         }
     }
 
@@ -963,6 +988,7 @@ private:
     std::array<FXChain, maxParts> partFx;
     std::array<std::vector<float>, maxParts> partMono, partL, partR;
     std::array<std::vector<float>, maxParts> partSampleL, partSampleR;   // I2: per-part stereo sample bus
+    std::array<std::vector<float>, maxParts> partSynthL, partSynthR;     // #96: per-part stereo unison bus
     std::array<std::vector<float>, maxParts> capPartL, capPartR;   // per-part looper capture taps
     int liveKitPart = -1, liveKitPad = -1;   // kit pad routed through live panel params (edit mode)
     std::atomic<float> focusMod[4] { };   // focused part's LFO mod per dest (UI knob animation)

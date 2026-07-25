@@ -360,6 +360,9 @@ static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& a
     p.osc2WtPos  = rp (apvts, ID::osc2WtPos);
     p.osc3WtPos  = rp (apvts, ID::osc3WtPos);
     p.analog     = rp (apvts, ID::analog);            // Tier 1b analog drift depth (0 = bit-exact)
+    p.unisonCount  = (int) rp (apvts, ID::oscUnison);         // #96 unison (1 = off, bit-identical)
+    p.unisonDetune = rp (apvts, ID::oscUnisonDetune);
+    p.unisonWidth  = rp (apvts, ID::oscUnisonWidth);
     p.oscMix     = rp (apvts, ID::oscMix);        // legacy; unused by the engine
     p.noiseLevel = rp (apvts, ID::noiseLevel);
 
@@ -476,6 +479,7 @@ static const juce::StringArray& perPartSoundIds()
         ID::osc1Phase, ID::osc2Phase, ID::osc3Phase, ID::analog,   // Tier 1 phase policy + analog drift
         ID::osc1WtKind, ID::osc2WtKind, ID::osc3WtKind, ID::osc1WtPos, ID::osc2WtPos, ID::osc3WtPos,   // #95 WT
         ID::osc1WtSeed, ID::osc2WtSeed, ID::osc3WtSeed,   // #95 3c WT random seed (per-part + persist)
+        ID::oscUnison, ID::oscUnisonDetune, ID::oscUnisonWidth,   // #96 unison (per-part sound)
         ID::oscMix, ID::noiseLevel, ID::osc1Level, ID::osc2Level, ID::osc3Level, ID::osc1On, ID::osc2On, ID::osc3On,
         ID::velToAmp, ID::velToCutoff,
         ID::filterType, ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack, ID::filterDrive,
