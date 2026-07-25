@@ -134,6 +134,8 @@ private:
     { namespace ID = ParamID; const char* ids[] { ID::osc1Wave,   ID::osc2Wave,   ID::osc3Wave   }; return ids[(size_t) osc]; }
     static const char* wtKindId (int osc)
     { namespace ID = ParamID; const char* ids[] { ID::osc1WtKind, ID::osc2WtKind, ID::osc3WtKind }; return ids[(size_t) osc]; }
+    static const char* wtSeedId (int osc)
+    { namespace ID = ParamID; const char* ids[] { ID::osc1WtSeed, ID::osc2WtSeed, ID::osc3WtSeed }; return ids[(size_t) osc]; }
 
     // WT hides the (meaningless) PW knob and shows the WT POS knob on the same slot.
     void applyWaveMode (int osc)
@@ -145,24 +147,54 @@ private:
         if (o.wtpos) o.wtpos->setVisible (wt);
     }
 
-    // Second tap on a selected WT button -> choose which factory table this osc uses.
+    // Second tap on a selected WT button -> pick a factory table or (re-)roll a random one.
     void openTablePicker (int osc)
     {
         auto* kind = dynamic_cast<juce::AudioParameterChoice*> (proc.apvts.getParameter (wtKindId (osc)));
-        if (kind == nullptr) return;
-        const int cur = kind->getIndex();
+        auto* seed = dynamic_cast<juce::AudioParameterInt*>    (proc.apvts.getParameter (wtSeedId (osc)));
+        if (kind == nullptr || seed == nullptr) return;
+        const int  curKind  = kind->getIndex();
+        const bool isRandom = seed->get() > 0;
         juce::PopupMenu m;
         m.addSectionHeader ("Wavetable");
         for (int t = 0; t < kind->choices.size(); ++t)
-            m.addItem (t + 1, kind->choices[t], true, t == cur);
+            m.addItem (t + 1, kind->choices[t], true, ! isRandom && t == curKind);   // factory table (clears the seed)
+        m.addSeparator();
+        m.addItem (100, juce::String (isRandom ? "Random (re-roll)" : "Random"), true, isRandom);   // the die
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (oscs[(size_t) osc].wave.get()),
-            [kind] (int r)
+            [this, osc] (int r)
             {
                 if (r <= 0) return;
-                kind->beginChangeGesture();
-                kind->setValueNotifyingHost (kind->convertTo0to1 ((float) (r - 1)));
-                kind->endChangeGesture();
+                if (r == 100) rollRandomTable (osc);
+                else          selectFactoryTable (osc, r - 1);
             });
+    }
+
+    // Pick factory table k: clear the seed (0 -> factory path) and set the kind.
+    void selectFactoryTable (int osc, int k)
+    {
+        setWtSeed (osc, 0);
+        if (auto* kind = dynamic_cast<juce::AudioParameterChoice*> (proc.apvts.getParameter (wtKindId (osc))))
+        {
+            kind->beginChangeGesture();
+            kind->setValueNotifyingHost (kind->convertTo0to1 ((float) k));
+            kind->endChangeGesture();
+        }
+    }
+    // The die: a fresh seed (>0) selects a new deterministic random table for this osc.
+    void rollRandomTable (int osc)
+    {
+        setWtSeed (osc, 1 + juce::Random::getSystemRandom().nextInt (1000000));
+    }
+    // Exact integer set (avoids any normalized round-trip); notifies the host -> processor rebuilds.
+    void setWtSeed (int osc, int s)
+    {
+        if (auto* seed = dynamic_cast<juce::AudioParameterInt*> (proc.apvts.getParameter (wtSeedId (osc))))
+        {
+            seed->beginChangeGesture();
+            *seed = s;
+            seed->endChangeGesture();
+        }
     }
 
     std::array<juce::Rectangle<int>, 3> boxRects() const

@@ -845,7 +845,26 @@ private:
     // #95 Wavetable bank: the factory tables, built once in prepareToPlay. Const/stable pointers (an
     // osc in WT mode reads one) so resolving a table in the audio path is just a lookup, allocation-free.
     std::array<Wavetable, wtgen::kFactoryMax> wtFactory {};
-    void resolveWtTables (VoiceParams& p, const juce::AudioProcessorValueTreeState& src) const;
+
+    // #95 3c: per-osc RANDOM wavetables. When an osc's osc*_wt_seed > 0 it plays a table generated
+    // from that seed (deterministic; persisted BY seed) instead of a factory table. Built on the
+    // MESSAGE thread and handed to the audio thread lock-free: each slot double-buffers and publishes
+    // a std::atomic<const Wavetable*> that resolveWtTables (audio thread) simply loads. Indexed
+    // [part][osc]. Kit-pad bakes have no part slot and fall back to the factory table.
+    struct WtRandomSlot
+    {
+        Wavetable                     buf[2] {};
+        std::atomic<const Wavetable*> live { nullptr };   // audio thread reads this
+        std::uint32_t                 builtSeed { 0 };     // message thread only
+        int                           next { 0 };          // message thread only
+    };
+    std::array<std::array<WtRandomSlot, 3>, SynthEngine::maxParts> wtRandom {};
+    double wtSampleRate = 48000.0;   // set in prepareToPlay; random tables are SR-dependent (getSampleRate() may be 0 pre-host)
+
+    void resolveWtTables    (VoiceParams& p, const juce::AudioProcessorValueTreeState& src, int part) const;
+    void ensureRandomTable  (int part, int osc, std::uint32_t seed);   // message thread: (re)build one slot from its seed
+    void ensureRandomTables (int part, const juce::AudioProcessorValueTreeState& src);   // build all 3 oscs of a part
+    void rebuildAllRandomTables();                                     // prepare: rebuild every part for the new sample rate
 
     // Edit focus (1.3). editFocusPart = the part the APVTS currently represents (panel +
     // engine live slot). partEditState holds the OTHER parts' full panel states; on a

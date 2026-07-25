@@ -27,6 +27,32 @@ namespace
         }
         return peak;
     }
+
+    // Concatenated left-channel output over `blocks` — for exact cross-instance comparison.
+    std::vector<float> renderCapture (VASynthProcessor& p, int blocks = 24)
+    {
+        p.prepareToPlay (48000.0, 128);
+        std::vector<float> out;
+        for (int b = 0; b < blocks; ++b)
+        {
+            juce::AudioBuffer<float> buf (2, 128); buf.clear();
+            juce::MidiBuffer m; if (b == 0) m.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0);
+            p.processBlock (buf, m);
+            const float* d = buf.getReadPointer (0);
+            out.insert (out.end(), d, d + 128);
+        }
+        return out;
+    }
+
+    void soloWtOsc1 (VASynthProcessor& p)
+    {
+        p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (1.0f);   // WT
+        p.apvts.getParameter (ParamID::osc2On)->setValueNotifyingHost (0.0f);
+        p.apvts.getParameter (ParamID::osc3On)->setValueNotifyingHost (0.0f);
+        p.apvts.getParameter (ParamID::analog)->setValueNotifyingHost (0.0f);     // no drift -> deterministic
+    }
+    void setSeed (VASynthProcessor& p, const char* id, int s)
+    { *dynamic_cast<juce::AudioParameterInt*> (p.apvts.getParameter (id)) = s; }
 }
 
 TEST_CASE ("WT pin: the 5-option wave normalized->index mapping is exactly Saw..WT", "[plugin][wt][pin]")
@@ -109,4 +135,69 @@ TEST_CASE ("WT patch survives save/load (wave + table choice persist)", "[plugin
     REQUIRE (waveIndex (dst, ParamID::osc1WtKind) == 3);   // Digital
     REQUIRE (dst.apvts.getRawParameterValue (ParamID::osc1WtPos)->load() == Catch::Approx (0.5f).margin (0.01));
     REQUIRE (renderPeak (dst) > 0.02f);                    // and it still sounds after reload
+}
+
+// ============================================================================
+// #95 3c-B — the random die + seed (RT-safe per-part regen, persisted by seed).
+// ============================================================================
+
+TEST_CASE ("WT random: a seeded random table is audible", "[plugin][wt][random]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p;
+    soloWtOsc1 (p);
+    setSeed (p, ParamID::osc1WtSeed, 4242);       // seed>0 -> a deterministic random table
+    REQUIRE (renderPeak (p) > 0.02f);
+}
+
+TEST_CASE ("WT random: two different seeds give different tables", "[plugin][wt][random]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    auto capForSeed = [] (int s)
+    {
+        VASynthProcessor p; soloWtOsc1 (p); setSeed (p, ParamID::osc1WtSeed, s);
+        return renderCapture (p);
+    };
+    const auto a = capForSeed (11), b = capForSeed (999);
+    REQUIRE (a.size() == b.size());
+    double diff = 0.0; for (size_t i = 0; i < a.size(); ++i) diff += std::abs ((double) a[i] - b[i]);
+    REQUIRE (diff > 1.0);                          // clearly distinct waveforms
+}
+
+TEST_CASE ("WT random: a factory pick clears the seed (back to the factory table)", "[plugin][wt][random]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p;
+    soloWtOsc1 (p);
+    setSeed (p, ParamID::osc1WtSeed, 777);
+    REQUIRE (dynamic_cast<juce::AudioParameterInt*> (p.apvts.getParameter (ParamID::osc1WtSeed))->get() == 777);
+    // Selecting a factory table zeroes the seed (see OscSection::selectFactoryTable). Emulate it:
+    setSeed (p, ParamID::osc1WtSeed, 0);
+    REQUIRE (dynamic_cast<juce::AudioParameterInt*> (p.apvts.getParameter (ParamID::osc1WtSeed))->get() == 0);
+    REQUIRE (renderPeak (p) > 0.02f);             // factory table plays
+}
+
+TEST_CASE ("WT random: seed persists + reproduces the SAME audio on reload (determinism)",
+           "[plugin][wt][random][state]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    juce::MemoryBlock blob;
+    std::vector<float> ref;
+    {
+        VASynthProcessor src;
+        soloWtOsc1 (src);
+        setSeed (src, ParamID::osc1WtSeed, 314159);
+        ref = renderCapture (src);
+        float pk = 0.0f; for (float v : ref) pk = std::max (pk, std::abs (v));
+        REQUIRE (pk > 0.02f);                     // the random table is audible
+        src.getStateInformation (blob);
+    }
+    VASynthProcessor dst;
+    dst.setStateInformation (blob.getData(), (int) blob.getSize());
+    REQUIRE (dynamic_cast<juce::AudioParameterInt*> (dst.apvts.getParameter (ParamID::osc1WtSeed))->get() == 314159);
+    const auto out = renderCapture (dst);
+    REQUIRE (out.size() == ref.size());
+    bool identical = true;
+    for (size_t i = 0; i < out.size(); ++i) if (out[i] != ref[i]) { identical = false; break; }
+    REQUIRE (identical);                          // deterministic seed -> identical table -> identical audio
 }

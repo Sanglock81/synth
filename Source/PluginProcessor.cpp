@@ -90,8 +90,16 @@ VASynthProcessor::~VASynthProcessor()
     for (auto& id : perPartSoundIds()) apvts.removeParameterListener (id, this);
 }
 
-void VASynthProcessor::parameterChanged (const juce::String&, float)
+void VASynthProcessor::parameterChanged (const juce::String& id, float)
 {
+    namespace ID = ParamID;
+    // #95 3c: a WT osc's seed (the die) or wave (-> WT) changed on the focused part — (re)build its
+    // random table off the audio thread so the live slot is ready before the next snapshotParams.
+    if (! loadingPartState
+        && (id == ID::osc1WtSeed || id == ID::osc2WtSeed || id == ID::osc3WtSeed
+            || id == ID::osc1Wave  || id == ID::osc2Wave  || id == ID::osc3Wave))
+        ensureRandomTables (editFocusPart.load (std::memory_order_relaxed), apvts);
+
     if (loadingPartState) return;                       // ignore programmatic focus/preset loads
     const int f = editFocusPart.load (std::memory_order_relaxed);
     if (f > 0 && f < SynthEngine::maxParts) partEdited[(std::size_t) f] = true;
@@ -260,6 +268,8 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     // #95: (re)build the wavetable factory bank at this sample rate (message thread). The mip pitch
     // selection is sample-rate dependent, so rebuild on every prepare; pointers stay stable for the run.
     for (int id = 0; id < wtgen::kFactoryMax; ++id) wtFactory[(std::size_t) id] = wtgen::buildFactory (id, sampleRate);
+    wtSampleRate = sampleRate;
+    rebuildAllRandomTables();   // #95 3c: per-osc RANDOM tables are sample-rate dependent too
     // Allocate the stereo master buffer ONCE, at the host's max block size. processBlock
     // never resizes it (JUCE guarantees numSamples <= this). Per-part mix buffers + FX
     // live in the engine now (Sub-phase 2).
@@ -389,24 +399,64 @@ static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& a
 // #95: set each osc's WT table pointer from its wave + WT-table choice. Only oscs in WT mode get a
 // (stable, prebuilt) factory pointer; others stay null. Runs wherever VoiceParams is built (live +
 // baked), so a locked part / preset resolves its own table too.
-void VASynthProcessor::resolveWtTables (VoiceParams& p, const juce::AudioProcessorValueTreeState& src) const
+void VASynthProcessor::resolveWtTables (VoiceParams& p, const juce::AudioProcessorValueTreeState& src, int part) const
 {
     namespace ID = ParamID;
     constexpr int kWtWave = 4;   // PolyBlepOscillator::Wave::Wavetable
-    auto table = [this] (int kind) -> const Wavetable*
+    const bool haveSlot = (part >= 0 && part < SynthEngine::maxParts);
+    auto factory = [this] (int kind) -> const Wavetable*
     {
         const std::size_t k = (std::size_t) juce::jlimit (0, wtgen::kFactoryMax - 1, kind);
         return wtFactory[k].valid() ? &wtFactory[k] : nullptr;
     };
-    p.osc1WtTable = (p.osc1Wave == kWtWave) ? table ((int) rp (src, ID::osc1WtKind)) : nullptr;
-    p.osc2WtTable = (p.osc2Wave == kWtWave) ? table ((int) rp (src, ID::osc2WtKind)) : nullptr;
-    p.osc3WtTable = (p.osc3Wave == kWtWave) ? table ((int) rp (src, ID::osc3WtKind)) : nullptr;
+    // Random table (seed>0) if its slot is built (lock-free load); else the factory table (seed 0,
+    // or a kit-pad bake with no part slot, or a not-yet-built random -> audible factory fallback).
+    auto resolve = [&] (int osc, int wave, const char* kindId, const char* seedId) -> const Wavetable*
+    {
+        if (wave != kWtWave) return nullptr;
+        const std::uint32_t seed = (std::uint32_t) juce::jmax (0, (int) std::lround (rp (src, seedId)));
+        if (seed > 0 && haveSlot)
+            if (auto* r = wtRandom[(std::size_t) part][(std::size_t) osc].live.load (std::memory_order_acquire))
+                return r;
+        return factory ((int) rp (src, kindId));
+    };
+    p.osc1WtTable = resolve (0, p.osc1Wave, ID::osc1WtKind, ID::osc1WtSeed);
+    p.osc2WtTable = resolve (1, p.osc2Wave, ID::osc2WtKind, ID::osc2WtSeed);
+    p.osc3WtTable = resolve (2, p.osc3Wave, ID::osc3WtKind, ID::osc3WtSeed);
+}
+
+// Message thread: (re)build one osc's random table from its seed into the double-buffer, then
+// publish the pointer atomically. A no-op if the slot already holds that seed. seed 0 -> nothing
+// (the factory path is used). buildRandom(seed) is deterministic, so this is the ONLY generator
+// and the persisted seed reproduces the same bytes on reload / on every platform (#95 pin 2).
+void VASynthProcessor::ensureRandomTable (int part, int osc, std::uint32_t seed)
+{
+    if (part < 0 || part >= SynthEngine::maxParts || osc < 0 || osc >= 3 || seed == 0) return;
+    auto& slot = wtRandom[(std::size_t) part][(std::size_t) osc];
+    if (slot.builtSeed == seed && slot.live.load (std::memory_order_relaxed) != nullptr) return;
+    const int buf = slot.next;
+    slot.buf[(std::size_t) buf] = wtgen::buildRandom (seed, wtSampleRate);
+    slot.live.store (&slot.buf[(std::size_t) buf], std::memory_order_release);
+    slot.next     = buf ^ 1;                     // next rebuild targets the OTHER buffer (readers keep the old one)
+    slot.builtSeed = seed;
+}
+
+// Build every WT osc's random table for one part from a state source (message thread).
+void VASynthProcessor::ensureRandomTables (int part, const juce::AudioProcessorValueTreeState& src)
+{
+    namespace ID = ParamID;
+    constexpr int kWtWave = 4;
+    const char* waveIds[] { ID::osc1Wave,   ID::osc2Wave,   ID::osc3Wave   };
+    const char* seedIds[] { ID::osc1WtSeed, ID::osc2WtSeed, ID::osc3WtSeed };
+    for (int o = 0; o < 3; ++o)
+        if ((int) std::lround (rp (src, waveIds[o])) == kWtWave)
+            ensureRandomTable (part, o, (std::uint32_t) juce::jmax (0, (int) std::lround (rp (src, seedIds[o]))));
 }
 
 VoiceParams VASynthProcessor::snapshotParams() const
 {
     VoiceParams p = buildVoiceParams (apvts);
-    resolveWtTables (p, apvts);
+    resolveWtTables (p, apvts, editFocusPart.load (std::memory_order_relaxed));   // the live/focused part's random slot
     return p;
 }
 
@@ -425,6 +475,7 @@ static const juce::StringArray& perPartSoundIds()
         ID::osc1Detune, ID::osc2Detune, ID::osc3Detune, ID::osc1PW, ID::osc2PW, ID::osc3PW,
         ID::osc1Phase, ID::osc2Phase, ID::osc3Phase, ID::analog,   // Tier 1 phase policy + analog drift
         ID::osc1WtKind, ID::osc2WtKind, ID::osc3WtKind, ID::osc1WtPos, ID::osc2WtPos, ID::osc3WtPos,   // #95 WT
+        ID::osc1WtSeed, ID::osc2WtSeed, ID::osc3WtSeed,   // #95 3c WT random seed (per-part + persist)
         ID::oscMix, ID::noiseLevel, ID::osc1Level, ID::osc2Level, ID::osc3Level, ID::osc1On, ID::osc2On, ID::osc3On,
         ID::velToAmp, ID::velToCutoff,
         ID::filterType, ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack, ID::filterDrive,
@@ -809,7 +860,7 @@ VoiceParams VASynthProcessor::bakePresetParams (const juce::String& name, bool& 
     if (lfoOut   != nullptr) *lfoOut   = lfosFrom (scratch.apvts);
     if (stateOut != nullptr) *stateOut = scratch.apvts.copyState();   // full panel state (1.3 edit-focus)
     VoiceParams vp = buildVoiceParams (scratch.apvts);
-    resolveWtTables (vp, scratch.apvts);
+    resolveWtTables (vp, scratch.apvts, -1);   // kit-pad / preset bake: no part slot -> factory table for WT
     return vp;
 }
 
@@ -819,7 +870,7 @@ VoiceParams VASynthProcessor::bakeVoiceStateParams (const juce::ValueTree& state
     if (state.isValid()) scratch.apvts.replaceState (state);          // an edited pad voice
     else                 bakeInitBaseline (scratch);
     VoiceParams vp = buildVoiceParams (scratch.apvts);
-    resolveWtTables (vp, scratch.apvts);
+    resolveWtTables (vp, scratch.apvts, -1);   // kit-pad voice: no part slot -> factory table for WT
     return vp;
 }
 
@@ -831,11 +882,32 @@ void VASynthProcessor::bakeStateToSlot (int part, const juce::ValueTree& state)
     BakeProcessor scratch;
     if (state.isValid()) scratch.apvts.replaceState (state.createCopy());
     else                 bakeInitBaseline (scratch);
+    ensureRandomTables (part, scratch.apvts);   // build this locked part's random WT slots before resolving
     VoiceParams vp = buildVoiceParams (scratch.apvts);
-    resolveWtTables (vp, scratch.apvts);
+    resolveWtTables (vp, scratch.apvts, part);
     engine.setLockedPartParams (part, vp,
                                 fxParamsFrom (scratch.apvts), lfosFrom (scratch.apvts),
                                 partMatrix[(std::size_t) juce::jlimit (0, SynthEngine::maxParts - 1, part)]);
+}
+
+// prepareToPlay: rebuild every part's random tables for the (possibly new) sample rate. The focused
+// part reads from the live APVTS; locked parts from their stored edit state. (Defined here, below
+// BakeProcessor, since it bakes locked parts through a scratch APVTS.)
+void VASynthProcessor::rebuildAllRandomTables()
+{
+    for (auto& part : wtRandom)
+        for (auto& slot : part) { slot.builtSeed = 0; slot.live.store (nullptr, std::memory_order_release); }
+
+    const int f = editFocusPart.load (std::memory_order_relaxed);
+    ensureRandomTables (f, apvts);
+    for (int part = 0; part < SynthEngine::maxParts; ++part)
+    {
+        if (part == f) continue;
+        const auto& st = partEditState[(std::size_t) part];
+        if (! st.isValid()) continue;
+        BakeProcessor scratch; scratch.apvts.replaceState (st.createCopy());
+        ensureRandomTables (part, scratch.apvts);
+    }
 }
 
 // Copy ONLY the per-part sound params (+ fx order) from a stored state tree into the live
@@ -880,6 +952,7 @@ void VASynthProcessor::setEditFocus (int part)
     { BakeProcessor b; bakeInitBaseline (b); partEditState[(std::size_t) part] = b.apvts.copyState(); }
 
     applyPartSoundFromTree (partEditState[(std::size_t) part]);              // panel swaps to this part
+    ensureRandomTables (part, apvts);                                        // this part's random WT slots ready before it goes live
     editFocusPart.store (part, std::memory_order_release);                   // audio thread re-primes smoothing
 }
 
@@ -2786,6 +2859,10 @@ void VASynthProcessor::setStateInformation (const void* data, int sizeInBytes)
         // Old sessions (osc_mix, no osc1_level) derive the per-source levels from
         // the legacy crossfade so they sound the same.
         if (needsMigration) applyLegacyOscLevelMigration (apvts);
+
+        // #95 3c: build the focused sound's random WT tables from its persisted seed(s) so a saved
+        // WT-random patch reproduces the same table on reload (deterministic; guarded until prepared).
+        ensureRandomTables (editFocusPart.load (std::memory_order_relaxed), apvts);
 
         // Restore the FX chain order (state-tree property, not an APVTS param).
         applyFxOrderProperty();

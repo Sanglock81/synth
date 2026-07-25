@@ -97,6 +97,24 @@
 
 ## 3c — UI (the user's LOCKED interaction — build exactly this)
 
+> **3c-A done.** WT POS knob shares the PW slot via a ParameterAttachment on the wave choice (same
+> same-bounds morph idiom as the LFO RATE<->DIV knob); a second tap on the already-selected WT button
+> (`HSelector::onReselect`) opens the table picker (the 4 factory tables). UI smoke test + `osc-wt.png`.
+> **3c-B done.** The random die + seed: a hidden per-osc `osc*_wt_seed` int param (0 = factory[kind];
+> >0 = a table from `wtgen::buildRandom(seed)`, deterministic + persisted BY seed, so no choice-append
+> shift — kind stays 4). RT-safe handoff: a per-`[part][osc]` double-buffered `std::atomic<const
+> Wavetable*>` slot built on the MESSAGE thread (parameterChanged/setEditFocus/setStateInformation/
+> bakeStateToSlot/prepareToPlay) and loaded lock-free by `resolveWtTables` (now takes a `part`; kit-pad
+> bakes pass -1 -> factory fallback). The picker gained "Random (re-roll)" (the die); a factory pick
+> clears the seed. Tests: random audible, two seeds differ, seed persists + reproduces bit-identical
+> audio on reload (determinism pin). Fixed a latent bug: the SR guard used `getSampleRate()` (0 when a
+> host calls prepareToPlay before the rate details are set) -> now a stored `wtSampleRate`. Release
+> 502 + --sanitize (ASan/UBSan, RT handoff clean) green.
+> **3c-C (remaining):** a VISIBLE one-tap die button (menu re-roll works today); 1-2 WT showcase
+> presets (the position-LFO evolving pad needs mod-matrix-in-preset support — the JSON format carries
+> only APVTS params, not LINK routes — so it's flagged, not shipped); CHANGELOG/README; screenshot sign-off.
+
+
 - The osc wave row (`HSelector` SIN..) gains the **WT** option (append).
 - **TAP on WT when it is already the selected wave** → opens the **table picker** (choose factory table or the
   current random one).

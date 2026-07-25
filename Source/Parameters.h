@@ -41,6 +41,7 @@ namespace ParamID
     // frame position (0..1). Per-osc, per-part (plain APVTS params, so they swap/persist like the rest).
     inline constexpr auto osc1WtKind = "osc1_wt_kind", osc2WtKind = "osc2_wt_kind", osc3WtKind = "osc3_wt_kind";
     inline constexpr auto osc1WtPos  = "osc1_wt_pos",  osc2WtPos  = "osc2_wt_pos",  osc3WtPos  = "osc3_wt_pos";
+    inline constexpr auto osc1WtSeed = "osc1_wt_seed", osc2WtSeed = "osc2_wt_seed", osc3WtSeed = "osc3_wt_seed";
 
     // Musicality Tier 1: per-osc start-phase policy (RESET/RANDOM/FREE) + one analog-drift amount.
     inline constexpr auto osc1Phase = "osc1_phase", osc2Phase = "osc2_phase", osc3Phase = "osc3_phase";
@@ -266,6 +267,13 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc1WtPos, 1},  "Osc1 WT Pos", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2WtPos, 1},  "Osc2 WT Pos", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3WtPos, 1},  "Osc3 WT Pos", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
+    // #95 3c: per-osc RANDOM wavetable seed. 0 = use the factory table above; >0 = a table generated
+    // from this seed (deterministic + persisted BY seed). Set by the die affordance; not host-automatable
+    // and flagged meta so it stays out of automation lanes. Default 0 keeps non-WT / factory patches unchanged.
+    const auto wtSeedAttr = juce::AudioParameterIntAttributes().withAutomatable (false).withMeta (true);
+    params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID{ID::osc1WtSeed, 1}, "Osc1 WT Seed", 0, 1000000, 0, wtSeedAttr));
+    params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID{ID::osc2WtSeed, 1}, "Osc2 WT Seed", 0, 1000000, 0, wtSeedAttr));
+    params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID{ID::osc3WtSeed, 1}, "Osc3 WT Seed", 0, 1000000, 0, wtSeedAttr));
 
     // Musicality Tier 1: per-osc start-phase policy (default RESET = bit-exact) + analog drift depth.
     const juce::StringArray phaseModes { "Reset", "Random", "Free" };
