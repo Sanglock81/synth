@@ -17,6 +17,7 @@
 #include "UI/Widgets.h"
 #include "UI/Sections.h"
 #include "UI/BottomZones.h"
+#include "UI/SessionExportDialog.h"
 #include "UI/OutputsDialog.h"
 #include "UI/ModMatrixPanel.h"
 #include "UI/FXPanel.h"
@@ -323,6 +324,30 @@ TEST_CASE ("WT wave swaps the visible PW<->WT POS control (#95)", "[plugin][smok
     REQUIRE (pw->isVisible());
     REQUIRE_FALSE (wtpos->isVisible());
     REQUIRE_FALSE (die->isVisible());
+}
+
+// --- #98: the session-export dialog renders with a bar-count field (default = realign cycle) ------
+TEST_CASE ("session export: the dialog renders with a bar-count field (#98)", "[plugin][smoke][export]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    SessionExportDialog dlg (p);
+    dlg.setSize (480, 156);
+
+    std::function<juce::TextEditor*(juce::Component&)> findEd = [&] (juce::Component& c) -> juce::TextEditor*
+    {
+        for (auto* ch : c.getChildren())
+        {
+            if (auto* e = dynamic_cast<juce::TextEditor*> (ch)) return e;
+            if (auto* f = findEd (*ch)) return f;
+        }
+        return nullptr;
+    };
+    auto* bars = findEd (dlg);
+    REQUIRE (bars != nullptr);
+    REQUIRE (bars->getText().getIntValue() == p.realignBars());   // default = the realign cycle (1 with no loops)
+    dlg.repaint();
+    snapshot (dlg, "session-export.png");
 }
 
 // --- #96: the unison controls (COUNT/DETUNE/WIDTH) are wired + render ---------------------

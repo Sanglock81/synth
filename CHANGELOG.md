@@ -9,6 +9,15 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Session export — a DAW-handoff bounce (one folder).** A **BOUNCE** button (by the loop exports)
+  renders the whole session **offline** into a folder your DAW can open: a **WAV stem per part**
+  (each part through its full chain — voices → FX → EQ → level/pan), the **master WAV**, a **MIDI
+  file per part** (looper + step-seq content), and a **manifest.json** (BPM, bar length, stem list,
+  version). It renders the current scene's **realign cycle** by default, with a **bar-count override**
+  in the dialog. Offline means it's exact and faster than real time; the stems sum to the master for
+  a clean handoff (stems are pre-master-bus, master is post-clip — noted in the manifest). Drag the
+  folder into Ableton or Reaper and it lines up at the manifest BPM. (Audio-loop *recordings* are not
+  stemmed — they're separately WAV-exportable; MP3 output is a later optional-if-a-system-encoder add.)
 - **QWERTY: Shift extends the octave range.** Holding **Shift** while you play the standalone's
   computer keyboard drops the top row an octave (`Shift+Q…}` → C3…B3) and lifts the number row an
   octave (`Shift+!…+` → C6…B6) — four octaves (C3…B6) reachable from the home position, no `z`/`x`

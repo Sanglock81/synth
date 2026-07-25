@@ -2208,7 +2208,7 @@ bool VASynthProcessor::bounceSession (const juce::File& dir, int bars)
         buf.setSize (2, n, false, false, true);
         buf.clear();
         midi.clear();
-        processBlock (buf, midi);
+        renderBlockImpl (buf, midi);   // bypass the suspend guard — this IS the offline render
         master.copyFrom (0, off, buf, 0, 0, n);
         master.copyFrom (1, off, buf, 1, 0, n);
         for (int p = 0; p < SynthEngine::maxParts; ++p)
@@ -2478,8 +2478,17 @@ juce::String VASynthProcessor::archetypeName (int i)
     return (i >= 0 && i < kNumArchetypes) ? names[i] : "Random";
 }
 
-void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer,
-                                     juce::MidiBuffer& midi)
+// The audio-callback entry point. When an offline bounce is running (#98) the live audio thread is
+// SUSPENDED to silence so it never touches the engine while bounceSession drives renderBlockImpl on
+// the message thread — the only safe way to reuse the exact render path offline without a device stop.
+void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    if (audioSuspended.load (std::memory_order_acquire)) { buffer.clear(); return; }
+    renderBlockImpl (buffer, midi);
+}
+
+void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
+                                        juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
     const auto tStart = std::chrono::steady_clock::now();   // cheap, RT-safe (vDSO)

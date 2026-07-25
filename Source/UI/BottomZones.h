@@ -4,6 +4,7 @@
 #include "PanelChrome.h"
 #include "Widgets.h"
 #include "SeqPanel.h"
+#include "SessionExportDialog.h"
 #include "../PluginProcessor.h"
 #include "../DSP/ChordEngine.h"
 
@@ -380,6 +381,9 @@ public:
         // J2: length is now PER-LANE (a BARS selector on each row) — no shared top-bar selector.
         expo.setButtonText ("MIDI"); styleBtn (expo);   expo.setTooltip ("Export recorded loops to a MIDI file");   expo.onClick    = [this] { exportMidi(); }; addAndMakeVisible (expo);
         expoWav.setButtonText ("WAV"); styleBtn (expoWav); expoWav.setTooltip ("Export the audio loops to a WAV file"); expoWav.onClick = [this] { exportWav(); }; addAndMakeVisible (expoWav);
+        // #98: bounce the whole session (per-part WAV stems + MIDI + master + manifest) for a DAW handoff.
+        bounce.setButtonText ("BOUNCE"); styleBtn (bounce); bounce.setTooltip ("Export the whole session to a folder (WAV stems + MIDI + master + manifest) for your DAW");
+        bounce.onClick = [this] { SessionExportDialog::show (proc, getTopLevelComponent(), nullptr); }; addAndMakeVisible (bounce);
 
         // J3: eight scene slots + the launch-quantum selector, in the top bar.
         for (int i = 0; i < VASynthProcessor::kScenes; ++i)
@@ -450,6 +454,7 @@ public:
         // rows so the scenes read as the primary control (the rows below give up ~10% of their height).
         auto top = c.removeFromTop (42); c.removeFromTop (5);
         auto exports = top.removeFromRight (98); exports.removeFromTop (exports.getHeight() / 2 - 12);
+        bounce.setBounds  (exports.removeFromRight (64).reduced (2, 2)); exports.removeFromRight (3);
         expoWav.setBounds (exports.removeFromRight (46).reduced (2, 2)); exports.removeFromRight (3);
         expo.setBounds    (exports.removeFromRight (46).reduced (2, 2));
         for (int i = 0; i < VASynthProcessor::kScenes; ++i)
@@ -534,7 +539,7 @@ private:
     std::array<juce::TextButton, kLanes> clearBtn;
     std::array<std::unique_ptr<SceneButton>, VASynthProcessor::kScenes> sceneBtn;   // J3
     std::unique_ptr<HSelector> sceneQuant;
-    juce::TextButton expo, expoWav;
+    juce::TextButton expo, expoWav, bounce;
     std::array<juce::Rectangle<int>, kLanes> labelRect { }, laneStrip { };
     std::unique_ptr<juce::FileChooser> chooser;
 

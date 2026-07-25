@@ -57,10 +57,16 @@
   Wired into `bounceSession` (a `"midi"` list in the manifest). Test: a 4-hit seq pattern yields
   exactly four note-ons in `part1.mid`. Included in the #98 Inc-1 gate cadence.
 
-### Inc 3 — the export dialog (UI) + MP3
-- A modal (OutputsDialog template): choose folder, bar-count override (default = realignBars()),
-  optional MP3 toggle (enabled only if a system encoder is found). The standalone suspends audio
-  around the bounce. Screenshot.
+### Inc 3 — the export dialog (UI)  ← DONE
+- `SessionExportDialog` (OutputsDialog template): a bar-count field (default = `realignBars()`) + an
+  "Export to folder..." directory chooser. Launched from a **BOUNCE** button beside the loop
+  MIDI/WAV exports. The bounce is race-free via a **wrapper-agnostic suspend flag**: `processBlock`
+  bails to silence when `audioSuspended`, and `bounceSession` drives the extracted `renderBlockImpl`
+  directly (a 60 ms settle after suspending lets any in-flight block finish) — so no standalone-only
+  device-stop code, and it works in any wrapper. UI smoke test (dialog renders, bar field defaults to
+  the cycle) + `session-export.png`. Fixed a Unicode-ellipsis mojibake (ASCII `...`).
+- **MP3 deferred (optional, within #98's spirit):** no in-tree encoder; a "MP3 if a system
+  lame/ffmpeg exists" toggle is a small best-effort follow-on. WAV-only ships. Flagged for sign-off.
 
 ## Acceptance (UAT)
 - The exported folder drags into Ableton AND Reaper and lines up at the manifest's BPM — the original

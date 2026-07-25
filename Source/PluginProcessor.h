@@ -54,6 +54,10 @@ public:
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    // #98: suspend the live audio thread (to silence) while an offline bounce runs on the message
+    // thread — the standalone export sets this around bounceSession so the two never touch the engine
+    // at once. A brief settle after setting true lets any in-flight block finish first.
+    void setAudioSuspended (bool b) { audioSuspended.store (b, std::memory_order_release); }
     // Float-only synth; keep the base double-precision overload in scope so it
     // isn't hidden (-Woverloaded-virtual). supportsDoublePrecisionProcessing()
     // is false by default, so the double version is never actually called.
@@ -974,6 +978,8 @@ private:
     Looper looper;
     std::array<AudioLoop, SynthEngine::maxParts> audioLoops;   // one AUDIO lane per part (#47)
     bool   bounceMuteAudioLoops = false;   // #98: skip audio-loop playback/record during an offline bounce
+    std::atomic<bool> audioSuspended { false };   // #98: live audio thread outputs silence while a bounce runs
+    void   renderBlockImpl (juce::AudioBuffer<float>&, juce::MidiBuffer&);   // the real render (processBlock body)
     std::atomic<int>  loopClearMask { 0 };      // bit per lane: RT-safe per-lane CLEAR request
     std::atomic<int>  loopPosDisp { 0 };        // master loop position (mirrored for the UI)
     std::array<std::atomic<int>, SynthEngine::maxParts> loopLenDisp {};   // per-lane length (samples), for the playhead
