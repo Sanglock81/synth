@@ -270,6 +270,45 @@ TEST_CASE ("LFO SYNC swaps the visible RATE<->DIV control (#J1)", "[plugin][smok
     REQUIRE_FALSE (div->isVisible());
 }
 
+// --- #95 3c: selecting WT on an osc swaps the PW knob for a WT POS knob (same slot) --------
+TEST_CASE ("WT wave swaps the visible PW<->WT POS control (#95)", "[plugin][smoke][wt][morph]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);   // full recursive layout so both knobs get real bounds
+
+    auto* pw    = findKnob (*ed, ParamID::osc1PW);
+    auto* wtpos = findKnob (*ed, ParamID::osc1WtPos);
+    REQUIRE (pw    != nullptr);
+    REQUIRE (wtpos != nullptr);
+
+    // Default wave (Saw) -> PW shows, WT POS hidden.
+    p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (0.0f);   // Saw
+    REQUIRE (pw->isVisible());
+    REQUIRE_FALSE (wtpos->isVisible());
+
+    // WT (index 4 of 5 -> normalized 1.0) -> WT POS shows in the same slot, PW hidden.
+    p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (1.0f);   // WT
+    REQUIRE (wtpos->isVisible());
+    REQUIRE_FALSE (pw->isVisible());
+
+    // A true morph: the two share one slot.
+    REQUIRE (pw->getBounds() == wtpos->getBounds());
+
+    // Snapshot the oscillator section in WT mode for the gate's human review.
+    juce::Component* section = wtpos->getParentComponent();
+    while (section != nullptr && dynamic_cast<OscSection*> (section) == nullptr)
+        section = section->getParentComponent();
+    REQUIRE (section != nullptr);
+    snapshot (*section, "osc-wt.png");
+
+    // Back to a classic wave -> PW returns (idempotent swap).
+    p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (0.0f);   // Saw
+    REQUIRE (pw->isVisible());
+    REQUIRE_FALSE (wtpos->isVisible());
+}
+
 // --- J2: each looper lane has its OWN bars selector (per-part loop length) ---------------
 TEST_CASE ("J2: per-lane looper BARS selectors are wired + render (#J2)", "[plugin][smoke][looper][j2]")
 {

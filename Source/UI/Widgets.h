@@ -843,7 +843,10 @@ public:
             b->setColour (juce::TextButton::textColourOffId, VASynthLookAndFeel::ink());
             b->setColour (juce::TextButton::textColourOnId, juce::Colours::black);
             const int idx = i;
-            b->onClick = [this, idx] { setIndex (idx); };
+            // Tapping the button that is ALREADY current fires onReselect (no value change) —
+            // used by the WT wave button to open the table picker on a second tap. A tap on any
+            // other button is a normal selection.
+            b->onClick = [this, idx] { if (choice->getIndex() == idx && onReselect) onReselect (idx); else setIndex (idx); };
             b->setTooltip (choice->getName (128));      // hover -> full parameter name
             addAndMakeVisible (b);
             listenForLearnGestures (*b);
@@ -855,6 +858,10 @@ public:
     }
 
     void paint (juce::Graphics& g) override { paintLearnDecorations (g); }
+
+    // Fired when the currently-selected button is tapped again (no value change). Optional;
+    // the WT wave button uses it to open the table picker on a second tap.
+    std::function<void (int)> onReselect;
 
     void resized() override
     {

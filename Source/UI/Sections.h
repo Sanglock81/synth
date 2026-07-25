@@ -32,11 +32,12 @@ namespace sectiontint
 class OscSection : public juce::Component
 {
 public:
-    explicit OscSection (VASynthProcessor& p)
+    explicit OscSection (VASynthProcessor& p) : proc (p)
     {
         namespace ID = ParamID;
         const char* onIds[]   { ID::osc1On, ID::osc2On, ID::osc3On };
         const char* waveIds[] { ID::osc1Wave, ID::osc2Wave, ID::osc3Wave };
+        const char* wtPosIds[]  { ID::osc1WtPos,  ID::osc2WtPos,  ID::osc3WtPos  };
         const char* octIds[]  { ID::osc1Octave, ID::osc2Octave, ID::osc3Octave };
         const char* detIds[]  { ID::osc1Detune, ID::osc2Detune, ID::osc3Detune };
         const char* pwIds[]   { ID::osc1PW, ID::osc2PW, ID::osc3PW };
@@ -56,10 +57,24 @@ public:
             o.k[1] = std::make_unique<RotaryKnob> (p.apvts, detIds[i], "DETUNE", p.getMidiLearn());
             o.k[2] = std::make_unique<RotaryKnob> (p.apvts, pwIds[i],  "PW",     p.getMidiLearn());
             o.k[3] = std::make_unique<RotaryKnob> (p.apvts, lvlIds[i], "LEVEL",  p.getMidiLearn());
+            // #95 3c: a WT POS knob shares the PW slot (k[2]) — PW is meaningless for a wavetable.
+            // A ParameterAttachment on the wave choice swaps which of the two is visible (the same
+            // same-bounds morph idiom as the LFO RATE<->DIV knob and the EnvSection AMP/MOD swap).
+            o.wtpos = std::make_unique<RotaryKnob> (p.apvts, wtPosIds[i], "WT POS", p.getMidiLearn());
+            o.wtpos->setHelp ("Wavetable position: morphs through the table's frames");
             // LINK targets + animation are wired centrally from the registry (editor::wireModTargets);
             // PW/level/cutoff/reso etc. no longer need per-knob wiring here.
             addAndMakeVisible (*o.on);   addAndMakeVisible (*o.wave); addAndMakeVisible (*o.phase);
             for (auto& k : o.k) addAndMakeVisible (*k);
+            addChildComponent (*o.wtpos);   // shown only when this osc's wave == WT (swaps with PW)
+
+            // Second tap on the WT wave button (when already selected) opens the table picker.
+            o.wave->onReselect = [this, i] (int idx) { if (idx == kWtWaveIndex) openTablePicker (i); };
+            // The wave choice morphs the PW<->WT POS knob (WT hides PW, shows WT POS).
+            auto* waveParam = p.apvts.getParameter (waveIds[i]);
+            o.waveAtt = std::make_unique<juce::ParameterAttachment> (
+                *waveParam, [this, i] (float) { applyWaveMode (i); });
+            o.waveAtt->sendInitialUpdate();
         }
 
         // NOISE — the 4th sound source (white noise), given the SAME row anatomy as an oscillator
@@ -102,6 +117,7 @@ public:
             const int kw = c.getWidth() / 4;
             for (int k = 0; k < 4; ++k)
                 o.k[(size_t) k]->setBounds ((k < 3 ? c.removeFromLeft (kw) : c).reduced (2, 0));
+            o.wtpos->setBounds (o.k[2]->getBounds());   // shares the PW slot (visibility swaps)
         }
         // NOISE fill-bar: fills the row to the right of the "NOISE" source label (the open middle
         // between them is the reserved post-1.0 COLOR-selector slot). The bar itself shows the level.
@@ -111,7 +127,43 @@ public:
     }
 
 private:
-    static constexpr int kNoiseStrip = 46;   // compact 4th-source row height
+    static constexpr int kNoiseStrip   = 46;   // compact 4th-source row height
+    static constexpr int kWtWaveIndex  = 4;    // wave choice index of "WT" (5th option)
+
+    static const char* waveId (int osc)
+    { namespace ID = ParamID; const char* ids[] { ID::osc1Wave,   ID::osc2Wave,   ID::osc3Wave   }; return ids[(size_t) osc]; }
+    static const char* wtKindId (int osc)
+    { namespace ID = ParamID; const char* ids[] { ID::osc1WtKind, ID::osc2WtKind, ID::osc3WtKind }; return ids[(size_t) osc]; }
+
+    // WT hides the (meaningless) PW knob and shows the WT POS knob on the same slot.
+    void applyWaveMode (int osc)
+    {
+        auto* wave = dynamic_cast<juce::AudioParameterChoice*> (proc.apvts.getParameter (waveId (osc)));
+        const bool wt = wave != nullptr && wave->getIndex() == kWtWaveIndex;
+        auto& o = oscs[(size_t) osc];
+        if (o.k[2])  o.k[2]->setVisible (! wt);
+        if (o.wtpos) o.wtpos->setVisible (wt);
+    }
+
+    // Second tap on a selected WT button -> choose which factory table this osc uses.
+    void openTablePicker (int osc)
+    {
+        auto* kind = dynamic_cast<juce::AudioParameterChoice*> (proc.apvts.getParameter (wtKindId (osc)));
+        if (kind == nullptr) return;
+        const int cur = kind->getIndex();
+        juce::PopupMenu m;
+        m.addSectionHeader ("Wavetable");
+        for (int t = 0; t < kind->choices.size(); ++t)
+            m.addItem (t + 1, kind->choices[t], true, t == cur);
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (oscs[(size_t) osc].wave.get()),
+            [kind] (int r)
+            {
+                if (r <= 0) return;
+                kind->beginChangeGesture();
+                kind->setValueNotifyingHost (kind->convertTo0to1 ((float) (r - 1)));
+                kind->endChangeGesture();
+            });
+    }
 
     std::array<juce::Rectangle<int>, 3> boxRects() const
     {
@@ -133,9 +185,12 @@ private:
         std::unique_ptr<PowerToggle> on;
         std::unique_ptr<HSelector> wave, phase;
         std::array<std::unique_ptr<RotaryKnob>, 4> k;
+        std::unique_ptr<RotaryKnob> wtpos;                    // shares the PW slot; visible only in WT mode
+        std::unique_ptr<juce::ParameterAttachment> waveAtt;  // morphs PW <-> WT POS on wave change
     };
     std::array<Osc, 3> oscs;
     std::unique_ptr<HBarControl> noise;   // 4th source: white-noise level (horizontal fill bar)
+    VASynthProcessor& proc;               // for the WT table picker (reads/sets osc*_wt_kind)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OscSection)
 };
