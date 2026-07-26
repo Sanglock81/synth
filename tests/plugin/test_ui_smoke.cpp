@@ -379,30 +379,55 @@ TEST_CASE ("unison: UNI/DET/WID controls are bound and render (#96)", "[plugin][
 }
 
 // --- Inc 3: the Save dialog carries a category picker; screenshot for sign-off ------------
+// Rendered as a plain offscreen Component (NOT a real juce::AlertWindow, which would try to
+// grab a native X window and fail under CI's Xvfb) — same widget types the real dialog uses.
+namespace
+{
+    struct SaveDialogMock : juce::Component
+    {
+        juce::Label title { {}, "Save Preset" }, nameLbl { {}, "Preset name:" }, catLbl { {}, "Category:" };
+        juce::TextEditor name;
+        juce::ComboBox cat;
+        juce::TextButton saveB { "Save" }, cancelB { "Cancel" };
+        SaveDialogMock()
+        {
+            title.setJustificationType (juce::Justification::centred);
+            title.setFont (juce::Font (juce::FontOptions (18.0f, juce::Font::bold)));
+            for (auto* l : { &title, &nameLbl, &catLbl }) l->setColour (juce::Label::textColourId, juce::Colours::white);
+            name.setText ("My Patch");
+            juce::StringArray cats = FactoryPresetLibrary::canonicalOrder(); cats.add ("User");
+            for (int i = 0; i < cats.size(); ++i) cat.addItem (cats[i], i + 1);
+            cat.setText ("Bass", juce::dontSendNotification);
+            addAndMakeVisible (title);  addAndMakeVisible (nameLbl); addAndMakeVisible (name);
+            addAndMakeVisible (catLbl); addAndMakeVisible (cat);     addAndMakeVisible (saveB); addAndMakeVisible (cancelB);
+        }
+        void paint (juce::Graphics& g) override { g.fillAll (juce::Colour (0xff23272e)); }
+        void resized() override
+        {
+            auto r = getLocalBounds().reduced (16);
+            title.setBounds (r.removeFromTop (30)); r.removeFromTop (8);
+            nameLbl.setBounds (r.removeFromTop (20));
+            name.setBounds (r.removeFromTop (28)); r.removeFromTop (10);
+            catLbl.setBounds (r.removeFromTop (20));
+            cat.setBounds (r.removeFromTop (28)); r.removeFromTop (14);
+            auto b = r.removeFromTop (30);
+            saveB.setBounds (b.removeFromLeft (b.getWidth() / 2).reduced (6, 0));
+            cancelB.setBounds (b.reduced (6, 0));
+        }
+    };
+}
+
 TEST_CASE ("save dialog: category picker present + renders", "[plugin][smoke][menu]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
-    juce::LookAndFeel_V4 lnf;
-    juce::LookAndFeel::setDefaultLookAndFeel (&lnf);
+    SaveDialogMock dlg;
+    dlg.setSize (420, 230);
 
-    juce::AlertWindow aw ("Save Preset", "Preset name:", juce::MessageBoxIconType::NoIcon);
-    aw.addTextEditor ("name", "My Patch");
     juce::StringArray cats = FactoryPresetLibrary::canonicalOrder(); cats.add ("User");
-    aw.addComboBox ("cat", cats, "Category:");
-    if (auto* cb = aw.getComboBoxComponent ("cat")) cb->setText ("Bass", juce::dontSendNotification);
-    aw.addButton ("Save", 1); aw.addButton ("Cancel", 0);
+    REQUIRE (dlg.cat.getNumItems() == cats.size());              // every category is offered
+    REQUIRE (dlg.cat.getText() == "Bass");
 
-    REQUIRE (aw.getComboBoxComponent ("cat") != nullptr);        // the picker exists
-    REQUIRE (aw.getComboBoxComponent ("cat")->getNumItems() == cats.size());
-    aw.setBounds (0, 0, 420, 260);
-
-    auto img = aw.createComponentSnapshot (aw.getLocalBounds(), false, 1.0f);
-    REQUIRE (img.isValid());
-    juce::File out (juce::String (VASYNTH_DOCS_DIR) + "/smoke/save-dialog.png");
-    out.getParentDirectory().createDirectory(); out.deleteFile();
-    juce::FileOutputStream os (out); REQUIRE (os.openedOk());
-    juce::PNGImageFormat png; REQUIRE (png.writeImageToStream (img, os));
-    juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
+    snapshot (dlg, "save-dialog.png");
 }
 
 // --- Inc 2: per-patch TRIM (program level) is wired, carries the preset, screenshots ----
