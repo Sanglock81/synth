@@ -29,7 +29,7 @@ pick the same one again.
 | Winds   | Soft Flute, Breath Flute |
 | Organ   | Full Organ |
 | FX      | Noise Riser, Dark Drone, Cave Drone, Static Riser, Metal Ping |
-| Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom, Clap, Rimshot, Clave, Cowbell, Splash, Crash, Ride |
+| Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom, Clap, Rimshot, Clave, Cowbell, Splash, Crash, Ride, House Kick, House Snare, House Hat, Industrial Kick, Metal Hit, Noise Snare |
 
 Some concepts (an envelope sweeping the wavetable position, a per-step timbre morph) want a
 modulation route that the current preset format can't spell; those patches are voiced as close
@@ -119,9 +119,13 @@ Editor**. Per pad: set the trigger and sounding notes by **learn-by-play** (arm,
 press keys), pick the source preset, set level and choke group, and **Audition**. Kits
 save/load as their own presets (a **Kits** category) and are included in a **MULTI**.
 
-**Factory kits.** *808 Basics* — a full **16-pad** kit on triggers 36–51 (the Launchkey
-pad grid); the two hats choke each other (group 1), the cymbals ring free. *Stab Board* —
-four drums plus four tuned **minor-triad** chord pads (a plucky Synth Pluck at C/D/E/F).
+**Factory kits.** Four built in, all on triggers 36–51 (the Launchkey pad grid):
+- *808 Basics* — the full **16-pad** 808 kit; the two hats choke each other (group 1), the cymbals ring free.
+- *House Basics* — a 909-flavoured house/techno kit: a tighter **House Kick**, snappy **House Snare**,
+  crisp **House Hat**, plus the shared claps/toms/cymbals. Same choke layout as 808 Basics.
+- *Industrial* — a driven, metallic kit: a distorted **Industrial Kick**, a harsh **Noise Snare**,
+  and a clanging **Metal Hit** (also the three tuned toms).
+- *Stab Board* — four drums plus four tuned **minor-triad** chord pads (a plucky Synth Pluck at C/D/E/F).
 
 *808 Basics* pad map (pad = trigger − 36):
 

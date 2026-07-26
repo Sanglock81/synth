@@ -1156,7 +1156,7 @@ VASynthProcessor::KitDefinition VASynthProcessor::kitFromTree (const juce::Value
 
 // ---- factory kits -----------------------------------------------------------
 
-juce::StringArray VASynthProcessor::factoryKitNames() { return { "808 Basics", "Stab Board" }; }
+juce::StringArray VASynthProcessor::factoryKitNames() { return { "808 Basics", "House Basics", "Industrial", "Stab Board" }; }
 
 VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String& name)
 {
@@ -1188,6 +1188,47 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[13] = drum  (49, "Crash",       0);
         def.pads[14] = drum  (50, "Clave",       0);
         def.pads[15] = drum  (51, "Ride",        0);
+    }
+    else if (name == "House Basics")
+    {
+        // 909-flavoured house/techno kit: tighter kick, snappy snare, crisp hats. Same layout
+        // conventions as 808 Basics — hats choke (group 1), cymbals ring free.
+        def.pads[0]  = drum  (36, "House Kick",  0);
+        def.pads[1]  = drum  (37, "Kick Punchy", 0);
+        def.pads[2]  = drum  (38, "House Snare", 0);
+        def.pads[3]  = drum  (39, "Rimshot",     0);
+        def.pads[4]  = drum  (40, "Clap",        0);
+        def.pads[5]  = tuned (41, "House Snare", 0, 48);    // Snare 2 — tuned up
+        def.pads[6]  = drum  (42, "House Hat",   1);
+        def.pads[7]  = drum  (43, "Hat Open",    1);
+        def.pads[8]  = tuned (44, "Tom",         0, 40);    // Low / Mid / High Tom
+        def.pads[9]  = tuned (45, "Tom",         0, 46);
+        def.pads[10] = tuned (46, "Tom",         0, 52);
+        def.pads[11] = drum  (47, "Splash",      0);
+        def.pads[12] = drum  (48, "Cowbell",     0);
+        def.pads[13] = drum  (49, "Crash",       0);
+        def.pads[14] = drum  (50, "Clave",       0);
+        def.pads[15] = drum  (51, "Ride",        0);
+    }
+    else if (name == "Industrial")
+    {
+        // Driven, metallic kit: distorted kick, noise snare, clanging Metal Hit (also the toms).
+        def.pads[0]  = drum  (36, "Industrial Kick", 0);
+        def.pads[1]  = drum  (37, "Metal Hit",       0);
+        def.pads[2]  = drum  (38, "Noise Snare",     0);
+        def.pads[3]  = drum  (39, "Rimshot",         0);
+        def.pads[4]  = drum  (40, "Clap",            0);
+        def.pads[5]  = tuned (41, "Noise Snare",     0, 48);   // Snare 2 — tuned up
+        def.pads[6]  = drum  (42, "House Hat",       1);       // crisp hats choke each other
+        def.pads[7]  = drum  (43, "Hat Open",        1);
+        def.pads[8]  = tuned (44, "Metal Hit",       0, 40);   // three tuned metal toms
+        def.pads[9]  = tuned (45, "Metal Hit",       0, 47);
+        def.pads[10] = tuned (46, "Metal Hit",       0, 55);
+        def.pads[11] = drum  (47, "Splash",          0);
+        def.pads[12] = drum  (48, "Cowbell",         0);
+        def.pads[13] = drum  (49, "Crash",           0);
+        def.pads[14] = drum  (50, "Clave",           0);
+        def.pads[15] = drum  (51, "Ride",            0);
     }
     else if (name == "Stab Board")
     {

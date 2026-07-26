@@ -9,6 +9,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Two new factory drum kits — House Basics + Industrial.** *House Basics* is a 909-flavoured
+  house/techno kit (tighter House Kick, snappy House Snare, crisp House Hat + shared claps/toms/
+  cymbals); *Industrial* is a driven, metallic kit (distorted Industrial Kick, harsh Noise Snare, a
+  clanging Metal Hit that also voices the three tuned toms). Six new synthesized drums back them.
+  Both are full 16-pad kits on triggers 36–51 with the 808's choke layout (hats choke, cymbals ring).
 - **27 new factory patches + a loudness-matched bank.** The factory library grows to **59 patches**
   with a fresh roster across every category — Bass (Acid, WT Growl, Sub + Click, Unison Wide, Reese
   Redux), Lead (Screamer, Vowel Talk, Glass Whistle, Soft Solo, Supersaw Slim), Pad (Motion, WT Drift,

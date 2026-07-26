@@ -118,6 +118,59 @@ TEST_CASE ("Crash rings long, Splash is short (cymbal decay)", "[plugin][drums][
     REQUIRE (rmsRange (splash, 48000, 0.0, 0.1) > 0.02);                  // but splash is audible up front
 }
 
+// --- Inc 2b: House Basics + Industrial kits ------------------------------------------------
+TEST_CASE ("factory kits reference only real presets + fill 16 pads", "[plugin][drums][kits]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    const auto& lib = p.factoryPresetLibrary();
+    auto has = [&] (const juce::String& n) { for (auto& fp : lib.all()) if (fp.name == n) return true; return false; };
+
+    for (auto* kitName : { "808 Basics", "House Basics", "Industrial" })
+    {
+        auto def = p.factoryKit (kitName);
+        for (int i = 0; i < 16; ++i)
+        {
+            const auto& pd = def.pads[(size_t) i];
+            INFO (kitName << " pad " << i << " -> '" << pd.source << "'");
+            REQUIRE (pd.source.isNotEmpty());            // every pad filled (no gaps)
+            REQUIRE (pd.triggerNote == 36 + i);          // Launchkey grid 36..51
+            REQUIRE (has (pd.source));                   // no dangling preset reference
+        }
+    }
+}
+
+TEST_CASE ("House + Industrial kits: a dense mash stays finite + bounded", "[plugin][drums][kits][torture]")
+{
+    for (auto* kitName : { "House Basics", "Industrial" })
+    {
+        juce::ScopedJuceInitialiser_GUI juceInit;
+        VASynthProcessor p;
+        p.prepareToPlay (48000.0, 128);
+        p.setPartKit (3, p.factoryKit (kitName));        // swap P4's kit (seq targets P4)
+
+        auto set = [&] (const char* id, float v) { auto* pp = p.apvts.getParameter (id); pp->setValueNotifyingHost (pp->convertTo0to1 (v)); };
+        set (ParamID::tempo, 180.0f);
+        for (int row = 0; row < 8; ++row)
+            for (int step = 0; step < 16; ++step) p.setSeqCell (row, step, 1);
+        set (ParamID::seqOn, 1.0f);
+
+        float peak = 0.0f; bool finite = true;
+        for (int b = 0; b < 700; ++b)
+        {
+            juce::AudioBuffer<float> buf (2, 128); buf.clear();
+            juce::MidiBuffer m; p.processBlock (buf, m);
+            for (int ch = 0; ch < 2; ++ch)
+                for (int i = 0; i < 128; ++i)
+                { const float s = buf.getSample (ch, i); if (! std::isfinite (s)) finite = false; peak = std::max (peak, std::abs (s)); }
+        }
+        INFO (kitName << " mash peak=" << peak);
+        REQUIRE (finite);
+        REQUIRE (peak > 0.05f);
+        REQUIRE (peak <= 1.05f);
+    }
+}
+
 TEST_CASE ("808 kit: a dense 16th mash including the crash stays clean + bounded", "[plugin][drums][808][torture]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

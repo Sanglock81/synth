@@ -1,0 +1,10 @@
+{
+  "name": "Noise Snare",
+  "category": "Drums",
+  "params": {
+    "osc1_wave": 3, "osc1_octave": 0, "osc1_level": 0.4, "osc2_on": 0, "osc3_on": 0, "noise_level": 1.0,
+    "filter_type": 1, "filter_cutoff": 1800, "filter_reso": 0.3, "filter_drive": 0.5, "fltenv_to_pitch": 5, "filter_env_amt": 0.0,
+    "flt_attack": 0.001, "flt_decay": 0.05, "flt_sustain": 0.0, "flt_release": 0.04,
+    "amp_attack": 0.001, "amp_decay": 0.18, "amp_sustain": 0.0, "amp_release": 0.04, "vel_to_amp": 0.3
+  }
+}
