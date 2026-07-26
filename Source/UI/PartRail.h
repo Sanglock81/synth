@@ -142,14 +142,35 @@ private:
     {
         // Switch this part between a SYNTH PATCH (edited on the panel via focus) and a
         // DRUM KIT (per-pad, edited in the Kit Editor).
+        // Patches: Init pinned, then factory grouped by category (canonical order, alphabetical)
+        // so this picker matches the top-bar Load menu. patchNames stays index-aligned to the
+        // item ids (1000 + index) for the callback.
+        const auto& lib = proc.factoryPresetLibrary();
         juce::StringArray patchNames { "Init" };
-        for (auto& fp : proc.factoryPresetLibrary().all()) patchNames.add (fp.name);
-        const auto kitNames = proc.getKitNames();
-
         juce::PopupMenu patches;
-        for (int k = 0; k < patchNames.size(); ++k) patches.addItem (1000 + k, patchNames[k]);
+        patches.addItem (1000, "Init");
+        for (auto& cat : lib.orderedCategories())
+        {
+            patches.addSectionHeader (cat);
+            for (auto& n : lib.namesInCategory (cat)) { patches.addItem (1000 + patchNames.size(), n); patchNames.add (n); }
+        }
+
+        // Kits: Factory + User sections, each entry showing its pad count. kitNames stays
+        // index-aligned to the ids (2000 + index).
+        const auto factoryKits = proc.factoryKitNames();
+        juce::StringArray kitNames;
         juce::PopupMenu kits;
-        for (int k = 0; k < kitNames.size(); ++k) kits.addItem (2000 + k, kitNames[k]);
+        auto padCount = [&] (const juce::String& n) { int c = 0; auto d = proc.loadKit (n); for (int pd = 0; pd < 16; ++pd) if (d.pads[(size_t) pd].source.isNotEmpty()) ++c; return c; };
+        auto addKit = [&] (const juce::String& n) { kits.addItem (2000 + kitNames.size(), n + "  (" + juce::String (padCount (n)) + " pads)"); kitNames.add (n); };
+        kits.addSectionHeader ("Factory");
+        for (auto& n : proc.getKitNames()) if (factoryKits.contains (n)) addKit (n);
+        bool anyUser = false;
+        for (auto& n : proc.getKitNames()) if (! factoryKits.contains (n)) anyUser = true;
+        if (anyUser)
+        {
+            kits.addSectionHeader ("User");
+            for (auto& n : proc.getKitNames()) if (! factoryKits.contains (n)) addKit (n);
+        }
 
         juce::PopupMenu m;
         m.addSubMenu ("Load synth patch", patches);

@@ -7,6 +7,7 @@
 #include "OutputsDialog.h"
 #include "../PluginProcessor.h"
 #include "../PresetManager.h"
+#include <map>
 
 // ============================================================================
 // R2 top bar: the preset name (tap to load), Save / Random, a live CPU readout,
@@ -359,18 +360,30 @@ private:
         juce::StringArray order;                       // id -> name
         auto add = [&] (const juce::String& n) { m.addItem (id++, n); order.add (n); };
 
-        add ("Init");
+        add ("Init");                                  // blank slate, pinned at the top
         const auto& lib = proc.factoryPresetLibrary();
-        for (auto& cat : lib.categories())
+        for (auto& cat : lib.orderedCategories())      // canonical musical order
         {
             m.addSectionHeader (cat);
-            for (auto& fp : lib.all()) if (fp.category == cat) add (fp.name);
+            for (auto& n : lib.namesInCategory (cat)) add (n);   // alphabetical within category
         }
+        // User presets in their own section, grouped by the category chosen at save time
+        // (old presets read back as "User"), alphabetical within each group.
         auto userNames = presets.getPresetNames();
         if (! userNames.isEmpty())
         {
-            m.addSectionHeader ("User");
-            for (auto& n : userNames) add (n);
+            std::map<juce::String, juce::StringArray> byCat;
+            for (auto& n : userNames) byCat[presets.getPresetCategory (n)].add (n);
+            juce::StringArray groups = FactoryPresetLibrary::canonicalOrder();
+            groups.add ("User");
+            for (auto& g : groups)
+            {
+                auto it = byCat.find (g);
+                if (it == byCat.end()) continue;
+                m.addSectionHeader (g == "User" ? "User" : "User > " + g);
+                it->second.sort (true);
+                for (auto& n : it->second) add (n);
+            }
         }
 
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (presetBtn),
@@ -393,6 +406,10 @@ private:
         auto* aw = new juce::AlertWindow ("Save Preset", "Preset name:",
                                           juce::MessageBoxIconType::NoIcon, this);
         aw->addTextEditor ("name", "");
+        juce::StringArray cats = FactoryPresetLibrary::canonicalOrder();
+        cats.add ("User");
+        aw->addComboBox ("cat", cats, "Category:");
+        if (auto* cb = aw->getComboBoxComponent ("cat")) cb->setText ("User", juce::dontSendNotification);
         aw->addButton ("Save",   1, juce::KeyPress (juce::KeyPress::returnKey));
         aw->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
         aw->enterModalState (true, juce::ModalCallbackFunction::create (
@@ -401,7 +418,9 @@ private:
                 if (result == 1)
                 {
                     const auto n = aw->getTextEditorContents ("name");
-                    if (presets.save (n)) { currentName = n; refreshTitle(); }
+                    auto* cb = aw->getComboBoxComponent ("cat");
+                    const auto cat = cb != nullptr ? cb->getText() : juce::String ("User");
+                    if (presets.save (n, cat)) { currentName = n; refreshTitle(); }
                 }
                 if (restoreFocus) restoreFocus();
             }), true);

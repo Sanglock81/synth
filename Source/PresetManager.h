@@ -26,15 +26,34 @@ public:
         return names;
     }
 
-    bool save (const juce::String& name) const
+    // Property name for a user preset's category (additive; presets saved before Inc 3 have
+    // none and read back as "User"). Stored on the state tree, stripped again on load so it
+    // never pollutes the live parameter state.
+    static constexpr const char* kCategoryProp = "vaCategory";
+
+    bool save (const juce::String& name, const juce::String& category = "User") const
     {
         auto safe = juce::File::createLegalFileName (name).trim();
         if (safe.isEmpty()) return false;
         auto state = apvts.copyState();
         PresetPolicy::stripFromState (state);         // don't bake the player's master into the file
+        state.setProperty (kCategoryProp, category, nullptr);
         if (auto xml = state.createXml())
             return xml->writeTo (presetDir().getChildFile (safe + ".vasynth"));
         return false;
+    }
+
+    // A user preset's saved category ("User" if it predates the field or the file is gone).
+    juce::String getPresetCategory (const juce::String& name) const
+    {
+        auto file = presetDir().getChildFile (name + ".vasynth");
+        if (auto xml = juce::XmlDocument::parse (file))
+        {
+            auto tree = juce::ValueTree::fromXml (*xml);
+            auto c = tree.getProperty (kCategoryProp).toString();
+            if (c.isNotEmpty()) return c;
+        }
+        return "User";
     }
 
     bool load (const juce::String& name)
@@ -43,6 +62,7 @@ public:
         if (auto xml = juce::XmlDocument::parse (file))
         {
             auto tree = juce::ValueTree::fromXml (*xml);
+            tree.removeProperty (kCategoryProp, nullptr);   // menu-only metadata — keep it out of live state
             // Presets the user saved before 6A carry osc_mix but no per-source
             // levels — detect before replaceState back-fills them, then migrate so
             // their existing patches still sound right.

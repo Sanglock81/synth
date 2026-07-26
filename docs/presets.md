@@ -7,13 +7,16 @@ save your own. The Load menu (in the Global panel) groups everything by category
 
 Open the **Load** menu and pick a patch. Entries are grouped:
 
-- **Init** — resets every parameter to its default and the FX chain to
+- **Init** — pinned at the top; resets every parameter to its default and the FX chain to
   chorus → delay → reverb → width.
-- **Factory** patches, grouped by category (below).
-- **User** — your saved patches (only shown once you've saved one).
+- **Factory** patches, grouped by category in a fixed musical order (Bass, Lead, Keys, Pad,
+  Pluck, Brass, Strings, Winds, Organ, FX, Drums) and **alphabetical within each category**.
+- **User** — your saved patches (only once you've saved one), in their own section grouped by
+  the category you chose at save time (a "User > Bass" sub-header; older presets read as "User").
 
 Selecting a patch applies it immediately; the panel returns to "Load" so you can
-pick the same one again.
+pick the same one again. The per-part **Load synth patch** picker (on a P1–P4 cell) uses the
+same grouping; **Load drum kit** lists **Factory** and **User** kits with each kit's pad count.
 
 ## Factory presets
 
@@ -59,8 +62,9 @@ factory patch is untouched.
 
 ## Saving your own
 
-**Save** opens a modal name dialog (no text field lives on the main panel, so
-QWERTY note input is never starved). Your presets are stored as XML here:
+**Save** opens a modal name dialog with a **Category** picker (defaults to *User*; pick any
+factory category to file the patch there). No text field lives on the main panel, so QWERTY
+note input is never starved. Your presets are stored as XML here:
 
 ```
 ~/.config/synth/presets/*.vasynth      # Linux

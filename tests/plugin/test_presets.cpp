@@ -206,6 +206,47 @@ TEST_CASE ("master_gain is a performance control excluded from preset load/save"
     pm.presetDir().getChildFile (name + ".vasynth").deleteFile();
 }
 
+TEST_CASE ("Inc 3: user preset category round-trips (and old presets read as User)", "[plugin][preset][category]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    PresetManager pm (p.apvts);
+
+    const auto name = "ut-cat-" + juce::String (juce::Random::getSystemRandom().nextInt (1'000'000));
+    REQUIRE (pm.save (name, "Bass"));
+    REQUIRE (pm.getPresetCategory (name) == "Bass");     // chosen category persists
+
+    // Loading the categorised preset must NOT drag the category property into live state.
+    REQUIRE (pm.load (name));
+    REQUIRE_FALSE (p.apvts.state.hasProperty (PresetManager::kCategoryProp));
+
+    // A preset saved WITHOUT a category (pre-Inc-3) reads back as "User".
+    const auto legacy = "ut-legacy-" + juce::String (juce::Random::getSystemRandom().nextInt (1'000'000));
+    { auto st = p.apvts.copyState(); if (auto xml = st.createXml()) xml->writeTo (pm.presetDir().getChildFile (legacy + ".vasynth")); }
+    REQUIRE (pm.getPresetCategory (legacy) == "User");
+
+    pm.presetDir().getChildFile (name   + ".vasynth").deleteFile();
+    pm.presetDir().getChildFile (legacy + ".vasynth").deleteFile();
+}
+
+TEST_CASE ("Inc 3: factory Load menu order is canonical + alphabetical within a category", "[plugin][preset][menu]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    const auto& lib = p.factoryPresetLibrary();
+
+    // Canonical order: the categories present appear in the fixed musical order.
+    auto ord = lib.orderedCategories();
+    int bass = ord.indexOf ("Bass"), pad = ord.indexOf ("Pad"), drums = ord.indexOf ("Drums");
+    REQUIRE (bass >= 0); REQUIRE (pad > bass); REQUIRE (drums > pad);   // Bass < Pad < Drums
+
+    // Alphabetical within a category (case-insensitive).
+    auto bassNames = lib.namesInCategory ("Bass");
+    REQUIRE (bassNames.size() >= 4);
+    for (int i = 1; i < bassNames.size(); ++i)
+        REQUIRE (bassNames[i - 1].compareIgnoreCase (bassNames[i]) <= 0);
+}
+
 TEST_CASE ("save then load round-trips the parameter state", "[plugin][preset][saveload]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

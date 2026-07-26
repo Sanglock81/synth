@@ -378,6 +378,33 @@ TEST_CASE ("unison: UNI/DET/WID controls are bound and render (#96)", "[plugin][
     snapshot (*bar, "unison-controls.png");
 }
 
+// --- Inc 3: the Save dialog carries a category picker; screenshot for sign-off ------------
+TEST_CASE ("save dialog: category picker present + renders", "[plugin][smoke][menu]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    juce::LookAndFeel_V4 lnf;
+    juce::LookAndFeel::setDefaultLookAndFeel (&lnf);
+
+    juce::AlertWindow aw ("Save Preset", "Preset name:", juce::MessageBoxIconType::NoIcon);
+    aw.addTextEditor ("name", "My Patch");
+    juce::StringArray cats = FactoryPresetLibrary::canonicalOrder(); cats.add ("User");
+    aw.addComboBox ("cat", cats, "Category:");
+    if (auto* cb = aw.getComboBoxComponent ("cat")) cb->setText ("Bass", juce::dontSendNotification);
+    aw.addButton ("Save", 1); aw.addButton ("Cancel", 0);
+
+    REQUIRE (aw.getComboBoxComponent ("cat") != nullptr);        // the picker exists
+    REQUIRE (aw.getComboBoxComponent ("cat")->getNumItems() == cats.size());
+    aw.setBounds (0, 0, 420, 260);
+
+    auto img = aw.createComponentSnapshot (aw.getLocalBounds(), false, 1.0f);
+    REQUIRE (img.isValid());
+    juce::File out (juce::String (VASYNTH_DOCS_DIR) + "/smoke/save-dialog.png");
+    out.getParentDirectory().createDirectory(); out.deleteFile();
+    juce::FileOutputStream os (out); REQUIRE (os.openedOk());
+    juce::PNGImageFormat png; REQUIRE (png.writeImageToStream (img, os));
+    juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
+}
+
 // --- Inc 2: per-patch TRIM (program level) is wired, carries the preset, screenshots ----
 TEST_CASE ("trim: patch TRIM control is bound, follows the loaded patch, renders", "[plugin][smoke][trim]")
 {

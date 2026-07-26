@@ -9,6 +9,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Preset & kit menus tidied.** The **Load** menu now lists factory patches in a fixed musical
+  category order (Bass → Lead → Keys → … → Drums) and **alphabetically within each category**, with
+  **Init** pinned on top. The **Save** dialog gains a **Category** picker (stored with the patch;
+  older presets read back as *User*), and user presets appear in their own section grouped by that
+  category. The per-part **Load synth patch** picker uses the same grouping, and **Load drum kit**
+  now splits **Factory** / **User** kits and shows each kit's **pad count**. No search/tags/favorites.
 - **Two new factory drum kits — House Basics + Industrial.** *House Basics* is a 909-flavoured
   house/techno kit (tighter House Kick, snappy House Snare, crisp House Hat + shared claps/toms/
   cymbals); *Industrial* is a driven, metallic kit (distorted Industrial Kick, harsh Noise Snare, a

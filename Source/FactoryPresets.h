@@ -89,6 +89,33 @@ public:
         return c;
     }
 
+    // The canonical menu order (musical first-impressions: sounds you'd reach for first,
+    // textures/drums last). Any present category not on this list is appended after.
+    static const juce::StringArray& canonicalOrder()
+    {
+        static const juce::StringArray o { "Bass", "Lead", "Keys", "Pad", "Pluck",
+                                           "Brass", "Strings", "Winds", "Organ", "FX", "Drums" };
+        return o;
+    }
+
+    // Present categories in canonical order (unknown ones appended, first-seen).
+    juce::StringArray orderedCategories() const
+    {
+        juce::StringArray present = categories(), out;
+        for (auto& c : canonicalOrder()) if (present.contains (c)) out.add (c);
+        for (auto& c : present) out.addIfNotAlreadyThere (c);   // any extras keep their slot
+        return out;
+    }
+
+    // Preset names in a category, sorted alphabetically (case-insensitive) for the menu.
+    juce::StringArray namesInCategory (const juce::String& cat) const
+    {
+        juce::StringArray n;
+        for (auto& p : presets) if (p.category == cat) n.add (p.name);
+        n.sort (true);
+        return n;
+    }
+
 private:
     std::vector<FactoryPreset> presets;
 };
