@@ -334,7 +334,19 @@ delay→width→reverb→chorus.)
 | `Source/PresetManager.h` | User preset save/load (per-user dir) + musical randomize; migrates legacy patches. |
 | `Source/FactoryPresets.h` | Read-only factory presets (JSON in `resources/presets/`, embedded). |
 
-## Build
+## Build & install
+
+**Fastest path — the one-command installers** (build from source + place the VST3 and
+standalone where your DAW/desktop expect them). Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
+
+```bash
+# Linux (Debian/Ubuntu)
+./scripts/install-linux.sh
+# Windows (PowerShell in the repo root)
+.\scripts\install-windows.ps1
+```
+
+The rest of this section is the manual build.
 
 ### Linux (Ubuntu/Debian)
 
@@ -342,7 +354,7 @@ delay→width→reverb→chorus.)
 sudo apt install build-essential cmake git \
     libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev \
     libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev \
-    libcurl4-openssl-dev libwebkit2gtk-4.1-dev
+    libgl1-mesa-dev
 
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
