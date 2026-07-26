@@ -143,8 +143,13 @@ public:
         uniDet->setHelp ("Unison detune: how far the stacked voices spread in pitch");
         uniWid = std::make_unique<RotaryKnob> (proc.apvts, ParamID::oscUnisonWidth,  "WID", proc.getMidiLearn());
         uniWid->setHelp ("Unison width: how far the stacked voices spread across the stereo field");
+        // Per-patch TRIM (program level): the patch's own output gain, baked with the sound so a
+        // patch carries its loudness. Registry-bound -> a LINK target that animates like the rest.
+        trim   = std::make_unique<RotaryKnob> (proc.apvts, ParamID::patchTrim, "TRIM", proc.getMidiLearn());
+        trim->setHelp ("Patch trim: this patch's own output level (the factory bank is loudness-matched with it). Saved with the sound.");
         addAndMakeVisible (*mode); addAndMakeVisible (*glide); addAndMakeVisible (*analog);
         addAndMakeVisible (*uni); addAndMakeVisible (*uniDet); addAndMakeVisible (*uniWid);
+        addAndMakeVisible (*trim);
 
         refreshMacroLabels();
         startTimerHz (4);   // CPU readout + macro-label resync
@@ -194,6 +199,7 @@ public:
         uni->setBounds    (tb.removeFromLeft (46)); tb.removeFromLeft (3);
         uniDet->setBounds (tb.removeFromLeft (46)); tb.removeFromLeft (3);
         uniWid->setBounds (tb.removeFromLeft (46)); tb.removeFromLeft (10);
+        trim->setBounds   (tb.removeFromLeft (46)); tb.removeFromLeft (10);   // per-patch program level
 
         // 8 macro knobs, packed to 75% of the middle span (J4#1: closer together), centred.
         const int n = macros.size();
@@ -414,7 +420,7 @@ private:
     inline static const juce::Colour kLinkRing { 0xff4bb3c4 };   // LINK cyan (matches the knob armed ring)
     juce::OwnedArray<RotaryKnob> macros;
     juce::OwnedArray<juce::ParameterAttachment> macroAtt;
-    std::unique_ptr<RotaryKnob> master, glide, analog, uni, uniDet, uniWid;
+    std::unique_ptr<RotaryKnob> master, glide, analog, uni, uniDet, uniWid, trim;
     std::unique_ptr<HSelector> mode;
     bool voiceCtrlsDisabled = false;   // mode/glide greyed while a kit part is active
     juce::Rectangle<int> statusArea;

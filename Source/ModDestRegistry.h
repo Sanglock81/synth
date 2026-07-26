@@ -98,6 +98,7 @@ namespace moddest
             { ModMatrix::EqB5Gain,     P::peqB5Gain,     "EQ Air Gain",    Fx },
             // Part
             { ModMatrix::GlideTime, P::glideTime, "Glide",   Part },
+            { ModMatrix::PartTrim,  P::patchTrim, "Trim",    Part },   // per-patch program level (LINK target + animates)
             // PartLevel / PartPan reserved (enum stable) — they modulate the mixer, a later seam.
         };
         return t;

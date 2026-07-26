@@ -1,0 +1,27 @@
+{
+  "name": "Sub + Click",
+  "category": "Bass",
+  "params": {
+    "osc1_wave": 3,
+    "osc1_octave": -2,
+    "osc1_level": 0.9,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "noise_level": 0.25,
+    "filter_type": 0,
+    "filter_cutoff": 1400,
+    "filter_reso": 0.1,
+    "filter_env_amt": 0.5,
+    "vel_to_cutoff": 0.25,
+    "amp_attack": 0.001,
+    "amp_decay": 0.4,
+    "amp_sustain": 0.7,
+    "amp_release": 0.12,
+    "flt_attack": 0.001,
+    "flt_decay": 0.03,
+    "flt_sustain": 0.0,
+    "flt_release": 0.05,
+    "poly_mode": 1,
+    "patch_trim": 0.73
+  }
+}

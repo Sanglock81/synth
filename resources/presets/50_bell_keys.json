@@ -1,0 +1,26 @@
+{
+  "name": "Bell Keys",
+  "category": "Keys",
+  "params": {
+    "osc1_wave": 4,
+    "osc1_wt_kind": 3,
+    "osc1_wt_pos": 0.3,
+    "osc2_on": 1,
+    "osc2_wave": 3,
+    "osc2_octave": 2,
+    "osc2_level": 0.3,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 5000,
+    "filter_reso": 0.1,
+    "filter_env_amt": 0.2,
+    "vel_to_cutoff": 0.5,
+    "amp_attack": 0.001,
+    "amp_decay": 1.4,
+    "amp_sustain": 0.2,
+    "amp_release": 0.6,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.3,
+    "reverb_size": 0.7
+  }
+}

@@ -75,6 +75,9 @@ public:
                               // dest despite its numeric position, so blockOffsets() collects it harmlessly.
                   ReverbMotion, // Tier 4a: reverb tail modulation depth (block-tier, appended).
                   Saturation,   // FX SAT: tube saturation in the width block (block-tier, appended).
+                  PartTrim,     // Per-patch program level (post-FX / pre-part-level gain). Registry-listed
+                                // for LINK/animation; applied by the processor (setPartTrims) like PartLevel,
+                                // not live-summed here (shares the mixer-tier seam reserved with PartLevel/Pan).
                   kNumDests };
     static constexpr int kFirstBlockDest = ChorusRate;
     static constexpr int kNumBlockDests  = kNumDests - kFirstBlockDest;

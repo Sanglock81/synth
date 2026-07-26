@@ -43,6 +43,9 @@ struct FXParams
     float reverbSize = 0.5f, reverbDamp = 0.5f, reverbWidth = 1.0f, reverbMix = 0.3f, reverbMotion = 0.0f;
     float width = 1.4f;
     float sat   = 0.0f;                               // tube saturation in the width block (0 = clean)
+    float trim  = 1.0f;                               // per-patch program level (patch_trim). NOT an effect —
+                                                      // it rides this per-part bundle so it travels with every
+                                                      // bake; the engine applies it post-FX in mixParts (unity 1.0).
     PartEQ::Band eqBand1 { 180.0f,   0.0f, 0.9f };   // per-part EQ, 5 fully parametric bells (fixed last)
     PartEQ::Band eqBand2 { 1000.0f,  0.0f, 0.9f };
     PartEQ::Band eqBand3 { 5000.0f,  0.0f, 0.9f };

@@ -1,0 +1,27 @@
+{
+  "name": "Static Riser",
+  "category": "FX",
+  "params": {
+    "osc1_on": 0,
+    "osc1_level": 0,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "noise_level": 0.8,
+    "filter_type": 1,
+    "filter_cutoff": 300,
+    "filter_reso": 0.3,
+    "filter_env_amt": 0.9,
+    "vel_to_cutoff": 0.0,
+    "amp_attack": 0.5,
+    "amp_decay": 0.5,
+    "amp_sustain": 0.9,
+    "amp_release": 0.3,
+    "flt_attack": 2.0,
+    "flt_decay": 0.5,
+    "flt_sustain": 1.0,
+    "flt_release": 0.3,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.4,
+    "reverb_size": 0.8
+  }
+}

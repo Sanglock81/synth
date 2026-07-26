@@ -66,6 +66,7 @@ public:
         namespace ID = ParamID;
         static const juce::StringArray excluded {
             ID::masterGain,     // output level (player rides it; often a mapped knob)
+            ID::patchTrim,      // per-patch program level (a loudness-match lever, not a sound-design knob)
             ID::velToAmp,       // velocity -> amplitude routing (playing dynamics)
             ID::velToCutoff,    // velocity -> cutoff routing
             ID::polyMode,       // poly / mono / legato performance mode

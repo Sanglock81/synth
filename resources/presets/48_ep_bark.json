@@ -1,0 +1,31 @@
+{
+  "name": "EP Bark",
+  "category": "Keys",
+  "params": {
+    "osc1_wave": 2,
+    "osc2_on": 1,
+    "osc2_wave": 3,
+    "osc2_octave": 1,
+    "osc2_level": 0.4,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 1600,
+    "filter_reso": 0.15,
+    "filter_env_amt": 0.35,
+    "vel_to_cutoff": 0.55,
+    "amp_attack": 0.002,
+    "amp_decay": 1.2,
+    "amp_sustain": 0.35,
+    "amp_release": 0.4,
+    "flt_attack": 0.002,
+    "flt_decay": 0.4,
+    "flt_sustain": 0.2,
+    "flt_release": 0.3,
+    "fx_chorus_on": 1,
+    "chorus_voices": 2,
+    "chorus_rate": 0.4,
+    "chorus_depth": 0.3,
+    "chorus_mix": 0.3,
+    "patch_trim": 2.37
+  }
+}

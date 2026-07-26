@@ -52,6 +52,7 @@ TEST_CASE ("randomize never touches the performance/global exclusion list", "[pl
     struct KV { const char* id; float norm; };
     const std::vector<KV> pinned {
         { ParamID::masterGain,  0.42f },
+        { ParamID::patchTrim,   0.8f  },   // Inc 2: per-patch program level is a loudness lever, not sound design
         { ParamID::velToAmp,    0.11f },
         { ParamID::velToCutoff, 0.66f },
         { ParamID::polyMode,    1.0f  },   // Mono

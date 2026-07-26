@@ -28,6 +28,8 @@ namespace
             p.apvts.getParameter ("filter_cutoff")->setValueNotifyingHost (1.0f);
             p.apvts.getParameter ("amp_attack")->setValueNotifyingHost (0.0f);
             p.apvts.getParameter ("amp_sustain")->setValueNotifyingHost (1.0f);
+            { auto* t = p.apvts.getParameter ("patch_trim");   // unity trim: test note-holding, not the
+              t->setValueNotifyingHost (t->convertTo0to1 (1.0f)); }   // startup patch's program level
             p.prepareToPlay (kSR, 512);
         }
 

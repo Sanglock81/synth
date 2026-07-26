@@ -1,0 +1,24 @@
+{
+  "name": "Supersaw Slim",
+  "category": "Lead",
+  "params": {
+    "osc1_wave": 0,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "osc_unison": 3,
+    "osc_unison_detune": 0.35,
+    "osc_unison_width": 0.6,
+    "filter_type": 0,
+    "filter_cutoff": 9000,
+    "filter_reso": 0.1,
+    "filter_env_amt": 0.2,
+    "vel_to_cutoff": 0.4,
+    "amp_attack": 0.008,
+    "amp_decay": 0.4,
+    "amp_sustain": 0.85,
+    "amp_release": 0.3,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.2,
+    "reverb_size": 0.65
+  }
+}

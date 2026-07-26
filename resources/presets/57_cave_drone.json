@@ -1,0 +1,30 @@
+{
+  "name": "Cave Drone",
+  "category": "FX",
+  "params": {
+    "osc1_wave": 0,
+    "osc2_on": 1,
+    "osc2_wave": 0,
+    "osc2_octave": -1,
+    "osc2_detune": 11,
+    "osc2_level": 0.7,
+    "osc3_on": 0,
+    "analog": 0.7,
+    "filter_type": 0,
+    "filter_cutoff": 700,
+    "filter_reso": 0.2,
+    "filter_env_amt": 0.1,
+    "vel_to_cutoff": 0.0,
+    "amp_attack": 1.5,
+    "amp_decay": 1.0,
+    "amp_sustain": 0.8,
+    "amp_release": 3.0,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.6,
+    "reverb_size": 0.95,
+    "reverb_motion": 0.7,
+    "reverb_damp": 0.5,
+    "fx_width_on": 1,
+    "stereo_width": 1.7
+  }
+}

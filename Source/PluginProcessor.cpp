@@ -491,7 +491,7 @@ static const juce::StringArray& perPartSoundIds()
         ID::chorusRate, ID::chorusDepth, ID::chorusMix, ID::chorusVoices, ID::fxChorusOn,
         ID::delayTime, ID::delayFeedback, ID::delayMix, ID::delaySpread, ID::fxDelayOn,
         ID::reverbSize, ID::reverbDamp, ID::reverbWidth, ID::reverbMix, ID::reverbMotion, ID::fxReverbOn,
-        ID::stereoWidth, ID::fxSat, ID::fxWidthOn,
+        ID::stereoWidth, ID::fxSat, ID::fxWidthOn, ID::patchTrim,   // patch_trim = per-patch program level (baked per part)
         ID::peqOn, ID::peqB1Freq, ID::peqB1Gain, ID::peqB1Q, ID::peqB1On,
         ID::peqB2Freq, ID::peqB2Gain, ID::peqB2Q, ID::peqB2On,
         ID::peqB3Freq, ID::peqB3Gain, ID::peqB3Q, ID::peqB3On,
@@ -795,6 +795,7 @@ static FXParams fxParamsFrom (const juce::AudioProcessorValueTreeState& src)
     p.reverbMotion = rp (src, ID::reverbMotion);
     p.width = rp (src, ID::stereoWidth);
     p.sat   = rp (src, ID::fxSat);
+    p.trim  = rp (src, ID::patchTrim);   // per-patch program level travels with the locked-part bake
     p.eqBand1 = { rp (src, ID::peqB1Freq), rp (src, ID::peqB1Gain), rp (src, ID::peqB1Q), rp (src, ID::peqB1On) > 0.5f };
     p.eqBand2 = { rp (src, ID::peqB2Freq), rp (src, ID::peqB2Gain), rp (src, ID::peqB2Q), rp (src, ID::peqB2On) > 0.5f };
     p.eqBand3 = { rp (src, ID::peqB3Freq), rp (src, ID::peqB3Gain), rp (src, ID::peqB3Q), rp (src, ID::peqB3On) > 0.5f };
@@ -1828,6 +1829,7 @@ FXParams VASynthProcessor::snapshotFXParams() const
 
     p.width = rp (apvts, ID::stereoWidth);
     p.sat   = rp (apvts, ID::fxSat);
+    p.trim  = rp (apvts, ID::patchTrim);   // per-patch program level (post-FX gain, applied in mixParts)
 
     // K1: the per-part EQ (fixed last stage). The LIVE part reads it here — this was the
     // missing wiring: snapshotFXParams never carried the EQ, so the live part's EQ did

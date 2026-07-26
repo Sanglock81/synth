@@ -20,7 +20,7 @@
     "vel_to_amp": 0.2,
     "fx_chorus_on": 1,
     "chorus_mix": 0.25,
-    "master_gain": 0.6,
-    "osc1_level": 0.4447
+    "osc1_level": 0.4447,
+    "patch_trim": 0.58
   }
 }

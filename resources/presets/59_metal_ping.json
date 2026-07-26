@@ -1,0 +1,28 @@
+{
+  "name": "Metal Ping",
+  "category": "FX",
+  "params": {
+    "osc1_wave": 4,
+    "osc1_wt_seed": 777,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "noise_level": 0.05,
+    "filter_type": 0,
+    "filter_cutoff": 1500,
+    "filter_reso": 0.97,
+    "filter_keytrack": 0.8,
+    "filter_env_amt": 0.4,
+    "vel_to_cutoff": 0.4,
+    "amp_attack": 0.001,
+    "amp_decay": 0.6,
+    "amp_sustain": 0.0,
+    "amp_release": 0.4,
+    "flt_attack": 0.001,
+    "flt_decay": 0.3,
+    "flt_sustain": 0.0,
+    "flt_release": 0.3,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.35,
+    "reverb_size": 0.7
+  }
+}

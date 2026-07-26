@@ -9,6 +9,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **27 new factory patches + a loudness-matched bank.** The factory library grows to **59 patches**
+  with a fresh roster across every category — Bass (Acid, WT Growl, Sub + Click, Unison Wide, Reese
+  Redux), Lead (Screamer, Vowel Talk, Glass Whistle, Soft Solo, Supersaw Slim), Pad (Motion, WT Drift,
+  Dark Hollow, Shimmer Bed), Keys/EP (EP Bark, Soft EP, Bell Keys, Clav Bite), Pluck (Ice, WT Marimba,
+  Rubber), Brass/Winds (Solo Brass, Breath Flute), Strings Redux, and textures (Cave Drone, Static
+  Riser, Metal Ping). Each is a characterful starting point that shows off the new engine (wavetable,
+  unison, filter drive, saturation, reverb motion).
+- **Per-patch TRIM (program level).** A new `patch_trim` parameter — the **TRIM** knob in the top
+  bar — is a transparent post-FX gain baked *with the sound* (saved in the preset, unlike MASTER).
+  It's the standard "program level" every hardware synth has, and it's a LINK target that animates
+  like the rest. With it, the **sustained** factory patches are level-matched to within **±4 dB** of
+  the bank median (~−30 dBFS) — no oscillator re-voicing, so every patch keeps its exact character.
+  Percussive/evolving patches (plucks, bells, EPs, drums, risers) stay feel-matched with TRIM at unity.
 - **808 Basics is now a full 16-pad kit.** The factory drum kit fills all 16 pads (triggers 36–51,
   the Launchkey grid): the existing kick/snare/hats/tom plus **seven new synthesized drums** — Clap,
   Rimshot, Clave, Cowbell, Splash, Crash, Ride — with three toms and a tuned second snare voiced from

@@ -19,17 +19,21 @@ pick the same one again.
 
 | Category | Presets |
 |---|---|
-| Bass    | Fat Saw Bass, Deep Sub, Reese Bass |
-| Lead    | Bright Lead, Square Lead |
-| Keys    | E-Piano, Digital Bell |
-| Pad     | Warm Pad, Glass Pad |
-| Pluck   | Synth Pluck |
-| Brass   | Analog Brass |
-| Strings | String Machine |
-| Winds   | Soft Flute |
+| Bass    | Fat Saw Bass, Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Unison Wide Bass, Reese Redux |
+| Lead    | Bright Lead, Square Lead, WT Digital Lead, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo, Supersaw Slim |
+| Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite |
+| Pad     | Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow, Shimmer Bed |
+| Pluck   | Synth Pluck, Ice Pluck, WT Marimba, Rubber Pluck |
+| Brass   | Analog Brass, Solo Brass |
+| Strings | String Machine, Strings Redux |
+| Winds   | Soft Flute, Breath Flute |
 | Organ   | Full Organ |
-| FX      | Noise Riser, Dark Drone |
+| FX      | Noise Riser, Dark Drone, Cave Drone, Static Riser, Metal Ping |
 | Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom, Clap, Rimshot, Clave, Cowbell, Splash, Crash, Ride |
+
+Some concepts (an envelope sweeping the wavetable position, a per-step timbre morph) want a
+modulation route that the current preset format can't spell; those patches are voiced as close
+as the fixed routes allow, and the **full versions are pending a preset-format extension** (1.1).
 
 ### Drum recipes (7A)
 
@@ -76,13 +80,21 @@ The single exclusion list lives in `PresetPolicy::excludedParams()` (`Parameters
 
 ## Loudness
 
-Factory patches are **level-matched**: played as a single sustained note they sit
-within a few dB of each other (~−33 dBFS RMS), so switching patches doesn't jump the
-volume. Matching is done by trimming a patch's internal oscillator levels (never the
-master). **Percussive/evolving patches are deliberately not RMS-matched** — a Pluck,
-Bell, or a slow FX Riser has most of its energy in a short transient or a late swell,
-so integrated RMS understates them; they are matched by feel/peak instead. Drum
-presets (7A) are likewise matched by transient, not sustain.
+Every patch carries its own **program level** — a `patch_trim` parameter shown as the **TRIM**
+knob in the top bar (right of the unison controls). Trim is a transparent post-FX gain baked
+**with the sound** (saved in the preset, unlike MASTER which is yours), so a patch knows how loud
+it wants to be. It is the lever the factory bank is level-matched with — no oscillator re-voicing,
+no character change: the same patch, at a chosen level.
+
+The **sustained, full-spectrum** factory patches are matched to within **±4 dB** of the bank
+median (~−30 dBFS RMS on a held note), so switching patches during a set doesn't jump the volume.
+`tests/plugin/test_preset_loudness.cpp` renders every patch and enforces this **post-trim**.
+
+**Percussive/evolving patches are deliberately outside the RMS match** — a Pluck, Bell, EP, drum,
+slow FX Riser or drone has its energy in a short transient or a late swell, so integrated RMS
+understates them; they are matched by feel/peak instead (their TRIM sits at unity, free for you to
+nudge). The check classifies a patch as *sustained* only when its amp envelope holds (sustain > 0.25)
+**and** it is still ringing at full level late in the note — everything else is feel-matched.
 
 ## Kits
 

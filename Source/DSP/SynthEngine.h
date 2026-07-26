@@ -959,8 +959,12 @@ private:
     std::array<float, maxParts> prevLg { { 1.0f, 1.0f, 1.0f, 1.0f } };         // per-block-ramped mixer L gain
     std::array<float, maxParts> prevRg { { 1.0f, 1.0f, 1.0f, 1.0f } };         // ...and R gain (anti-zipper)
     bool mixPrimed = false;                                                    // snap smoothers to first setMix
-    float targetLg (int p) const { const float pan = partPanUse[(std::size_t) p]; return partLevelUse[(std::size_t) p] * (pan <= 0.0f ? 1.0f : 1.0f - pan); }
-    float targetRg (int p) const { const float pan = partPanUse[(std::size_t) p]; return partLevelUse[(std::size_t) p] * (pan >= 0.0f ? 1.0f : 1.0f + pan); }
+    // Per-patch TRIM rides with the part's FX bundle (partFxUse[p].trim) and folds into the SAME
+    // smoothed L/R gain as level/pan — post-FX, click-safe, riding the existing ramp so a stepped
+    // trim (automation / preset load) never zippers. Unity trim (1.0) leaves the gain bit-identical,
+    // so goldens are unchanged.
+    float targetLg (int p) const { const float pan = partPanUse[(std::size_t) p]; return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * (pan <= 0.0f ? 1.0f : 1.0f - pan); }
+    float targetRg (int p) const { const float pan = partPanUse[(std::size_t) p]; return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * (pan >= 0.0f ? 1.0f : 1.0f + pan); }
 
     // Kit parts: per-part double-buffered KitData (pads + baked params). Published on
     // the message thread; the audio thread reads buf[kitReadIdx[part]] (sampled once

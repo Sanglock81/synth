@@ -107,6 +107,12 @@ namespace ParamID
     inline constexpr auto glideTime   = "glide_time";
     inline constexpr auto masterGain  = "master_gain";
     inline constexpr auto polyMode    = "poly_mode";     // poly / mono / legato
+    // Per-patch output TRIM (the "program level" every hardware synth has). A transparent
+    // post-FX / pre-part-level gain baked WITH the patch (a per-part sound param, carried in
+    // the preset JSON) so a patch can carry its own loudness — the lever the equal-loudness
+    // bank match uses. Default 1.0 = unity (goldens bit-identical). Unlike masterGain this is
+    // NOT excluded from preset apply — it's part of the sound.
+    inline constexpr auto patchTrim   = "patch_trim";    // gain 0.25..4.0 (~-12..+12 dB), unity 1.0
 
     // Part mixer (Sub-phase 2). Per-part level (0..2, unity 1.0) + pan (-1..+1, centre 0).
     // Defaults keep the master sum bit-identical. IDs part0_..part3_.
@@ -351,6 +357,10 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::glideTime, 1}, "Glide", juce::NormalisableRange<float>(0.0f, 2.0f, 0.0f, 0.4f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("s")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::masterGain, 1},"Master", juce::NormalisableRange<float>(0.0f, 1.0f), 0.7f));
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::polyMode, 1},  "Mode", juce::StringArray{ "Poly", "Mono", "Legato" }, 0));
+    // Per-patch TRIM (program level): linear gain 0..4 (−inf..+12 dB), unity 1.0. A plain
+    // linear range keeps the default EXACTLY 1.0 (goldens bit-identical); a skew-for-centre
+    // here corrupts the stored default, silently re-levelling every patch.
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::patchTrim, 1}, "Trim", juce::NormalisableRange<float>(0.0f, 4.0f), 1.0f));
 
     // --- Part mixer (Sub-phase 2) --------------------------------------------
     // level 0..2 (unity 1.0), pan -1..+1 (centre 0). Defaults keep goldens.

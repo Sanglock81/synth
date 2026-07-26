@@ -1,0 +1,27 @@
+{
+  "name": "Unison Wide Bass",
+  "category": "Bass",
+  "params": {
+    "osc1_wave": 0,
+    "osc1_octave": -1,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "osc_unison": 3,
+    "osc_unison_detune": 0.3,
+    "osc_unison_width": 0.2,
+    "filter_type": 0,
+    "filter_cutoff": 900,
+    "filter_reso": 0.2,
+    "filter_env_amt": 0.35,
+    "vel_to_cutoff": 0.3,
+    "amp_attack": 0.003,
+    "amp_decay": 0.3,
+    "amp_sustain": 0.7,
+    "amp_release": 0.12,
+    "flt_attack": 0.003,
+    "flt_decay": 0.25,
+    "flt_sustain": 0.3,
+    "flt_release": 0.12,
+    "poly_mode": 1
+  }
+}

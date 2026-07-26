@@ -1,0 +1,28 @@
+{
+  "name": "WT Marimba",
+  "category": "Pluck",
+  "params": {
+    "osc1_wave": 4,
+    "osc1_wt_kind": 0,
+    "osc1_wt_pos": 0.2,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 2500,
+    "filter_reso": 0.1,
+    "filter_keytrack": 0.6,
+    "filter_env_amt": 0.3,
+    "vel_to_cutoff": 0.4,
+    "amp_attack": 0.001,
+    "amp_decay": 0.4,
+    "amp_sustain": 0.0,
+    "amp_release": 0.25,
+    "flt_attack": 0.001,
+    "flt_decay": 0.25,
+    "flt_sustain": 0.0,
+    "flt_release": 0.2,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.2,
+    "reverb_size": 0.5
+  }
+}

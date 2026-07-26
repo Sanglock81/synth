@@ -1,5 +1,26 @@
-{ "name":"Rimshot", "category":"Drums",
-  "params": { "osc1_wave":2, "osc1_octave":1, "osc1_level":0.6, "osc2_on":0, "osc3_on":0, "noise_level":0.28,
-    "filter_type":2, "filter_cutoff":2400, "filter_reso":0.3, "filter_env_amt":0.0, "fltenv_to_pitch":8,
-    "flt_attack":0.001, "flt_decay":0.02, "flt_sustain":0.0, "flt_release":0.02,
-    "amp_attack":0.001, "amp_decay":0.05, "amp_sustain":0.0, "amp_release":0.03, "vel_to_amp":0.5 } }
+{
+  "name": "Rimshot",
+  "category": "Drums",
+  "params": {
+    "osc1_wave": 2,
+    "osc1_octave": 1,
+    "osc1_level": 0.6,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "noise_level": 0.28,
+    "filter_type": 2,
+    "filter_cutoff": 2400,
+    "filter_reso": 0.3,
+    "filter_env_amt": 0.0,
+    "fltenv_to_pitch": 8,
+    "flt_attack": 0.001,
+    "flt_decay": 0.02,
+    "flt_sustain": 0.0,
+    "flt_release": 0.02,
+    "amp_attack": 0.001,
+    "amp_decay": 0.05,
+    "amp_sustain": 0.0,
+    "amp_release": 0.03,
+    "vel_to_amp": 0.5
+  }
+}

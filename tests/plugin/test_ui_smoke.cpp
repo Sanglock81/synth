@@ -378,6 +378,31 @@ TEST_CASE ("unison: UNI/DET/WID controls are bound and render (#96)", "[plugin][
     snapshot (*bar, "unison-controls.png");
 }
 
+// --- Inc 2: per-patch TRIM (program level) is wired, carries the preset, screenshots ----
+TEST_CASE ("trim: patch TRIM control is bound, follows the loaded patch, renders", "[plugin][smoke][trim]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+
+    auto* trim = findKnob (*ed, ParamID::patchTrim);
+    REQUIRE (trim != nullptr);
+    REQUIRE (trim->isVisible());
+
+    // A loudness-matched factory patch carries a non-unity trim; the control must reflect it.
+    p.loadFactoryPreset ("Full Organ");   // trimmed DOWN (0.58) by the bank match
+    const float t = p.apvts.getRawParameterValue (ParamID::patchTrim)->load();
+    REQUIRE (t < 0.9f);                    // clearly below unity
+    REQUIRE (t > 0.25f);
+
+    juce::Component* bar = trim->getParentComponent();
+    while (bar != nullptr && dynamic_cast<TopBar*> (bar) == nullptr) bar = bar->getParentComponent();
+    REQUIRE (bar != nullptr);
+    bar->repaint();
+    snapshot (*bar, "patch-trim.png");
+}
+
 // --- J2: each looper lane has its OWN bars selector (per-part loop length) ---------------
 TEST_CASE ("J2: per-lane looper BARS selectors are wired + render (#J2)", "[plugin][smoke][looper][j2]")
 {
