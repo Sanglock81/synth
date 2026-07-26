@@ -95,6 +95,41 @@ a general-purpose synth that runs in any VST3 host or standalone.
 - **Observability**: RT-safe ring logger, per-block CPU/xrun/saturation telemetry,
   ASan/UBSan + soak, golden-render regression tests.
 
+## MIDI mapping
+
+Every control is **MIDI-learnable**: right-click (mouse) or long-press (touch) a knob,
+fader, or button — it pulses amber — then move a knob or press a footswitch. The next
+incoming CC binds to it, and the map persists in the patch/MULTI state across restarts.
+The 8 macros ship pre-mapped to a Launchkey (**CC 21–28**); mod wheel (CC 1) and sustain
+(CC 64) work out of the box.
+
+### Footswitch looper rig (e.g. Morningstar MC8 Pro)
+
+The four looper lanes are learnable for a hands-free record/mute rig on release day:
+
+| Lane | REC param | PLAY / mute param |
+|------|-----------|-------------------|
+| 1 (P1) | `loop_rec`  | `loop_play`  |
+| 2 (P2) | `loop_rec2` | `loop_play2` |
+| 3 (P3) | `loop_rec3` | `loop_play3` |
+| 4 (P4) | `loop_rec4` | `loop_play4` |
+
+Two things to get right on the controller:
+
+- **Send a *Toggle* CC, not momentary.** A learned CC sets the value to `cc/127`, so a
+  toggle reads **127 = on, 0 = off** (absolute). A momentary switch would only record
+  *while held*; configure the footswitch to send a **Toggle CC** (alternating 127 / 0)
+  so one tap latches REC on and the next taps it off.
+- **Pick CCs in the undefined 102–119 range** — clear of the macro defaults (21–28),
+  mod wheel (1), and sustain (64).
+
+A controller that can send different messages per press-type (tap vs long-press) can fold
+all four lanes' REC + PLAY onto four switches (tap = REC, long-press = PLAY/mute).
+
+> **Scene ("section") switching from a footswitch, external-audio loop lanes, and a
+> one-shot drum-fill pedal are the [1.1 *Live Rig*](docs/plans/1.1-live-rig.md) package** —
+> scene launch isn't a MIDI-reachable parameter in 1.0.
+
 ## Architecture
 
 ```
@@ -488,6 +523,16 @@ out-of-range peaks, and non-finite samples. The `[click]` suite runs in every ga
   dialog still shows JUCE's raw ALSA list as the advanced view. Replacing it with a
   selector that shows only the curated list (friendly endpoints + card names, with
   a show-all toggle) needs a custom `AudioDeviceManager`/plugin-holder — deferred.
+
+**v1.1 — planned**
+- [ ] **Live Rig** — footswitch performance package ([spec](docs/plans/1.1-live-rig.md)):
+      MIDI scene control (absolute PC/notes + relative next/prev with queued targets, launch-quantised);
+      external-audio loop lanes (Scarlett in → lane capture, monitoring + latency comp); a one-shot
+      drum-fill engine (CC-triggered, bar-quantised, auto-return); and a documented MC8 Pro factory
+      layout + device profile. The 1.0 README MIDI-mapping section already covers the four-switch
+      loop-record rig that works today.
+- [ ] **Sharing / format** — session-portability bundle + `.vasynthkit` embedding (samples travel
+      with the kit), and a preset-format extension for mod-routed patch concepts.
 
 **v2 (make it deep)**
 - [x] Mod matrix — any source → any continuous parameter (registry-driven), touch-connect LINK + categorized overlay
