@@ -135,6 +135,11 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   automation, MIDI-learn, numeric entry). (Its COLOR — white/pink — is a documented post-1.0 slot.)
 
 ### Fixed
+- **Top-bar knobs are draggable again when pinned to the window edge.** MASTER, GLIDE, ANALOG,
+  UNI, DET, WID and TRIM sit right under the title bar, so a vertical-only drag ran out of room
+  to go *up* and the knob felt stuck. They now accept **horizontal drag too** (drag right to
+  raise), matching the macros. Also gave GLIDE a hover-help description like the other voice knobs
+  (hover any control ~1 s for its help).
 - **Arp no longer skips to its start at each bar.** With the shared clock, striking a key mid-bar
   used to make the arpeggiator snap back to pattern step 0 at the next measure boundary — an audible
   discontinuity. The bar re-lock now keeps the arp's **rhythm on the grid** (its steps still land on

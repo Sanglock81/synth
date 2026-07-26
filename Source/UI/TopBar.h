@@ -135,6 +135,7 @@ public:
         mode  = std::make_unique<HSelector> (proc.apvts, ParamID::polyMode, proc.getMidiLearn(),
                                              juce::StringArray { "POLY", "MONO", "LEG" });
         glide = std::make_unique<RotaryKnob> (proc.apvts, ParamID::glideTime, "GLIDE", proc.getMidiLearn());
+        glide->setHelp ("Glide: portamento — the pitch slides between notes over this time (0 = off). Best in mono / legato.");
         analog = std::make_unique<RotaryKnob> (proc.apvts, ParamID::analog, "ANALOG", proc.getMidiLearn());   // Tier 1b drift
         analog->setHelp ("Analog drift: subtle per-voice pitch & pulse-width wander for a livelier, vintage feel");
         // #96 Unison: voice-wide stack. UNI count (1 = off), DETune spread, WIDth (stereo).
@@ -151,6 +152,11 @@ public:
         addAndMakeVisible (*mode); addAndMakeVisible (*glide); addAndMakeVisible (*analog);
         addAndMakeVisible (*uni); addAndMakeVisible (*uniDet); addAndMakeVisible (*uniWid);
         addAndMakeVisible (*trim);
+        // Top-of-window knobs: allow HORIZONTAL drag too (drag right = raise), like the macros
+        // already do (see the macro loop). A knob pinned near the title bar has no room to drag
+        // UP to increase, so vertical-only drag left these stuck at the screen edge.
+        for (auto* k : { master.get(), glide.get(), analog.get(), uni.get(), uniDet.get(), uniWid.get(), trim.get() })
+            k->setBothAxisDrag();
 
         refreshMacroLabels();
         startTimerHz (4);   // CPU readout + macro-label resync
