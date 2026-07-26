@@ -16,16 +16,19 @@ tests can't: feel, latency, clicks, stuck notes, and cross-feature interactions.
 4. **The tag fires only on your explicit call**, after the ThinkPad validation report (#100)
    and after you're satisfied here — never automatically, never alongside the report.
 
-### Environment — fill in before you start
-| | |
-|---|---|
-| Date / session # | |
-| Machine | ThinkPad X1C 3rd gen (2015, dual-core Broadwell) |
-| OS / kernel | |
-| Audio server + buffer | PipeWire, ____ samples @ 48 kHz |
-| CPU governor | (bench is only valid at **performance**) |
-| Build **version + git hash** | _(read the on-screen banner — confirm it matches HEAD)_ |
-| Format tested | ☐ Standalone ☐ VST3 (host: ______) |
+### Environment — fill in before you start (both machines)
+| | **Machine 1 — Linux live rig** | **Machine 2 — Windows tablet** |
+|---|---|---|
+| Model | ThinkPad X1C 3rd gen (2015, dual-core Broadwell) | Surface (____ model) |
+| OS / kernel / build | | |
+| Audio backend + buffer | PipeWire, ____ samples @ 48 kHz | ASIO (Focusrite), ____ samples @ ____ kHz |
+| CPU governor | (bench valid only at **performance**) | (power plan: ____) |
+| Display scale / DPI | 1× | ____ % (high-DPI) |
+| Build **version + git hash** | _(banner must match HEAD)_ | _(banner must match HEAD)_ |
+| Format(s) tested | ☐ Standalone ☐ VST3 (host: ____) | ☐ Standalone ☐ VST3 (host: ____) |
+
+The Linux ThinkPad is the primary live target (sections A–R). The Windows Surface pass is
+**Section R** (touch, ASIO, high-DPI, VST3-in-DAW, multi-instance). Run the Linux pass first.
 
 ---
 
@@ -159,6 +162,8 @@ tests can't: feel, latency, clicks, stuck notes, and cross-feature interactions.
 - [ ] **O4. Controls never lie** — every readout equals the live value (e.g. an LFO with SYNC off shows the RATE-knob value, not a stale division).
 - [ ] **O5. CPU under load** — a full scene (4 parts, kit, seq, loops, FX) holds within budget on the ThinkPad with no xruns at the chosen buffer.
 - [ ] **O6. Soak** — leave a busy scene running for a while; no drift, no leak-driven slowdown, no accumulating clicks.
+- [ ] **O7. Mono fold-down** — sum L+R to mono (monitor mono, or a mono PA) on the wide patches — unison/WID, chorus, width>1 (allpass-decorrelated), stereo delay/reverb. Nothing **hollows out or cancels**: the fundamental stays solid, the patch just narrows. (Allpass decorrelation and the balance-law pan are specifically meant to survive mono.)
+- [ ] **O8. Blind analog A/B** — have someone toggle **ANALOG** (drift) between 0 and a moderate setting without telling you which, on a sustained pad/unison patch. You should reliably hear the difference: drift on = livelier/looser, off = static/sterile. If you can't tell blind, the drift is too subtle (see the tuning sheet, `kMaxDriftCents`).
 
 ## P. Cross-feature workflows (build something real)
 
@@ -168,8 +173,49 @@ Run these end to end — this is where interactions surface.
 - [ ] **P2. Verse→chorus** — set up two scenes (different drum pattern + loop clips); switch between them on the quantum boundary while playing over the top; transitions are clean, no stuck notes, loops realign.
 - [ ] **P3. Sound design → save → recall** — design a patch (WT + unison + LFO-sync + FX + a LINK route + a learned CC + a TRIM setting), save it under a category, reload it → **everything** recalls, master untouched.
 - [ ] **P4. Controller rig** — Launchkey split (keys→lead, pads→kit) + macros on CC21–28 + a footswitch looper CC; perform hands-mostly-free for a few minutes.
-- [ ] **P5. Bounce to DAW** — capture the whole thing with BOUNCE, drop it into your DAW, confirm it lines up and the stems are usable.
+- [ ] **P5. Bounce to DAW — Ableton *and* Reaper** — capture the scene with BOUNCE, then import the folder into **both** hosts. In each: the per-part WAV stems drop onto tracks and **line up at the manifest BPM**, the master WAV matches the sum, and the per-part MIDI files import in time. Note any host-specific quirk (sample-rate mismatch, warp/stretch defaults, stem start offset).
 - [ ] **P6. Free play** — just make music for a session. Note anything that annoys, surprises, or feels wrong.
+
+## Q. Voice-character tuning verdicts
+
+Focused A/B listening (good monitors/headphones, on the Linux rig). Each is a **verdict** — if it
+fails, the fix is a one-line constant in **[the tuning-constants sheet](uat-tuning-constants.md)**,
+then re-gate + regenerate goldens. Record the verdict (✓ ships as-is / adjust → new value).
+
+- [ ] **Q1. Drive protocol** — sweep `filter_drive` 0→1 on a saw/bass patch. Verdict: it reads as
+      **musical overdrive** (thickens, adds harmonics, roughly level-matched) — not just louder,
+      not harsh/fizzy. Tunable: `kMaxDriveGain` (`SVFilter.h` ~275, currently `4.0`) — harsh/loud →
+      lower; too subtle → raise. Verdict: ______
+- [ ] **Q2. SAT dynamic contrast** — at a fixed moderate `fx_sat`, play **soft then hard**. Verdict:
+      soft stays clean and hard bites — the saturation **tracks your dynamics** (no constant fuzz
+      floor), with tube-ish (even-harmonic) warmth rather than transistor fizz. Tunables:
+      `kThi` / `kTmid` / `kTlo` + `kAsymK` (`StereoWidth.h` ~238–241). Verdict: ______
+- [ ] **Q3. Unison character** — a unison lead/pad at moderate DET/WID. Verdict: a **wide, animated
+      ensemble** (moving, alive), not thin/static/comb-filtered; detune is lush without sounding
+      out of tune. Tunables: `kMaxUnisonCents`, the `unisonPos()` spread curve, `kMaxDriftCents`
+      (`SynthVoice.h` ~405/522/548). Verdict: ______
+
+## R. Windows / Surface (second machine)
+
+Run after the Linux pass. Same build, `brave`-free — this is the Windows binary + a touch tablet.
+
+- [ ] **R1. Launch + banner** — the Windows build (standalone) opens; version+hash banner matches HEAD.
+- [ ] **R2. Focusrite ASIO** — select the Focusrite ASIO driver; audio plays with no dropouts at the
+      chosen buffer; the reported latency is sane; switching buffer sizes works without a crash.
+- [ ] **R3. Touch pass** — drive the whole UI by **touch only** (no mouse): knobs (drag), buttons,
+      the part rail, seq grid, scene buttons, and **long-press MIDI-learn / scene menu** all respond;
+      no control is too small to hit; double-tap numeric entry works by touch.
+- [ ] **R4. High-DPI** — at the Surface's display scaling (150–200 %), the UI is crisp (no blur),
+      correctly sized (no clipped panels/text), and hit-targets line up with what's drawn. Try a
+      scale change while open if practical.
+- [ ] **R5. VST3 in a DAW** — load the VST3 in your Windows DAW; it instantiates, makes sound, saves
+      + reloads its state with the project, and automation of a param works.
+- [ ] **R6. Multi-instance in Ableton** — load **several instances** (e.g. 3–4) on separate tracks.
+      Each is independent (own patch/scene/loops), they don't cross-talk or fight for MIDI, and CPU
+      + RAM stay sane (note: each instance pre-allocates ~98 MB of loop rings — expected, it's RAM
+      not CPU). Play two at once; no xruns beyond the machine's honest limit.
+- [ ] **R7. Cross-platform state** — a MULTI (or patch) saved on Linux **loads on Windows** and sounds
+      identical (the determinism goldens promise this — confirm by ear on a WT/unison patch).
 
 ---
 
