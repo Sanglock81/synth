@@ -4,7 +4,7 @@
   "params": {
     "osc1_wave": 4,
     "osc1_wt_kind": 2,
-    "osc1_wt_pos": 0.45,
+    "osc1_wt_pos": 0.4,
     "osc2_on": 0,
     "osc3_on": 0,
     "filter_type": 0,
@@ -18,9 +18,16 @@
     "amp_release": 0.25,
     "poly_mode": 1,
     "glide_time": 0.03,
+    "lfo_rate": 0.22,
+    "lfo_depth": 1.0,
+    "lfo_shape": 0,
+    "lfo_dest": 3,
     "fx_reverb_on": 1,
     "reverb_mix": 0.18,
     "reverb_size": 0.6,
     "patch_trim": 1.9
-  }
+  },
+  "routes": [
+    { "src": "LFO 1", "dest": "Wave Pos", "depth": 0.45 }
+  ]
 }

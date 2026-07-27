@@ -24,6 +24,10 @@ struct FactoryPreset
     juce::String category;
     std::vector<std::pair<juce::String, double>> params;   // paramID -> real value
     juce::Array<int> fxOrder;                              // empty => default 0,1,2,3
+    // Mod-matrix routes carried BY the patch (applied to the focused part on load). Source/dest
+    // are the display names (e.g. "LFO 1" -> "Wave Pos"); the processor resolves them to indices.
+    struct Route { juce::String source, dest; float depth = 0.0f; };
+    std::vector<Route> routes;
 
     static FactoryPreset fromJson (const juce::String& json, bool& ok)
     {
@@ -42,6 +46,14 @@ struct FactoryPreset
 
         if (auto* ord = v.getProperty ("fxOrder", juce::var()).getArray())
             for (auto& e : *ord) p.fxOrder.add ((int) e);
+
+        // Optional mod-matrix routes: [ { "src":"LFO 1", "dest":"Wave Pos", "depth":0.6 }, ... ]
+        if (auto* arr = v.getProperty ("routes", juce::var()).getArray())
+            for (auto& e : *arr)
+                if (auto* o = e.getDynamicObject())
+                    p.routes.push_back ({ o->getProperty ("src").toString(),
+                                          o->getProperty ("dest").toString(),
+                                          (float) (double) o->getProperty ("depth") });
 
         // Require a params object so a device-profile JSON is never mistaken for a
         // preset when both are iterated out of BinaryData.

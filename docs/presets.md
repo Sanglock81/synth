@@ -34,9 +34,9 @@ same grouping; **Load drum kit** lists **Factory** and **User** kits with each k
 | FX      | Noise Riser, Dark Drone, Cave Drone, Static Riser, Metal Ping |
 | Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom, Clap, Rimshot, Clave, Cowbell, Splash, Crash, Ride, House Kick, House Snare, House Hat, Industrial Kick, Metal Hit, Noise Snare |
 
-Some concepts (an envelope sweeping the wavetable position, a per-step timbre morph) want a
-modulation route that the current preset format can't spell; those patches are voiced as close
-as the fixed routes allow, and the **full versions are pending a preset-format extension** (1.1).
+Patches can also carry **modulation routes** (see "Modulation routes in a patch" below), so a
+sound's movement — an LFO morphing the wavetable vowel, an envelope opening a filter beyond its
+static amount — travels with the preset. *Vowel Talk Lead* uses this.
 
 ### Drum recipes (7A)
 
@@ -71,8 +71,8 @@ note input is never starved. Your presets are stored as XML here:
 ```
 
 Drop files in or remove them freely; they appear under **User** in the Load menu.
-A user preset captures the full parameter state, the FX chain order, and your
-learned MIDI mappings, so it recalls exactly.
+A user preset captures the full parameter state, the FX chain order, your **mod-matrix
+routes**, and your learned MIDI mappings, so it recalls exactly.
 
 ## Master gain is yours, not the preset's
 
@@ -155,6 +155,30 @@ Factory presets are JSON in `resources/presets/`, embedded via BinaryData. Each
 lists parameter overrides in real units (Hz, seconds, cents, choice index) applied
 on top of an Init baseline, plus an optional FX `fxOrder`. Adding a JSON there and
 rebuilding is all it takes to ship another patch — the build globs the folder.
+
+### Modulation routes in a patch
+
+A patch can carry up to 8 **mod-matrix routes** — the same routing you make live with LINK —
+so its movement recalls with the sound. In a factory JSON:
+
+```json
+"routes": [
+  { "src": "LFO 1", "dest": "Wave Pos", "depth": 0.45 },
+  { "src": "Velocity", "dest": "Reverb Mix", "depth": 0.3 }
+]
+```
+
+- **`src`** — one of `LFO 1`/`2`/`3`, `Mod Env`, `Amp Env`, `Velocity`, `Note`, `Mod Wheel`,
+  `Pitch Bend`, `Random`, `Macro 1`…`8` (exact display names).
+- **`dest`** — any modulation destination's display name (`Cutoff`, `Resonance`, `Wave Pos`,
+  `Reverb Motion`, `Delay Feedback`, an EQ band gain, …).
+- **`depth`** — −1.0…+1.0.
+
+Routes apply to the **focused part** on load; a patch that declares none clears the focused
+part's routing (a patch is its complete sound). **User** patches round-trip their routes
+automatically — saving captures the focused part's routes, loading reapplies them.
+(Unknown source/dest names are skipped, never a bad slot. Full DAW/MULTI recall uses the
+separate all-parts `mod_matrix` state.)
 
 Kits are XML under the app's `kits/` folder (factory kits are built in). A kit lists its
 pads (trigger, source preset, sounding notes, level, choke); each pad's source is baked

@@ -118,11 +118,50 @@ void VASynthProcessor::applyFocusedPartSound (const juce::ValueTree& soundTree)
     const int f = editFocusPart.load (std::memory_order_relaxed);
     if (f >= 0 && f < SynthEngine::maxParts)
     {
+        // A patch defines its COMPLETE sound — mod-matrix routing included. Clear the focused
+        // part's routes, then apply any the patch carries ("patch_routes"; absent => no routes).
+        auto& mtx = partMatrix[(std::size_t) f];
+        for (auto& s : mtx.slots) s = {};
+        const auto rstr = soundTree.getProperty ("patch_routes").toString();
+        if (rstr.isNotEmpty())
+        {
+            auto toks = juce::StringArray::fromTokens (rstr, ",", "");
+            for (int i = 0; i < juce::jmin ((int) mtx.slots.size(), toks.size()); ++i)
+            {
+                auto ff = juce::StringArray::fromTokens (toks[i], ":", "");
+                if (ff.size() >= 3)
+                    mtx.slots[(std::size_t) i] = { juce::jlimit (0, ModMatrix::kNumSources - 1, ff[0].getIntValue()),
+                                                   juce::jlimit (0, ModMatrix::kNumDests   - 1, ff[1].getIntValue()),
+                                                   juce::jlimit (-1.0f, 1.0f, ff[2].getFloatValue()) };
+            }
+        }
+        writeModMatrixProperty();                          // reflect into apvts.state (mod_matrix + patch_routes)
         partEditState[(std::size_t) f] = apvts.copyState();
         partEdited[(std::size_t) f] = false;               // a freshly loaded preset is unedited
         if (f > 0)                                         // a LOCKED part must re-publish to keep sounding
             engine.setLockedPartParams (f, snapshotParams(), snapshotFXParams(), lfosFrom (apvts), partMatrix[(std::size_t) f]);
     }
+}
+
+// Resolve a preset's display-name routes ("LFO 1" -> "Wave Pos") to the numeric slot string
+// (src:dest:depth,...) the focused part's matrix uses. Unknown source/dest names are skipped.
+static juce::String patchRoutesSlotString (const std::vector<FactoryPreset::Route>& routes)
+{
+    static const char* kSrc[] = { "LFO 1","LFO 2","LFO 3","Mod Env","Amp Env","Velocity","Note",
+        "Mod Wheel","Pitch Bend","Random","Macro 1","Macro 2","Macro 3","Macro 4","Macro 5","Macro 6","Macro 7","Macro 8" };
+    juce::StringArray slots;
+    for (auto& r : routes)
+    {
+        if ((int) slots.size() >= ModMatrix::kSlots) break;
+        int src = 0;
+        for (int i = 0; i < (int) (sizeof (kSrc) / sizeof (kSrc[0])); ++i)
+            if (r.source.equalsIgnoreCase (kSrc[i])) { src = i + 1; break; }   // enum: LFO1 = 1
+        int dest = 0;
+        for (auto& e : moddest::table()) if (r.dest.equalsIgnoreCase (e.name)) { dest = e.dest; break; }
+        if (src == 0 || dest == 0) continue;               // unknown -> skip (never a bad slot)
+        slots.add (juce::String (src) + ":" + juce::String (dest) + ":" + juce::String (juce::jlimit (-1.0f, 1.0f, r.depth), 4));
+    }
+    return slots.joinIntoString (",");
 }
 
 void VASynthProcessor::loadFactoryPreset (const juce::String& name)
@@ -131,6 +170,8 @@ void VASynthProcessor::loadFactoryPreset (const juce::String& name)
     if (p == nullptr) return;
     bool ok = true; juce::ValueTree st;
     bakePresetParams (name, ok, nullptr, nullptr, &st);    // preset -> scratch SOUND state
+    if (! p->routes.empty())                               // carry the patch's mod routes into the sound tree
+        st.setProperty ("patch_routes", patchRoutesSlotString (p->routes), nullptr);
     applyFocusedPartSound (st);                            // sound-only: globals + other parts untouched
     // The FX chain ORDER is a global, user-controlled setting (reordered via the panel arrows) — a
     // SOUND preset must NOT silently rearrange the blocks. Only honour an order a preset DELIBERATELY
@@ -1988,6 +2029,15 @@ void VASynthProcessor::writeModMatrixProperty()
         parts.add (slots.joinIntoString (","));
     }
     apvts.state.setProperty ("mod_matrix", parts.joinIntoString (";"), nullptr);
+
+    // Mirror the FOCUSED part's routes as "patch_routes" so a saved user preset (a copy of the
+    // apvts state) carries the routes it should reapply on load — the same channel factory JSON
+    // presets use. (Full DAW/MULTI restore uses mod_matrix above; this is the per-patch slice.)
+    const int f = juce::jlimit (0, SynthEngine::maxParts - 1, editFocusPart.load (std::memory_order_relaxed));
+    juce::StringArray fs;
+    for (auto& s : partMatrix[(std::size_t) f].slots)
+        fs.add (juce::String (s.source) + ":" + juce::String (s.dest) + ":" + juce::String (s.depth, 4));
+    apvts.state.setProperty ("patch_routes", fs.joinIntoString (","), nullptr);
 }
 
 void VASynthProcessor::applyModMatrixProperty()

@@ -9,6 +9,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Added
+- **Patches carry their modulation.** A preset can now save **mod-matrix routes** as part of its
+  sound. Factory patches declare them in JSON (`"routes": [{ "src": "LFO 1", "dest": "Wave Pos",
+  "depth": 0.45 }]`); your saved user patches round-trip their routes automatically. Loading a
+  patch applies its routes to the focused part (and clears any it doesn't define — a patch is its
+  complete sound). First showcase: **Vowel Talk Lead** now has an LFO slowly morphing the vowel
+  wavetable. Sources: LFO 1–3, Mod/Amp Env, Velocity, Note, Mod Wheel, Pitch Bend, Random,
+  Macro 1–8; destinations: any registry parameter (Cutoff, Wave Pos, Reverb Motion, …).
 - **Preset & kit menus tidied.** The **Load** menu now lists factory patches in a fixed musical
   category order (Bass → Lead → Keys → … → Drums) and **alphabetically within each category**, with
   **Init** pinned on top. The **Save** dialog gains a **Category** picker (stored with the patch;

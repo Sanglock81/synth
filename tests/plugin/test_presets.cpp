@@ -206,6 +206,38 @@ TEST_CASE ("master_gain is a performance control excluded from preset load/save"
     pm.presetDir().getChildFile (name + ".vasynth").deleteFile();
 }
 
+TEST_CASE ("patches carry + apply their mod-matrix routes (factory + user round-trip)", "[plugin][preset][routes]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+
+    // Vowel Talk Lead ships an LFO 1 -> Wave Pos route (the vowel-morph showcase).
+    p.loadFactoryPreset ("Vowel Talk Lead");
+    auto s0 = p.getModSlot (-1, 0);                         // focused part, slot 0
+    REQUIRE (s0.source == ModMatrix::LFO1);
+    REQUIRE (s0.dest   == ModMatrix::WavePos);
+    REQUIRE (s0.depth  == Catch::Approx (0.45f).margin (0.02));
+
+    // A routeless patch CLEARS the focused part's routes — a preset defines its complete sound.
+    p.loadFactoryPreset ("Warm Pad");
+    REQUIRE (p.getModSlot (-1, 0).source == ModMatrix::SrcNone);
+
+    // Round-trip through a USER preset: save the routed patch, clear, reload -> routes come back.
+    p.loadFactoryPreset ("Vowel Talk Lead");
+    PresetManager pm (p.apvts);
+    const auto name = "ut-routes-" + juce::String (juce::Random::getSystemRandom().nextInt (1'000'000));
+    REQUIRE (pm.save (name, "Lead"));
+    p.loadFactoryPreset ("Warm Pad");                      // clear
+    REQUIRE (p.getModSlot (-1, 0).source == ModMatrix::SrcNone);
+    p.loadUserPreset (name);                               // reload the saved routed patch
+    auto r0 = p.getModSlot (-1, 0);
+    REQUIRE (r0.source == ModMatrix::LFO1);
+    REQUIRE (r0.dest   == ModMatrix::WavePos);
+    REQUIRE (r0.depth  == Catch::Approx (0.45f).margin (0.02));
+
+    pm.presetDir().getChildFile (name + ".vasynth").deleteFile();
+}
+
 TEST_CASE ("Inc 3: user preset category round-trips (and old presets read as User)", "[plugin][preset][category]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
