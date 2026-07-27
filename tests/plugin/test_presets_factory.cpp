@@ -37,7 +37,7 @@ TEST_CASE ("factory library has the expected presets spanning the categories", "
     VASynthProcessor p;
     const auto& lib = p.factoryPresetLibrary();
 
-    REQUIRE (lib.size() == 65);        // 32 base + 27 roster (Inc 2a) + 6 House/Industrial drums (Inc 2b)
+    REQUIRE (lib.size() == 57);        // Inc 2 bank (65) minus the 8 overhaul cuts (dups/weak)
     for (auto& fp : lib.all())
     {
         REQUIRE (fp.name.isNotEmpty());

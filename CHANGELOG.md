@@ -8,6 +8,17 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
+### Changed
+- **Preset bank overhaul (first pass).** Consolidated the factory bank to **57 patches** — cut
+  eight duplicates/weak sounds (Fat Saw Bass, Unison Wide Bass, Square Lead, WT Digital Lead,
+  Solo Brass, Supersaw Slim, Shimmer Bed, Noise Riser) and rebuilt the **Bright Lead** flagship
+  (a rich 3-saw poly lead with drift, a slow LFO→cutoff, delay + motion reverb) so the first
+  patch a new user hears earns its place. Eased the resonant "weoh" out of **Acid Bass** (lower
+  resonance + drift = more organic 303). Reworked the roughest drums: a more pitched **Cowbell**,
+  a **Crash**/**Splash** with the pitched resonance pulled down for a brighter metallic wash, a
+  de-toyed **Ride**, and a **Metal Hit** opened up to ring naturally. The loudness match holds
+  across the trimmed bank.
+
 ### Added
 - **Patches carry their modulation.** A preset can now save **mod-matrix routes** as part of its
   sound. Factory patches declare them in JSON (`"routes": [{ "src": "LFO 1", "dest": "Wave Pos",

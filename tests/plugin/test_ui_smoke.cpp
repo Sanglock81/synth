@@ -580,7 +580,9 @@ TEST_CASE ("Tier 1 UI: osc phase selectors + ANALOG knob are bound (#99)", "[plu
     { INFO ("missing phase selector: " << id); REQUIRE (findLearnable (*ed, id) != nullptr); }
     REQUIRE (findKnob (*ed, ParamID::analog) != nullptr);
 
-    // Default is RESET / analog 0 (bit-exact); the selector reflects it.
+    // Init is RESET / analog 0 (bit-exact); the selector reflects it. (The startup default patch
+    // may ship drift/phase settings, so check against Init, not whatever loads at construction.)
+    p.loadInitPreset();
     REQUIRE (dynamic_cast<juce::AudioParameterChoice*> (p.apvts.getParameter (ParamID::osc1Phase))->getIndex() == 0);
     REQUIRE (p.apvts.getParameter (ParamID::analog)->getValue() == Catch::Approx (0.0f));
 }

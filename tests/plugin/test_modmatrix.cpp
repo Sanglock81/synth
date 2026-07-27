@@ -33,6 +33,7 @@ TEST_CASE ("mod matrix routes persist across a state round-trip (#56)", "[plugin
 TEST_CASE ("linkModRoute fills free slots, reuses a pair, and reports full (#56)", "[plugin][modmatrix]")
 {
     VASynthProcessor p;
+    p.loadInitPreset();                        // clean matrix baseline (the default patch may ship routes)
 
     REQUIRE (p.linkModRoute (0, ModMatrix::LFO1, ModMatrix::Cutoff, 0.5f) == 0);
     REQUIRE (p.linkModRoute (0, ModMatrix::LFO1, ModMatrix::Cutoff, 0.8f) == 0);   // same pair -> reuse
@@ -40,6 +41,7 @@ TEST_CASE ("linkModRoute fills free slots, reuses a pair, and reports full (#56)
     REQUIRE (p.linkModRoute (0, ModMatrix::Velocity, ModMatrix::Amp) == 1);         // new pair -> next free
 
     VASynthProcessor q;
+    q.loadInitPreset();                        // clean matrix baseline
     for (int i = 0; i < ModMatrix::kSlots; ++i)                                     // 8 distinct pairs fill it
         REQUIRE (q.linkModRoute (0, ModMatrix::Macro1 + i, ModMatrix::Cutoff) == i);
     REQUIRE (q.linkModRoute (0, ModMatrix::LFO1, ModMatrix::Pitch) == -1);          // full

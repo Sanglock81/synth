@@ -51,7 +51,7 @@ TEST_CASE ("seq plays only its target part (muting the target silences it)", "[p
         // Make the target a plain synth so seq note 60 sounds on it regardless of the
         // default scene (P2 defaults to a drum kit whose pads aren't on note 60).
         if (target == 0) p.loadInitPreset();
-        else             p.setPartPreset (target, "Fat Saw Bass");
+        else             p.setPartPreset (target, "Reese Bass");
         armRow0 (p, 60);
         s01 (p, ParamID::seqTarget, (float) target / 3.0f);
         s01 (p, ParamID::tempo, 0.9f);
@@ -65,7 +65,7 @@ TEST_CASE ("seq plays only its target part (muting the target silences it)", "[p
 TEST_CASE ("seq target uses its OWN baked sound, not the focused part's", "[plugin][seq][multitimbral]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
-    REQUIRE (p.setPartPreset (2, "Fat Saw Bass"));   // bake an audible sound on the target (P3)
+    REQUIRE (p.setPartPreset (2, "Reese Bass"));   // bake an audible sound on the target (P3)
     p.loadInitPreset();                              // focused part (P1)...
     s01 (p, ParamID::osc1On, 0.0f); s01 (p, ParamID::osc2On, 0.0f);
     s01 (p, ParamID::osc3On, 0.0f); s01 (p, ParamID::noiseLevel, 0.0f);   // ...made silent

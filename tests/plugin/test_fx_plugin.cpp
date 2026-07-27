@@ -172,6 +172,7 @@ TEST_CASE ("chorus makes the output genuinely stereo", "[plugin][6b][fx][stereo]
     auto stereoSpread = [] (bool chorusOn)
     {
         VASynthProcessor p;
+        p.loadInitPreset();                    // Init base (no width FX) — the default patch may be stereo
         p.apvts.getParameter ("amp_sustain")->setValueNotifyingHost (1.0f);
         if (chorusOn)
         {

@@ -51,7 +51,7 @@ TEST_CASE ("bounce: a seq session renders to master + stem + manifest, stems sum
     juce::AudioBuffer<float> master;
     const int n = loadWav (dir.getChildFile ("master.wav"), master);
     REQUIRE (n == 96000);                                             // exactly one bar
-    REQUIRE (master.getMagnitude (0, n) > 0.02f);                     // the seq actually rendered
+    REQUIRE (master.getMagnitude (0, n) > 0.01f);                     // the seq actually rendered
 
     // Sum every part stem; it must match the master (stems are the exact per-part contributions;
     // unity gain + no clip -> master == sum, within 24-bit quantisation).

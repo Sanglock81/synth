@@ -22,16 +22,16 @@ same grouping; **Load drum kit** lists **Factory** and **User** kits with each k
 
 | Category | Presets |
 |---|---|
-| Bass    | Fat Saw Bass, Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Unison Wide Bass, Reese Redux |
-| Lead    | Bright Lead, Square Lead, WT Digital Lead, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo, Supersaw Slim |
+| Bass    | Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Reese Redux |
+| Lead    | Bright Lead, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo |
 | Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite |
-| Pad     | Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow, Shimmer Bed |
+| Pad     | Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow |
 | Pluck   | Synth Pluck, Ice Pluck, WT Marimba, Rubber Pluck |
-| Brass   | Analog Brass, Solo Brass |
+| Brass   | Analog Brass |
 | Strings | String Machine, Strings Redux |
 | Winds   | Soft Flute, Breath Flute |
 | Organ   | Full Organ |
-| FX      | Noise Riser, Dark Drone, Cave Drone, Static Riser, Metal Ping |
+| FX      | Dark Drone, Cave Drone, Static Riser, Metal Ping |
 | Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom, Clap, Rimshot, Clave, Cowbell, Splash, Crash, Ride, House Kick, House Snare, House Hat, Industrial Kick, Metal Hit, Noise Snare |
 
 Patches can also carry **modulation routes** (see "Modulation routes in a patch" below), so a

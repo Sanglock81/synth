@@ -17,7 +17,7 @@ namespace
 TEST_CASE ("looper: recording a lane is independent of edit focus", "[plugin][looper][isolation]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
-    p.setPartPreset (2, "Fat Saw Bass");
+    p.setPartPreset (2, "Reese Bass");
     setVal (p, ParamID::tempo, 200.0f);
     s01 (p, ParamID::loopRec3, 1.0f);                // lane 2 (P3) REC + PLAY
     s01 (p, ParamID::loopPlay3, 1.0f);
@@ -46,7 +46,7 @@ TEST_CASE ("looper: lane 2 records the same whether or not focus is switched", "
     auto count = [] (bool switchFocus)
     {
         VASynthProcessor p; p.prepareToPlay (48000.0, 128);
-        p.setPartPreset (2, "Fat Saw Bass");
+        p.setPartPreset (2, "Reese Bass");
         setVal (p, ParamID::tempo, 200.0f);
         s01 (p, ParamID::loopRec3, 1.0f);
         s01 (p, ParamID::loopPlay3, 1.0f);

@@ -127,6 +127,7 @@ TEST_CASE ("edit-focus: playing a loaded kit triggers per-pad drums, not one pit
 TEST_CASE ("edit-focus: switching parts while holding a note releases it (no stuck note)", "[plugin][editfocus]")
 {
     VASynthProcessor p;
+    p.loadInitPreset();                        // dry Init (the default patch may have reverb/delay tails)
     p.prepareToPlay (48000.0, 128);
     set01 (p, ParamID::ampRelease, 0.0f);      // fast release so a freed note decays quickly
 

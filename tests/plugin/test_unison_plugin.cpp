@@ -12,6 +12,7 @@ namespace
     // Play middle C for `blocks` and return (stereo spread = sum|L-R|, peak).
     std::pair<double, float> playMeasure (VASynthProcessor& p, int unison, int blocks = 30)
     {
+        p.loadInitPreset();                    // clean base (1 osc, no width FX) — the default patch may be rich/wide
         *dynamic_cast<juce::AudioParameterInt*> (p.apvts.getParameter (ParamID::oscUnison)) = unison;
         p.apvts.getParameter (ParamID::oscUnisonDetune)->setValueNotifyingHost (0.6f);
         p.apvts.getParameter (ParamID::oscUnisonWidth)->setValueNotifyingHost (0.9f);

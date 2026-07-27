@@ -91,7 +91,7 @@ The Linux ThinkPad is the primary live target (sections A–R). The Windows Surf
 ## H. Presets, TRIM & loudness
 
 - [ ] **H1. Load menu grouping** — the Load menu shows **Init pinned on top**, factory patches grouped by category in musical order (Bass→…→Drums), **alphabetical within each category**.
-- [ ] **H2. Browse the whole bank** — click through **all ~59 patches**; each loads and makes sound; names are clean (no file-number prefixes); nothing is silent or broken.
+- [ ] **H2. Browse the whole bank** — click through **all ~57 patches**; each loads and makes sound; names are clean (no file-number prefixes); nothing is silent or broken.
 - [ ] **H3. Equal loudness** — switching between **sustained** patches (leads/pads/keys/bass) does **not** jump the volume noticeably (±4 dB matched via TRIM). Percussive/dark patches (plucks, EPs, drones) are matched by feel — a bit louder/quieter is expected there.
 - [ ] **H4. TRIM control** — the **TRIM** knob in the top bar shows the loaded patch's program level (e.g. Full Organ reads low); turning it changes that patch's level; it's **saved with the patch** and **not** touched by RANDOM.
 - [ ] **H5. Save + category** — Save opens the name dialog **with a Category picker**; save a patch under a category → it appears under **User > <category>** in the Load menu; a patch saved as "User" lands in the plain User section.

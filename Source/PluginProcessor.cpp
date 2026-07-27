@@ -362,7 +362,7 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 void VASynthProcessor::applyDefaultScene()
 {
     setPartKit (3, factoryKit ("808 Basics"));      // P4: sequencer's drum kit
-    setPartPreset (2, "Fat Saw Bass");              // P3: dedicated bass voice
+    setPartPreset (2, "Reese Bass");              // P3: dedicated bass voice
     // P2 (part 1) intentionally left at Init — a free spare part.
 }
 

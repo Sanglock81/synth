@@ -182,7 +182,7 @@ TEST_CASE ("master_gain is a performance control excluded from preset load/save"
     auto setMaster = [&] (float v) { mg->setValueNotifyingHost (v); };
 
     setMaster (0.42f);                                   // player dials in a level
-    p.loadFactoryPreset ("Fat Saw Bass");
+    p.loadFactoryPreset ("Reese Bass");
     REQUIRE (mg->getValue() == Catch::Approx (0.42f).margin (1e-4));   // factory load keeps it
     p.loadInitPreset();
     REQUIRE (mg->getValue() == Catch::Approx (0.42f).margin (1e-4));   // Init keeps it

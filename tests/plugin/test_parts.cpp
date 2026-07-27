@@ -51,13 +51,13 @@ TEST_CASE ("locked-part bake renders like the preset loaded live", "[plugin][7c]
 
     // Live: load the preset into part 0 and play note 60.
     VASynthProcessor live; live.prepareToPlay (48000.0, 256);
-    live.loadFactoryPreset ("Fat Saw Bass");
+    live.loadFactoryPreset ("Reese Bass");
     live.routeNoteOn (60, 0.8f, 0);
     auto a = capture (live, 20);
 
     // Locked: bake the SAME preset into part 1 and route note 60 there.
     VASynthProcessor lockd; lockd.prepareToPlay (48000.0, 256);
-    lockd.setPartPreset (1, "Fat Saw Bass");
+    lockd.setPartPreset (1, "Reese Bass");
     lockd.routeNoteOn (60, 0.8f, 1);
     auto b = capture (lockd, 20);
 
@@ -121,7 +121,7 @@ TEST_CASE ("live edits do not touch a locked part", "[plugin][7c][parts][isolati
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
     setP (p, ParamID::lfoDepth, 0.0f); setP (p, ParamID::lfoDest, 0.0f);   // shared LFO neutral
 
-    p.setPartPreset (1, "Fat Saw Bass");
+    p.setPartPreset (1, "Reese Bass");
     auto part1 = [&] { p.routeNoteOn (48, 0.8f, 1); auto v = capture (p, 24); p.routeNoteOff (48, 1); capture (p, 120); return tu::rms (v); };
 
     const double before = part1();
@@ -181,7 +181,7 @@ TEST_CASE ("reassigning a part mid-note stays finite and bounded (atomic publish
     p.setPartPreset (1, "Warm Pad");
     p.routeNoteOn (60, 0.8f, 1);
     capture (p, 8);
-    p.setPartPreset (1, "Fat Saw Bass");             // reassign WHILE the part is sounding
+    p.setPartPreset (1, "Reese Bass");             // reassign WHILE the part is sounding
     auto out = capture (p, 8);
     REQUIRE (tu::allFinite (out));
     REQUIRE (tu::peak (out) <= 1.0f);
@@ -579,14 +579,14 @@ TEST_CASE ("MULTI save/load round-trips through a file", "[plugin][partsB][multi
     file.deleteFile();
 
     VASynthProcessor src; src.prepareToPlay (48000.0, 256);
-    src.setPartPreset (1, "Fat Saw Bass");
+    src.setPartPreset (1, "Reese Bass");
     src.setSurfaceZones ("B2", { { 0, 59, 1, 0 }, { 60, 127, 0, 0 } });
     REQUIRE (src.saveMulti (nm));
     REQUIRE (src.getMultiNames().contains (nm));
 
     VASynthProcessor dst; dst.prepareToPlay (48000.0, 256);
     REQUIRE (dst.loadMulti (nm));
-    REQUIRE (dst.getPartPreset (1) == "Fat Saw Bass");
+    REQUIRE (dst.getPartPreset (1) == "Reese Bass");
     REQUIRE (dst.surfaceHasSplit ("B2"));
 
     file.deleteFile();                                       // clean up the test artefact
@@ -641,7 +641,7 @@ TEST_CASE ("render the INPUTS dialog to docs/inputs-dialog.png", "[plugin][7c][p
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
 
     // Configure a headline split: QWERTY bottom octave -> Part 1 (bass), rest -> LIVE.
-    p.setPartPreset (1, "Fat Saw Bass");
+    p.setPartPreset (1, "Reese Bass");
     p.setSurfaceZones ("QWERTY", { { 0, 47, 1, +0 }, { 48, 127, 0, 0 } });
 
     auto dlg = std::make_unique<InputsDialog> (p);

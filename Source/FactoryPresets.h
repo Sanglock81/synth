@@ -7,7 +7,7 @@
 // JSON file listing a name, a category, parameter overrides (in REAL units —
 // Hz, seconds, cents, choice index), and an optional FX chain order:
 //
-//   { "name":"Fat Saw Bass", "category":"Bass",
+//   { "name":"Reese Bass", "category":"Bass",
 //     "params": { "filter_cutoff": 520, "osc2_detune": 8, "poly_mode": 1 },
 //     "fxOrder": [0,1,2,3] }
 //
