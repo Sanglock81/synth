@@ -1,0 +1,62 @@
+{
+  "name": "Aurora Pad",
+  "category": "Pad",
+  "params": {
+    "osc1_wave": 4,
+    "osc1_wt_kind": 1,
+    "osc1_wt_pos": 0.15,
+    "osc2_on": 1,
+    "osc2_wave": 4,
+    "osc2_wt_kind": 3,
+    "osc2_octave": 1,
+    "osc2_wt_pos": 0.5,
+    "osc2_level": 0.45,
+    "osc3_on": 1,
+    "osc3_wave": 3,
+    "osc3_octave": 1,
+    "osc3_detune": 5,
+    "osc3_level": 0.25,
+    "filter_type": 0,
+    "filter_cutoff": 3800,
+    "filter_reso": 0.1,
+    "filter_env_amt": 0.15,
+    "vel_to_cutoff": 0.2,
+    "amp_attack": 1.0,
+    "amp_decay": 0.8,
+    "amp_sustain": 0.88,
+    "amp_release": 2.6,
+    "lfo_rate": 0.1,
+    "lfo_depth": 1.0,
+    "lfo_shape": 0,
+    "lfo_dest": 3,
+    "lfo2_rate": 0.07,
+    "lfo2_depth": 1.0,
+    "lfo2_shape": 0,
+    "lfo2_dest": 3,
+    "fx_chorus_on": 1,
+    "chorus_voices": 2,
+    "chorus_rate": 0.25,
+    "chorus_depth": 0.4,
+    "chorus_mix": 0.4,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.5,
+    "reverb_size": 0.9,
+    "reverb_motion": 0.5,
+    "reverb_damp": 0.25,
+    "fx_width_on": 1,
+    "stereo_width": 1.7,
+    "patch_trim": 2.7
+  },
+  "routes": [
+    {
+      "src": "LFO 1",
+      "dest": "Wave Pos",
+      "depth": 0.5
+    },
+    {
+      "src": "LFO 2",
+      "dest": "Reverb Motion",
+      "depth": 0.4
+    }
+  ]
+}

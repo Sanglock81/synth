@@ -1,18 +1,20 @@
 # Presets
 
-synth ships with 16 read-only **factory presets** plus **Init**, and you can
+synth ships with 61 read-only **factory presets** plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
 
-Open the **Load** menu and pick a patch. Entries are grouped:
+Open the **Load** menu and pick a patch. The menu is **collapsible** so it opens compact:
 
 - **Init** — pinned at the top; resets every parameter to its default and the FX chain to
   chorus → delay → reverb → width.
-- **Factory** patches, grouped by category in a fixed musical order (Bass, Lead, Keys, Pad,
+- **Factory** patches, in a submenu per category in a fixed musical order (Bass, Lead, Keys, Pad,
   Pluck, Brass, Strings, Winds, Organ, FX, Drums) and **alphabetical within each category**.
-- **User** — your saved patches (only once you've saved one), in their own section grouped by
-  the category you chose at save time (a "User > Bass" sub-header; older presets read as "User").
+- **My Presets** — a submenu of your saved patches (only once you've saved one), grouped by the
+  category you chose at save time (older presets read as "User"). Each patch is a small submenu
+  with **Load / Rename… / Delete** — rename keeps its category and won't overwrite another patch;
+  delete asks first. Factory patches are read-only.
 
 Selecting a patch applies it immediately; the panel returns to "Load" so you can
 pick the same one again. The per-part **Load synth patch** picker (on a P1–P4 cell) uses the
@@ -23,20 +25,20 @@ same grouping; **Load drum kit** lists **Factory** and **User** kits with each k
 | Category | Presets |
 |---|---|
 | Bass    | Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Reese Redux |
-| Lead    | Bright Lead, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo |
-| Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite |
-| Pad     | Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow |
+| Lead    | Bright Lead, Foundry Lead, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo |
+| Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite, Velvet Poly |
+| Pad     | Aurora Pad, Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow |
 | Pluck   | Synth Pluck, Ice Pluck, WT Marimba, Rubber Pluck |
 | Brass   | Analog Brass |
 | Strings | String Machine, Strings Redux |
 | Winds   | Soft Flute, Breath Flute |
 | Organ   | Full Organ |
-| FX      | Dark Drone, Cave Drone, Static Riser, Metal Ping |
+| FX      | Dark Drone, Cave Drone, Static Riser, Metal Ping, Ghost Sine |
 | Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom, Clap, Rimshot, Clave, Cowbell, Splash, Crash, Ride, House Kick, House Snare, House Hat, Industrial Kick, Metal Hit, Noise Snare |
 
 Patches can also carry **modulation routes** (see "Modulation routes in a patch" below), so a
 sound's movement — an LFO morphing the wavetable vowel, an envelope opening a filter beyond its
-static amount — travels with the preset. *Vowel Talk Lead* uses this.
+static amount — travels with the preset. *Vowel Talk Lead*, *Aurora Pad*, *Foundry Lead*, and *Ghost Sine* show this off.
 
 ### Drum recipes (7A)
 

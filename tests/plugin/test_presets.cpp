@@ -226,6 +226,20 @@ TEST_CASE ("patches carry + apply their mod-matrix routes (factory + user round-
     p.loadFactoryPreset ("Bell Keys");                     // Velocity -> Wave Pos (harder = brighter bell)
     { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::Velocity); REQUIRE (s.dest == ModMatrix::WavePos); }
 
+    // Increment-D showcase patches route into experimental destinations (two routes each on the pads).
+    p.loadFactoryPreset ("Aurora Pad");                    // LFO1->Wave Pos + LFO2->Reverb Motion
+    { auto a = p.getModSlot (-1, 0); auto b = p.getModSlot (-1, 1);
+      REQUIRE (a.source == ModMatrix::LFO1); REQUIRE (a.dest == ModMatrix::WavePos);
+      REQUIRE (b.source == ModMatrix::LFO2); REQUIRE (b.dest == ModMatrix::ReverbMotion); }
+    p.loadFactoryPreset ("Velvet Poly");                   // LFO1 -> Pulse Width (PWM shimmer)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::PulseWidth); }
+    p.loadFactoryPreset ("Foundry Lead");                  // Velocity -> Saturation (harder = more grind)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::Velocity); REQUIRE (s.dest == ModMatrix::Saturation); }
+    p.loadFactoryPreset ("Ghost Sine");                    // LFO1->Cutoff + LFO2->Resonance (self-osc ghost)
+    { auto a = p.getModSlot (-1, 0); auto b = p.getModSlot (-1, 1);
+      REQUIRE (a.source == ModMatrix::LFO1); REQUIRE (a.dest == ModMatrix::Cutoff);
+      REQUIRE (b.source == ModMatrix::LFO2); REQUIRE (b.dest == ModMatrix::Resonance); }
+
     // A routeless patch CLEARS the focused part's routes — a preset defines its complete sound.
     p.loadFactoryPreset ("Warm Pad");
     REQUIRE (p.getModSlot (-1, 0).source == ModMatrix::SrcNone);

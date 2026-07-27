@@ -9,7 +9,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
 
 ### Changed
-- **Preset bank overhaul (first pass).** Consolidated the factory bank to **57 patches** — cut
+- **Preset bank overhaul (first pass).** Consolidated the factory bank — cut
   eight duplicates/weak sounds (Fat Saw Bass, Unison Wide Bass, Square Lead, WT Digital Lead,
   Solo Brass, Supersaw Slim, Shimmer Bed, Noise Riser) and rebuilt the **Bright Lead** flagship
   (a rich 3-saw poly lead with drift, a slow LFO→cutoff, delay + motion reverb) so the first
@@ -27,6 +27,13 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Added
+- **Four showcase patches (bank now 61).** New patches that lean on the mod-matrix-in-presets in
+  experimental ways: **Aurora Pad** (an ethereal wavetable pad whose spectrum slowly morphs — LFO 1
+  sweeps the wave position while LFO 2 modulates the reverb's motion), **Velvet Poly** (a lush
+  drifting analog poly with slow LFO-driven PWM), **Foundry Lead** (an industrial in-loop-driven,
+  tube-saturated mono lead where velocity pushes the saturation harder), and **Ghost Sine** (a
+  self-oscillating filter texture — LFO 1 sweeps the singing cutoff while LFO 2 pulses resonance in
+  and out of self-oscillation).
 - **Manage your presets from the Load menu.** Each of your saved patches now carries **Load /
   Rename… / Delete** actions inline (rename preserves the patch's category and won't clobber an
   existing name; delete asks first). Factory patches stay read-only. The **Load** menu is also now
