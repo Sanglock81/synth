@@ -1,0 +1,18 @@
+{
+  "name": "Feedback Bloom",
+  "category": "FX",
+  "params": {
+    "osc1_wave": 4, "osc1_wt_kind": 1, "osc1_wt_pos": 0.3, "osc1_level": 0.12, "osc2_on": 0, "osc3_on": 0, "noise_level": 0.03,
+    "filter_type": 0, "filter_cutoff": 500, "filter_reso": 1.0, "filter_drive": 0.35, "filter_keytrack": 1.0, "filter_env_amt": 0.3,
+    "amp_attack": 0.08, "amp_decay": 1.2, "amp_sustain": 0.7, "amp_release": 2.4,
+    "lfo_rate": 0.12, "lfo_depth": 1.0, "lfo_shape": 0, "lfo_dest": 3,
+    "lfo2_rate": 0.08, "lfo2_depth": 1.0, "lfo2_shape": 0, "lfo2_dest": 3,
+    "fx_reverb_on": 1, "reverb_mix": 0.5, "reverb_size": 0.92, "reverb_motion": 0.45,
+    "fx_width_on": 1, "stereo_width": 1.5,
+    "patch_trim": 1.2
+  },
+  "routes": [
+    { "src": "LFO 2", "dest": "Wave Pos", "depth": 0.35 },
+    { "src": "LFO 1", "dest": "Pitch",    "depth": 0.06 }
+  ]
+}

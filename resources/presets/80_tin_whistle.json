@@ -1,0 +1,14 @@
+{
+  "name": "Tin Whistle",
+  "category": "Winds",
+  "params": {
+    "osc1_wave": 2, "osc1_level": 0.9, "osc2_on": 0, "osc3_on": 0, "noise_level": 0.18,
+    "filter_type": 0, "filter_cutoff": 2800, "filter_reso": 0.1, "filter_keytrack": 0.5, "filter_env_amt": 0.5, "vel_to_cutoff": 0.3,
+    "amp_attack": 0.02, "amp_decay": 0.15, "amp_sustain": 0.85, "amp_release": 0.15, "vel_to_amp": 0.4,
+    "flt_attack": 0.001, "flt_decay": 0.08, "flt_sustain": 0.4, "flt_release": 0.1,
+    "lfo_rate": 5.2, "lfo_depth": 0.08, "lfo_shape": 1, "lfo_dest": 1,
+    "poly_mode": 2, "glide_time": 0.035,
+    "fx_reverb_on": 1, "reverb_mix": 0.2, "reverb_size": 0.55,
+    "patch_trim": 0.7
+  }
+}

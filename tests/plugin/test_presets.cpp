@@ -240,6 +240,18 @@ TEST_CASE ("patches carry + apply their mod-matrix routes (factory + user round-
       REQUIRE (a.source == ModMatrix::LFO1); REQUIRE (a.dest == ModMatrix::Cutoff);
       REQUIRE (b.source == ModMatrix::LFO2); REQUIRE (b.dest == ModMatrix::Resonance); }
 
+    // Increment-G routed patches.
+    p.loadFactoryPreset ("Power Grind");                   // Velocity -> Saturation (pick dynamics grind)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::Velocity); REQUIRE (s.dest == ModMatrix::Saturation); }
+    p.loadFactoryPreset ("Dream Chime");                   // LFO1 -> Wave Pos (slow vowel morph)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::WavePos); }
+    p.loadFactoryPreset ("Pendulum");                      // S&H LFO1 (tempo-synced 1/8) -> Cutoff
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::Cutoff); }
+    p.loadFactoryPreset ("Feedback Bloom");                // LFO2->Wave Pos + LFO1->Pitch (unstable bloom)
+    { auto a = p.getModSlot (-1, 0); auto b = p.getModSlot (-1, 1);
+      REQUIRE (a.source == ModMatrix::LFO2); REQUIRE (a.dest == ModMatrix::WavePos);
+      REQUIRE (b.source == ModMatrix::LFO1); REQUIRE (b.dest == ModMatrix::Pitch); }
+
     // A routeless patch CLEARS the focused part's routes — a preset defines its complete sound.
     p.loadFactoryPreset ("Warm Pad");
     REQUIRE (p.getModSlot (-1, 0).source == ModMatrix::SrcNone);

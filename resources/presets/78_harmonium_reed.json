@@ -1,0 +1,33 @@
+{
+  "name": "Harmonium Reed",
+  "category": "Organ",
+  "params": {
+    "osc1_wave": 0,
+    "osc2_on": 1,
+    "osc2_wave": 1,
+    "osc2_pw": 0.5,
+    "osc2_detune": 3,
+    "osc2_level": 0.8,
+    "noise_level": 0.05,
+    "analog": 0.35,
+    "filter_type": 0,
+    "filter_cutoff": 2000,
+    "filter_reso": 0.12,
+    "filter_env_amt": 0.0,
+    "vel_to_cutoff": 0.0,
+    "amp_attack": 0.004,
+    "amp_decay": 0.1,
+    "amp_sustain": 1.0,
+    "amp_release": 0.05,
+    "vel_to_amp": 0.0,
+    "fx_chorus_on": 1,
+    "chorus_voices": 1,
+    "chorus_rate": 0.6,
+    "chorus_depth": 0.25,
+    "chorus_mix": 0.25,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.18,
+    "reverb_size": 0.55,
+    "patch_trim": 0.47
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Foundry Stomp",
+  "category": "Pluck",
+  "params": {
+    "osc1_wave": 1, "osc1_pw": 0.4, "osc2_on": 1, "osc2_wave": 0, "osc2_octave": -1, "osc2_level": 0.6, "noise_level": 0.1,
+    "filter_type": 0, "filter_cutoff": 1600, "filter_reso": 0.4, "filter_drive": 0.6, "filter_keytrack": 0.7, "fltenv_to_pitch": 0.5, "vel_to_cutoff": 0.4,
+    "amp_attack": 0.001, "amp_decay": 0.16, "amp_sustain": 0.0, "amp_release": 0.1, "vel_to_amp": 0.5,
+    "flt_attack": 0.001, "flt_decay": 0.05, "flt_sustain": 0.0, "flt_release": 0.06,
+    "fx_delay_on": 1, "delay_mix": 0.16, "delay_time": 180, "delay_feedback": 0.28,
+    "fx_width_on": 1, "stereo_width": 1.15, "fx_sat": 0.4,
+    "patch_trim": 1.0
+  }
+}

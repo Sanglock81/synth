@@ -1,6 +1,6 @@
 # Presets
 
-synth ships with 61 read-only **factory presets** plus **Init**, and you can
+synth ships with 76 read-only **factory presets** plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
@@ -24,21 +24,21 @@ same grouping; **Load drum kit** lists **Factory** and **User** kits with each k
 
 | Category | Presets |
 |---|---|
-| Bass    | Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Reese Redux |
-| Lead    | Bright Lead, Foundry Lead, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo |
-| Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite, Velvet Poly |
-| Pad     | Aurora Pad, Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow |
-| Pluck   | Synth Pluck, Ice Pluck, WT Marimba, Rubber Pluck |
-| Brass   | Analog Brass |
+| Bass    | Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Reese Redux, Power Grind |
+| Lead    | Bright Lead, Foundry Lead, Dream Chime, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo |
+| Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite, Velvet Poly, Tape Keys |
+| Pad     | Aurora Pad, Prairie Ensemble, Floating Poly, Anvil Choir, Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow |
+| Pluck   | Synth Pluck, Nylon Pluck, Music Box, Foundry Stomp, Ice Pluck, WT Marimba, Rubber Pluck |
+| Brass   | Analog Brass, Dawn Brass |
 | Strings | String Machine, Strings Redux |
-| Winds   | Soft Flute, Breath Flute |
-| Organ   | Full Organ |
-| FX      | Dark Drone, Cave Drone, Static Riser, Metal Ping, Ghost Sine |
+| Winds   | Soft Flute, Breath Flute, Tin Whistle |
+| Organ   | Full Organ, Harmonium Reed |
+| FX      | Dark Drone, Cave Drone, Static Riser, Metal Ping, Ghost Sine, Sheet Metal Riser, Pendulum, Feedback Bloom |
 | Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom, Clap, Rimshot, Clave, Cowbell, Splash, Crash, Ride, House Kick, House Snare, House Hat, Industrial Kick, Metal Hit, Noise Snare |
 
 Patches can also carry **modulation routes** (see "Modulation routes in a patch" below), so a
 sound's movement — an LFO morphing the wavetable vowel, an envelope opening a filter beyond its
-static amount — travels with the preset. *Vowel Talk Lead*, *Aurora Pad*, *Foundry Lead*, and *Ghost Sine* show this off.
+static amount — travels with the preset. Showcases: *Vowel Talk Lead*, *Aurora Pad*, *Foundry Lead*, *Ghost Sine*, *Dream Chime* (LFO morphs the vowel table), *Pendulum* (a tempo-synced S&H LFO steps the cutoff — a clock-locked random melody), and *Feedback Bloom* (LFOs drift a self-oscillating filter).
 
 ### Drum recipes (7A)
 

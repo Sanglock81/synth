@@ -1,0 +1,15 @@
+{
+  "name": "Floating Poly",
+  "category": "Pad",
+  "params": {
+    "osc1_wave": 0, "osc2_on": 1, "osc2_wave": 0, "osc2_detune": 5, "osc2_level": 0.8,
+    "osc3_on": 1, "osc3_wave": 3, "osc3_octave": 1, "osc3_level": 0.35,
+    "analog": 0.25, "osc_unison": 3, "osc_unison_detune": 0.28, "osc_unison_width": 0.9,
+    "filter_type": 0, "filter_cutoff": 1200, "filter_reso": 0.1, "filter_env_amt": 0.12, "vel_to_cutoff": 0.1,
+    "amp_attack": 1.4, "amp_decay": 1.0, "amp_sustain": 0.9, "amp_release": 3.2,
+    "fx_chorus_on": 1, "chorus_voices": 2, "chorus_rate": 0.22, "chorus_depth": 0.45, "chorus_mix": 0.45,
+    "fx_reverb_on": 1, "reverb_mix": 0.48, "reverb_size": 0.92, "reverb_motion": 0.5, "reverb_damp": 0.35,
+    "fx_width_on": 1, "stereo_width": 1.8,
+    "patch_trim": 1.7
+  }
+}

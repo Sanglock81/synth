@@ -27,6 +27,17 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Added
+- **Fifteen new patches across five families (bank now 76).** A big content pass:
+  *Prologue-lush* — **Prairie Ensemble** & **Floating Poly** (wide unison-stacked pads), **Tape Keys**
+  (worn tape-aged synth keys), **Dawn Brass** (a slow poly brass swell); *Industrial* — **Power Grind**
+  (a saturated metal rhythm bass, velocity drives the grind), **Anvil Choir** (a metallic high-resonance
+  pad), **Sheet Metal Riser** (a resonant screaming riser), **Foundry Stomp** (a melodic industrial
+  percussion voice); *Folk/organic* — **Harmonium Reed** (a breathy pump-organ), **Music Box**,
+  **Tin Whistle** (chiffy folk whistle with vibrato), **Nylon Pluck** (a woody classical-guitar pluck);
+  *Melodic* — **Dream Chime** (an airy dream-pop lead whose LFO morphs the vowel table); *Experimental*
+  — **Pendulum** (a tempo-synced sample-&-hold LFO steps the cutoff into a clock-locked random melody —
+  the first patch to ship LFO-sync inside a preset) and **Feedback Bloom** (a self-oscillating filter
+  drifted by two LFOs).
 - **Four showcase patches (bank now 61).** New patches that lean on the mod-matrix-in-presets in
   experimental ways: **Aurora Pad** (an ethereal wavetable pad whose spectrum slowly morphs — LFO 1
   sweeps the wave position while LFO 2 modulates the reverb's motion), **Velvet Poly** (a lush

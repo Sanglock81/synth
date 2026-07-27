@@ -1,0 +1,12 @@
+{
+  "name": "Nylon Pluck",
+  "category": "Pluck",
+  "params": {
+    "osc1_wave": 2, "osc2_on": 1, "osc2_wave": 0, "osc2_detune": 4, "osc2_level": 0.55, "osc3_on": 0,
+    "filter_type": 0, "filter_cutoff": 2000, "filter_reso": 0.12, "filter_drive": 0.1, "filter_keytrack": 0.5, "filter_env_amt": 0.45, "vel_to_cutoff": 0.35,
+    "amp_attack": 0.002, "amp_decay": 0.28, "amp_sustain": 0.0, "amp_release": 0.35, "vel_to_amp": 0.7,
+    "flt_attack": 0.001, "flt_decay": 0.18, "flt_sustain": 0.0, "flt_release": 0.3,
+    "fx_reverb_on": 1, "reverb_mix": 0.16, "reverb_size": 0.5,
+    "patch_trim": 1.0
+  }
+}

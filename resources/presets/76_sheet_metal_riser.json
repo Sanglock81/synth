@@ -1,0 +1,13 @@
+{
+  "name": "Sheet Metal Riser",
+  "category": "FX",
+  "params": {
+    "osc1_wave": 1, "osc1_level": 0.35, "osc2_on": 1, "osc2_wave": 1, "osc2_detune": 14, "osc2_level": 0.3, "noise_level": 0.6,
+    "filter_type": 2, "filter_cutoff": 500, "filter_reso": 0.8, "filter_drive": 0.3, "filter_env_amt": 0.95,
+    "amp_attack": 0.05, "amp_decay": 2.5, "amp_sustain": 0.7, "amp_release": 0.6,
+    "flt_attack": 2.4, "flt_decay": 0.5, "flt_sustain": 1.0, "flt_release": 0.3,
+    "fx_reverb_on": 1, "reverb_mix": 0.4, "reverb_size": 0.85, "reverb_motion": 0.3,
+    "fx_width_on": 1, "stereo_width": 1.5, "fx_sat": 0.4,
+    "patch_trim": 1.0
+  }
+}
