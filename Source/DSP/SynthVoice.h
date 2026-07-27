@@ -246,9 +246,9 @@ public:
         // velocity steps give equal loudness (dB) steps below unity; a gentle LINEAR boost handles
         // >1.0 accents (an exponential there would explode). velToAmp scales the depth (0 = inert),
         // velocity 1.0 = unity. std::pow once per render chunk is cheap.
-        const float ampScale = (velocity <= 1.0f)
+        const float ampScale = std::max (kVelAmpFloor, (velocity <= 1.0f)
             ? std::pow (10.0f, p.velToAmp * (velocity - 1.0f) * (kVelAmpMaxDb / 20.0f))
-            : 1.0f + p.velToAmp * (velocity - 1.0f) * kVelAccentGain;
+            : 1.0f + p.velToAmp * (velocity - 1.0f) * kVelAccentGain);
         const float ampMul   = std::clamp (1.0f + mm.amp, 0.0f, 2.0f);       // matrix -> amp
 
         // Effective per-source levels, folding in any matrix osc-level modulation. Used for
@@ -346,9 +346,9 @@ public:
 
         const float trackOct = p.keytrack * (midiNote - 60) / 12.0f;
         const float velOct   = p.velToCutoff * velocity * 3.0f;
-        const float ampScale = (velocity <= 1.0f)
+        const float ampScale = std::max (kVelAmpFloor, (velocity <= 1.0f)
             ? std::pow (10.0f, p.velToAmp * (velocity - 1.0f) * (kVelAmpMaxDb / 20.0f))
-            : 1.0f + p.velToAmp * (velocity - 1.0f) * kVelAccentGain;
+            : 1.0f + p.velToAmp * (velocity - 1.0f) * kVelAccentGain);
         const float ampMul   = std::clamp (1.0f + mm.amp, 0.0f, 2.0f);
 
         const float l1 = std::clamp (p.osc1Level + mm.osc1Level, 0.0f, 1.0f);
@@ -549,6 +549,11 @@ private:
     static constexpr float kMaxPwDrift    = 0.01f;  // a hair of pulse-width drift
     static constexpr float kVelAmpMaxDb   = 40.0f;  // vel->amp perceptual depth (dB) at velToAmp = 1
     static constexpr float kVelAccentGain = 1.0f;   // gentle linear amp boost per unit velocity above 1.0
+    // Floor under the vel->amp scale: the softest hit never drops below this (~-18 dB). Keeps the
+    // FULL upper dynamic range (a hard hit is untouched) but stops a light/uneven touch — common in
+    // fast passages — from falling so far it reads as a dropped note. Raise for more presence on
+    // soft hits, lower for a deeper pianissimo.
+    static constexpr float kVelAmpFloor   = 0.125f; // -18.06 dB; softest note is >= 1/8 of a full hit
     bool  freshNote = false;                        // Tier 2C: pending filter-oversampling latch for a new note
 
     // Start phase for a policy. RESET/FREE never draw an RNG, so the default (RESET) path is

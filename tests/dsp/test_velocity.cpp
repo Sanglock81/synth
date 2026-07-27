@@ -69,6 +69,41 @@ TEST_CASE ("velocity drives amplitude (vel->amp) end-to-end through the engine",
     REQUIRE (accent > loud   * 1.1f);      // a 160 % accent is louder still — the upper range is LIVE
 }
 
+// The vel->amp curve has a FLOOR (kVelAmpFloor, ~-18 dB): a very light or uneven touch — the kind a
+// fast run produces — must still register clearly, not fall so far it reads as a dropped note. But
+// the floor must NOT flatten dynamics: the full range above it stays intact.
+TEST_CASE ("velocity->amp has an audible floor: the softest hit still sounds", "[dsp][velocity][floor]")
+{
+    VoiceParams p = sustainedSaw();
+    p.velToAmp = 0.9f; p.velToCutoff = 0.0f;   // the default depth — the most aggressive attenuation
+
+    const float faint = tu::peak (renderNoteAtVel (p, 0.05f));  // a barely-there tap
+    const float soft  = tu::peak (renderNoteAtVel (p, 0.20f));  // a light touch (common in fast passages)
+    const float loud  = tu::peak (renderNoteAtVel (p, 1.00f));  // a firm hit
+
+    // Floor holds: the faintest hit is at least ~1/10 of a full hit (~-18 dB). WITHOUT the floor this
+    // curve puts vel 0.05 near -34 dB (~x0.02) — inaudible in a mix; the assertion pins the fix.
+    REQUIRE (faint > loud * 0.10f);
+    // ...but a soft hit is still clearly SOFTER than a firm one — the floor rescues the bottom, it
+    // does not compress the whole range up to unity.
+    REQUIRE (soft  < loud * 0.45f);
+}
+
+TEST_CASE ("velocity->amp floor preserves dynamics above it (top of the range untouched)", "[dsp][velocity][floor]")
+{
+    VoiceParams p = sustainedSaw();
+    p.velToAmp = 0.9f; p.velToCutoff = 0.0f;
+
+    const float atFloor = tu::peak (renderNoteAtVel (p, 0.20f));   // down in the floored region
+    const float mid     = tu::peak (renderNoteAtVel (p, 0.70f));   // above the floor
+    const float loud    = tu::peak (renderNoteAtVel (p, 1.00f));
+    const float accent  = tu::peak (renderNoteAtVel (p, 1.60f));   // > 1.0 accent, unaffected by the floor
+
+    REQUIRE (mid    > atFloor * 1.3f);   // above the floor the curve still slopes — real dynamics
+    REQUIRE (loud   > mid     * 1.2f);   // and keeps climbing to a firm hit
+    REQUIRE (accent > loud    * 1.1f);   // the accent range is still live (floor never touches >= unity)
+}
+
 TEST_CASE ("velocity drives filter brightness (vel->cutoff) end-to-end through the engine", "[dsp][velocity]")
 {
     VoiceParams p = sustainedSaw();

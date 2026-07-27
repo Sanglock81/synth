@@ -100,10 +100,12 @@ TEST_CASE ("velocity -> amp: perceptual (dB-linear) scaling below unity", "[6a][
         return tu::rms (steady);
     };
     const double r0 = rmsAtVel (0.0f), r5 = rmsAtVel (0.5f), r8 = rmsAtVel (0.8f), r1 = rmsAtVel (1.0f);
-    // Perceptual: scale(v) = 10^(v2a*(v-1)*40/20). v2a=0.7 -> v=0:0.040, 0.5:0.200, 0.8:0.525, 1:1.0.
-    // Equal velocity steps give equal dB steps (loudness is logarithmic), unlike the old linear map.
-    REQUIRE (r0 / r1 == Catch::Approx (0.040).margin (0.010));
-    REQUIRE (r5 / r1 == Catch::Approx (0.200).margin (0.020));
+    // Perceptual: scale(v) = 10^(v2a*(v-1)*40/20). v2a=0.7 -> curve gives v=0:0.040, 0.5:0.200,
+    // 0.8:0.525, 1:1.0 — equal velocity steps give equal dB steps (loudness is logarithmic).
+    // A FLOOR (kVelAmpFloor = 0.125, ~-18 dB) caps the very bottom so a faint hit still sounds:
+    // the curve's 0.040 at v=0 is lifted to the floor, while 0.5/0.8 are above it and untouched.
+    REQUIRE (r0 / r1 == Catch::Approx (0.125).margin (0.010));   // floored (curve would be 0.040)
+    REQUIRE (r5 / r1 == Catch::Approx (0.200).margin (0.020));   // above the floor -> perceptual curve
     REQUIRE (r8 / r1 == Catch::Approx (0.525).margin (0.030));
 }
 
