@@ -43,6 +43,26 @@ public:
         return false;
     }
 
+    // Delete a user preset file. Only user presets live in presetDir(); factory presets are
+    // compiled-in and unreachable here, so this can never touch the read-only bank.
+    bool remove (const juce::String& name) const
+    {
+        auto file = presetDir().getChildFile (name + ".vasynth");
+        return file.existsAsFile() && file.deleteFile();
+    }
+
+    // Rename a user preset, preserving its saved category. Refuses if the target name is empty,
+    // unchanged, or already taken (so a rename never silently clobbers another patch).
+    bool rename (const juce::String& oldName, const juce::String& newName) const
+    {
+        auto safe = juce::File::createLegalFileName (newName).trim();
+        if (safe.isEmpty() || safe == oldName) return false;
+        auto src = presetDir().getChildFile (oldName + ".vasynth");
+        auto dst = presetDir().getChildFile (safe + ".vasynth");
+        if (! src.existsAsFile() || dst.existsAsFile()) return false;
+        return src.moveFileTo (dst);
+    }
+
     // A user preset's saved category ("User" if it predates the field or the file is gone).
     juce::String getPresetCategory (const juce::String& name) const
     {

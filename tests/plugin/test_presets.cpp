@@ -246,6 +246,43 @@ TEST_CASE ("patches carry + apply their mod-matrix routes (factory + user round-
     pm.presetDir().getChildFile (name + ".vasynth").deleteFile();
 }
 
+TEST_CASE ("preset manage: rename + delete a user preset (round-trip), factory untouched", "[plugin][preset][manage]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    PresetManager pm (p.apvts);
+
+    const auto tag = juce::String (juce::Random::getSystemRandom().nextInt (1'000'000));
+    const auto a   = "ut-manage-a-" + tag;
+    const auto b   = "ut-manage-b-" + tag;
+    const auto c   = "ut-manage-c-" + tag;
+    auto exists = [&] (const juce::String& n) { return pm.presetDir().getChildFile (n + ".vasynth").existsAsFile(); };
+
+    // Rename preserves the saved category and moves the file (old gone, new present).
+    REQUIRE (pm.save (a, "Lead"));
+    REQUIRE (pm.rename (a, b));
+    REQUIRE_FALSE (exists (a));
+    REQUIRE (exists (b));
+    REQUIRE (pm.getPresetCategory (b) == "Lead");
+
+    // Rename refuses to clobber an existing patch, and a no-op / empty name is rejected.
+    REQUIRE (pm.save (c, "Bass"));
+    REQUIRE_FALSE (pm.rename (b, c));       // c already exists -> refused
+    REQUIRE (exists (b));                   // b untouched
+    REQUIRE_FALSE (pm.rename (b, "   "));   // empty after trim -> refused
+
+    // Delete removes only the named user file; a missing name is a no-op false.
+    REQUIRE (pm.remove (b));
+    REQUIRE_FALSE (exists (b));
+    REQUIRE_FALSE (pm.remove (b));          // already gone
+
+    // Factory presets live in the compiled bank, not presetDir() — unreachable by remove/rename.
+    REQUIRE_FALSE (pm.remove ("Bright Lead"));
+    REQUIRE (p.factoryPresetLibrary().byName ("Bright Lead") != nullptr);
+
+    pm.presetDir().getChildFile (c + ".vasynth").deleteFile();
+}
+
 TEST_CASE ("Inc 3: user preset category round-trips (and old presets read as User)", "[plugin][preset][category]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

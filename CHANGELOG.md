@@ -18,8 +18,20 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   a **Crash**/**Splash** with the pitched resonance pulled down for a brighter metallic wash, a
   de-toyed **Ride**, and a **Metal Hit** opened up to ring naturally. The loudness match holds
   across the trimmed bank.
+- **Preset bank overhaul (tonal pass).** Redesigned eight flat patches toward a warmer, more alive
+  bar: **Bell Keys** (velocity brightens the bell timbre; rings and fades like a real bell),
+  **Clav Bite** (snappier, with drive and a filter-env bite), **Synth Pluck** (fuller, with drift
+  and space), **WT Marimba** (warmer body + soft mallet attack), **String Machine** (a drifting,
+  chorused ensemble with a slow filter shimmer), **Motion Pad** (a slow LFO filter sweep that earns
+  its name, distinct from the other pads), and the two flutes **Soft/Breath Flute** (de-noised —
+  breath, not hiss).
 
 ### Added
+- **Manage your presets from the Load menu.** Each of your saved patches now carries **Load /
+  Rename… / Delete** actions inline (rename preserves the patch's category and won't clobber an
+  existing name; delete asks first). Factory patches stay read-only. The **Load** menu is also now
+  **collapsible** — factory categories and a **My Presets** group open as submenus instead of one
+  long scroll.
 - **Patches carry their modulation.** A preset can now save **mod-matrix routes** as part of its
   sound. Factory patches declare them in JSON (`"routes": [{ "src": "LFO 1", "dest": "Wave Pos",
   "depth": 0.45 }]`); your saved user patches round-trip their routes automatically. Loading a

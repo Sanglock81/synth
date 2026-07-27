@@ -359,22 +359,35 @@ private:
 
     void refreshTitle() { presetBtn.setButtonText ("synth  -  " + currentName); }
 
-    void showPresetMenu()
+    // Load a patch by name (Init / factory / user) and reflect it in the title.
+    void loadNamed (const juce::String& n)
     {
-        juce::PopupMenu m;
-        int id = 1;
-        juce::StringArray order;                       // id -> name
-        auto add = [&] (const juce::String& n) { m.addItem (id++, n); order.add (n); };
+        if (n == "Init")                                           proc.loadInitPreset();
+        else if (proc.factoryPresetLibrary().byName (n) != nullptr) proc.loadFactoryPreset (n);
+        else                                                        proc.loadUserPreset (n);
+        currentName = n; refreshTitle();
+    }
 
-        add ("Init");                                  // blank slate, pinned at the top
-        const auto& lib = proc.factoryPresetLibrary();
-        for (auto& cat : lib.orderedCategories())      // canonical musical order
+public:
+    // Build the preset Load menu into `m`. Factory categories become collapsible submenus;
+    // user presets get a "My Presets" submenu where each patch is itself a Load/Rename/Delete
+    // submenu. Pure of UI state (takes hooks) so a test can introspect the tree + fire the actions.
+    static void buildPresetMenu (juce::PopupMenu& m,
+                                 const FactoryPresetLibrary& lib,
+                                 const PresetManager& presets,
+                                 std::function<void (const juce::String&)> onLoad,
+                                 std::function<void (const juce::String&)> onRename,
+                                 std::function<void (const juce::String&)> onDelete)
+    {
+        m.addItem ("Init", [onLoad] { onLoad ("Init"); });         // blank slate, pinned at the top
+
+        for (auto& cat : lib.orderedCategories())                  // canonical musical order
         {
-            m.addSectionHeader (cat);
-            for (auto& n : lib.namesInCategory (cat)) add (n);   // alphabetical within category
+            juce::PopupMenu sub;
+            for (auto& n : lib.namesInCategory (cat)) sub.addItem (n, [onLoad, n] { onLoad (n); });
+            m.addSubMenu (cat, sub);
         }
-        // User presets in their own section, grouped by the category chosen at save time
-        // (old presets read back as "User"), alphabetical within each group.
+
         auto userNames = presets.getPresetNames();
         if (! userNames.isEmpty())
         {
@@ -382,29 +395,74 @@ private:
             for (auto& n : userNames) byCat[presets.getPresetCategory (n)].add (n);
             juce::StringArray groups = FactoryPresetLibrary::canonicalOrder();
             groups.add ("User");
+
+            juce::PopupMenu mine;
             for (auto& g : groups)
             {
                 auto it = byCat.find (g);
                 if (it == byCat.end()) continue;
-                m.addSectionHeader (g == "User" ? "User" : "User > " + g);
+                mine.addSectionHeader (g);
                 it->second.sort (true);
-                for (auto& n : it->second) add (n);
-            }
-        }
-
-        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (presetBtn),
-            [this, order] (int r)
-            {
-                if (r >= 1 && r <= order.size())
+                for (auto& n : it->second)
                 {
-                    const auto n = order[r - 1];
-                    if (n == "Init")                                           proc.loadInitPreset();
-                    else if (proc.factoryPresetLibrary().byName (n) != nullptr) proc.loadFactoryPreset (n);
-                    else                                                        proc.loadUserPreset (n);
-                    currentName = n; refreshTitle();
+                    juce::PopupMenu actions;
+                    actions.addItem ("Load",    [onLoad, n]   { onLoad (n); });
+                    actions.addItem ("Rename…", [onRename, n] { onRename (n); });
+                    actions.addItem ("Delete",  [onDelete, n] { onDelete (n); });
+                    mine.addSubMenu (n, actions);
+                }
+            }
+            m.addSeparator();
+            m.addSubMenu ("My Presets", mine);
+        }
+    }
+
+private:
+    void showPresetMenu()
+    {
+        juce::PopupMenu m;
+        buildPresetMenu (m, proc.factoryPresetLibrary(), presets,
+                         [this] (const juce::String& n) { loadNamed (n); },
+                         [this] (const juce::String& n) { showRenameDialog (n); },
+                         [this] (const juce::String& n) { confirmDelete (n); });
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (presetBtn),
+            [this] (int) { if (restoreFocus) restoreFocus(); });
+    }
+
+    void showRenameDialog (const juce::String& oldName)
+    {
+        auto* aw = new juce::AlertWindow ("Rename Preset", "New name for \"" + oldName + "\":",
+                                          juce::MessageBoxIconType::NoIcon, this);
+        aw->addTextEditor ("name", oldName);
+        aw->addButton ("Rename", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        aw->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+        aw->enterModalState (true, juce::ModalCallbackFunction::create (
+            [this, aw, oldName] (int result)
+            {
+                if (result == 1)
+                {
+                    const auto n = aw->getTextEditorContents ("name").trim();
+                    if (presets.rename (oldName, n) && currentName == oldName)
+                        { currentName = juce::File::createLegalFileName (n).trim(); refreshTitle(); }
                 }
                 if (restoreFocus) restoreFocus();
-            });
+            }), true);
+    }
+
+    void confirmDelete (const juce::String& name)
+    {
+        auto* aw = new juce::AlertWindow ("Delete Preset", "Delete \"" + name + "\"? This cannot be undone.",
+                                          juce::MessageBoxIconType::WarningIcon, this);
+        aw->addButton ("Delete", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        aw->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+        aw->enterModalState (true, juce::ModalCallbackFunction::create (
+            [this, aw, name] (int result)
+            {
+                juce::ignoreUnused (aw);
+                if (result == 1 && presets.remove (name) && currentName == name)
+                    { currentName = "Init"; refreshTitle(); }
+                if (restoreFocus) restoreFocus();
+            }), true);
     }
 
     void showSaveDialog()

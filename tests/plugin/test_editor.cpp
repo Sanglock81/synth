@@ -7,6 +7,7 @@
 #include <catch2/catch_approx.hpp>
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "UI/TopBar.h"
 #include <memory>
 
 #ifndef VASYNTH_DOCS_DIR
@@ -34,6 +35,60 @@ namespace
             collectParamIds (*ch, out);
         }
     }
+}
+
+TEST_CASE ("preset menu: factory categories are submenus; user presets carry Load/Rename/Delete", "[plugin][preset][menu]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    PresetManager pm (p.apvts);
+    const auto& lib = p.factoryPresetLibrary();
+
+    const auto uname = "ut-menu-" + juce::String (juce::Random::getSystemRandom().nextInt (1'000'000));
+    REQUIRE (pm.save (uname, "Lead"));
+
+    juce::String loaded, renamed, deleted;
+    juce::PopupMenu m;
+    TopBar::buildPresetMenu (m, lib, pm,
+        [&] (const juce::String& n) { loaded  = n; },
+        [&] (const juce::String& n) { renamed = n; },
+        [&] (const juce::String& n) { deleted = n; });
+
+    // Copy out a named submenu (safe past the iterator's lifetime).
+    auto sub = [] (juce::PopupMenu& menu, const juce::String& text, juce::PopupMenu& out) -> bool
+    {
+        for (juce::PopupMenu::MenuItemIterator it (menu); it.next();)
+            if (it.getItem().text == text && it.getItem().subMenu != nullptr) { out = *it.getItem().subMenu; return true; }
+        return false;
+    };
+    // Fire a named item's action.
+    auto fire = [] (juce::PopupMenu& menu, const juce::String& text) -> bool
+    {
+        for (juce::PopupMenu::MenuItemIterator it (menu); it.next();)
+            if (it.getItem().text == text && it.getItem().action) { it.getItem().action(); return true; }
+        return false;
+    };
+
+    // Init loads directly from the top level.
+    REQUIRE (fire (m, "Init"));
+    REQUIRE (loaded == "Init");
+
+    // Each factory category is a collapsible submenu; its patches load on click (real wiring).
+    juce::PopupMenu bass;
+    REQUIRE (sub (m, "Bass", bass));
+    const auto aBass = lib.namesInCategory ("Bass")[0];
+    REQUIRE (fire (bass, aBass));
+    REQUIRE (loaded == aBass);
+
+    // The user patch lives under "My Presets" as its own Load/Rename/Delete submenu.
+    juce::PopupMenu mine, actions;
+    REQUIRE (sub (m, "My Presets", mine));
+    REQUIRE (sub (mine, uname, actions));
+    REQUIRE (fire (actions, "Load"));    REQUIRE (loaded  == uname);
+    REQUIRE (fire (actions, "Rename\xe2\x80\xa6")); REQUIRE (renamed == uname);   // "Rename…" (UTF-8 ellipsis)
+    REQUIRE (fire (actions, "Delete"));  REQUIRE (deleted == uname);
+
+    pm.presetDir().getChildFile (uname + ".vasynth").deleteFile();
 }
 
 TEST_CASE ("editor surfaces the voice controls + key params (drop regression)", "[plugin][editor][regression]")
