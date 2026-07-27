@@ -2,23 +2,12 @@
   "name": "Clav Bite",
   "category": "Keys",
   "params": {
-    "osc1_wave": 1,
-    "osc1_pw": 0.35,
-    "osc2_on": 0,
-    "osc3_on": 0,
-    "filter_type": 0,
-    "filter_cutoff": 2200,
-    "filter_reso": 0.25,
-    "filter_drive": 0.3,
-    "filter_env_amt": 0.3,
-    "vel_to_cutoff": 0.55,
-    "amp_attack": 0.001,
-    "amp_decay": 0.25,
-    "amp_sustain": 0.2,
-    "amp_release": 0.1,
-    "flt_attack": 0.001,
-    "flt_decay": 0.15,
-    "flt_sustain": 0.1,
-    "flt_release": 0.1
+    "osc1_wave": 1, "osc1_pw": 0.28, "osc2_on": 0, "osc3_on": 0,
+    "filter_type": 0, "filter_cutoff": 1400, "filter_reso": 0.34, "filter_drive": 0.42,
+    "filter_env_amt": 0.5, "filter_keytrack": 0.45, "vel_to_cutoff": 0.6,
+    "amp_attack": 0.001, "amp_decay": 0.22, "amp_sustain": 0.0, "amp_release": 0.08,
+    "flt_attack": 0.001, "flt_decay": 0.13, "flt_sustain": 0.0, "flt_release": 0.08,
+    "fx_delay_on": 1, "delay_mix": 0.15, "delay_time": 190, "delay_feedback": 0.25,
+    "patch_trim": 1.0
   }
 }

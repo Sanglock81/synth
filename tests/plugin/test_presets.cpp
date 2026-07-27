@@ -218,6 +218,14 @@ TEST_CASE ("patches carry + apply their mod-matrix routes (factory + user round-
     REQUIRE (s0.dest   == ModMatrix::WavePos);
     REQUIRE (s0.depth  == Catch::Approx (0.45f).margin (0.02));
 
+    // Increment-B showcase routes must resolve (a mistyped src/dest name would silently drop).
+    p.loadFactoryPreset ("Motion Pad");                    // LFO 1 -> Cutoff (the "motion" is a filter sweep)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::Cutoff); }
+    p.loadFactoryPreset ("String Machine");                // LFO 1 -> Cutoff (ensemble shimmer)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::Cutoff); }
+    p.loadFactoryPreset ("Bell Keys");                     // Velocity -> Wave Pos (harder = brighter bell)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::Velocity); REQUIRE (s.dest == ModMatrix::WavePos); }
+
     // A routeless patch CLEARS the focused part's routes — a preset defines its complete sound.
     p.loadFactoryPreset ("Warm Pad");
     REQUIRE (p.getModSlot (-1, 0).source == ModMatrix::SrcNone);
