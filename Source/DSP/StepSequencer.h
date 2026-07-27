@@ -72,6 +72,29 @@ public:
     // process()/swing/gate logic is untouched — this is a phase reset the owner drives.
     void realign() { started = false; }
 
+    // Start the pattern ALREADY LOCKED to the shared grid, instead of firing step 0 at the
+    // instant of enabling. `g` = the bar's current 16th-step index (looper.position()/step),
+    // `intoStep` = samples elapsed into it. Enabling mid-bar therefore picks up at the beat the
+    // transport is actually on — step 0 still lands on the bar downbeat — so nothing plays a
+    // partial bar off-grid and there's no visible snap-to-0 when the clock wraps. The owner calls
+    // this on the enable edge (task #127). A hit that lands exactly on a step boundary still fires.
+    void startAtGrid (int g, double intoStep)
+    {
+        started = true;
+        g = ((g % kSteps) + kSteps) % kSteps;
+        const double stepLen = cfg.samplesPerStep;                 // un-swung anchor; swing accrues after
+        if (intoStep < 1.0)                                        // on the boundary -> fire this step now
+        {
+            stepIndex = (g - 1 + kSteps) % kSteps;
+            sampleInStep = stepLen;                                // process() immediately doStep()s -> g
+        }
+        else                                                      // mid-step -> pick up here, next boundary fires g+1
+        {
+            stepIndex = g;
+            sampleInStep = std::min (intoStep, stepLen);
+        }
+    }
+
     // Emit this block's note events. emit(sampleOffset, note, velocity, isOn).
     template <typename Emit>
     void process (int numSamples, Emit&& emit)

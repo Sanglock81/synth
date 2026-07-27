@@ -104,3 +104,41 @@ TEST_CASE ("arp: a bar realign keeps the rhythm on-grid but does NOT reset the p
     REQUIRE (firedStep == (before + 1) % Arpeggiator::kNumSteps);   // pattern CONTINUED (not reset to 0)
     REQUIRE (firedStep != 0);                                       // and it did fire on the downbeat
 }
+
+TEST_CASE ("seq: enabling mid-bar picks up at the current grid step, not step 0 (task #127)",
+           "[dsp][clock][resync]")
+{
+    // The hands-on fix: enabling the sequencer mid-bar must lock its pattern to the running grid
+    // (step 0 stays on the bar downbeat) instead of firing step 0 at the enable instant and then
+    // snapping back to 0 at the wrap. note 60 lives ONLY on step 0, so we can see exactly when the
+    // pattern's step 0 comes round.
+    StepSequencer seq;
+    StepSequencer::Config c; c.enabled = true; c.gate = 0.5f; c.swing = 0.0f;
+    for (int s = 0; s < StepSequencer::kSteps; ++s) c.cells[0][s] = 0;
+    c.cells[0][0] = 1; c.note[0] = 60; c.samplesPerStep = 1000.0;
+    seq.setConfig (c);
+
+    // Enable at grid step 10 (10 sixteenths into the bar), a third of the way into that step.
+    seq.startAtGrid (10, 300.0);
+    REQUIRE (seq.currentStep() == 10);          // picked up at the beat the transport is on, NOT step 0
+
+    // Run 8 steps (8000 samples) and record where step 0 (note 60) fires.
+    std::vector<int> step0HitsAt; int t = 0; const int block = 250;
+    for (int b = 0; b < 32; ++b)
+    {
+        seq.process (block, [&] (int off, int note, float, bool on) { if (on && note == 60) step0HitsAt.push_back (t + off); });
+        t += block;
+    }
+    // Old behaviour fired step 0 at the enable instant (~t=0). Grid-anchored, the first step-0 hit
+    // lands ~6 steps later at the bar downbeat (grid 16) — and only once in the 8-step window.
+    REQUIRE (step0HitsAt.size() == 1);
+    REQUIRE (step0HitsAt.front() > 4000);       // NOT at enable; out near the downbeat
+
+    // Enabling exactly on a downbeat DOES fire step 0 immediately (the kick on the 1).
+    StepSequencer seq2; seq2.setConfig (c);
+    seq2.startAtGrid (0, 0.0);
+    int firstNote = -1, firstAt = -1;
+    seq2.process (128, [&] (int off, int note, float, bool on) { if (on && firstNote < 0) { firstNote = note; firstAt = off; } });
+    REQUIRE (firstNote == 60);                  // step 0 fired
+    REQUIRE (firstAt == 0);                     // right on the downbeat
+}

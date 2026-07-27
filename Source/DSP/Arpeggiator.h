@@ -74,6 +74,27 @@ public:
     // it free-runs its pattern locked to the grid, instead of skipping to the start each bar.
     void realign() { sampleInStep = stepLength(); }
 
+    // Start the arp ALREADY LOCKED to the shared grid instead of firing step 0 the instant it's
+    // enabled: `g` = the bar's current 16th index, `intoStep` = samples into it. So turning the arp
+    // on mid-bar picks up on the beat the transport is at, matching the sequencer (task #127). A
+    // strike lands within block tolerance; a boundary hit still fires this step.
+    void startAtGrid (int g, double intoStep)
+    {
+        started = true;
+        g = ((g % kNumSteps) + kNumSteps) % kNumSteps;
+        const double stepLen = cfg.samplesPerStep;
+        if (intoStep < 1.0)
+        {
+            stepIndex = (g - 1 + kNumSteps) % kNumSteps;
+            sampleInStep = stepLen;
+        }
+        else
+        {
+            stepIndex = g;
+            sampleInStep = std::min (intoStep, stepLen);
+        }
+    }
+
     // Emit clock-accurate events for this block. emit(sampleOffset, note, velocity, isOn).
     template <typename Emit>
     void process (int numSamples, Emit&& emit)

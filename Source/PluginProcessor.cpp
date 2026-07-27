@@ -2744,6 +2744,12 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
             ac.steps[(std::size_t) i] = (arpSteps[(std::size_t) i] > 0.5f) ? getArpStepVel (i) / 100.0f : 0.0f;
         arp.setConfig (ac);
         if (arpWasOn && ! ac.enabled) { arp.reset(); engine.allNotesOff(); }
+        else if (! arpWasOn && ac.enabled)     // enable edge: anchor to the running grid (task #127)
+        {
+            const double gp = looper.position() / samplesPerStep;
+            const double fg = std::floor (gp);
+            arp.startAtGrid ((int) ((long long) fg % Arpeggiator::kNumSteps), (gp - fg) * samplesPerStep);
+        }
         arpWasOn = ac.enabled;
     }
 
@@ -2765,6 +2771,12 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
         {
             const int seqT = juce::jlimit (0, SynthEngine::maxParts - 1, (int) rp (apvts, ID::seqTarget));
             seq.flush ([this, seqT, chordOn] (int, int note, float, bool) { dispatchNoteOff (note, seqT, chordOn); });
+        }
+        else if (! seqWasOn && sc.enabled)     // enable edge: anchor to the running grid (task #127)
+        {
+            const double gp = looper.position() / samplesPerStep;
+            const double fg = std::floor (gp);
+            seq.startAtGrid ((int) ((long long) fg % StepSequencer::kSteps), (gp - fg) * samplesPerStep);
         }
         seqWasOn = sc.enabled;
     }
