@@ -12,6 +12,7 @@
 #include "ModDestRegistry.h"
 #include <cmath>
 #include <vector>
+#include <set>
 
 namespace
 {
@@ -151,6 +152,36 @@ TEST_CASE ("RANDOM generates 0-3 valid registry matrix routes", "[plugin][random
         }
         REQUIRE (used <= 3);
     }
+}
+
+TEST_CASE ("RANDOM routes are shaped: audible + varied, not always LFO->Cutoff", "[plugin][random][routes]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    juce::Random rng (808);
+    int total = 0, cutoff = 0, moveSrc = 0;
+    std::set<int> dests;
+    const int N = 500;
+    auto isMove = [] (int s) { return s == ModMatrix::LFO1 || s == ModMatrix::LFO2 || s == ModMatrix::LFO3
+                                   || s == ModMatrix::ModEnv || s == ModMatrix::AmpEnv || s == ModMatrix::Velocity; };
+    for (int i = 0; i < N; ++i)
+    {
+        p.randomizeSound (rng);
+        for (int s = 0; s < ModMatrix::kSlots; ++s)
+        {
+            const auto slot = p.getModSlot (-1, s);
+            if (slot.source == ModMatrix::SrcNone || slot.dest == ModMatrix::DstNone) continue;
+            ++total; dests.insert (slot.dest);
+            if (slot.dest == ModMatrix::Cutoff) ++cutoff;
+            if (isMove (slot.source)) ++moveSrc;
+        }
+    }
+    INFO ("routes=" << total << " cutoff=" << cutoff << " distinctDests=" << dests.size() << " moveSrc=" << moveSrc);
+    REQUIRE (total > 100);                                  // routes are actually being generated
+    REQUIRE (dests.size() >= 5);                            // spread across the audibly-live set, not one dest
+    REQUIRE ((double) cutoff / total < 0.45);              // cutoff is common but NOT dominant (the fix)
+    REQUIRE ((double) cutoff / total > 0.05);              // ...still well represented
+    REQUIRE ((double) moveSrc / total > 0.6);             // most routes use a source that actually MOVES
 }
 
 TEST_CASE ("VARY perturbs by bounded deltas and never moves exclusions", "[plugin][random]")

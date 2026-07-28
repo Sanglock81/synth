@@ -2532,14 +2532,43 @@ void VASynthProcessor::randomizeSound (juce::Random& rng)
     applyRandomParams (apvts, rng);
     ensureAudibleParams (apvts);                               // audibility floor + broken-patch invariants
 
-    // 0-3 mod-matrix routes from valid registry pairs (the best part of the old wild mode, kept).
+    // 0-3 mod-matrix routes, SHAPED (docs/plans/random-density.md). Uniform routes almost always
+    // landed on a static source or an inaudible/inactive dest, so the only ones you HEARD were the
+    // rare LFO->Cutoff. Weight toward routes that actually move + respond -- LFO/env/velocity sources
+    // into the audibly-live destinations, spread across them -- while keeping FULL support (a ~15%
+    // wildcard: any source into any registry destination).
     const auto& tbl = moddest::table();
+    // Sources that create audible motion on a held note: the LFOs self-move (weighted 2x); mod/amp
+    // env + velocity are at least dynamic. (Note/Mod Wheel/Pitch Bend/Random/Macros sit still after a
+    // roll, so a route from them reads as "nothing connected" -- they stay in the wildcard only.)
+    static const int moveSrc[] { ModMatrix::LFO1, ModMatrix::LFO2, ModMatrix::LFO3,
+                                 ModMatrix::LFO1, ModMatrix::LFO2, ModMatrix::LFO3,
+                                 ModMatrix::ModEnv, ModMatrix::AmpEnv, ModMatrix::Velocity };
+    // Destinations that are audibly live + always in the signal path; FX depths added only when that
+    // FX is on (else the route would be silent). Cutoff is one of several, not the default.
+    int liveDest[8]; int nLive = 0;
+    for (int d : { ModMatrix::Cutoff, ModMatrix::Pitch, ModMatrix::PulseWidth, ModMatrix::WavePos, ModMatrix::Resonance })
+        liveDest[nLive++] = d;
+    if (getN (apvts, ParamID::fxReverbOn) > 0.5f) liveDest[nLive++] = ModMatrix::ReverbMix;
+    if (getN (apvts, ParamID::fxDelayOn)  > 0.5f) liveDest[nLive++] = ModMatrix::DelayMix;
+    if (getN (apvts, ParamID::fxChorusOn) > 0.5f) liveDest[nLive++] = ModMatrix::ChorusDepth;
+
     const int nRoutes = rng.nextInt (4);
     for (int k = 0; k < nRoutes; ++k)
     {
-        const int src  = 1 + rng.nextInt (ModMatrix::kNumSources - 1);              // any real source
-        const int dest = tbl[(std::size_t) rng.nextInt ((int) tbl.size())].dest;
-        const float d  = rng.nextFloat() * 2.0f - 1.0f;                             // bipolar
+        int src, dest;
+        if (rng.nextFloat() < 0.15f)                                // wildcard: full support -> anywhere
+        {
+            src  = 1 + rng.nextInt (ModMatrix::kNumSources - 1);
+            dest = tbl[(std::size_t) rng.nextInt ((int) tbl.size())].dest;
+        }
+        else                                                        // shaped: a moving source into a live dest
+        {
+            src  = moveSrc[rng.nextInt ((int) (sizeof moveSrc / sizeof moveSrc[0]))];
+            dest = liveDest[rng.nextInt (nLive)];
+        }
+        const float scale = (dest == ModMatrix::Pitch) ? 0.35f : 0.9f;   // tame pitch (no seasick octave wobble)
+        const float d = (rng.nextFloat() * 2.0f - 1.0f) * scale;         // bipolar
         linkModRoute (focus, src, dest, d);
     }
     writeModMatrixProperty();

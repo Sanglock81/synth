@@ -36,8 +36,15 @@ by RANDOM. Only the **probability shaping** changes, so useful sounds happen far
    `{0, 0, 0, ±5, ±7, ±12}` (zero weighted heaviest) with a small chance of a chromatic outlier.
 5. **Resonance.** Usual cap for most rolls, with a **~5%** high-reso excursion into the
    self-osc-adjacent zone — the occasional screamer is wanted; a constant diet isn't.
-6. **Mod-matrix routes (kept from wild, simplified).** Every press rolls **0–3 routes** from valid
-   registry pairs. This was the best part of wild; it stays in the one algorithm.
+6. **Mod-matrix routes — SHAPED (kept from wild, weighted).** Every press rolls **0–3 routes**.
+   Uniform pairs almost always landed on a *static* source (Note/Wheel/Bend/Macros sit still after a
+   roll) or an *inaudible/inactive* dest, so the only routes you HEARD were the rare LFO→Cutoff.
+   Instead: **~85% shaped** — a *moving* source (the 3 LFOs weighted 2×, plus Mod/Amp Env + Velocity)
+   into an *audibly-live* dest (Cutoff, Pitch, Pulse Width, Wave Pos, Resonance — plus Reverb/Delay/
+   Chorus depth **only when that FX is on**), spread across them so it isn't always cutoff; **~15%
+   wildcard** — any source into any registry dest (full support preserved). Pitch depth is tamed
+   (×0.35) so it isn't a seasick octave wobble. A directed test pins: routes generated, dests spread
+   ≥5, cutoff < 45% (common but not dominant), movement-sourced > 60%.
 7. **Optional re-roll check (feasibility-gated).** After generation, render ~250 ms offline; if
    silent / DC-stuck / numerically broken, silently re-roll (≤5 attempts, then ship the last roll
    regardless). **If it costs >~150 ms wall-clock per press, skip it and say so** — the invariants

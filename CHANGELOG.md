@@ -15,8 +15,11 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   parameter still spans its full range (perceptual via the params' log-skewed ranges), with
   middle-biased oscillator levels, a hidden per-press **temperament** that loosely correlates the
   envelope tails + reverb size, **musical SEMI intervals** ({0, ±5, ±7, ±12} + rare chromatic), an
-  occasional (~5%) self-oscillating resonance excursion, and 0–3 mod-matrix routes — then a repair
-  pass (exclusion list + audibility floor + broken-patch invariants) so it's never silent or broken.
+  occasional (~5%) self-oscillating resonance excursion, and 0–3 **shaped** mod-matrix routes (a
+  *moving* source — LFO/env/velocity — into an *audibly-live* destination spread across
+  cutoff/pitch/PW/wave-pos/resonance, so RANDOM's modulation stops sounding like "always an LFO on
+  the filter"; a ~15% wildcard keeps full support) — then a repair pass (exclusion list + audibility
+  floor + broken-patch invariants) so it's never silent or broken.
   **VARY is unchanged** — the small step from the current sound. Design + the ear-tuned bias
   constants: `docs/plans/random-density.md`. (The optional offline re-roll check was skipped — the
   invariants already catch the defects; it can be added later if UAT shows a need.) This delivers the
