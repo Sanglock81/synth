@@ -22,18 +22,21 @@ namespace ParamID
     // Oscillator 1
     inline constexpr auto osc1Wave    = "osc1_wave";     // saw / square / tri / sine
     inline constexpr auto osc1Octave  = "osc1_octave";   // -2..+2
+    inline constexpr auto osc1Semi    = "osc1_semi";     // coarse tune, -24..+24 semitones
     inline constexpr auto osc1Detune  = "osc1_detune";   // cents
     inline constexpr auto osc1PW      = "osc1_pw";       // pulse width (square only)
 
     // Oscillator 2
     inline constexpr auto osc2Wave    = "osc2_wave";
     inline constexpr auto osc2Octave  = "osc2_octave";
+    inline constexpr auto osc2Semi    = "osc2_semi";
     inline constexpr auto osc2Detune  = "osc2_detune";
     inline constexpr auto osc2PW      = "osc2_pw";
 
     // Oscillator 3 (6A)
     inline constexpr auto osc3Wave    = "osc3_wave";
     inline constexpr auto osc3Octave  = "osc3_octave";
+    inline constexpr auto osc3Semi    = "osc3_semi";
     inline constexpr auto osc3Detune  = "osc3_detune";
     inline constexpr auto osc3PW      = "osc3_pw";
 
@@ -253,16 +256,19 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     // --- Oscillators -------------------------------------------------------
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc1Wave, 1},  "Osc1 Wave", waveNames, 0));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc1Octave, 1},"Osc1 Octave", juce::NormalisableRange<float>(-2.0f, 2.0f, 1.0f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc1Semi, 1},  "Osc1 Semi", juce::NormalisableRange<float>(-24.0f, 24.0f, 1.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("st")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc1Detune, 1},"Osc1 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("ct")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc1PW, 1},    "Osc1 PW", juce::NormalisableRange<float>(0.05f, 0.95f), 0.5f));
 
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc2Wave, 1},  "Osc2 Wave", waveNames, 0));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2Octave, 1},"Osc2 Octave", juce::NormalisableRange<float>(-2.0f, 2.0f, 1.0f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2Semi, 1},  "Osc2 Semi", juce::NormalisableRange<float>(-24.0f, 24.0f, 1.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("st")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2Detune, 1},"Osc2 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 7.0f, juce::AudioParameterFloatAttributes().withLabel ("ct")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2PW, 1},    "Osc2 PW", juce::NormalisableRange<float>(0.05f, 0.95f), 0.5f));
 
     params.push_back(std::make_unique<Pc>(juce::ParameterID{ID::osc3Wave, 1},  "Osc3 Wave", waveNames, 0));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Octave, 1},"Osc3 Octave", juce::NormalisableRange<float>(-2.0f, 2.0f, 1.0f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Semi, 1},  "Osc3 Semi", juce::NormalisableRange<float>(-24.0f, 24.0f, 1.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("st")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Detune, 1},"Osc3 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("ct")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3PW, 1},    "Osc3 PW", juce::NormalisableRange<float>(0.05f, 0.95f), 0.5f));
 

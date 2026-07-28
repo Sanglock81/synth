@@ -152,6 +152,8 @@ public:
 
             float v = rng.nextFloat();                                     // default: full range
             if      (id == ID::osc1On)        v = 1.0f;                     // guarantee a live source
+            else if (id == ID::osc1Semi || id == ID::osc2Semi || id == ID::osc3Semi)
+                                              v = 0.5f;                     // coarse tune -> 0 st (stay in tune)
             else if (id == ID::lfoDepth)      v = 0.6f  * rng.nextFloat();  // subtle-to-moderate mod
             else if (id == ID::filterReso)    v = 0.7f  * rng.nextFloat();  // avoid a constant scream
             else if (id == ID::noiseLevel)    v = 0.3f  * rng.nextFloat();  // seasoning, not the dish

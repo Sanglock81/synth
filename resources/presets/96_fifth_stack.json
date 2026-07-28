@@ -1,0 +1,5 @@
+{ "name":"Fifth Stack","category":"Lead","params":{
+  "osc1_wave":0,"osc2_on":1,"osc2_wave":0,"osc2_semi":7,"osc2_level":0.85,"osc3_on":1,"osc3_wave":0,"osc3_octave":1,"osc3_level":0.6,
+  "filter_type":0,"filter_cutoff":2600,"filter_reso":0.16,"filter_drive":0.3,"filter_env_amt":0.25,"vel_to_cutoff":0.35,
+  "amp_attack":0.008,"amp_decay":0.3,"amp_sustain":0.8,"amp_release":0.4,
+  "fx_width_on":1,"stereo_width":1.25,"patch_trim":1.0 } }

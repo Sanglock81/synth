@@ -65,6 +65,7 @@ public:
         const char* waveIds[] { ID::osc1Wave, ID::osc2Wave, ID::osc3Wave };
         const char* wtPosIds[]  { ID::osc1WtPos,  ID::osc2WtPos,  ID::osc3WtPos  };
         const char* octIds[]  { ID::osc1Octave, ID::osc2Octave, ID::osc3Octave };
+        const char* semiIds[] { ID::osc1Semi, ID::osc2Semi, ID::osc3Semi };
         const char* detIds[]  { ID::osc1Detune, ID::osc2Detune, ID::osc3Detune };
         const char* pwIds[]   { ID::osc1PW, ID::osc2PW, ID::osc3PW };
         const char* lvlIds[]  { ID::osc1Level, ID::osc2Level, ID::osc3Level };
@@ -79,11 +80,13 @@ public:
             o.wave = std::make_unique<HSelector> (p.apvts, waveIds[i], p.getMidiLearn(), waveLabels);
             o.phase = std::make_unique<HSelector> (p.apvts, phIds[i], p.getMidiLearn(), phaseLabels);
             o.phase->setHelp ("Start phase per note: RST reset / RND random / FRE free-run");
-            o.k[0] = std::make_unique<RotaryKnob> (p.apvts, octIds[i], "OCTAVE", p.getMidiLearn());
-            o.k[1] = std::make_unique<RotaryKnob> (p.apvts, detIds[i], "DETUNE", p.getMidiLearn());
-            o.k[2] = std::make_unique<RotaryKnob> (p.apvts, pwIds[i],  "PW",     p.getMidiLearn());
-            o.k[3] = std::make_unique<RotaryKnob> (p.apvts, lvlIds[i], "LEVEL",  p.getMidiLearn());
-            // #95 3c: a WT POS knob shares the PW slot (k[2]) — PW is meaningless for a wavetable.
+            o.k[0] = std::make_unique<RotaryKnob> (p.apvts, octIds[i],  "OCTAVE", p.getMidiLearn());
+            o.k[1] = std::make_unique<RotaryKnob> (p.apvts, semiIds[i], "SEMI",   p.getMidiLearn());
+            o.k[1]->setHelp ("Coarse tune this oscillator in semitones (-24..+24) — stack intervals like a fifth");
+            o.k[2] = std::make_unique<RotaryKnob> (p.apvts, detIds[i], "DETUNE", p.getMidiLearn());
+            o.k[3] = std::make_unique<RotaryKnob> (p.apvts, pwIds[i],  "PW",     p.getMidiLearn());
+            o.k[4] = std::make_unique<RotaryKnob> (p.apvts, lvlIds[i], "LEVEL",  p.getMidiLearn());
+            // #95 3c: a WT POS knob shares the PW slot (k[3]) — PW is meaningless for a wavetable.
             // A ParameterAttachment on the wave choice swaps which of the two is visible (the same
             // same-bounds morph idiom as the LFO RATE<->DIV knob and the EnvSection AMP/MOD swap).
             o.wtpos = std::make_unique<RotaryKnob> (p.apvts, wtPosIds[i], "WT POS", p.getMidiLearn());
@@ -147,10 +150,10 @@ public:
             // in WT mode. Reserved always (not carved on mode change) so nothing shifts between modes.
             o.die->setBounds (top.removeFromRight (22).reduced (0, 3)); top.removeFromRight (4);
             o.wave->setBounds (top);
-            const int kw = c.getWidth() / 4;
-            for (int k = 0; k < 4; ++k)
-                o.k[(size_t) k]->setBounds ((k < 3 ? c.removeFromLeft (kw) : c).reduced (2, 0));
-            o.wtpos->setBounds (o.k[2]->getBounds());   // shares the PW slot (visibility swaps)
+            const int kw = c.getWidth() / 5;
+            for (int k = 0; k < 5; ++k)
+                o.k[(size_t) k]->setBounds ((k < 4 ? c.removeFromLeft (kw) : c).reduced (2, 0));
+            o.wtpos->setBounds (o.k[3]->getBounds());   // shares the PW slot (visibility swaps)
         }
         // NOISE fill-bar: fills the row to the right of the "NOISE" source label (the open middle
         // between them is the reserved post-1.0 COLOR-selector slot). The bar itself shows the level.
@@ -176,7 +179,7 @@ private:
         auto* wave = dynamic_cast<juce::AudioParameterChoice*> (proc.apvts.getParameter (waveId (osc)));
         const bool wt = wave != nullptr && wave->getIndex() == kWtWaveIndex;
         auto& o = oscs[(size_t) osc];
-        if (o.k[2])  o.k[2]->setVisible (! wt);
+        if (o.k[3])  o.k[3]->setVisible (! wt);
         if (o.wtpos) o.wtpos->setVisible (wt);
         if (o.die)   o.die->setVisible (wt);
     }
@@ -250,7 +253,7 @@ private:
     {
         std::unique_ptr<PowerToggle> on;
         std::unique_ptr<HSelector> wave, phase;
-        std::array<std::unique_ptr<RotaryKnob>, 4> k;
+        std::array<std::unique_ptr<RotaryKnob>, 5> k;   // OCTAVE, SEMI, DETUNE, PW, LEVEL
         std::unique_ptr<RotaryKnob> wtpos;                    // shares the PW slot; visible only in WT mode
         std::unique_ptr<DieButton>  die;                      // WT-mode re-roll affordance (right of the picker)
         std::unique_ptr<juce::ParameterAttachment> waveAtt;  // morphs PW <-> WT POS on wave change

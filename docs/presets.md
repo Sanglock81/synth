@@ -1,6 +1,6 @@
 # Presets
 
-synth ships with 100 read-only **factory presets** plus **Init**, and you can
+synth ships with 101 read-only **factory presets** plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
@@ -25,7 +25,7 @@ same grouping; **Load drum kit** lists **Factory** and **User** kits with each k
 | Category | Presets |
 |---|---|
 | Bass    | Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Reese Redux, Power Grind, Velvet Bass, Stab Bass, Cavern Bass |
-| Lead    | Bright Lead, Foundry Lead, Dream Chime, PWM Anthem, Chip Lead, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo |
+| Lead    | Bright Lead, Foundry Lead, Dream Chime, PWM Anthem, Chip Lead, Fifth Stack, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo |
 | Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite, Velvet Poly, Tape Keys, Toy Piano, Glass Harmonica |
 | Pad     | Aurora Pad, Boreal, Choir Ahh, Submerged, Prairie Ensemble, Floating Poly, Anvil Choir, Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow |
 | Pluck   | Synth Pluck, Nylon Pluck, Music Box, Kalimba, Raindrop, Foundry Stomp, Ice Pluck, WT Marimba, Rubber Pluck |

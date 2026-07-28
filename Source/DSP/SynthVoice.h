@@ -31,6 +31,7 @@ struct VoiceParams
     // osc
     int    osc1Wave = 0, osc2Wave = 0, osc3Wave = 0;
     float  osc1Octave = 0, osc2Octave = 0, osc3Octave = 0;
+    float  osc1Semi   = 0, osc2Semi   = 0, osc3Semi   = 0;   // coarse tune, semitones (-24..+24)
     float  osc1Detune = 0, osc2Detune = 0, osc3Detune = 0;   // cents
     float  osc1PW = 0.5f, osc2PW = 0.5f, osc3PW = 0.5f;
     // Musicality Tier 1a: per-oscillator start-phase policy (0 RESET / 1 RANDOM / 2 FREE).
@@ -488,9 +489,9 @@ private:
         osc1.setWavetable (p.osc1WtTable);
         osc2.setWavetable (p.osc2WtTable);
         osc3.setWavetable (p.osc3WtTable);
-        osc1.setFrequency (f0 * std::exp2 (p.osc1Octave + (p.osc1Detune + d1c) / 1200.0f));
-        osc2.setFrequency (f0 * std::exp2 (p.osc2Octave + (p.osc2Detune + d2c) / 1200.0f));
-        osc3.setFrequency (f0 * std::exp2 (p.osc3Octave + (p.osc3Detune + d3c) / 1200.0f));
+        osc1.setFrequency (f0 * std::exp2 (p.osc1Octave + p.osc1Semi / 12.0f + (p.osc1Detune + d1c) / 1200.0f));
+        osc2.setFrequency (f0 * std::exp2 (p.osc2Octave + p.osc2Semi / 12.0f + (p.osc2Detune + d2c) / 1200.0f));
+        osc3.setFrequency (f0 * std::exp2 (p.osc3Octave + p.osc3Semi / 12.0f + (p.osc3Detune + d3c) / 1200.0f));
         osc1.setPulseWidth (std::clamp (p.osc1PW + p.pwMod + extraPwMod + dpw, 0.05f, 0.95f));
         osc2.setPulseWidth (std::clamp (p.osc2PW + p.pwMod + extraPwMod + dpw, 0.05f, 0.95f));
         osc3.setPulseWidth (std::clamp (p.osc3PW + p.pwMod + extraPwMod + dpw, 0.05f, 0.95f));

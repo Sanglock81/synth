@@ -27,6 +27,11 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Added
+- **Per-oscillator coarse tune (SEMI) + Fifth Stack (bank now 101).** Each oscillator gains a
+  **SEMI** knob — coarse tune in semitones (−24…+24), next to OCTAVE — so you can stack intervals
+  (a fifth, a fourth) from a single key, not just octaves. New **Fifth Stack** lead uses it: osc2 a
+  fifth up, osc3 an octave up, for an instant power-interval lead. Default 0 (no effect on existing
+  patches); RANDOM keeps it in tune.
 - **Category deepening — 18 more patches (bank now 100).** Filling gaps across the bank: Bass
   (**Velvet Bass**, **Stab Bass**, **Cavern Bass**), Lead (**PWM Anthem**, **Chip Lead**), Pad
   (**Choir Ahh**, **Boreal**, **Submerged**), Keys (**Toy Piano**, **Glass Harmonica**), Pluck

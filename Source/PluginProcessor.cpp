@@ -388,6 +388,9 @@ static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& a
     p.osc1Octave = rp (apvts, ID::osc1Octave);
     p.osc2Octave = rp (apvts, ID::osc2Octave);
     p.osc3Octave = rp (apvts, ID::osc3Octave);
+    p.osc1Semi   = rp (apvts, ID::osc1Semi);
+    p.osc2Semi   = rp (apvts, ID::osc2Semi);
+    p.osc3Semi   = rp (apvts, ID::osc3Semi);
     p.osc1Detune = rp (apvts, ID::osc1Detune);
     p.osc2Detune = rp (apvts, ID::osc2Detune);
     p.osc3Detune = rp (apvts, ID::osc3Detune);
@@ -516,6 +519,7 @@ static const juce::StringArray& perPartSoundIds()
     namespace ID = ParamID;
     static const juce::StringArray ids {
         ID::osc1Wave, ID::osc2Wave, ID::osc3Wave, ID::osc1Octave, ID::osc2Octave, ID::osc3Octave,
+        ID::osc1Semi, ID::osc2Semi, ID::osc3Semi,
         ID::osc1Detune, ID::osc2Detune, ID::osc3Detune, ID::osc1PW, ID::osc2PW, ID::osc3PW,
         ID::osc1Phase, ID::osc2Phase, ID::osc3Phase, ID::analog,   // Tier 1 phase policy + analog drift
         ID::osc1WtKind, ID::osc2WtKind, ID::osc3WtKind, ID::osc1WtPos, ID::osc2WtPos, ID::osc3WtPos,   // #95 WT

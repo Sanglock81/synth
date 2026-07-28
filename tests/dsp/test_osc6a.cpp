@@ -158,3 +158,30 @@ TEST_CASE ("toggling an oscillator on mid-note does not click", "[6a][kill][clic
     REQUIRE (tu::allFinite (out));
     REQUIRE (atEv <= pre + 0.05f);                   // no click when the osc fades in
 }
+
+TEST_CASE ("osc coarse tune: SEMI shifts an oscillator by exact semitones", "[6a][osc][semi]")
+{
+    // Measure osc2 alone (osc1/3 off). SEMI +12 must double the fundamental (octave);
+    // SEMI +7 must raise it by a fifth (2^(7/12) = 1.4983). Default 0 is the reference.
+    auto peakHz = [] (float semi)
+    {
+        VoiceParams p;
+        p.osc1Wave = 0; p.osc1Level = 0.0f;                       // osc1 off
+        p.osc2Wave = 0; p.osc2Level = 0.8f; p.osc2Semi = semi;    // the oscillator under test
+        p.osc3Level = 0.0f;
+        p.cutoffHz = 18000.0f; p.filterEnvAmt = 0.0f; p.keytrack = 0.0f;
+        p.ampA = 0.001f; p.ampD = 0.001f; p.ampS = 1.0f;
+        auto out   = render1 (p, 57, 1.0f, 32768);               // note 57 = A3 = 220 Hz
+        auto slice = tu::slice (out, 4096, 16384);               // 2^14 window past the attack
+        auto mag   = tu::magnitudeSpectrum (slice);
+        const double binHz = kSR / (double) slice.size();
+        int peak = 1; for (int k = 2; k < (int) mag.size(); ++k) if (mag[(size_t) k] > mag[(size_t) peak]) peak = k;
+        return peak * binHz;
+    };
+    const double f0  = peakHz (0.0f);
+    const double f7  = peakHz (7.0f);
+    const double f12 = peakHz (12.0f);
+    REQUIRE (f0  == Catch::Approx (220.0).margin (4.0));         // sanity: A3
+    REQUIRE (f7  / f0 == Catch::Approx (1.4983).margin (0.02));  // a perfect fifth
+    REQUIRE (f12 / f0 == Catch::Approx (2.0).margin (0.02));     // an octave
+}
