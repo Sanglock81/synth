@@ -1,0 +1,6 @@
+{ "name":"Ska Stab","category":"Brass","params":{
+  "osc1_wave":0,"osc2_on":1,"osc2_wave":0,"osc2_detune":8,"osc2_level":0.7,"osc3_on":1,"osc3_wave":0,"osc3_octave":-1,"osc3_level":0.4,
+  "filter_type":0,"filter_cutoff":1400,"filter_reso":0.2,"filter_drive":0.25,"filter_env_amt":0.5,"vel_to_cutoff":0.3,
+  "amp_attack":0.005,"amp_decay":0.18,"amp_sustain":0.0,"amp_release":0.08,"vel_to_amp":0.7,
+  "flt_attack":0.002,"flt_decay":0.12,"flt_sustain":0.0,
+  "fx_width_on":1,"stereo_width":1.2,"patch_trim":1.0 } }

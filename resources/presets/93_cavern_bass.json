@@ -1,0 +1,6 @@
+{ "name":"Cavern Bass","category":"Bass","params":{
+  "osc1_wave":4,"osc1_wt_kind":0,"osc1_wt_pos":0.15,"osc2_on":1,"osc2_wave":3,"osc2_octave":-1,"osc2_level":0.4,"osc3_on":0,
+  "filter_type":0,"filter_cutoff":360,"filter_reso":0.2,
+  "amp_attack":0.04,"amp_decay":0.3,"amp_sustain":0.7,"amp_release":0.4,
+  "fx_reverb_on":1,"reverb_mix":0.2,"reverb_size":0.5,"reverb_motion":0.3,
+  "fx_width_on":1,"stereo_width":1.2,"patch_trim":1.0 } }

@@ -1,0 +1,14 @@
+{
+  "name": "One-Voice Choir",
+  "category": "Experimental",
+  "params": {
+    "osc1_wave": 0, "osc2_on": 1, "osc2_wave": 0, "osc2_detune": 45, "osc2_level": 0.85,
+    "osc3_on": 1, "osc3_wave": 0, "osc3_detune": -45, "osc3_level": 0.85,
+    "osc_unison": 1,
+    "filter_type": 0, "filter_cutoff": 2200, "filter_reso": 0.1, "filter_env_amt": 0.15,
+    "amp_attack": 1.2, "amp_decay": 0.8, "amp_sustain": 0.9, "amp_release": 2.6,
+    "fx_reverb_on": 1, "reverb_mix": 0.5, "reverb_size": 0.95, "reverb_motion": 0.6, "reverb_damp": 0.3,
+    "fx_width_on": 1, "stereo_width": 1.7,
+    "patch_trim": 1.35
+  }
+}

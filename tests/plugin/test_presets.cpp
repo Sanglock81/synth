@@ -252,6 +252,20 @@ TEST_CASE ("patches carry + apply their mod-matrix routes (factory + user round-
       REQUIRE (a.source == ModMatrix::LFO2); REQUIRE (a.dest == ModMatrix::WavePos);
       REQUIRE (b.source == ModMatrix::LFO1); REQUIRE (b.dest == ModMatrix::Pitch); }
 
+    // Increment-H experimental patches (tempo-synced + S&H LFOs into exotic destinations).
+    p.loadFactoryPreset ("Breathing Machine");             // 1-bar-synced LFO1 -> Cutoff (inhale/exhale)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::Cutoff); }
+    p.loadFactoryPreset ("Insect Swarm");                  // free S&H LFO1 -> Pitch (chitter)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::Pitch); }
+    p.loadFactoryPreset ("Sputter");                       // 1/16-synced S&H LFO1 -> Pulse Width (stutter)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::PulseWidth); }
+
+    // Increment-H deepening patches with routes.
+    p.loadFactoryPreset ("PWM Anthem");                    // LFO1 -> Pulse Width (the classic PWM lead)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::PulseWidth); }
+    p.loadFactoryPreset ("Boreal");                        // S&H LFO1 -> Cutoff (shallow sparkle)
+    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::Cutoff); }
+
     // A routeless patch CLEARS the focused part's routes — a preset defines its complete sound.
     p.loadFactoryPreset ("Warm Pad");
     REQUIRE (p.getModSlot (-1, 0).source == ModMatrix::SrcNone);

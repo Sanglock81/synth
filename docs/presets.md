@@ -1,6 +1,6 @@
 # Presets
 
-synth ships with 76 read-only **factory presets** plus **Init**, and you can
+synth ships with 100 read-only **factory presets** plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
@@ -10,7 +10,7 @@ Open the **Load** menu and pick a patch. The menu is **collapsible** so it opens
 - **Init** — pinned at the top; resets every parameter to its default and the FX chain to
   chorus → delay → reverb → width.
 - **Factory** patches, in a submenu per category in a fixed musical order (Bass, Lead, Keys, Pad,
-  Pluck, Brass, Strings, Winds, Organ, FX, Drums) and **alphabetical within each category**.
+  Pluck, Brass, Strings, Winds, Organ, FX, Experimental, Drums) and **alphabetical within each category**.
 - **My Presets** — a submenu of your saved patches (only once you've saved one), grouped by the
   category you chose at save time (older presets read as "User"). Each patch is a small submenu
   with **Load / Rename… / Delete** — rename keeps its category and won't overwrite another patch;
@@ -24,17 +24,22 @@ same grouping; **Load drum kit** lists **Factory** and **User** kits with each k
 
 | Category | Presets |
 |---|---|
-| Bass    | Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Reese Redux, Power Grind |
-| Lead    | Bright Lead, Foundry Lead, Dream Chime, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo |
-| Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite, Velvet Poly, Tape Keys |
-| Pad     | Aurora Pad, Prairie Ensemble, Floating Poly, Anvil Choir, Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow |
-| Pluck   | Synth Pluck, Nylon Pluck, Music Box, Foundry Stomp, Ice Pluck, WT Marimba, Rubber Pluck |
-| Brass   | Analog Brass, Dawn Brass |
+| Bass    | Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Reese Redux, Power Grind, Velvet Bass, Stab Bass, Cavern Bass |
+| Lead    | Bright Lead, Foundry Lead, Dream Chime, PWM Anthem, Chip Lead, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo |
+| Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite, Velvet Poly, Tape Keys, Toy Piano, Glass Harmonica |
+| Pad     | Aurora Pad, Boreal, Choir Ahh, Submerged, Prairie Ensemble, Floating Poly, Anvil Choir, Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow |
+| Pluck   | Synth Pluck, Nylon Pluck, Music Box, Kalimba, Raindrop, Foundry Stomp, Ice Pluck, WT Marimba, Rubber Pluck |
+| Brass   | Analog Brass, Dawn Brass, Ska Stab |
 | Strings | String Machine, Strings Redux |
-| Winds   | Soft Flute, Breath Flute, Tin Whistle |
-| Organ   | Full Organ, Harmonium Reed |
-| FX      | Dark Drone, Cave Drone, Static Riser, Metal Ping, Ghost Sine, Sheet Metal Riser, Pendulum, Feedback Bloom |
+| Winds   | Soft Flute, Breath Flute, Tin Whistle, Ocarina |
+| Organ   | Full Organ, Harmonium Reed, Cathedral Pipe, Percussive B |
+| FX      | Dark Drone, Cave Drone, Static Riser, Ghost Sine, Sheet Metal Riser, Thunder Sheet, Radio Ghost |
+| Experimental | Metal Ping, Pendulum, Feedback Bloom, Breathing Machine, One-Voice Choir, Gamelan Ghost, Gravity Well, Insect Swarm, Sputter |
 | Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom, Clap, Rimshot, Clave, Cowbell, Splash, Crash, Ride, House Kick, House Snare, House Hat, Industrial Kick, Metal Hit, Noise Snare |
+
+**Experimental** is its own category: wholly unique instruments — sounds that exist nowhere
+else; play them to find out what they do. (Cave Drone and Static Riser stay in *FX/Texture* —
+they read as production tools, an ambient bed and a riser, rather than play-to-discover voices.)
 
 Patches can also carry **modulation routes** (see "Modulation routes in a patch" below), so a
 sound's movement — an LFO morphing the wavetable vowel, an envelope opening a filter beyond its

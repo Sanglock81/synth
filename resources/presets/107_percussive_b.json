@@ -1,0 +1,33 @@
+{
+  "name": "Percussive B",
+  "category": "Organ",
+  "params": {
+    "osc1_wave": 3,
+    "osc2_on": 1,
+    "osc2_wave": 3,
+    "osc2_octave": 1,
+    "osc2_level": 0.5,
+    "osc3_on": 1,
+    "osc3_wave": 2,
+    "osc3_level": 0.3,
+    "filter_type": 0,
+    "filter_cutoff": 2500,
+    "filter_reso": 0.2,
+    "filter_env_amt": 0.6,
+    "flt_attack": 0.001,
+    "flt_decay": 0.06,
+    "flt_sustain": 0.0,
+    "flt_release": 0.05,
+    "amp_attack": 0.003,
+    "amp_decay": 0.1,
+    "amp_sustain": 0.9,
+    "amp_release": 0.1,
+    "vel_to_amp": 0.0,
+    "fx_chorus_on": 1,
+    "chorus_voices": 1,
+    "chorus_rate": 0.5,
+    "chorus_depth": 0.3,
+    "chorus_mix": 0.3,
+    "patch_trim": 0.47
+  }
+}

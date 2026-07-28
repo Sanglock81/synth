@@ -1,0 +1,29 @@
+{
+  "name": "Choir Ahh",
+  "category": "Pad",
+  "params": {
+    "osc1_wave": 4,
+    "osc1_wt_kind": 2,
+    "osc1_wt_pos": 0.1,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "osc_unison": 3,
+    "osc_unison_detune": 0.25,
+    "osc_unison_width": 0.7,
+    "filter_type": 0,
+    "filter_cutoff": 2200,
+    "filter_reso": 0.1,
+    "filter_env_amt": 0.12,
+    "amp_attack": 1.0,
+    "amp_decay": 0.8,
+    "amp_sustain": 0.9,
+    "amp_release": 2.0,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.4,
+    "reverb_size": 0.85,
+    "reverb_motion": 0.3,
+    "fx_width_on": 1,
+    "stereo_width": 1.6,
+    "patch_trim": 3.9
+  }
+}

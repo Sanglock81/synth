@@ -1,0 +1,28 @@
+{
+  "name": "Chip Lead",
+  "category": "Lead",
+  "params": {
+    "osc1_wave": 1,
+    "osc1_pw": 0.18,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "analog": 0.0,
+    "filter_type": 0,
+    "filter_cutoff": 5000,
+    "filter_reso": 0.1,
+    "vel_to_cutoff": 0.2,
+    "amp_attack": 0.002,
+    "amp_decay": 0.1,
+    "amp_sustain": 0.75,
+    "amp_release": 0.08,
+    "lfo_rate": 6.0,
+    "lfo_depth": 0.05,
+    "lfo_shape": 1,
+    "lfo_dest": 1,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.08,
+    "reverb_size": 0.4,
+    "poly_mode": 1,
+    "patch_trim": 0.48
+  }
+}

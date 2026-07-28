@@ -1,0 +1,6 @@
+{ "name":"Thunder Sheet","category":"FX","params":{
+  "osc1_wave":3,"osc1_octave":-1,"osc1_level":0.4,"osc2_on":0,"osc3_on":0,"noise_level":0.6,
+  "filter_type":0,"filter_cutoff":400,"filter_reso":0.2,"filter_env_amt":0.2,"fltenv_to_pitch":-0.2,
+  "flt_attack":0.5,"flt_decay":1.0,"flt_sustain":0.5,
+  "amp_attack":0.6,"amp_decay":1.5,"amp_sustain":0.6,"amp_release":2.0,
+  "fx_reverb_on":1,"reverb_mix":0.35,"reverb_size":0.85,"reverb_motion":0.3,"fx_width_on":1,"stereo_width":1.4,"patch_trim":1.1 } }

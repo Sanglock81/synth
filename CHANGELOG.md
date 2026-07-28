@@ -27,6 +27,23 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Added
+- **Category deepening — 18 more patches (bank now 100).** Filling gaps across the bank: Bass
+  (**Velvet Bass**, **Stab Bass**, **Cavern Bass**), Lead (**PWM Anthem**, **Chip Lead**), Pad
+  (**Choir Ahh**, **Boreal**, **Submerged**), Keys (**Toy Piano**, **Glass Harmonica**), Pluck
+  (**Kalimba**, **Raindrop**), Brass (**Ska Stab**), Winds (**Ocarina**), Organ (**Cathedral Pipe**,
+  **Percussive B**), and FX (**Thunder Sheet**, **Radio Ghost**). Each is voiced to sit apart from
+  its neighbours (e.g. Velvet Bass is a dynamic finger bass vs Deep Sub's bed; Choir Ahh holds a
+  static vowel where WT Vowel Pad sweeps).
+- **New EXPERIMENTAL category + six new patches (bank now 82).** A dedicated home (after FX) for
+  *wholly unique instruments — sounds that exist nowhere else; play them to find out what they do.*
+  Moved **Metal Ping**, **Pendulum**, and **Feedback Bloom** into it, and added: **Breathing
+  Machine** (a respirator you can chord — a 1-bar-synced LFO inhales/exhales the filter), **One-Voice
+  Choir** (three oscillators detuned ±45 cents so the beating itself is the instrument), **Gamelan
+  Ghost** (a seeded inharmonic wavetable — bells that refuse equal temperament), **Gravity Well**
+  (a filter-envelope pitch-drop, so every note is born and falls), **Insect Swarm** (a free-running
+  sample-&-hold LFO chittering the pitch over band-passed noise), and **Sputter** (a 1/16-synced
+  S&H stutters the pulse width — a broken machine on the grid). *Cave Drone* and *Static Riser* stay
+  in FX/Texture as production tools.
 - **Fifteen new patches across five families (bank now 76).** A big content pass:
   *Prologue-lush* — **Prairie Ensemble** & **Floating Poly** (wide unison-stacked pads), **Tape Keys**
   (worn tape-aged synth keys), **Dawn Brass** (a slow poly brass swell); *Industrial* — **Power Grind**

@@ -1,0 +1,6 @@
+{ "name":"Kalimba","category":"Pluck","params":{
+  "osc1_wave":3,"osc2_on":1,"osc2_wave":2,"osc2_octave":1,"osc2_level":0.4,"osc3_on":0,
+  "filter_type":0,"filter_cutoff":2200,"filter_reso":0.5,"filter_keytrack":0.7,"filter_env_amt":0.3,"vel_to_cutoff":0.35,
+  "amp_attack":0.001,"amp_decay":0.35,"amp_sustain":0.0,"amp_release":0.25,
+  "flt_attack":0.001,"flt_decay":0.2,"flt_sustain":0.0,
+  "fx_reverb_on":1,"reverb_mix":0.1,"reverb_size":0.4,"patch_trim":1.0 } }

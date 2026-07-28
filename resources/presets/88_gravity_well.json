@@ -1,0 +1,14 @@
+{
+  "name": "Gravity Well",
+  "category": "Experimental",
+  "params": {
+    "osc1_wave": 0, "osc2_on": 1, "osc2_wave": 0, "osc2_detune": 5, "osc2_level": 0.6, "osc3_on": 0,
+    "filter_type": 0, "filter_cutoff": 1600, "filter_reso": 0.28, "filter_drive": 0.4, "filter_env_amt": 0.3, "fltenv_to_pitch": -0.7,
+    "amp_attack": 0.01, "amp_decay": 0.6, "amp_sustain": 0.85, "amp_release": 2.0,
+    "flt_attack": 0.55, "flt_decay": 1.0, "flt_sustain": 1.0, "flt_release": 0.8,
+    "poly_mode": 2, "glide_time": 0.04,
+    "fx_reverb_on": 1, "reverb_mix": 0.28, "reverb_size": 0.72,
+    "fx_width_on": 1, "stereo_width": 1.2,
+    "patch_trim": 1.0
+  }
+}

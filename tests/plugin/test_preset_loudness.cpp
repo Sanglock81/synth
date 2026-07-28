@@ -57,7 +57,7 @@ namespace
 
     bool isSustainedClass (const juce::String& category, float ampS, const Meas& m)
     {
-        if (category == "Drums" || category == "FX") return false;   // matched by transient/feel
+        if (category == "Drums" || category == "FX" || category == "Experimental") return false;   // matched by transient/feel
         if (ampS <= 0.25f) return false;                             // pluck/bell/clav — percussive VCA
         return (m.lateDb - m.earlyDb) > -6.0;                        // still ringing at full level -> real sustain
     }

@@ -1,0 +1,6 @@
+{ "name":"Submerged","category":"Pad","params":{
+  "osc1_wave":0,"osc2_on":1,"osc2_wave":0,"osc2_detune":8,"osc2_level":0.85,"osc3_on":0,
+  "filter_type":0,"filter_cutoff":700,"filter_reso":0.15,"filter_env_amt":0.15,
+  "amp_attack":1.5,"amp_decay":1.0,"amp_sustain":0.9,"amp_release":2.4,
+  "fx_chorus_on":1,"chorus_voices":2,"chorus_rate":0.3,"chorus_depth":0.7,"chorus_mix":0.55,
+  "fx_reverb_on":1,"reverb_mix":0.4,"reverb_size":0.85,"reverb_damp":0.6,"reverb_motion":0.3,"fx_width_on":1,"stereo_width":1.5,"patch_trim":1.7 } }

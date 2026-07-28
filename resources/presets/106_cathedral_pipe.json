@@ -1,0 +1,30 @@
+{
+  "name": "Cathedral Pipe",
+  "category": "Organ",
+  "params": {
+    "osc1_wave": 3,
+    "osc2_on": 1,
+    "osc2_wave": 3,
+    "osc2_octave": -1,
+    "osc2_level": 0.7,
+    "osc3_on": 1,
+    "osc3_wave": 2,
+    "osc3_octave": 1,
+    "osc3_level": 0.5,
+    "filter_type": 0,
+    "filter_cutoff": 3000,
+    "filter_reso": 0.05,
+    "amp_attack": 0.006,
+    "amp_decay": 0.1,
+    "amp_sustain": 1.0,
+    "amp_release": 0.3,
+    "vel_to_amp": 0.0,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.42,
+    "reverb_size": 0.92,
+    "reverb_motion": 0.4,
+    "fx_width_on": 1,
+    "stereo_width": 1.5,
+    "patch_trim": 0.35
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Breathing Machine",
+  "category": "Experimental",
+  "params": {
+    "osc1_wave": 0, "osc2_on": 1, "osc2_wave": 0, "osc2_detune": 6, "osc2_level": 0.8, "osc3_on": 0, "noise_level": 0.14,
+    "filter_type": 0, "filter_cutoff": 520, "filter_reso": 0.3, "filter_env_amt": 0.1,
+    "amp_attack": 0.3, "amp_decay": 0.6, "amp_sustain": 0.85, "amp_release": 1.2,
+    "lfo_rate": 0.5, "lfo_depth": 1.0, "lfo_shape": 0, "lfo_dest": 3, "lfo_sync": 1, "lfo_div": 2,
+    "fx_reverb_on": 1, "reverb_mix": 0.32, "reverb_size": 0.85, "reverb_motion": 0.4,
+    "fx_width_on": 1, "stereo_width": 1.4,
+    "patch_trim": 1.2
+  },
+  "routes": [ { "src": "LFO 1", "dest": "Cutoff", "depth": 0.7 } ]
+}

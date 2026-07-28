@@ -1,0 +1,5 @@
+{ "name":"Velvet Bass","category":"Bass","params":{
+  "osc1_wave":2,"osc2_on":1,"osc2_wave":3,"osc2_level":0.6,"osc3_on":0,
+  "filter_type":0,"filter_cutoff":480,"filter_reso":0.15,"filter_env_amt":0.2,
+  "amp_attack":0.003,"amp_decay":0.16,"amp_sustain":0.5,"amp_release":0.15,"vel_to_amp":0.8,
+  "poly_mode":2,"glide_time":0.02,"patch_trim":1.0 } }

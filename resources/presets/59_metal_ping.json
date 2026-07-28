@@ -1,6 +1,6 @@
 {
   "name": "Metal Ping",
-  "category": "FX",
+  "category": "Experimental",
   "params": {
     "osc1_wave": 4,
     "osc1_wt_seed": 777,

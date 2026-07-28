@@ -106,7 +106,7 @@ public:
     static const juce::StringArray& canonicalOrder()
     {
         static const juce::StringArray o { "Bass", "Lead", "Keys", "Pad", "Pluck",
-                                           "Brass", "Strings", "Winds", "Organ", "FX", "Drums" };
+                                           "Brass", "Strings", "Winds", "Organ", "FX", "Experimental", "Drums" };
         return o;
     }
 
