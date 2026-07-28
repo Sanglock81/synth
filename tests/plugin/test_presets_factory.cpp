@@ -37,7 +37,7 @@ TEST_CASE ("factory library has the expected presets spanning the categories", "
     VASynthProcessor p;
     const auto& lib = p.factoryPresetLibrary();
 
-    REQUIRE (lib.size() == 101);       // ... + Fifth Stack (coarse-tune) [65 -8 +4 +15 +6 +18 +1]
+    REQUIRE (lib.size() == 115);       // ... + 14 Studio drums (H-C) [+... ]
     for (auto& fp : lib.all())
     {
         REQUIRE (fp.name.isNotEmpty());

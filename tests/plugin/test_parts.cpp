@@ -680,3 +680,30 @@ TEST_CASE ("routed-note path does not allocate on the audio thread", "[plugin][7
         REQUIRE (g.count() == 0);
     }
 }
+
+TEST_CASE ("kit: the Studio kit loads and every one of its 16 pads sounds", "[plugin][kit][studio]")
+{
+    // Guards the Studio kit definition: each pad must reference a preset that exists and makes
+    // sound, so a typo'd source name (a silent pad) is caught. Choke behaviour is kit-agnostic
+    // and covered by the dsp choke tests; here we prove the full 36..51 pad map is live.
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    REQUIRE (p.getKitNames().contains ("Studio"));
+    p.setPartKit (2, p.loadKit ("Studio"));
+    p.setEditFocus (2);
+
+    auto energy = [&] (int trig)
+    {
+        juce::AudioBuffer<float> buf (2, 128);
+        p.routeNoteOn (trig, 1.0f, VASynthProcessor::kLivePart);
+        double e = 0.0;
+        for (int b = 0; b < 20; ++b) { buf.clear(); juce::MidiBuffer m; p.processBlock (buf, m); e += buf.getRMSLevel (0, 0, 128); }
+        p.routeNoteOff (trig, VASynthProcessor::kLivePart);
+        return e;
+    };
+    for (int trig = 36; trig <= 51; ++trig)
+    {
+        INFO ("Studio pad trigger " << trig);
+        REQUIRE (energy (trig) > 0.0);
+    }
+}

@@ -1,0 +1,5 @@
+{ "name":"Clap Soft","category":"Drums","params":{ "osc1_wave":3,"osc1_level":0.0,"osc2_on":0,"osc3_on":0,"noise_level":0.7,
+  "filter_type":2,"filter_cutoff":1500,"filter_reso":0.25,
+  "flt_attack":0.001,"flt_decay":0.09,"flt_sustain":0.0,
+  "amp_attack":0.001,"amp_decay":0.13,"amp_sustain":0.0,"amp_release":0.08,"vel_to_amp":0.5,
+  "fx_reverb_on":1,"reverb_mix":0.14,"reverb_size":0.35,"reverb_damp":0.4 } }

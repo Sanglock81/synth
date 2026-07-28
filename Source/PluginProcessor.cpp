@@ -1201,7 +1201,7 @@ VASynthProcessor::KitDefinition VASynthProcessor::kitFromTree (const juce::Value
 
 // ---- factory kits -----------------------------------------------------------
 
-juce::StringArray VASynthProcessor::factoryKitNames() { return { "808 Basics", "House Basics", "Industrial", "Stab Board" }; }
+juce::StringArray VASynthProcessor::factoryKitNames() { return { "808 Basics", "House Basics", "Industrial", "Studio", "Stab Board" }; }
 
 VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String& name)
 {
@@ -1274,6 +1274,29 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[13] = drum  (49, "Crash",           0);
         def.pads[14] = drum  (50, "Clave",           0);
         def.pads[15] = drum  (51, "Ride",            0);
+    }
+    else if (name == "Studio")
+    {
+        // The synthesized general-purpose kit — warmer/rounder/less stylized than 808/House/
+        // Industrial, aimed at singer-songwriter / pop / rock demos. (Fully-acoustic realism is
+        // the 1.1 CC0 sampled-kit pass; you can also load your own samples onto any pad today.)
+        // Same layout conventions: hats choke each other (group 1), cymbals ring free (group 0).
+        def.pads[0]  = drum  (36, "Kick Studio",     0);
+        def.pads[1]  = drum  (37, "Kick Tight",      0);
+        def.pads[2]  = drum  (38, "Snare Studio",    0);
+        def.pads[3]  = drum  (39, "Sidestick",       0);
+        def.pads[4]  = drum  (40, "Clap Soft",       0);
+        def.pads[5]  = drum  (41, "Snare Brush",     0);
+        def.pads[6]  = drum  (42, "Hat Closed Soft", 1);
+        def.pads[7]  = drum  (43, "Hat Open Soft",   1);
+        def.pads[8]  = tuned (44, "Tom Studio",      0, 40);   // low / mid / high — warm, longer
+        def.pads[9]  = tuned (45, "Tom Studio",      0, 46);
+        def.pads[10] = tuned (46, "Tom Studio",      0, 52);
+        def.pads[11] = drum  (47, "Shaker",          0);
+        def.pads[12] = drum  (48, "Tambourine",      0);
+        def.pads[13] = drum  (49, "Crash Dark",      0);
+        def.pads[14] = drum  (50, "Ride Soft",       0);
+        def.pads[15] = drum  (51, "Cowbell Low",     0);
     }
     else if (name == "Stab Board")
     {

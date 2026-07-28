@@ -1,0 +1,4 @@
+{ "name":"Tambourine","category":"Drums","params":{ "osc1_wave":3,"osc1_level":0.0,"osc2_on":0,"osc3_on":0,"noise_level":0.5,
+  "filter_type":1,"filter_cutoff":9000,"filter_reso":0.35,
+  "flt_attack":0.001,"flt_decay":0.16,"flt_sustain":0.0,
+  "amp_attack":0.001,"amp_decay":0.18,"amp_sustain":0.0,"amp_release":0.08,"vel_to_amp":0.6 } }

@@ -1,0 +1,5 @@
+{ "name":"Snare Studio","category":"Drums","params":{ "osc1_wave":2,"osc1_octave":1,"osc1_level":0.5,"osc2_on":0,"osc3_on":0,"noise_level":0.55,
+  "filter_type":2,"filter_cutoff":2000,"filter_reso":0.3,"fltenv_to_pitch":8,
+  "flt_attack":0.001,"flt_decay":0.12,"flt_sustain":0.0,"flt_release":0.08,
+  "amp_attack":0.001,"amp_decay":0.19,"amp_sustain":0.0,"amp_release":0.09,"vel_to_amp":0.5,
+  "fx_reverb_on":1,"reverb_mix":0.16,"reverb_size":0.4,"reverb_damp":0.5 } }

@@ -1,0 +1,4 @@
+{ "name":"Snare Brush","category":"Drums","params":{ "osc1_wave":3,"osc1_level":0.0,"osc2_on":0,"osc3_on":0,"noise_level":0.6,
+  "filter_type":2,"filter_cutoff":2400,"filter_reso":0.15,
+  "flt_attack":0.02,"flt_decay":0.14,"flt_sustain":0.0,
+  "amp_attack":0.012,"amp_decay":0.2,"amp_sustain":0.0,"amp_release":0.1,"vel_to_amp":0.6 } }

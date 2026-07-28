@@ -27,6 +27,13 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Added
+- **Studio drum kit — a synthesized general-purpose kit + 14 drum presets (bank now 115).** A
+  warmer, rounder, less-stylized kit than the 808/House/Industrial ones, aimed at singer-songwriter
+  / pop / rock demos: Kick Studio + Kick Tight, Snare Studio, Sidestick, Clap Soft, Snare Brush,
+  softer closed/open hats (they choke each other), three warm Tom Studio toms, Shaker, Tambourine,
+  a darker Crash, Ride Soft, and a mellower Cowbell Low. **It's synthesized, not sampled** —
+  fully-acoustic realism is the planned 1.1 CC0 sampled-kit pass, and you can already load your own
+  samples onto any pad (Kit Editor → Load sample).
 - **Per-oscillator coarse tune (SEMI) + Fifth Stack (bank now 101).** Each oscillator gains a
   **SEMI** knob — coarse tune in semitones (−24…+24), next to OCTAVE — so you can stack intervals
   (a fifth, a fourth) from a single key, not just octaves. New **Fifth Stack** lead uses it: osc2 a

@@ -1,6 +1,6 @@
 # Presets
 
-synth ships with 101 read-only **factory presets** plus **Init**, and you can
+synth ships with 115 read-only **factory presets** plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
@@ -35,7 +35,7 @@ same grouping; **Load drum kit** lists **Factory** and **User** kits with each k
 | Organ   | Full Organ, Harmonium Reed, Cathedral Pipe, Percussive B |
 | FX      | Dark Drone, Cave Drone, Static Riser, Ghost Sine, Sheet Metal Riser, Thunder Sheet, Radio Ghost |
 | Experimental | Metal Ping, Pendulum, Feedback Bloom, Breathing Machine, One-Voice Choir, Gamelan Ghost, Gravity Well, Insect Swarm, Sputter |
-| Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom, Clap, Rimshot, Clave, Cowbell, Splash, Crash, Ride, House Kick, House Snare, House Hat, Industrial Kick, Metal Hit, Noise Snare |
+| Drums   | Kick 808, Kick Punchy, Snare, Hat Closed, Hat Open, Tom, Clap, Rimshot, Clave, Cowbell, Splash, Crash, Ride, House Kick, House Snare, House Hat, Industrial Kick, Metal Hit, Noise Snare, Kick Studio, Kick Tight, Snare Studio, Sidestick, Clap Soft, Snare Brush, Hat Closed Soft, Hat Open Soft, Tom Studio, Shaker, Tambourine, Crash Dark, Ride Soft, Cowbell Low |
 
 **Experimental** is its own category: wholly unique instruments — sounds that exist nowhere
 else; play them to find out what they do. (Cave Drone and Static Riser stay in *FX/Texture* —
@@ -136,6 +136,12 @@ save/load as their own presets (a **Kits** category) and are included in a **MUL
   crisp **House Hat**, plus the shared claps/toms/cymbals. Same choke layout as 808 Basics.
 - *Industrial* — a driven, metallic kit: a distorted **Industrial Kick**, a harsh **Noise Snare**,
   and a clanging **Metal Hit** (also the three tuned toms).
+- *Studio* — the **synthesized general-purpose** kit (warmer/rounder than the 808/House/Industrial
+  kits, for singer-songwriter / pop / rock demos): Kick Studio + Tight, Snare Studio, Sidestick,
+  Clap Soft, Snare Brush, softer hats (choke group 1), three warm Tom Studio toms, Shaker,
+  Tambourine, a darker Crash, Ride Soft, Cowbell Low. **Honest note:** this is synthesized, not
+  sampled — fully-acoustic realism is the 1.1 CC0 sampled-kit pass; you can also load your own
+  samples onto any pad today (Kit Editor -> Load sample).
 - *Stab Board* — four drums plus four tuned **minor-triad** chord pads (a plucky Synth Pluck at C/D/E/F).
 
 *808 Basics* pad map (pad = trigger − 36):
