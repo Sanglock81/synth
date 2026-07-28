@@ -2440,81 +2440,61 @@ namespace
     float getN (juce::AudioProcessorValueTreeState& a, const char* id)
     { auto* p = a.getParameter (id); return p ? p->getValue() : 0.0f; }
 
-    // WILD: full-range uniform over every non-excluded sound param.
-    void applyWildParams (juce::AudioProcessorValueTreeState& a, juce::Random& rng)
+    // RANDOM — ONE algorithm (docs/plans/random-density.md): full-range support, musical density.
+    // No modes. Every continuous param still spans its FULL range — and because the time/frequency
+    // params use log-skewed NormalisableRanges (timeRange skew 0.3, cutoff/EQ 0.25, LFO 0.4),
+    // sampling the normalized value uniformly is ALREADY log-uniform in seconds/Hz (perceptual).
+    // The shaping below just makes usable sounds far more likely. These are EAR-TUNED constants,
+    // shipped conservatively (mild biases) so "fully random" stays honest — one place to tune them.
+    namespace randcal
     {
-        for (auto& id : VASynthProcessor::soundDesignParamIDs())
-            if (! PresetManager::randomizeExclusions().contains (id))
-                setN (a, id.toRawUTF8(), rng.nextFloat());
+        constexpr float semiChromaticP = 0.06f;   // chance a SEMI ignores the interval set (chromatic)
+        constexpr float selfOscP       = 0.05f;   // chance resonance excurses toward self-oscillation
+        constexpr float resoCap        = 0.7f;    // usual resonance ceiling (most rolls)
+        constexpr float cohereSpread   = 0.35f;   // temperament correlation LOOSENESS (bigger = looser)
     }
 
-    // CONSTRAINED: musical per-param ranges (fewer duds than full uniform).
-    void applyConstrainedParams (juce::AudioProcessorValueTreeState& a, juce::Random& rng)
+    // A value biased toward the useful middle of 0..1 (mean of two uniforms = triangular). Extremes
+    // still reachable, just rarer.
+    inline float midBias (juce::Random& rng) { return 0.5f * (rng.nextFloat() + rng.nextFloat()); }
+
+    // Normalized value for an osc SEMI param: musical intervals {0,0,0,+/-5,+/-7,+/-12} (zero weighted
+    // heaviest) with a rare chromatic outlier. Semi range is -24..+24 -> normalized (semi+24)/48.
+    inline float randSemiNorm (juce::Random& rng)
+    {
+        if (rng.nextFloat() < randcal::semiChromaticP) return rng.nextFloat();      // rare chromatic
+        static const int set[] { 0, 0, 0, 5, -5, 7, -7, 12, -12 };
+        return ((float) set[rng.nextInt (9)] + 24.0f) / 48.0f;
+    }
+
+    void applyRandomParams (juce::AudioProcessorValueTreeState& a, juce::Random& rng)
     {
         namespace ID = ParamID;
+        // Coherence latent: one hidden "temperament" per press (0 = percussive .. 1 = sustained).
+        // Loosely correlate the envelope tails + reverb size toward it (correlation, not determinism —
+        // each still keeps independent variance). This is what makes a random patch feel intentional.
+        const float temper = rng.nextFloat();
+        auto toward = [&] (float t) { return juce::jlimit (0.0f, 1.0f, t + (rng.nextFloat() * 2.0f - 1.0f) * randcal::cohereSpread); };
+
         for (auto& id : VASynthProcessor::soundDesignParamIDs())
         {
             if (PresetManager::randomizeExclusions().contains (id)) continue;
-            float v = rng.nextFloat();
-            if      (id == ID::osc1On)        v = 1.0f;
-            else if (id == ID::filterCutoff)  v = 0.35f + 0.6f * rng.nextFloat();   // mostly bright enough to read
-            else if (id == ID::filterReso)    v = 0.6f  * rng.nextFloat();
-            else if (id == ID::lfoDepth || id == ID::lfo2Depth || id == ID::lfo3Depth) v = 0.5f * rng.nextFloat();
-            else if (id == ID::noiseLevel)    v = 0.25f * rng.nextFloat();
-            else if (id == ID::delayFeedback) v = 0.55f * rng.nextFloat();
-            else if (id == ID::ampAttack)     v = 0.5f  * rng.nextFloat();          // rarely a super-slow attack
-            else if (id == ID::chorusMix || id == ID::delayMix || id == ID::reverbMix) v = 0.55f * rng.nextFloat();
+            float v = rng.nextFloat();                                              // default: full range (perceptual via skewed ranges)
+            if      (id == ID::osc1On) v = 1.0f;                                     // guarantee a live source
+            else if (id == ID::osc1Semi || id == ID::osc2Semi || id == ID::osc3Semi) v = randSemiNorm (rng);
+            else if (id == ID::osc1Level || id == ID::osc2Level || id == ID::osc3Level) v = midBias (rng);         // middle-biased levels
+            else if (id == ID::chorusMix || id == ID::delayMix || id == ID::reverbMix)  v = 0.55f * midBias (rng); // wet, but the note still reads
+            else if (id == ID::filterReso) v = (rng.nextFloat() < randcal::selfOscP) ? (0.9f + 0.1f * rng.nextFloat())   // ~5% self-osc excursion
+                                                                                     : randcal::resoCap * rng.nextFloat();
+            else if (id == ID::ampSustain || id == ID::fltSustain || id == ID::ampRelease || id == ID::fltRelease || id == ID::reverbSize)
+                v = toward (temper);                                                 // coherence-correlated tails
             setN (a, id.toRawUTF8(), v);
         }
     }
 
-    // ARCHETYPE: a coherent patch within correlated ranges. rr(lo,hi) picks in a range.
-    void applyArchetypeParams (juce::AudioProcessorValueTreeState& a, juce::Random& rng, int which)
-    {
-        namespace ID = ParamID;
-        auto rr = [&] (float lo, float hi) { return lo + rng.nextFloat() * (hi - lo); };
-        // Sensible shared baseline first, then the archetype overrides its defining params.
-        setN (a, ID::osc1On, 1.0f); setN (a, ID::osc2On, rng.nextFloat() < 0.6f ? 1.0f : 0.0f); setN (a, ID::osc3On, 0.0f);
-        setN (a, ID::osc1Level, rr (0.6f, 0.9f)); setN (a, ID::osc2Level, rr (0.3f, 0.7f)); setN (a, ID::osc3Level, 0.0f);
-        setN (a, ID::noiseLevel, 0.0f); setN (a, ID::filterType, 0.0f);              // LP
-        setN (a, ID::filterReso, rr (0.1f, 0.4f)); setN (a, ID::filterKeytrack, rr (0.2f, 0.6f));
-        setN (a, ID::ampSustain, rr (0.5f, 0.9f));
-        for (const char* id : { ID::chorusMix, ID::delayMix, ID::reverbMix }) setN (a, id, rr (0.1f, 0.35f));
-
-        switch (which)
-        {
-            case 0: // BASS
-                setN (a, ID::osc1Wave, 0.0f); setN (a, ID::osc2Wave, 0.25f);          // saw + square (indices 0,1 of 5)
-                setN (a, ID::osc2Octave, 0.25f);                                      // -1 oct sub
-                setN (a, ID::filterCutoff, rr (0.2f, 0.45f)); setN (a, ID::filterEnvAmt, rr (0.55f, 0.75f));
-                setN (a, ID::ampAttack, rr (0.0f, 0.1f)); setN (a, ID::ampDecay, rr (0.3f, 0.6f)); setN (a, ID::ampSustain, rr (0.3f, 0.6f)); setN (a, ID::ampRelease, rr (0.1f, 0.3f));
-                setN (a, ID::fltAttack, 0.0f); setN (a, ID::fltDecay, rr (0.2f, 0.4f)); break;
-            case 1: // LEAD
-                setN (a, ID::osc1Wave, 0.0f); setN (a, ID::osc2Detune, rr (0.5f, 0.6f));
-                setN (a, ID::filterCutoff, rr (0.5f, 0.8f)); setN (a, ID::ampAttack, rr (0.0f, 0.15f)); setN (a, ID::ampRelease, rr (0.2f, 0.4f));
-                setN (a, ID::delayMix, rr (0.2f, 0.4f)); break;
-            case 2: // PAD
-                setN (a, ID::osc1Wave, 0.0f); setN (a, ID::osc2Wave, 0.0f); setN (a, ID::osc2Detune, rr (0.53f, 0.62f));
-                setN (a, ID::filterCutoff, rr (0.4f, 0.65f)); setN (a, ID::ampAttack, rr (0.55f, 0.8f)); setN (a, ID::ampRelease, rr (0.6f, 0.85f)); setN (a, ID::ampSustain, rr (0.7f, 0.95f));
-                setN (a, ID::reverbMix, rr (0.35f, 0.6f)); setN (a, ID::fxReverbOn, 1.0f); setN (a, ID::chorusMix, rr (0.3f, 0.5f)); setN (a, ID::fxChorusOn, 1.0f); break;
-            case 3: // PLUCK
-                setN (a, ID::osc1Wave, rng.nextFloat() < 0.5f ? 0.0f : 0.25f);   // saw or square (0 / 1 of 5)
-                setN (a, ID::filterCutoff, rr (0.35f, 0.6f)); setN (a, ID::filterEnvAmt, rr (0.5f, 0.8f));
-                setN (a, ID::ampAttack, 0.0f); setN (a, ID::ampDecay, rr (0.2f, 0.4f)); setN (a, ID::ampSustain, rr (0.0f, 0.15f)); setN (a, ID::ampRelease, rr (0.1f, 0.3f));
-                setN (a, ID::fltAttack, 0.0f); setN (a, ID::fltDecay, rr (0.15f, 0.35f)); setN (a, ID::delayMix, rr (0.15f, 0.3f)); break;
-            case 4: // KEYS / EP
-                setN (a, ID::osc1Wave, 0.5f); setN (a, ID::osc2Wave, 0.75f);          // tri + sine (indices 2,3 of 5)
-                setN (a, ID::filterCutoff, rr (0.5f, 0.75f)); setN (a, ID::ampAttack, rr (0.0f, 0.1f)); setN (a, ID::ampDecay, rr (0.4f, 0.7f)); setN (a, ID::ampSustain, rr (0.3f, 0.6f));
-                setN (a, ID::chorusMix, rr (0.25f, 0.45f)); setN (a, ID::fxChorusOn, 1.0f); break;
-            default: // 5: PERC
-                setN (a, ID::osc1Wave, 0.75f); setN (a, ID::osc2On, 0.0f); setN (a, ID::noiseLevel, rr (0.2f, 0.5f));   // sine (3 of 5)
-                setN (a, ID::filterCutoff, rr (0.4f, 0.8f)); setN (a, ID::fltEnvToPitch, rr (0.55f, 0.8f));
-                setN (a, ID::ampAttack, 0.0f); setN (a, ID::ampDecay, rr (0.1f, 0.3f)); setN (a, ID::ampSustain, 0.0f); setN (a, ID::ampRelease, rr (0.05f, 0.2f));
-                setN (a, ID::fltAttack, 0.0f); setN (a, ID::fltDecay, rr (0.05f, 0.2f)); break;
-        }
-    }
-
-    // AUDIBILITY FLOOR — applied in EVERY mode: never silent, however wild.
+    // AUDIBILITY FLOOR + broken-patch INVARIANTS — a repair pass after generation. Each rule fixes
+    // ONLY the offending parameter (the rest of the roll stands): defect culling, never character
+    // culling — a screaming self-osc chaos patch passes; silence/near-silence doesn't.
     void ensureAudibleParams (juce::AudioProcessorValueTreeState& a)
     {
         namespace ID = ParamID;
@@ -2533,65 +2513,36 @@ namespace
         setN (a, ID::filterCutoff, juce::jmax (0.18f, getN (a, ID::filterCutoff)));   // not fully closed
         if (getN (a, ID::ampSustain) < 0.05f && getN (a, ID::ampDecay) < 0.2f) // silent env -> give it a decay tail
             setN (a, ID::ampDecay, 0.4f);
+        // INVARIANT: attack + release must not BOTH sit at sluggish extremes over near-zero sustain
+        // (a slow swell into a note that never articulates then hangs). Fix the ATTACK only.
+        if (getN (a, ID::ampSustain) < 0.1f && getN (a, ID::ampRelease) > 0.85f && getN (a, ID::ampAttack) > 0.45f)
+            setN (a, ID::ampAttack, 0.15f);
     }
 }
 
-VASynthProcessor::RandomResult VASynthProcessor::randomizeSound (juce::Random& rng)
+// RANDOM — one press, one algorithm (docs/plans/random-density.md). No modes, no toast, no
+// long-press picker: a single shaped-but-fully-random roll on the focused part. VARY (below) is the
+// small-step neighbour; this is the go-anywhere NEW.
+void VASynthProcessor::randomizeSound (juce::Random& rng)
 {
-    const int r = rng.nextInt (100);
-    const RandomMode m = (r < kRandWildPct)                     ? RandomMode::Wild
-                       : (r < kRandWildPct + kRandArchetypePct) ? RandomMode::Archetype
-                                                                : RandomMode::Constrained;
-    const int arch = (m == RandomMode::Archetype) ? rng.nextInt (kNumArchetypes) : -1;
-    return randomizeSound (rng, m, arch);
-}
-
-VASynthProcessor::RandomResult VASynthProcessor::randomizeSound (juce::Random& rng, RandomMode mode, int archetype)
-{
-    RandomResult res; res.mode = mode;
     const int focus = juce::jlimit (0, SynthEngine::maxParts - 1, editFocus());
     auto& mtx = partMatrix[(std::size_t) focus];
+    for (auto& s : mtx.slots) s = {};                          // start each roll with a clean matrix
 
-    // Curated, musical routes for the tame modes; free-for-all for wild.
-    auto addTastefulRoutes = [&] (int n)
-    {
-        struct R { int src, dest; float depthLo, depthHi; };
-        static const R pool[] {
-            { ModMatrix::LFO1, ModMatrix::Cutoff,      -0.35f, 0.35f },
-            { ModMatrix::ModEnv, ModMatrix::Cutoff,     0.25f, 0.6f  },
-            { ModMatrix::LFO2, ModMatrix::PulseWidth,   0.15f, 0.35f },
-            { ModMatrix::LFO1, ModMatrix::Pitch,       -0.06f, 0.06f },
-            { ModMatrix::Velocity, ModMatrix::Cutoff,   0.2f,  0.5f  },
-            { ModMatrix::LFO3, ModMatrix::ReverbMix,    0.1f,  0.3f  } };
-        for (int k = 0; k < n; ++k)
-        {
-            const auto& e = pool[(std::size_t) rng.nextInt ((int) (sizeof pool / sizeof pool[0]))];
-            const float d = e.depthLo + rng.nextFloat() * (e.depthHi - e.depthLo);
-            linkModRoute (focus, e.src, e.dest, d);
-        }
-    };
-    auto addWildRoutes = [&] (int n)
-    {
-        const auto& tbl = moddest::table();
-        for (int k = 0; k < n; ++k)
-        {
-            const int src  = 1 + rng.nextInt (ModMatrix::kNumSources - 1);          // any real source
-            const int dest = tbl[(std::size_t) rng.nextInt ((int) tbl.size())].dest;
-            const float d  = rng.nextFloat() * 2.0f - 1.0f;                          // bipolar
-            linkModRoute (focus, src, dest, d);
-        }
-    };
+    applyRandomParams (apvts, rng);
+    ensureAudibleParams (apvts);                               // audibility floor + broken-patch invariants
 
-    for (auto& s : mtx.slots) s = {};                          // start each Random with a clean matrix
-    switch (mode)
+    // 0-3 mod-matrix routes from valid registry pairs (the best part of the old wild mode, kept).
+    const auto& tbl = moddest::table();
+    const int nRoutes = rng.nextInt (4);
+    for (int k = 0; k < nRoutes; ++k)
     {
-        case RandomMode::Wild:        applyWildParams (apvts, rng);        addWildRoutes (rng.nextInt (5));      res.label = "WILD"; break;
-        case RandomMode::Archetype:   applyArchetypeParams (apvts, rng, archetype); addTastefulRoutes (1 + rng.nextInt (2)); res.label = archetypeName (archetype).toUpperCase() + " archetype"; break;
-        default:                      applyConstrainedParams (apvts, rng); addTastefulRoutes (1 + rng.nextInt (2)); res.label = "RANDOM"; break;
+        const int src  = 1 + rng.nextInt (ModMatrix::kNumSources - 1);              // any real source
+        const int dest = tbl[(std::size_t) rng.nextInt ((int) tbl.size())].dest;
+        const float d  = rng.nextFloat() * 2.0f - 1.0f;                             // bipolar
+        linkModRoute (focus, src, dest, d);
     }
-    ensureAudibleParams (apvts);
     writeModMatrixProperty();
-    return res;
 }
 
 void VASynthProcessor::varySound (juce::Random& rng)
@@ -2606,12 +2557,6 @@ void VASynthProcessor::varySound (juce::Random& rng)
                p->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, p->getValue() + d)); }
     }
     ensureAudibleParams (apvts);
-}
-
-juce::String VASynthProcessor::archetypeName (int i)
-{
-    static const char* names[] { "Bass", "Lead", "Pad", "Pluck", "Keys", "Perc" };
-    return (i >= 0 && i < kNumArchetypes) ? names[i] : "Random";
 }
 
 // The audio-callback entry point. When an offline bounce is running (#98) the live audio thread is

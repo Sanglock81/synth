@@ -46,12 +46,12 @@ public:
         addAndMakeVisible (save);
 
         random.setButtonText ("RANDOM"); styleBtn (random);
-        // Left-click / tap = roll a mode (NEW). Right-click or long-press = pick a mode explicitly.
-        random.onClick = [this] { if (suppressRandClick) { suppressRandClick = false; return; } rollRandom(); };
-        random.addMouseListener (this, false);
+        random.onClick = [this] { rollRandom(); };     // one press = one shaped-random patch (NEW)
+        random.setTooltip ("RANDOM: a fully random patch on the focused part, shaped toward playable (NEW)");
         addAndMakeVisible (random);
 
         vary.setButtonText ("VARY"); styleBtn (vary);
+        vary.setTooltip ("VARY: a small step from the current sound (NEIGHBOUR)");
         vary.onClick = [this]
         {
             juce::Random rng;
@@ -232,10 +232,6 @@ private:
         if ((proc.modLinkArmedSource() >= 0) != linkWasArmed)
         { linkWasArmed = proc.modLinkArmedSource() >= 0; refreshLinkButton(); repaintTop(); }
 
-        // RANDOM long-press -> the explicit mode picker (touch-friendly; suppresses the release-click).
-        if (randArmed && juce::Time::getMillisecondCounter() - randDownMs > 500)
-        { randArmed = false; suppressRandClick = true; showRandomModeMenu(); }
-
         // Poly/Mono/Legato + glide are per-part VOICE controls; a kit part is always poly
         // and its pads don't glide, so grey them out (disabled) when a kit is the active part.
         const bool kitActive = proc.isPartKit (proc.playFocus());
@@ -270,48 +266,16 @@ private:
     }
     void repaintTop() { if (auto* t = getTopLevelComponent()) t->repaint(); }
 
+    // RANDOM: one press = one shaped-random patch on the focused part (no modes, no toast, no
+    // long-press picker). The title showing "Random" is the feedback; VARY beside it is the neighbour.
     void rollRandom()
     {
         juce::Random rng;
-        const auto res = proc.randomizeSound (rng);      // NEW: rolls a mode (wild/constrained/archetype)
+        proc.randomizeSound (rng);
         currentName = "Random"; refreshTitle(); refreshMacroLabels();
-        proc.postToast (res.label);                      // "WILD" / "PAD archetype" / "RANDOM"
         if (auto* t = getTopLevelComponent()) t->repaint();
         if (restoreFocus) restoreFocus();
     }
-    void showRandomModeMenu()
-    {
-        juce::PopupMenu m;
-        m.addItem (1, "New: Wild");                       // ASCII-only labels (avoid the String-ctor decode hazard)
-        m.addItem (2, "New: Constrained");
-        juce::PopupMenu arch;
-        for (int i = 0; i < VASynthProcessor::kNumArchetypes; ++i) arch.addItem (100 + i, VASynthProcessor::archetypeName (i));
-        m.addSubMenu ("New: Archetype", arch);
-        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&random),
-            [this] (int r)
-            {
-                if (r == 0) { if (restoreFocus) restoreFocus(); return; }
-                juce::Random rng;
-                using RM = VASynthProcessor::RandomMode;
-                const auto res = (r == 1) ? proc.randomizeSound (rng, RM::Wild, -1)
-                               : (r == 2) ? proc.randomizeSound (rng, RM::Constrained, -1)
-                                          : proc.randomizeSound (rng, RM::Archetype, r - 100);
-                currentName = "Random"; refreshTitle(); refreshMacroLabels(); proc.postToast (res.label);
-                if (auto* t = getTopLevelComponent()) t->repaint();
-                if (restoreFocus) restoreFocus();
-            });
-    }
-
-    void mouseDown (const juce::MouseEvent& e) override
-    {
-        if (e.eventComponent == &random)
-        {
-            if (e.mods.isPopupMenu()) { suppressRandClick = true; showRandomModeMenu(); return; }
-            randDownMs = juce::Time::getMillisecondCounter(); randArmed = true;
-        }
-    }
-    void mouseUp   (const juce::MouseEvent& e) override { if (e.eventComponent == &random) randArmed = false; }
-    void mouseDrag (const juce::MouseEvent& e) override { if (e.eventComponent == &random && e.getDistanceFromDragStart() > 8) randArmed = false; }
 
     void applyMacro (int idx, float value)
     {
@@ -497,8 +461,6 @@ private:
     juce::TextButton presetBtn, save, random, clear, rec, full, help;
     juce::TextButton vary;                              // H5: perturb the current patch
     juce::TextButton link, mod, inputs, outputs;        // global-action row
-    juce::uint32 randDownMs = 0;
-    bool randArmed = false, suppressRandClick = false;  // RANDOM long-press / mode-picker state
     bool linkWasArmed = false;
     inline static const juce::Colour kLinkRing { 0xff4bb3c4 };   // LINK cyan (matches the knob armed ring)
     juce::OwnedArray<RotaryKnob> macros;

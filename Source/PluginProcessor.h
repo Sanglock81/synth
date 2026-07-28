@@ -523,22 +523,17 @@ public:
     // global/performance control alone.
     static const juce::StringArray& soundDesignParamIDs();
 
-    // -- H5: musical RANDOM (NEW) + VARY -------------------------------------------------
-    // NEW rolls a mode: ~70% WILD (full-range + 0..4 random matrix routes), ~15% ARCHETYPE
-    // (a coherent bass/lead/pad/pluck/keys/perc within constrained, correlated ranges + a
-    // tasteful route or two), ~15% CONSTRAINED (musical per-param ranges). Two guardrails in
-    // EVERY mode: the exclusion list (performance/global untouched) and an AUDIBILITY FLOOR
-    // (>=1 osc at an audible level, non-silent amp env, cutoff not fully closed). All on the
-    // FOCUSED part only. VARY perturbs the CURRENT patch by small bounded deltas.
-    enum class RandomMode { Wild, Constrained, Archetype };
-    struct RandomResult { RandomMode mode = RandomMode::Wild; juce::String label; };
-    static constexpr int   kRandWildPct = 70, kRandArchetypePct = 15;   // constrained = the remainder
-    static constexpr int   kNumArchetypes = 6;
+    // -- RANDOM (NEW) + VARY -------------------------------------------------------------
+    // Two buttons, two jobs. RANDOM = one algorithm, every press: a fully-random-but-shaped patch
+    // (perceptual sampling via the params' log-skewed ranges, middle-biased levels, a hidden
+    // coherence "temperament", musical SEMI intervals, an occasional self-osc excursion, 0-3 matrix
+    // routes) with a repair pass (exclusion list + audibility floor + broken-patch invariants). No
+    // modes, no toast, no long-press picker. VARY = a small bounded step from the CURRENT patch --
+    // "usable variation near a sound I like". Both act on the FOCUSED part only.
+    // Design: docs/plans/random-density.md.
     static constexpr float kVaryDelta = 0.07f;                          // +/- 7% of range per continuous param
-    RandomResult randomizeSound (juce::Random& rng);                                 // roll a mode
-    RandomResult randomizeSound (juce::Random& rng, RandomMode mode, int archetype); // explicit (long-press picker)
-    void         varySound      (juce::Random& rng);
-    static juce::String archetypeName (int i);
+    void randomizeSound (juce::Random& rng);
+    void varySound      (juce::Random& rng);
 
     // -- arpeggiator 16-step pattern (R3; per-step velocity #54) ----------------
     // Each step has an on/off ("arp_steps") AND a velocity percent ("arp_vel", 10..200,

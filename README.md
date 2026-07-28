@@ -439,11 +439,16 @@ LookAndFeel; layout scales with the window.
   wrong things — or the macros point at the wrong destinations (a stale map from a past
   session) — **Reset MIDI + macros** in the INPUTS dialog restores both to factory
   (CC 21–28 → the macros, and M1 cutoff … M8 focused-part level).
-- **Random** shuffles the **sound-design** parameters only (oscillators, filter,
-  envelopes, LFO, FX amounts) and leaves your **performance** controls put — master
-  gain, velocity routing, poly mode, glide, MIDI mappings, and the whole **rhythm
-  section (arp / sequencer / looper / tempo)** all keep their values (single
-  `randomizeExclusions()` list). It also assigns 1–4 macros to random destinations.
+- **RANDOM + VARY — two buttons, two jobs.** **RANDOM** (NEW) rolls a *fully random* patch on the
+  focused part — one algorithm, every press — shaped toward playable: perceptual (log) sampling,
+  middle-biased levels, a hidden "temperament" that loosely correlates the envelope tails, musical
+  SEMI intervals, the occasional self-oscillating excursion, and 0–3 mod-matrix routes, with a
+  repair pass so it's never silent or broken. **VARY** (NEIGHBOUR) takes a *small step* from the
+  current sound — the way to explore near a patch you like. Both touch **sound-design** parameters
+  only (oscillators, filter, envelopes, LFO, FX amounts) and leave your **performance** controls put
+  — master gain, velocity routing, poly mode, glide, MIDI mappings, and the whole **rhythm section
+  (arp / sequencer / looper / tempo)** (single `randomizeExclusions()` list). RANDOM also assigns a
+  few macros to random destinations.
 - **Live / touchscreen use — run fullscreen.** The FS button, **F11**, or the window
   title-bar's maximise button put the app in **kiosk mode**, which fills the screen and
   **removes the native title bar** — so a touch near the top of the window (e.g. a

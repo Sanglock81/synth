@@ -158,6 +158,6 @@ Widgets gained `HSelector`, `ShapeSelector`, `RotaryKnob` side-label. 8 macro pa
   beside the NOISE label and LEVEL knob — the vacancy is planned, not an orphaned layout. (DSP:
   a one-pole pinking filter on the existing white-noise source; param `noise_color`, default white
   = bit-identical.)
-- **WILD randomize into self-oscillation.** Randomize caps `filter_reso` at 0.6 (predates Tier 2B
-  self-osc). Post-2C, WILD (the deep-exploration tier) may occasionally enter the self-osc sliver.
-  (Tracked as an H5 follow-up.)
+- **~~WILD randomize into self-oscillation.~~ DONE** — the RANDOM redesign (one algorithm) now takes
+  a ~5% high-resonance excursion into the self-osc-adjacent zone; the constant lives with the other
+  ear-tuned RANDOM constants (`randcal`, `PluginProcessor.cpp`). See `docs/plans/random-density.md`.
