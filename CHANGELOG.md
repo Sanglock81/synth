@@ -27,6 +27,13 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Added
+- **Eight SEMI interval variants (audition batch, bank now 123).** Showcasing the new coarse-tune on
+  existing patches — power-fifth voicings (**Power Grind 5th**, **Screamer 5th**, **Foundry 5th**,
+  **Bright Lead 5th**), suspended/quartal pad color (**Dark Hollow Sus**, **Anvil 5ths**,
+  **Warm Sus4**), and an octave sub-reinforced **Reese Sub**. Originals are untouched — these are
+  new patches. *Candidates pending the final listening pass; any that don't earn their slot next to
+  their base will be cut.* (String Machine's trim was nudged to stay in the loudness bank as the
+  median shifted.)
 - **Studio drum kit — a synthesized general-purpose kit + 14 drum presets (bank now 115).** A
   warmer, rounder, less-stylized kit than the 808/House/Industrial ones, aimed at singer-songwriter
   / pop / rock demos: Kick Studio + Kick Tight, Snare Studio, Sidestick, Clap Soft, Snare Brush,
