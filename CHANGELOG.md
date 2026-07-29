@@ -42,6 +42,18 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Added
+- **In-app section guide — a menu-driven reference (#133).** The **?** button now opens a small menu:
+  **Keyboard Map** (the existing cheat-sheet) plus a **section list** (the 13 panel areas in panel
+  order). Pick one and that section is **spotlighted** (the rest of the panel dims), its controls get
+  **numbered markers**, and a side card shows the section's role-in-the-signal-flow intro then a
+  numbered entry per control — NAME, one line of *what* it does, one line of *how/when* to use it
+  (practical + musical). Close with Esc, the card's ✕, or a tap on the dimmed area; reopen the menu to
+  pick another. It's a reference, not a tour — no next/prev, no state, never touches audio. **All the
+  text lives in one data file** (`Source/UI/GuideContent.h`), exported to a generated, PR-diffable
+  [`docs/guide.md`](docs/guide.md); a **coverage test** cross-references the entries against every
+  param-attached control in each covered section, so a future control shipped without help fails the
+  gate (the `noise_level`-was-undocumented lesson, institutionalized). *(Markers are functional, not
+  yet pixel-polished — marker styling + the EQ/scope custom surfaces get a UI pass in 1.1.)*
 - **Oscillator FM (phase-modulation) chain — osc3 → osc2 → osc1 (#132).** Two new depth knobs on the
   osc1 and osc2 rows: **osc2 phase-modulates osc1** (`osc1_fm`) and **osc3 phase-modulates osc2**
   (`osc2_fm`). This is DX-style phase modulation — a modulator's output offsets the carrier's read

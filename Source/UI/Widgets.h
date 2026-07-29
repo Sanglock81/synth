@@ -297,7 +297,7 @@ class PowerToggle : public juce::Component
 {
 public:
     PowerToggle (juce::AudioProcessorValueTreeState& apvts, const juce::String& pid, juce::String label)
-        : name (std::move (label))
+        : name (std::move (label)), paramID (pid)
     {
         btn.setClickingTogglesState (true);
         btn.setWantsKeyboardFocus (false);
@@ -313,10 +313,12 @@ public:
     }
 
     void setHelp (const juce::String& text) { btn.setTooltip (text); }   // custom hover help
+    const juce::String& parameterID() const { return paramID; }          // for the section guide's marker lookup
     void resized() override { btn.setBounds (getLocalBounds().reduced (2)); }
 
 private:
     juce::String name;
+    juce::String paramID;
     juce::TextButton btn;
     std::unique_ptr<juce::ButtonParameterAttachment> attachment;
 

@@ -306,6 +306,28 @@ TEST_CASE ("FM depth knob tracks the carrier wave restriction (#132)", "[plugin]
     snapshot (*section, "osc-fm.png");
 }
 
+// --- #133: the section guide spotlights a section with numbered markers + a side card ------
+TEST_CASE ("section guide renders on Oscillators (spotlight + markers + card) (#133)", "[plugin][smoke][guide]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+    auto* ve = dynamic_cast<VASynthEditor*> (ed.get());
+    REQUIRE (ve != nullptr);
+
+    ve->openSectionGuide (2);   // Oscillators (dense section -> proves the marker layout)
+    REQUIRE (ve->guideOverlayForTest().isVisible());
+    snapshot (*ed, "guide-oscillators.png");
+
+    ve->openSectionGuide (6);   // FX chain (15 entries -> the densest CARD; verify none drop)
+    snapshot (*ed, "guide-fx.png");
+
+    ve->openSectionGuide (11);  // Looper & Scenes (split section, spotlight on the bottom strip)
+    REQUIRE (ve->guideOverlayForTest().isVisible());
+    snapshot (*ed, "guide-looper.png");
+}
+
 // --- #95 3c: selecting WT on an osc swaps the PW knob for a WT POS knob (same slot) --------
 TEST_CASE ("WT wave swaps the visible PW<->WT POS control (#95)", "[plugin][smoke][wt][morph]")
 {

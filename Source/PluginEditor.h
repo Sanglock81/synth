@@ -16,6 +16,8 @@
 #include "UI/EQPanel.h"
 #include "UI/BottomZones.h"
 #include "UI/HelpOverlay.h"
+#include "UI/GuideOverlay.h"
+#include "UI/GuideContent.h"
 #include "PresetManager.h"
 
 // ============================================================================
@@ -171,6 +173,8 @@ public:
         addChildComponent (toast);
         addChildComponent (helpOverlay);
         helpOverlay.onDismiss = [this] { hideHelp(); };
+        addChildComponent (guideOverlay);
+        guideOverlay.onDismiss = [this] { hideHelp(); };
         lastToastSeq = proc.toastSequence();       // don't replay a pre-existing toast on open
 
         setResizable (true, true);
@@ -232,6 +236,7 @@ public:
         toast.setBounds ((getWidth() - 460) / 2, 92, 460, 46);
         kitBar.setBounds ((getWidth() - 620) / 2, 96, 620, 40);
         helpOverlay.setBounds (getLocalBounds());
+        guideOverlay.setBounds (getLocalBounds());
 
         auto area = getLocalBounds().reduced (6);
         const int gap = 5;
@@ -275,7 +280,7 @@ public:
         if (key == juce::KeyPress::F12Key) { overlay.setVisible (! overlay.isVisible()); return true; }
         if (key == juce::KeyPress::F11Key && isStandalone()) { toggleFullscreen(); return true; }
         if (key.getTextCharacter() == '?') { toggleHelp(); return true; }
-        if (key == juce::KeyPress::escapeKey && helpOverlay.isVisible()) { hideHelp(); return true; }
+        if (key == juce::KeyPress::escapeKey && (helpOverlay.isVisible() || guideOverlay.isVisible())) { hideHelp(); return true; }
         return false;
     }
 
@@ -293,6 +298,19 @@ public:
         const std::uint32_t mask = readChordModifierKeys();
         proc.setQwertyChordModifiers (mask);
         return qwerty.anyHeld() || mask != 0;
+    }
+
+    // Test/host hook: open the section guide directly (the interactive path is the `?` menu).
+    void openSectionGuide (int index) { showGuideSection (index); }
+    GuideOverlay& guideOverlayForTest() { return guideOverlay; }
+
+    // Every param-attached control id in a section (for the guide coverage test): a new control
+    // added to a covered section without a guide entry must fail the gate (the noise_level lesson).
+    std::vector<juce::String> sectionControlParamIds (int index) const
+    {
+        std::vector<juce::String> ids;
+        if (auto* comp = sectionComponent (index)) collectParamIds (*comp, ids);
+        return ids;
     }
 
 private:
@@ -373,14 +391,97 @@ private:
         return dynamic_cast<juce::TextEditor*> (f) != nullptr;
     }
 
+    // The `?` button/key opens a small MENU: "Keyboard Map" (the existing cheat-sheet) + the section
+    // list (menu order = panel order). Picking a section spotlights it (#133). If an overlay is
+    // already open, `?` toggles it closed instead.
     void toggleHelp()
     {
-        const bool show = ! helpOverlay.isVisible();
-        helpOverlay.setVisible (show);
-        if (show) helpOverlay.toFront (false);
-        else      grabQwertyFocus();
+        if (helpOverlay.isVisible() || guideOverlay.isVisible()) { hideHelp(); return; }
+
+        juce::PopupMenu m;
+        m.addItem (1, "Keyboard Map");
+        m.addSeparator();
+        m.addSectionHeader ("Section guide");
+        const auto& secs = guide::sections();
+        for (int i = 0; i < (int) secs.size(); ++i)
+            m.addItem (100 + i, secs[(std::size_t) i].title);
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (topBar.get()),
+            [this] (int r)
+            {
+                if (r == 1) { helpOverlay.setVisible (true); helpOverlay.toFront (false); }
+                else if (r >= 100) showGuideSection (r - 100);
+                else grabQwertyFocus();
+            });
     }
-    void hideHelp() { helpOverlay.setVisible (false); grabQwertyFocus(); }
+    void hideHelp() { helpOverlay.setVisible (false); guideOverlay.setVisible (false); grabQwertyFocus(); }
+
+    // Which panel component a section spotlights. Chord/Arp/Seq/Looper live inside BottomZones (no
+    // direct pointer yet) -> spotlight the whole bottom strip until those sections are authored.
+    juce::Component* sectionComponent (int index) const
+    {
+        switch (index)
+        {
+            case 0:  return topBar.get();
+            case 1:  return partRail.get();
+            case 2:  return oscSection.get();
+            case 3:  return filterSection.get();
+            case 4:  return envSection.get();
+            case 5:  return lfoSection.get();
+            case 6:  return fxPanel.get();
+            case 7:  return eqPanel.get();
+            case 8:  return bottomZones ? &bottomZones->chordZone()  : nullptr;
+            case 9:  return bottomZones ? &bottomZones->arpZone()    : nullptr;
+            case 10: return bottomZones ? &bottomZones->seqZone()    : nullptr;
+            case 11: return bottomZones ? &bottomZones->looperZone() : nullptr;
+            case 12: return scopeView.get();
+            default: return nullptr;
+        }
+    }
+
+    // Find the control bound to `pid` anywhere under `c` (LearnableComponent knobs/faders/selectors
+    // + PowerToggle enables), so a guide entry's controlId resolves to a marker position.
+    static juce::Component* findControl (juce::Component& c, const juce::String& pid)
+    {
+        for (auto* child : c.getChildren())
+        {
+            if (auto* lc = dynamic_cast<LearnableComponent*> (child)) { if (lc->parameterID() == pid) return child; }
+            else if (auto* pt = dynamic_cast<PowerToggle*> (child))   { if (pt->parameterID() == pid) return child; }
+            if (auto* found = findControl (*child, pid)) return found;
+        }
+        return nullptr;
+    }
+
+    static void collectParamIds (juce::Component& c, std::vector<juce::String>& out)
+    {
+        for (auto* child : c.getChildren())
+        {
+            if (auto* lc = dynamic_cast<LearnableComponent*> (child)) { if (lc->parameterID().isNotEmpty()) out.push_back (lc->parameterID()); }
+            else if (auto* pt = dynamic_cast<PowerToggle*> (child))   { if (pt->parameterID().isNotEmpty()) out.push_back (pt->parameterID()); }
+            collectParamIds (*child, out);
+        }
+    }
+
+    void showGuideSection (int index)
+    {
+        const auto& secs = guide::sections();
+        if (index < 0 || index >= (int) secs.size()) return;
+        const auto& sec = secs[(std::size_t) index];
+        auto* comp = sectionComponent (index);
+        if (comp == nullptr) { grabQwertyFocus(); return; }
+
+        const auto rect = getLocalArea (comp, comp->getLocalBounds());
+        std::vector<GuideOverlay::Marker> markers;
+        int n = 1;
+        for (auto& e : sec.entries)
+        {
+            if (juce::String (e.controlId).isNotEmpty())
+                if (auto* ctrl = findControl (*comp, e.controlId))
+                    markers.push_back ({ n, getLocalArea (ctrl, ctrl->getLocalBounds()) });
+            ++n;
+        }
+        const bool cardOnRight = rect.getCentreX() < getWidth() / 2;   // card opposite the spotlit section
+        guideOverlay.show (sec, rect, std::move (markers), cardOnRight);
+    }
 
     // True full-screen via JUCE kiosk mode: the window fills the display and sits on
     // top, so you can't accidentally click an app behind it. Toggles back to windowed.
@@ -473,6 +574,7 @@ private:
     QwertyKeyboard qwerty;
     Toast toast;
     HelpOverlay helpOverlay;
+    GuideOverlay guideOverlay;
     KitPadEditBar kitBar { proc };
     int  lastToastSeq = 0;
     bool hadFocus = false;

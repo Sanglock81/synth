@@ -464,6 +464,13 @@ pan + INPUTS), the **centre** in signal-flow order (**Oscillators · Filter · E
 parameter via attachments (GUI ↔ automation ↔ MIDI-learn stay in sync); dark hardware
 LookAndFeel; layout scales with the window.
 
+- **Section guide (`?`)**: the help button opens a menu — **Keyboard Map** plus a list of the 13
+  panel sections. Pick one and it's spotlighted with numbered markers on its controls and a side
+  card explaining each (what it does + how to use it). A reference, not a tour: Esc / ✕ / tap-out to
+  close, reopen to pick another. All the text lives in one data file (`Source/UI/GuideContent.h`),
+  mirrored to [`docs/guide.md`](docs/guide.md), and a coverage test fails the build if any control in
+  a covered section lacks help.
+
 - **MIDI-learn**: right-click (mouse) or long-press (touch) any control → arms it
   (amber pulse); the next CC binds it and a `CCnn` badge appears. Same gesture
   clears a mapping. The 8 Launchkey Mini pots (CC 21–28) map to **the 8 macros**

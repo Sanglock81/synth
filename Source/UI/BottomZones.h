@@ -559,6 +559,13 @@ public:
         addAndMakeVisible (looper);
     }
 
+    // Per-sub-panel access so the section guide (#133) can spotlight + cover each independently
+    // (chord / arp / seq / looper are separate menu sections though they share this bottom band).
+    juce::Component& chordZone()  { return chord; }
+    juce::Component& arpZone()    { return arp; }
+    juce::Component& seqZone()    { return seq; }
+    juce::Component& looperZone() { return looper; }
+
     // Editor calls this to size the bottom band: chord bar + arp bar + [seq | looper].
     int preferredHeight() const { return kChordH + gap + kArpH + gap + kGridH; }
     std::function<void()> onResizeNeeded;   // kept for API compatibility (unused now)
