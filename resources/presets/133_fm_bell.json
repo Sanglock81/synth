@@ -1,0 +1,15 @@
+{
+  "name": "Bell Ratio",
+  "category": "Pluck",
+  "params": {
+    "osc1_wave": 3, "osc1_level": 0.85,
+    "osc2_on": 1, "osc2_wave": 3, "osc2_octave": 1, "osc2_semi": 9, "osc2_level": 0.0, "osc1_fm": 0.48,
+    "osc3_on": 0,
+    "filter_type": 0, "filter_cutoff": 8000, "filter_reso": 0.06, "filter_env_amt": 0.0,
+    "vel_to_amp": 0.9,
+    "amp_attack": 0.001, "amp_decay": 2.6, "amp_sustain": 0.0, "amp_release": 1.2,
+    "fx_reverb_on": 1, "reverb_mix": 0.34, "reverb_size": 0.8, "reverb_motion": 0.3,
+    "patch_trim": 0.78
+  },
+  "routes": [ { "src": "Velocity", "dest": "Osc 1 FM", "depth": 0.35 } ]
+}

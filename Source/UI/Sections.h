@@ -69,6 +69,9 @@ public:
         const char* detIds[]  { ID::osc1Detune, ID::osc2Detune, ID::osc3Detune };
         const char* pwIds[]   { ID::osc1PW, ID::osc2PW, ID::osc3PW };
         const char* lvlIds[]  { ID::osc1Level, ID::osc2Level, ID::osc3Level };
+        const char* fmIds[]   { ID::osc1Fm, ID::osc2Fm, nullptr };   // #132 FM on osc1/osc2 rows only (osc3 tops the chain)
+        // Label states the chain direction plainly: "FM 2>1" = osc 2 phase-modulates osc 1.
+        const char* fmName[]  { "FM 2>1", "FM 3>2", nullptr };
         const char* phIds[]   { ID::osc1Phase, ID::osc2Phase, ID::osc3Phase };
         const juce::StringArray waveLabels { "SAW", "SQR", "TRI", "SIN", "WT" };
         const juce::StringArray phaseLabels { "RST", "RND", "FRE" };   // Tier 1a start-phase policy
@@ -86,6 +89,14 @@ public:
             o.k[2] = std::make_unique<RotaryKnob> (p.apvts, detIds[i], "DETUNE", p.getMidiLearn());
             o.k[3] = std::make_unique<RotaryKnob> (p.apvts, pwIds[i],  "PW",     p.getMidiLearn());
             o.k[4] = std::make_unique<RotaryKnob> (p.apvts, lvlIds[i], "LEVEL",  p.getMidiLearn());
+            if (fmIds[i] != nullptr)   // #132 FM depth knob (osc1/osc2); enabled state tracks the carrier wave
+            {
+                o.fm = std::make_unique<RotaryKnob> (p.apvts, fmIds[i], fmName[i], p.getMidiLearn());
+                o.fm->setHelp (fmEnabledHelp (i));
+                // Repaint the panel when this depth crosses 0 so the modulator-row "MOD" badge tracks it.
+                o.fmAtt = std::make_unique<juce::ParameterAttachment> (
+                    *p.apvts.getParameter (fmIds[i]), [this] (float) { repaint(); });
+            }
             // #95 3c: a WT POS knob shares the PW slot (k[3]) — PW is meaningless for a wavetable.
             // A ParameterAttachment on the wave choice swaps which of the two is visible (the same
             // same-bounds morph idiom as the LFO RATE<->DIV knob and the EnvSection AMP/MOD swap).
@@ -98,6 +109,7 @@ public:
             // PW/level/cutoff/reso etc. no longer need per-knob wiring here.
             addAndMakeVisible (*o.on);   addAndMakeVisible (*o.wave); addAndMakeVisible (*o.phase);
             for (auto& k : o.k) addAndMakeVisible (*k);
+            if (o.fm) addAndMakeVisible (*o.fm);
             addChildComponent (*o.wtpos);   // shown only when this osc's wave == WT (swaps with PW)
             addChildComponent (*o.die);     // shown only in WT mode (the re-roll affordance)
 
@@ -123,8 +135,27 @@ public:
     void paint (juce::Graphics& g) override
     {
         chrome::section (g, getLocalBounds(), "Oscillators", sectiontint::osc());
-        for (auto& b : boxRects()) chrome::subBox (g, b, sectiontint::osc());
+        auto boxes = boxRects();
+        for (auto& b : boxes) chrome::subBox (g, b, sectiontint::osc());
         chrome::subBox (g, noiseBox(), sectiontint::osc());
+
+        // #132 FM: badge the row of an oscillator that is currently a MODULATOR (its carrier's FM
+        // depth > 0) so the osc2->osc1 / osc3->osc2 relationship is visible on the panel — an accent
+        // outline plus a small "MOD>OSC n" chip riding the row's top edge, pointing at the carrier it
+        // feeds. osc2 modulates osc1; osc3 modulates osc2.
+        for (int i = 0; i < 3; ++i)
+            if (isActiveModulator (i))
+            {
+                auto box = boxes[(size_t) i];
+                g.setColour (VASynthLookAndFeel::accent().withAlpha (0.85f));
+                g.drawRoundedRectangle (box.toFloat().reduced (1.0f), 6.0f, 1.6f);
+                juce::Rectangle<int> chip (box.getRight() - 86, box.getY() - 7, 78, 11);
+                g.setColour (VASynthLookAndFeel::accent());
+                g.fillRoundedRectangle (chip.toFloat(), 4.0f);
+                g.setColour (juce::Colours::black.withAlpha (0.85f));
+                g.setFont (juce::Font (juce::FontOptions (9.5f, juce::Font::bold)));
+                g.drawText (i == 1 ? "MOD > OSC 1" : "MOD > OSC 2", chip, juce::Justification::centred, false);
+            }
 
         // "NOISE" source label (left), tinted like the osc rows — the 4th mixer source.
         auto nb = chrome::subBoxContent (noiseBox());
@@ -150,9 +181,17 @@ public:
             // in WT mode. Reserved always (not carved on mode change) so nothing shifts between modes.
             o.die->setBounds (top.removeFromRight (22).reduced (0, 3)); top.removeFromRight (4);
             o.wave->setBounds (top);
-            const int kw = c.getWidth() / 5;
-            for (int k = 0; k < 5; ++k)
-                o.k[(size_t) k]->setBounds ((k < 4 ? c.removeFromLeft (kw) : c).reduced (2, 0));
+            // Six columns: OCTAVE | SEMI | DETUNE | FM | PW(/WT POS) | LEVEL. FM sits between DETUNE and
+            // PW on osc1/osc2; osc3 tops the chain so its FM column stays empty (LEVEL stays rightmost,
+            // keeping the column alignment — incl. the NOISE bar under LEVEL — across all three rows).
+            const int kw = c.getWidth() / 6;
+            o.k[0]->setBounds (c.removeFromLeft (kw).reduced (2, 0));   // OCTAVE
+            o.k[1]->setBounds (c.removeFromLeft (kw).reduced (2, 0));   // SEMI
+            o.k[2]->setBounds (c.removeFromLeft (kw).reduced (2, 0));   // DETUNE
+            auto fmCol = c.removeFromLeft (kw);                         // FM (osc3: reserved + empty)
+            if (o.fm) o.fm->setBounds (fmCol.reduced (2, 0));
+            o.k[3]->setBounds (c.removeFromLeft (kw).reduced (2, 0));   // PW
+            o.k[4]->setBounds (c.reduced (2, 0));                       // LEVEL
             o.wtpos->setBounds (o.k[3]->getBounds());   // shares the PW slot (visibility swaps)
         }
         // NOISE fill-bar: fills the row to the right of the "NOISE" source label (the open middle
@@ -182,6 +221,39 @@ private:
         if (o.k[3])  o.k[3]->setVisible (! wt);
         if (o.wtpos) o.wtpos->setVisible (wt);
         if (o.die)   o.die->setVisible (wt);
+        // #132 FM carrier restriction: FM applies only to a continuous-phase carrier (TRI/SIN/WT).
+        // On a saw/square carrier the depth is inert in the DSP — disable + dim the knob and say why.
+        if (o.fm && wave != nullptr)
+        {
+            const int wi = wave->getIndex();
+            const bool carrier = wi == 2 || wi == 3 || wi == 4;   // TRI / SIN / WT
+            o.fm->setEnabled (carrier);
+            o.fm->setAlpha (carrier ? 1.0f : 0.4f);
+            o.fm->setHelp (carrier ? fmEnabledHelp (osc) : fmDisabledHelp());
+        }
+    }
+
+    // One-sentence tooltips that teach the model: WHERE the character comes from (the modulator's
+    // pitch) and WHY a carrier can be disabled (the PolyBLEP restriction), in plain words.
+    static juce::String fmEnabledHelp (int osc)
+    {
+        return osc == 0 ? "Osc 2 bends this oscillator's phase (FM); set depth here, character via Osc 2's SEMI/OCTAVE"
+                        : "Osc 3 bends this oscillator's phase (FM); set depth here, character via Osc 3's SEMI/OCTAVE";
+    }
+    static juce::String fmDisabledHelp()
+    {
+        return "FM carrier must be SIN / TRI / WT; SAW and SQR break under phase modulation";
+    }
+
+    // #132: is this oscillator currently acting as an FM MODULATOR? Osc i modulates osc i-1 when
+    // osc(i-1)'s FM depth is above 0 (osc2 -> osc1 via osc1_fm; osc3 -> osc2 via osc2_fm).
+    bool isActiveModulator (int osc) const
+    {
+        namespace ID = ParamID;
+        const char* carrierFmId = osc == 1 ? ID::osc1Fm : osc == 2 ? ID::osc2Fm : nullptr;
+        if (carrierFmId == nullptr) return false;
+        if (auto* v = proc.apvts.getRawParameterValue (carrierFmId)) return v->load() > 1.0e-4f;
+        return false;
     }
 
     // Second tap on a selected WT button -> pick a factory table or (re-)roll a random one.
@@ -254,6 +326,8 @@ private:
         std::unique_ptr<PowerToggle> on;
         std::unique_ptr<HSelector> wave, phase;
         std::array<std::unique_ptr<RotaryKnob>, 5> k;   // OCTAVE, SEMI, DETUNE, PW, LEVEL
+        std::unique_ptr<RotaryKnob> fm;                       // #132 FM depth (osc1/osc2 rows only; carrier = this osc)
+        std::unique_ptr<juce::ParameterAttachment> fmAtt;     // #132 repaint the MOD badge when depth crosses 0
         std::unique_ptr<RotaryKnob> wtpos;                    // shares the PW slot; visible only in WT mode
         std::unique_ptr<DieButton>  die;                      // WT-mode re-roll affordance (right of the picker)
         std::unique_ptr<juce::ParameterAttachment> waveAtt;  // morphs PW <-> WT POS on wave change

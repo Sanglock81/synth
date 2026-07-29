@@ -435,6 +435,7 @@ public:
             smCutoff = liveParams.cutoffHz; smReso = liveParams.resonance;
             smL1 = liveParams.osc1Level; smL2 = liveParams.osc2Level; smL3 = liveParams.osc3Level;
             smDrive = liveParams.drive;
+            smFm1 = liveParams.osc1Fm; smFm2 = liveParams.osc2Fm;
             smoothPrimed = true;
         }
 
@@ -451,6 +452,10 @@ public:
             smL3     += smoothCoef * (liveParams.osc3Level - smL3);
             smDrive  += smoothCoef * (liveParams.drive     - smDrive);
             if (smDrive < 1.0e-4f) smDrive = 0.0f;          // floor -> restore the bit-exact clean path
+            smFm1    += smoothCoef * (liveParams.osc1Fm    - smFm1);
+            smFm2    += smoothCoef * (liveParams.osc2Fm    - smFm2);
+            if (smFm1 < 1.0e-4f) smFm1 = 0.0f;              // floor -> exact FM-off path (goldens)
+            if (smFm2 < 1.0e-4f) smFm2 = 0.0f;
 
             partParams[0] = liveParams;                     // part 0 = smoothed LIVE
             partParams[0].cutoffHz  = smCutoff;
@@ -459,6 +464,8 @@ public:
             partParams[0].osc2Level = smL2;
             partParams[0].osc3Level = smL3;
             partParams[0].drive     = smDrive;
+            partParams[0].osc1Fm    = smFm1;
+            partParams[0].osc2Fm    = smFm2;
 
             // Shared modulation this chunk (one global LFO + bend + vibrato).
             const float lfoVal = lfo.advance (chunk) * lfoDepth;
@@ -559,6 +566,7 @@ public:
             smCutoff = liveParams.cutoffHz; smReso = liveParams.resonance;
             smL1 = liveParams.osc1Level; smL2 = liveParams.osc2Level; smL3 = liveParams.osc3Level;
             smDrive = liveParams.drive;
+            smFm1 = liveParams.osc1Fm; smFm2 = liveParams.osc2Fm;
             smoothPrimed = true;
         }
         // J1: per-LFO SYNC engage. Turning SYNC on does NOT jump the phase immediately — the LFO
@@ -614,11 +622,16 @@ public:
             smL3     += smoothCoef * (liveParams.osc3Level - smL3);
             smDrive  += smoothCoef * (liveParams.drive     - smDrive);
             if (smDrive < 1.0e-4f) smDrive = 0.0f;          // floor -> restore the bit-exact clean path
+            smFm1    += smoothCoef * (liveParams.osc1Fm    - smFm1);
+            smFm2    += smoothCoef * (liveParams.osc2Fm    - smFm2);
+            if (smFm1 < 1.0e-4f) smFm1 = 0.0f;              // floor -> exact FM-off path (goldens)
+            if (smFm2 < 1.0e-4f) smFm2 = 0.0f;
 
             partParams[(std::size_t) liveIndex] = liveParams;
             partParams[(std::size_t) liveIndex].cutoffHz  = smCutoff; partParams[(std::size_t) liveIndex].resonance = smReso;
             partParams[(std::size_t) liveIndex].osc1Level = smL1; partParams[(std::size_t) liveIndex].osc2Level = smL2; partParams[(std::size_t) liveIndex].osc3Level = smL3;
             partParams[(std::size_t) liveIndex].drive     = smDrive;
+            partParams[(std::size_t) liveIndex].osc1Fm    = smFm1; partParams[(std::size_t) liveIndex].osc2Fm = smFm2;
 
             // Per-part LFO modulation this chunk (three LFOs, summed per destination). The
             // RAW bipolar LFO output is also captured for the mod matrix (a matrix slot's own
@@ -1048,6 +1061,7 @@ private:
     float smoothCoef = 0.05f, smCutoff = 0.0f, smReso = 0.0f;
     float smL1 = 0.8f, smL2 = 0.8f, smL3 = 0.0f;   // smoothed effective osc levels
     float smDrive = 0.0f;                          // Tier 2: smoothed filter drive (declicks knob/automation/macro)
+    float smFm1 = 0.0f, smFm2 = 0.0f;              // #132: smoothed FM depths (declick knob/automation/LFO on the live part)
     bool  smoothPrimed = false;
     int   liveIndex = 0;                            // the APVTS-driven (focused) part (1.3)
 };

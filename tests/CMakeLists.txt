@@ -58,6 +58,7 @@ add_executable(dsp_tests
     dsp/test_rtlogring.cpp
     dsp/test_wavetable_gen.cpp
     dsp/test_unison.cpp
+    dsp/test_fm.cpp
     ${CMAKE_SOURCE_DIR}/Source/DSP/WavetableGen.cpp
     dsp/alloc_hook.cpp)
 
@@ -143,6 +144,7 @@ add_executable(plugin_tests
     plugin/test_clock_out.cpp
     plugin/test_perpart_mono.cpp
     plugin/test_click_torture.cpp
+    plugin/test_fm_plugin.cpp
     plugin/test_editfocus.cpp
     dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests
 

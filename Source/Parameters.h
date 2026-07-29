@@ -25,6 +25,7 @@ namespace ParamID
     inline constexpr auto osc1Semi    = "osc1_semi";     // coarse tune, -24..+24 semitones
     inline constexpr auto osc1Detune  = "osc1_detune";   // cents
     inline constexpr auto osc1PW      = "osc1_pw";       // pulse width (square only)
+    inline constexpr auto osc1Fm      = "osc1_fm";       // #132 phase-mod depth: osc2 -> osc1 (carrier SIN/TRI/WT only)
 
     // Oscillator 2
     inline constexpr auto osc2Wave    = "osc2_wave";
@@ -32,6 +33,7 @@ namespace ParamID
     inline constexpr auto osc2Semi    = "osc2_semi";
     inline constexpr auto osc2Detune  = "osc2_detune";
     inline constexpr auto osc2PW      = "osc2_pw";
+    inline constexpr auto osc2Fm      = "osc2_fm";       // #132 phase-mod depth: osc3 -> osc2 (carrier SIN/TRI/WT only)
 
     // Oscillator 3 (6A)
     inline constexpr auto osc3Wave    = "osc3_wave";
@@ -271,6 +273,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Semi, 1},  "Osc3 Semi", juce::NormalisableRange<float>(-24.0f, 24.0f, 1.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("st")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3Detune, 1},"Osc3 Detune", juce::NormalisableRange<float>(-100.0f, 100.0f), 0.0f, juce::AudioParameterFloatAttributes().withLabel ("ct")));
     params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc3PW, 1},    "Osc3 PW", juce::NormalisableRange<float>(0.05f, 0.95f), 0.5f));
+
+    // #132 Osc phase-modulation (FM) chain depth: osc2->osc1 and osc3->osc2. Carrier must be
+    // SIN/TRI/WT (the UI disables the knob otherwise). Default 0 = no FM -> goldens bit-identical.
+    // 0.3-0.5 ~ E-piano/bell region, 1.0 = aggressive (modulation index up to ~2*pi radians).
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc1Fm, 1},    "Osc1 FM", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
+    params.push_back(std::make_unique<P >(juce::ParameterID{ID::osc2Fm, 1},    "Osc2 FM", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
 
     // #95 Wavetable: per-osc table choice (factory) + frame position. Only used when the osc wave is
     // "WT"; defaults (Analog / pos 0) keep non-WT patches bit-identical.

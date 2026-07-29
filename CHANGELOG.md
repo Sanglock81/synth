@@ -42,6 +42,22 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Added
+- **Oscillator FM (phase-modulation) chain — osc3 → osc2 → osc1 (#132).** Two new depth knobs on the
+  osc1 and osc2 rows: **osc2 phase-modulates osc1** (`osc1_fm`) and **osc3 phase-modulates osc2**
+  (`osc2_fm`). This is DX-style phase modulation — a modulator's output offsets the carrier's read
+  phase while the accumulator advances unmodulated, so a simple carrier grows a rich sideband
+  spectrum at `fc ± n·f_mod`. Depth 0.3–0.5 ≈ E-piano/bell territory, 1.0 = aggressive (modulation
+  index up to ~2π). The modulator uses its *raw* output regardless of its mix level, so an inaudible
+  modulator (level 0) still shapes its carrier; its OCTAVE/SEMI set the **FM ratio** and keytrack by
+  construction. Both depths are **mod-matrix destinations** ("Osc 1 FM" / "Osc 2 FM") — the headline
+  is **Velocity → FM depth** for a harder-hit-is-brighter DX response. **Carrier restriction:** FM
+  applies only when the carrier wave is **sine / triangle / WT** (saw/square PolyBLEP edge
+  corrections break under a phase offset); on a saw/square carrier the depth is inert and the knob is
+  disabled + dimmed with a tooltip saying why. Depth is smoothed on the live part (click-free knob /
+  automation / LFO sweeps) and defaults to 0, so every existing patch — and the goldens — is
+  bit-identical. Three showcase patches: **FM E-Piano** (Keys), **Bell Ratio** (inharmonic bell,
+  Pluck), **Sideband Growl** (FM into a driven filter, Experimental) — bank now 126. *(This closed the
+  scoped R3 cross-modulation item; ring modulation + hard sync move to 1.1.)*
 - **Eight SEMI interval variants (audition batch, bank now 123).** Showcasing the new coarse-tune on
   existing patches — power-fifth voicings (**Power Grind 5th**, **Screamer 5th**, **Foundry 5th**,
   **Bright Lead 5th**), suspended/quartal pad color (**Dark Hollow Sus**, **Anvil 5ths**,

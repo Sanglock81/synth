@@ -37,7 +37,7 @@ TEST_CASE ("factory library has the expected presets spanning the categories", "
     VASynthProcessor p;
     const auto& lib = p.factoryPresetLibrary();
 
-    REQUIRE (lib.size() == 123);       // ... + 8 SEMI interval variants (audition batch)
+    REQUIRE (lib.size() == 126);       // ... + 8 SEMI interval variants + 3 FM patches (#132)
     for (auto& fp : lib.all())
     {
         REQUIRE (fp.name.isNotEmpty());

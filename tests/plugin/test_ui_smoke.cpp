@@ -271,6 +271,41 @@ TEST_CASE ("LFO SYNC swaps the visible RATE<->DIV control (#J1)", "[plugin][smok
     REQUIRE_FALSE (div->isVisible());
 }
 
+// --- #132: the FM depth knob exists on osc1/osc2 and enables only for a SIN/TRI/WT carrier ------
+TEST_CASE ("FM depth knob tracks the carrier wave restriction (#132)", "[plugin][smoke][fm]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);   // full recursive layout so the knobs get real bounds
+
+    auto* fm1 = findKnob (*ed, ParamID::osc1Fm);
+    auto* fm2 = findKnob (*ed, ParamID::osc2Fm);
+    REQUIRE (fm1 != nullptr);   // osc1 (carrier) FM depth — osc2 modulates osc1
+    REQUIRE (fm2 != nullptr);   // osc2 (carrier) FM depth — osc3 modulates osc2
+
+    // Saw carrier (default, index 0) -> FM inert -> knob disabled.
+    p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (0.0f);          // Saw
+    REQUIRE_FALSE (fm1->isEnabled());
+    // Sine carrier (index 3 of 5 -> normalized 0.75) -> FM available -> knob enabled.
+    p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (3.0f / 4.0f);   // Sine
+    REQUIRE (fm1->isEnabled());
+    // Triangle (index 2) is also a valid carrier; Square (index 1) is not.
+    p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (2.0f / 4.0f);   // Triangle
+    REQUIRE (fm1->isEnabled());
+    p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (1.0f / 4.0f);   // Square
+    REQUIRE_FALSE (fm1->isEnabled());
+
+    // Snapshot the osc section (sine carrier, FM active, osc2 marked as the MOD source) for review.
+    p.apvts.getParameter (ParamID::osc1Wave)->setValueNotifyingHost (3.0f / 4.0f);   // Sine carrier
+    p.apvts.getParameter (ParamID::osc1Fm)->setValueNotifyingHost (0.45f);           // FM on -> osc2 shows "MOD"
+    juce::Component* section = fm1->getParentComponent();
+    while (section != nullptr && dynamic_cast<OscSection*> (section) == nullptr)
+        section = section->getParentComponent();
+    REQUIRE (section != nullptr);
+    snapshot (*section, "osc-fm.png");
+}
+
 // --- #95 3c: selecting WT on an osc swaps the PW knob for a WT POS knob (same slot) --------
 TEST_CASE ("WT wave swaps the visible PW<->WT POS control (#95)", "[plugin][smoke][wt][morph]")
 {

@@ -78,6 +78,10 @@ public:
                   PartTrim,     // Per-patch program level (post-FX / pre-part-level gain). Registry-listed
                                 // for LINK/animation; applied by the processor (setPartTrims) like PartLevel,
                                 // not live-summed here (shares the mixer-tier seam reserved with PartLevel/Pan).
+                  Osc1Fm, Osc2Fm, // #132 FM chain depth (osc2->osc1, osc3->osc2). APPENDED for state
+                                // stability but VOICE-applied (evaluate() fills Offsets.osc1Fm/osc2Fm; the
+                                // voice reads them) — like NoiseLevel, NOT block dests despite position, so
+                                // blockOffsets() collects them harmlessly (no mod() entry consumes them).
                   kNumDests };
     static constexpr int kFirstBlockDest = ChorusRate;
     static constexpr int kNumBlockDests  = kNumDests - kFirstBlockDest;
@@ -97,6 +101,8 @@ public:
         float osc2Level  = 0.0f;
         float osc3Level  = 0.0f;
         float noiseLevel = 0.0f;   // added to noise level (0..1 domain)
+        float osc1Fm     = 0.0f;   // #132 added to osc1/osc2 FM depth (0..1 domain)
+        float osc2Fm     = 0.0f;
     };
 
     // Full-scale destination ranges at |depth| = 1 and a full-scale source.
@@ -107,6 +113,7 @@ public:
     static constexpr float kRangeAmp      = 1.0f;    // +/- full (mul 0..2)
     static constexpr float kRangeWavePos  = 1.0f;    // +/- full wavetable sweep (reserved)
     static constexpr float kRangeOscLevel = 1.0f;    // +/- full source level
+    static constexpr float kRangeFm       = 1.0f;    // #132 +/- full FM depth (velocity -> FM is the headline)
 
     std::array<Slot, kSlots> slots { };
 
@@ -151,6 +158,8 @@ public:
                 case Osc2Level:  o.osc2Level  += v * kRangeOscLevel; break;
                 case Osc3Level:  o.osc3Level  += v * kRangeOscLevel; break;
                 case NoiseLevel: o.noiseLevel += v * kRangeOscLevel; break;
+                case Osc1Fm:     o.osc1Fm     += v * kRangeFm;       break;   // #132 voice-tier FM depth
+                case Osc2Fm:     o.osc2Fm     += v * kRangeFm;       break;
                 default: break;
             }
         }

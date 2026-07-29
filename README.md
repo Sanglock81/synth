@@ -19,6 +19,10 @@ a general-purpose synth that runs in any VST3 host or standalone.
   sweepable position, factory tables + a seeded random die), 4× oversampled, with **unison** (up to a
   7-voice detuned/panned/phase-decorrelated stack — a proper supersaw, off by default)
   with a selectable Efficient/HQ quality-vs-CPU tradeoff, per-osc level + kill switch.
+  **FM (phase-modulation) chain** osc3 → osc2 → osc1: an **FM** depth knob on osc1 and osc2 grows a
+  DX-style sideband spectrum (E-piano, bells, growls); the modulator's OCTAVE/SEMI set the ratio, and
+  **Velocity → FM depth** is the classic harder-is-brighter route. FM needs a sine/tri/WT carrier
+  (the knob disables on saw/square). Off by default.
 - **TPT state-variable filter** (LP/HP/BP/Notch), resonant and stable, with velocity
   and keytrack routing.
 - **Two exponential ADSR envelopes** (amp + **mod env**), click-free retrigger and
@@ -172,6 +176,36 @@ Key rules baked into the design:
 level fader and a hardware-style **kill switch** (an off oscillator is skipped
 entirely — measurable CPU savings, not just muted). Velocity routes to amplitude
 (`vel_to_amp`) and filter cutoff (`vel_to_cutoff`) for dynamic playing.
+
+**Oscillator FM (phase-modulation) chain (#132).** DX-style phase modulation wired as a fixed chain
+down the three oscillators — each modulator offsets the next carrier's read phase, growing a rich
+sideband spectrum from a simple carrier:
+
+```
+  OSC3 ──(osc2_fm)──▶ OSC2 ──(osc1_fm)──▶ OSC1 ──▶ mix ──▶ filter
+ (modulator)         (carrier &          (carrier)
+                      modulator)
+```
+
+The **FM 3>2** knob (osc2's row) sets how hard osc3 modulates osc2; **FM 2>1** (osc1's row) sets how
+hard osc2 modulates osc1. Depth maps to modulation index `β = 2π·depth` (0.3–0.5 ≈ e-piano/bell, 1.0 =
+aggressive). The modulator uses its **raw** output regardless of mix level — so a modulator at level 0
+is silent alone yet still shapes its carrier (the classic 2-operator patch) — and its **SEMI/OCTAVE
+sets the ratio**, keytracking by construction:
+
+| modulator SEMI/OCT vs carrier | ratio | character |
+|-------------------------------|:-----:|-----------|
+| 0 st (unison)                 | 1:1   | warm, hollow (odd+even harmonics) — e-piano |
+| +12 st (octave)               | 2:1   | brighter, still harmonic |
+| +19 st (octave + fifth)       | 3:1   | hollow / clarinet-ish |
+| non-integer (e.g. +9 st over an octave, ≈3.36:1) | inharmonic | **bell / metallic** |
+
+**Carrier restriction:** FM applies only when the carrier's wave is **sine / triangle / WT** — saw and
+square rely on PolyBLEP edge corrections that a phase offset would break, so their FM knob is disabled
+and dimmed. A **MOD** badge marks whichever oscillator is currently acting as a modulator, and
+**Velocity → FM depth** (mod matrix) gives the classic harder-is-brighter response. Depth is smoothed
+on the live part (click-free) and defaults to 0 (existing patches + goldens bit-identical). Design +
+the honest aliasing note: [`docs/plans/fm-chain.md`](docs/plans/fm-chain.md).
 
 **Output gain staging.** A summing polysynth can drive its output far past
 full-scale on dense chords (16 voices at unity ≈ several ×FS), which hard-clips
@@ -511,6 +545,7 @@ out-of-range peaks, and non-finite samples. The `[click]` suite runs in every ga
 - [x] Drum kit parts (per-pad editing, choke); chord engine; arp + step sequencer; looper
 - [x] Master parametric EQ; 8 routable macros; custom touch-reliable editor; default scene
 - [x] Persist MIDI-learn mappings in APVTS state; MULTI layout save/load; sound-only patch load
+- [x] **Oscillator FM (phase-modulation) chain** osc3 → osc2 → osc1 (velocity→FM depth; sine/tri/WT carriers)
 
 **Deployment / validation (not yet done)**
 - [ ] ThinkPad X1 Carbon 3rd gen (2015, dual-core Broadwell) is the live Linux
@@ -550,11 +585,14 @@ out-of-range peaks, and non-finite samples. The `[click]` suite runs in every ga
       loop-record rig that works today.
 - [ ] **Sharing / format** — session-portability bundle + `.vasynthkit` embedding (samples travel
       with the kit), and a preset-format extension for mod-routed patch concepts.
+- [ ] **Cross-mod pack completion** — ring modulation + hard sync (osc2→osc1). The FM (phase-mod)
+      chain shipped in 1.0 (#132); these two round out the oscillator cross-modulation set.
 
 **v2 (make it deep)**
 - [x] Mod matrix — any source → any continuous parameter (registry-driven), touch-connect LINK + categorized overlay
+- [x] Oscillator FM (phase-modulation) chain osc3→osc2→osc1 (#132)
 - [ ] Second LFO, per-voice LFO option, MIDI-clock sync
-- [ ] Unison/detune stacking, hard sync osc2→osc1
+- [ ] Unison/detune stacking; **ring mod + hard sync osc2→osc1** (1.1 cross-mod pack)
 - [ ] Sub-oscillator, filter drive/saturation
 - [ ] Custom GUI with right-click MIDI-learn
 - [ ] Preset browser

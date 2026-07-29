@@ -51,6 +51,8 @@ namespace moddest
             { ModMatrix::Osc2Detune, P::osc2Detune,  "Osc 2 Detune", Osc },
             { ModMatrix::Osc3Octave, P::osc3Octave,  "Osc 3 Octave", Osc },
             { ModMatrix::Osc3Detune, P::osc3Detune,  "Osc 3 Detune", Osc },
+            { ModMatrix::Osc1Fm,     P::osc1Fm,      "Osc 1 FM",     Osc },   // #132 osc2->osc1 phase-mod depth
+            { ModMatrix::Osc2Fm,     P::osc2Fm,      "Osc 2 FM",     Osc },   // #132 osc3->osc2 phase-mod depth
             // Filter
             { ModMatrix::Cutoff,        P::filterCutoff, "Cutoff",       Filter },
             { ModMatrix::Resonance,     P::filterReso,   "Resonance",    Filter },

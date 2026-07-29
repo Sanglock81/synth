@@ -397,6 +397,8 @@ static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& a
     p.osc1PW     = rp (apvts, ID::osc1PW);
     p.osc2PW     = rp (apvts, ID::osc2PW);
     p.osc3PW     = rp (apvts, ID::osc3PW);
+    p.osc1Fm     = rp (apvts, ID::osc1Fm);            // #132 FM chain depth (0 = off, bit-identical)
+    p.osc2Fm     = rp (apvts, ID::osc2Fm);
     p.osc1Phase  = (int) rp (apvts, ID::osc1Phase);   // Tier 1a start-phase policy (0 RESET default)
     p.osc2Phase  = (int) rp (apvts, ID::osc2Phase);
     p.osc3Phase  = (int) rp (apvts, ID::osc3Phase);
@@ -521,6 +523,7 @@ static const juce::StringArray& perPartSoundIds()
         ID::osc1Wave, ID::osc2Wave, ID::osc3Wave, ID::osc1Octave, ID::osc2Octave, ID::osc3Octave,
         ID::osc1Semi, ID::osc2Semi, ID::osc3Semi,
         ID::osc1Detune, ID::osc2Detune, ID::osc3Detune, ID::osc1PW, ID::osc2PW, ID::osc3PW,
+        ID::osc1Fm, ID::osc2Fm,   // #132 FM chain depths (per-part sound)
         ID::osc1Phase, ID::osc2Phase, ID::osc3Phase, ID::analog,   // Tier 1 phase policy + analog drift
         ID::osc1WtKind, ID::osc2WtKind, ID::osc3WtKind, ID::osc1WtPos, ID::osc2WtPos, ID::osc3WtPos,   // #95 WT
         ID::osc1WtSeed, ID::osc2WtSeed, ID::osc3WtSeed,   // #95 3c WT random seed (per-part + persist)
@@ -2467,6 +2470,16 @@ namespace
         return ((float) set[rng.nextInt (9)] + 24.0f) / 48.0f;
     }
 
+    // #132 Normalized value for an osc FM depth: MOSTLY 0 (FM is a special colour, not a default),
+    // an occasional tasteful amount, a rare wild one. Range is 0..1 so the normalized value == depth.
+    inline float randFmNorm (juce::Random& rng)
+    {
+        const float r = rng.nextFloat();
+        if (r < 0.66f) return 0.0f;                             // ~2/3 of rolls: no FM
+        if (r < 0.93f) return 0.15f + 0.35f * rng.nextFloat();  // ~27%: tasteful (E-piano/bell region)
+        return 0.5f + 0.5f * rng.nextFloat();                   // ~7%: wild
+    }
+
     void applyRandomParams (juce::AudioProcessorValueTreeState& a, juce::Random& rng)
     {
         namespace ID = ParamID;
@@ -2482,6 +2495,7 @@ namespace
             float v = rng.nextFloat();                                              // default: full range (perceptual via skewed ranges)
             if      (id == ID::osc1On) v = 1.0f;                                     // guarantee a live source
             else if (id == ID::osc1Semi || id == ID::osc2Semi || id == ID::osc3Semi) v = randSemiNorm (rng);
+            else if (id == ID::osc1Fm   || id == ID::osc2Fm)   v = randFmNorm (rng);   // #132 mostly 0, occasional tasteful
             else if (id == ID::osc1Level || id == ID::osc2Level || id == ID::osc3Level) v = midBias (rng);         // middle-biased levels
             else if (id == ID::chorusMix || id == ID::delayMix || id == ID::reverbMix)  v = 0.55f * midBias (rng); // wet, but the note still reads
             else if (id == ID::filterReso) v = (rng.nextFloat() < randcal::selfOscP) ? (0.9f + 0.1f * rng.nextFloat())   // ~5% self-osc excursion

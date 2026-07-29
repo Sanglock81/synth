@@ -1,0 +1,16 @@
+{
+  "name": "FM E-Piano",
+  "category": "Keys",
+  "params": {
+    "osc1_wave": 3, "osc1_level": 0.85,
+    "osc2_on": 1, "osc2_wave": 3, "osc2_level": 0.0, "osc1_fm": 0.30,
+    "osc3_on": 0,
+    "filter_type": 0, "filter_cutoff": 5200, "filter_reso": 0.08, "filter_env_amt": 0.1,
+    "vel_to_amp": 0.85,
+    "amp_attack": 0.002, "amp_decay": 1.8, "amp_sustain": 0.22, "amp_release": 0.4,
+    "fx_chorus_on": 1, "chorus_voices": 2, "chorus_rate": 0.35, "chorus_depth": 0.28, "chorus_mix": 0.22,
+    "fx_reverb_on": 1, "reverb_mix": 0.22, "reverb_size": 0.55, "reverb_motion": 0.25,
+    "patch_trim": 0.8
+  },
+  "routes": [ { "src": "Velocity", "dest": "Osc 1 FM", "depth": 0.5 } ]
+}

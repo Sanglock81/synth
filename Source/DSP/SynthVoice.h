@@ -34,6 +34,9 @@ struct VoiceParams
     float  osc1Semi   = 0, osc2Semi   = 0, osc3Semi   = 0;   // coarse tune, semitones (-24..+24)
     float  osc1Detune = 0, osc2Detune = 0, osc3Detune = 0;   // cents
     float  osc1PW = 0.5f, osc2PW = 0.5f, osc3PW = 0.5f;
+    // #132 phase-modulation (FM) chain depth (0..1): osc2 phase-modulates osc1 (osc1Fm), osc3
+    // modulates osc2 (osc2Fm). Applied only when the CARRIER wave is SIN/TRI/WT. Default 0 = off.
+    float  osc1Fm = 0.0f, osc2Fm = 0.0f;
     // Musicality Tier 1a: per-oscillator start-phase policy (0 RESET / 1 RANDOM / 2 FREE).
     // Default 0 (RESET) keeps every note's waveform alignment bit-identical (goldens hold).
     int    osc1Phase = 0, osc2Phase = 0, osc3Phase = 0;
@@ -97,6 +100,14 @@ class SynthVoice
 {
 public:
     static constexpr int kMaxUnison = 7;   // #96: max unison members (the engine caps the live count lower)
+
+    // #132 FM (phase-modulation) chain. Carrier restriction: only continuous-phase waves —
+    // Triangle(2)/Sine(3)/Wavetable(4) — can be phase-modulated cleanly; saw(0)/square(1) rely on
+    // PolyBLEP edge corrections computed at the un-offset phase, which a phase offset invalidates.
+    // Enum order matches PolyBlepOscillator::Wave.
+    static bool fmCarrier (int wave) { return wave == 2 || wave == 3 || wave == 4; }
+    static constexpr float kFmMaxDepth      = 1.0f;   // depth clamp (knob + matrix offset)
+    static constexpr float kFmDepthToCycles = 1.0f;   // depth 1.0, full modulator -> +/-1 cycle phase (beta = 2*pi)
 
     // Set before prepare(): oscillator anti-aliasing quality.
     void setOscQuality (PolyBlepOscillator::Quality q)
@@ -268,6 +279,16 @@ public:
         const float nl = std::clamp (p.noiseLevel + mm.noiseLevel, 0.0f, 1.0f);   // + mod-matrix noise level
         const bool useNoise = nl > 1.0e-4f;
 
+        // #132 FM (phase-mod) chain osc3 -> osc2 -> osc1. Depth uses the modulator's RAW output
+        // (independent of its mix level, so an inaudible modulator still shapes its carrier), scaled
+        // to cycles of carrier phase; matrix mod (e.g. velocity -> FM) folds in here. Restricted to
+        // SIN/TRI/WT carriers. All-zero (the default) leaves the call path bit-identical (goldens).
+        const float fm1 = (fmCarrier (p.osc1Wave) ? std::clamp (p.osc1Fm + mm.osc1Fm, 0.0f, kFmMaxDepth) : 0.0f) * kFmDepthToCycles;  // osc2 -> osc1
+        const float fm2 = (fmCarrier (p.osc2Wave) ? std::clamp (p.osc2Fm + mm.osc2Fm, 0.0f, kFmMaxDepth) : 0.0f) * kFmDepthToCycles;  // osc3 -> osc2
+        const bool fm1On = fm1 != 0.0f, fm2On = fm2 != 0.0f;
+        const bool r2 = o2 || fm1On;               // render osc2 if audible OR it modulates osc1
+        const bool r3 = o3 || (fm2On && r2);       // render osc3 if audible OR it modulates a live osc2
+
         for (int i = 0; i < numSamples; ++i)
         {
             const float ampLevel = ampEnv.nextSample();
@@ -291,10 +312,14 @@ public:
             }
 
             // --- oscillators (per-source level; skip silent/off sources) ---
+            // Compute modulators first (osc3, then osc2) so their output offsets the carrier phase.
+            const float m3 = r3 ? osc3.nextSample() : 0.0f;
+            const float m2 = r2 ? osc2.nextSample (fm2On ? (double) (fm2 * m3) : 0.0) : 0.0f;
+            const float m1 = o1 ? osc1.nextSample (fm1On ? (double) (fm1 * m2) : 0.0) : 0.0f;
             float s = 0.0f;
-            if (o1) s += osc1.nextSample() * l1;
-            if (o2) s += osc2.nextSample() * l2;
-            if (o3) s += osc3.nextSample() * l3;
+            if (o1) s += m1 * l1;
+            if (o2) s += m2 * l2;
+            if (o3) s += m3 * l3;
             if (useNoise) s += noise() * nl;
 
             s = filter.process (s);
@@ -359,6 +384,13 @@ public:
         const float nl = std::clamp (p.noiseLevel + mm.noiseLevel, 0.0f, 1.0f);
         const bool useNoise = nl > 1.0e-4f;
 
+        // #132 FM chain (per stack-voice pair — each member's osc3->osc2->osc1, never across members).
+        const float fm1 = (fmCarrier (p.osc1Wave) ? std::clamp (p.osc1Fm + mm.osc1Fm, 0.0f, kFmMaxDepth) : 0.0f) * kFmDepthToCycles;
+        const float fm2 = (fmCarrier (p.osc2Wave) ? std::clamp (p.osc2Fm + mm.osc2Fm, 0.0f, kFmMaxDepth) : 0.0f) * kFmDepthToCycles;
+        const bool fm1On = fm1 != 0.0f, fm2On = fm2 != 0.0f;
+        const bool r2 = o2 || fm1On;
+        const bool r3 = o3 || (fm2On && r2);
+
         for (int i = 0; i < numSamples; ++i)
         {
             const float ampLevel = ampEnv.nextSample();
@@ -375,20 +407,26 @@ public:
 
             float accL = 0.0f, accR = 0.0f;
             {   // member 0 = osc1/osc2/osc3 (not treated as an array — no contiguity assumption)
+                const float m3 = r3 ? osc3.nextSample() : 0.0f;
+                const float m2 = r2 ? osc2.nextSample (fm2On ? (double) (fm2 * m3) : 0.0) : 0.0f;
+                const float m1 = o1 ? osc1.nextSample (fm1On ? (double) (fm1 * m2) : 0.0) : 0.0f;
                 float sm = 0.0f;
-                if (o1) sm += osc1.nextSample() * l1;
-                if (o2) sm += osc2.nextSample() * l2;
-                if (o3) sm += osc3.nextSample() * l3;
+                if (o1) sm += m1 * l1;
+                if (o2) sm += m2 * l2;
+                if (o3) sm += m3 * l3;
                 if (useNoise) sm += noise() * nl;                // noise stays centred (with member 0)
                 accL += sm * panL[0]; accR += sm * panR[0];
             }
             for (int mIdx = 1; mIdx < N; ++mIdx)
             {
                 auto& os = uosc[(std::size_t) (mIdx - 1)];
+                const float m3 = r3 ? os[2].nextSample() : 0.0f;
+                const float m2 = r2 ? os[1].nextSample (fm2On ? (double) (fm2 * m3) : 0.0) : 0.0f;
+                const float m1 = o1 ? os[0].nextSample (fm1On ? (double) (fm1 * m2) : 0.0) : 0.0f;
                 float sm = 0.0f;
-                if (o1) sm += os[0].nextSample() * l1;
-                if (o2) sm += os[1].nextSample() * l2;
-                if (o3) sm += os[2].nextSample() * l3;
+                if (o1) sm += m1 * l1;
+                if (o2) sm += m2 * l2;
+                if (o3) sm += m3 * l3;
                 accL += sm * panL[mIdx];
                 accR += sm * panR[mIdx];
             }
