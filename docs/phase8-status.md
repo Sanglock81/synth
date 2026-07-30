@@ -372,3 +372,16 @@ work runs on the message thread (`AsyncUpdater`); a per-lane guard makes the aud
 mid-overwrite (brief silence, no xrun). `SceneSlot` stays heap-free so the audio-thread reset is
 RT-safe. Tests: `dsp/test_audioloop` (snapshot/reload round-trip), `plugin/test_scenes` (audio
 isolation across switches).
+
+## Farmer sampled kit — forward-plan note (1.1-adjacent, NOT built yet)
+
+The first factory **sample-based** kit, with clean provenance: the **user records original
+sounds** (user-owned recordings — no third-party sample licensing). Tracked increment:
+1. Ship the factory samples in `resources/` (embedded like the preset JSONs).
+2. On first run, import them into the managed sample library (SampleStore / `AppInfo.samplesDir`,
+   the #80 md5-dedup path) so they behave like any loaded sample.
+3. A factory **"Farmer"** kit whose pads reference those samples (a new "Originals" entry alongside
+   Industrial/Studio once it exists).
+Does **not** block the v1.0 tag. **Flag the content-license choice (CC0 or CC-BY recommended) when
+this increment starts.** The synthesized Classic Machines (#134) ship first; Farmer is the sampled
+counterpoint.
