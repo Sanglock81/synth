@@ -157,13 +157,17 @@ private:
 
         // Kits: Factory + User sections, each entry showing its pad count. kitNames stays
         // index-aligned to the ids (2000 + index).
-        const auto factoryKits = proc.factoryKitNames();
+        const auto classicKits  = proc.classicKitNames();     // synthesized machine kits
+        const auto originalKits  = proc.originalKitNames();     // house-designed kits
+        const auto factoryKits   = proc.factoryKitNames();
         juce::StringArray kitNames;
         juce::PopupMenu kits;
         auto padCount = [&] (const juce::String& n) { int c = 0; auto d = proc.loadKit (n); for (int pd = 0; pd < 16; ++pd) if (d.pads[(size_t) pd].source.isNotEmpty()) ++c; return c; };
         auto addKit = [&] (const juce::String& n) { kits.addItem (2000 + kitNames.size(), n + "  (" + juce::String (padCount (n)) + " pads)"); kitNames.add (n); };
-        kits.addSectionHeader ("Factory");
-        for (auto& n : proc.getKitNames()) if (factoryKits.contains (n)) addKit (n);
+        kits.addSectionHeader ("Classic Machines");
+        for (auto& n : classicKits)  addKit (n);
+        kits.addSectionHeader ("Originals");
+        for (auto& n : originalKits) addKit (n);
         bool anyUser = false;
         for (auto& n : proc.getKitNames()) if (! factoryKits.contains (n)) anyUser = true;
         if (anyUser)

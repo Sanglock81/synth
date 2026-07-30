@@ -26,7 +26,7 @@ TEST_CASE ("sequencer targeting an 808 kit part drives the kit", "[plugin][seq][
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
 
     // Assign the 808 kit to part 1 (P2 = the seq's DEFAULT target).
-    p.setPartKit (1, p.factoryKit ("808 Basics"));
+    p.setPartKit (1, p.factoryKit ("808"));
 
     // Draw a pattern on the rows whose notes hit the kit pads (36..41).
     for (int r = 0; r < 6; ++r) { p.setSeqNote (r, 36 + r); for (int s = 0; s < VASynthProcessor::kSeqSteps; ++s) p.setSeqCell (r, s, 1); }

@@ -88,7 +88,7 @@ TEST_CASE ("multi-part pedaled play stays clean across silence/return (static re
     // Part 0 (live) = Warm Pad (chorus+reverb+width). Part 1 = locked Warm Pad. Part 2 = a kit.
     p.loadFactoryPreset ("Warm Pad");
     p.setPartPreset (1, "Warm Pad");
-    p.setPartKit (2, p.loadKit ("808 Basics"));
+    p.setPartKit (2, p.loadKit ("808"));
     auto set = [&p] (const char* id, float v) { p.apvts.getParameter (id)->setValueNotifyingHost (p.apvts.getParameter (id)->convertTo0to1 (v)); };
     set (ParamID::part1Level, 1.4f);   // exercise the mixer level
     set (ParamID::part2Pan, -0.6f);    // and pan

@@ -24,7 +24,7 @@ TEST_CASE ("default scene: P4 is the 808 kit (the sequencer's target), P3 is a b
 
     // P4 (part 3) is a drum kit, and it is the sequencer's DEFAULT target (seq_target = P4).
     REQUIRE (p.isPartKit (3));
-    REQUIRE (p.getPartPreset (3) == "808 Basics");
+    REQUIRE (p.getPartPreset (3) == "808");
     REQUIRE ((int) p.apvts.getRawParameterValue (ParamID::seqTarget)->load() == 3);
 
     // P3 (part 2) is a plain bass voice; P2 (part 1) is a free spare (not a kit).

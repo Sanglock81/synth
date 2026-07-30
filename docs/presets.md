@@ -1,6 +1,6 @@
 # Presets
 
-synth ships with 123 read-only **factory presets** plus **Init**, and you can
+synth ships with 160+ read-only **factory presets** (including the classic-machine kit voices) plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
@@ -18,7 +18,7 @@ Open the **Load** menu and pick a patch. The menu is **collapsible** so it opens
 
 Selecting a patch applies it immediately; the panel returns to "Load" so you can
 pick the same one again. The per-part **Load synth patch** picker (on a P1–P4 cell) uses the
-same grouping; **Load drum kit** lists **Factory** and **User** kits with each kit's pad count.
+same grouping; **Load drum kit** lists **Classic Machines** / **Originals** / **User** kits with each kit's pad count.
 
 ## Factory presets
 
@@ -130,33 +130,51 @@ Editor**. Per pad: set the trigger and sounding notes by **learn-by-play** (arm,
 press keys), pick the source preset, set level and choke group, and **Audition**. Kits
 save/load as their own presets (a **Kits** category) and are included in a **MULTI**.
 
-**Factory kits.** Four built in, all on triggers 36–51 (the Launchkey pad grid):
-- *808 Basics* — the full **16-pad** 808 kit; the two hats choke each other (group 1), the cymbals ring free.
-- *House Basics* — a 909-flavoured house/techno kit: a tighter **House Kick**, snappy **House Snare**,
-  crisp **House Hat**, plus the shared claps/toms/cymbals. Same choke layout as 808 Basics.
-- *Industrial* — a driven, metallic kit: a distorted **Industrial Kick**, a harsh **Noise Snare**,
-  and a clanging **Metal Hit** (also the three tuned toms).
-- *Studio* — the **synthesized general-purpose** kit (warmer/rounder than the 808/House/Industrial
-  kits, for singer-songwriter / pop / rock demos): Kick Studio + Tight, Snare Studio, Sidestick,
-  Clap Soft, Snare Brush, softer hats (choke group 1), three warm Tom Studio toms, Shaker,
-  Tambourine, a darker Crash, Ride Soft, Cowbell Low. **Honest note:** this is synthesized, not
-  sampled — fully-acoustic realism is the 1.1 CC0 sampled-kit pass; you can also load your own
-  samples onto any pad today (Kit Editor -> Load sample).
-- *Stab Board* — four drums plus four tuned **minor-triad** chord pads (a plucky Synth Pluck at C/D/E/F).
+**Factory kits.** Synthesized recreations inspired by classic drum machines, **voiced to sound
+good first** — the documented tunings/circuits are the starting point, then we deviated wherever it
+sounded better. All on triggers 36–51 (the Launchkey pad grid); hats choke (group 1), cymbals ring
+free (group 0). Grouped in the picker as **Classic Machines** / **Originals** / **User**.
 
-*808 Basics* pad map (pad = trigger − 36):
+> **Disclaimer.** Synthesized recreations inspired by classic drum machines; model shorthand is used
+> descriptively; no affiliation with or endorsement by any manufacturer.
+
+*Classic Machines* (increment 1 — the analog-heritage four; the PCM-homage six land next):
+
+- **808** — deep sine kick with a long boom, two-tone snare, square-stack metallic hats, the
+  540/800-flavour cowbell, toms + congas, clave/maraca, a long cymbal. The warm, round benchmark.
+- **909** — punchy click-attack kick (harder pitch sweep), bright cracking snare, aggressive toms;
+  hats/ride/crash/rim voiced **hotter and dirtier** (per-voice `filter_drive` grit) than the 808's.
+- **606** — thin, sharp, cheap-and-lovely: clicky kick, biting snare, sizzly hats + cymbal; the sparse
+  original filled to 16 with tuned variants.
+- **78** — soft vintage preset-rhythm colours: gentle kick, brushy snare, warm hats, a metallic beat,
+  guiro, bossa woodblocks, maraca, cowbell. Warm and lo-fi.
+
+*Originals* (house-designed, unchanged): **Industrial** (driven, metallic — distorted kick, harsh
+noise snare, clanging metal-hit toms) and **Studio** (synthesized general-purpose, warm/round for
+songwriter/pop/rock demos). *Fully-acoustic realism is the 1.1 sampled-kit pass; you can also load
+your own samples onto any pad today.*
+
+*808* pad map (pad = trigger − 36; the other kits follow the same kick/snare/hat conventions):
 
 | Trig | Pad | Trig | Pad | Trig | Pad | Trig | Pad |
 |------|-----|------|-----|------|-----|------|-----|
-| 36 | Kick 808 | 40 | Clap | 44 | Low Tom¹ | 48 | Cowbell |
-| 37 | Kick Punchy | 41 | Snare 2¹ | 45 | Mid Tom¹ | 49 | Crash² |
-| 38 | Snare | 42 | Hat Closed³ | 46 | High Tom¹ | 50 | Clave |
-| 39 | Rimshot | 43 | Hat Open³ | 47 | Splash² | 51 | Ride² |
+| 36 | Kick (≈45 Hz, ~0.55 s boom) | 40 | Clap | 44 | Low Tom¹ | 48 | Hi Conga¹ |
+| 37 | Kick Tight | 41 | Cowbell | 45 | Mid Tom¹ | 49 | Cymbal² |
+| 38 | Snare (two-tone + noise) | 42 | Hat Closed³ | 46 | High Tom¹ | 50 | Clave |
+| 39 | Rim | 43 | Hat Open³ | 47 | Low Conga¹ | 51 | Maraca |
 
-¹ the Snare / Tom preset re-tuned via the pad's sound-note (no extra preset). ² cymbals
-are **not** choked (group 0) so they wash over the groove. ³ the two hats share choke
-group 1. The step sequencer's 8 default rows map to kick · snare · clap · closed-hat ·
-open-hat · low-tom · crash · cowbell (trigger notes 36 · 38 · 40 · 42 · 43 · 44 · 49 · 48).
+¹ one preset re-tuned via the pad's sound-note (no extra preset). ² the cymbal is **not** choked
+(group 0) so it washes over the groove. ³ the two hats share choke group 1. Every pad responds to
+velocity. The step sequencer's 8 default rows map to kick · snare · clap · closed-hat · open-hat ·
+low-tom · cymbal · cowbell.
+
+**Migration.** A MULTI or `.kit` that stored a retired kit loads its successor: *808 Basics* → **808**,
+*House Basics* → **909**, *Stab Board* → **808** (the chord-pad *feature* stays — build one in the Kit
+Editor with 2–4 sounding notes on a pad).
+
+**Tour renders.** The verification suite renders a fixed one-bar reference pattern through every
+classic kit to `docs/audio-refs/<kit>.wav` (local, not committed) so the whole library can be A/B'd
+in one sitting.
 
 **Kit seam note.** In this version every pad of a Kit part shares the part's one FX/LFO
 chain (per-part FX arrives with the full-multitimbral work); a "drums" split zone plays

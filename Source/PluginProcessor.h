@@ -204,6 +204,9 @@ public:
     static juce::ValueTree   kitToTree   (const KitDefinition& def);        // shared format (kit files + MULTI)
     static KitDefinition     kitFromTree (const juce::ValueTree& t);
     static juce::StringArray factoryKitNames();
+    static juce::StringArray classicKitNames();     // "Classic Machines" group (synthesized machine kits)
+    static juce::StringArray originalKitNames();     // "Originals" group (Industrial, Studio)
+    static juce::String      migrateKitName (const juce::String& n);   // retired kit name -> successor
     static KitDefinition     factoryKit  (const juce::String& name);
 
     // -- key-range zones (Part B) ---------------------------------------------

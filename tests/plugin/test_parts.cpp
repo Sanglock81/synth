@@ -161,7 +161,7 @@ TEST_CASE ("ordinary state persists SOUND but RESETS routing/parts (lifecycle ru
     REQUIRE (dst.getSurfaceRouting ("Korg B2") == VASynthProcessor::kLivePart);
     REQUIRE (dst.getSurfaceRouting ("Launchkey Mini") == VASynthProcessor::kLivePart);
     REQUIRE (dst.getPartPreset (1).isEmpty());        // P2 (part 1) is a spare again, not src's "Kick 808"
-    REQUIRE (dst.getPartPreset (3) == "808 Basics");  // the default scene's kit is on P4
+    REQUIRE (dst.getPartPreset (3) == "808");  // the default scene's kit is on P4
 }
 
 TEST_CASE ("missing locked-part preset falls back to Init without crashing", "[plugin][7c][parts][fallback]")
@@ -423,7 +423,7 @@ TEST_CASE ("kit: trigger path is allocation-free; publish mid-note is glitch-fre
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p; p.prepareToPlay (48000.0, 512);
-    p.setPartKit (1, p.loadKit ("808 Basics"));
+    p.setPartKit (1, p.loadKit ("808"));
 
     juce::AudioBuffer<float> buf (2, 512);
     for (int i = 0; i < 20; ++i) { buf.clear(); juce::MidiBuffer m; p.processBlock (buf, m); }   // warm up
@@ -442,7 +442,7 @@ TEST_CASE ("kit: trigger path is allocation-free; publish mid-note is glitch-fre
     // Re-publish a different kit WHILE pads are sounding -> finite and bounded.
     p.routeMidi (juce::MidiMessage::noteOn (1, 36, 1.0f), 1);
     capture (p, 4);
-    p.setPartKit (1, p.loadKit ("Stab Board"));
+    p.setPartKit (1, p.loadKit ("909"));
     auto out = capture (p, 8);
     REQUIRE (tu::allFinite (out));
     REQUIRE (tu::peak (out) <= 1.0f);
@@ -452,17 +452,20 @@ TEST_CASE ("kit: factory kits load and play their pads", "[plugin][kitpart][fact
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
-    REQUIRE (p.getKitNames().contains ("808 Basics"));
-    REQUIRE (p.getKitNames().contains ("Stab Board"));
+    REQUIRE (p.getKitNames().contains ("808"));           // #134: standardized roster
+    REQUIRE (p.getKitNames().contains ("909"));
 
-    p.setPartKit (1, p.loadKit ("808 Basics"));
+    p.setPartKit (1, p.loadKit ("808"));
     REQUIRE (p.isPartKit (1));
     p.routeMidi (juce::MidiMessage::noteOn (1, 36, 1.0f), 1);   // kick trigger
     REQUIRE (bandEnergy (capture (p, 12), 20.0, 110.0) > 0.0);
 
-    // Stab Board: a chord-pad trigger fires a 3-note stab.
-    p.setPartKit (2, p.loadKit ("Stab Board"));
-    p.routeMidi (juce::MidiMessage::noteOn (1, 40, 1.0f), 2);   // first stab pad
+    // Chord-pad feature (retired the "Stab Board" factory kit, but the feature stays for user kits):
+    // a pad with 3 sound notes fires a 3-note stab.
+    VASynthProcessor::KitDefinition chordKit; chordKit.name = "ChordPad Test";
+    chordKit.pads[0] = VASynthProcessor::KitPadDef { 40, "Synth Pluck", { 48, 51, 55, 0 }, 3, 1.0f, 0 };
+    p.setPartKit (2, chordKit);
+    p.routeMidi (juce::MidiMessage::noteOn (1, 40, 1.0f), 2);   // the stab pad
     capture (p, 6);
     REQUIRE (p.partActivity (2) > 0);
 }
@@ -493,14 +496,14 @@ TEST_CASE ("kit: a kit part round-trips through MULTI", "[plugin][kitpart][multi
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor src; src.prepareToPlay (48000.0, 256);
-    src.setPartKit (1, src.loadKit ("808 Basics"));
+    src.setPartKit (1, src.loadKit ("808"));
     src.setSurfaceZones ("B2", { { 0, 47, 1, 0 }, { 48, 127, 0, 0 } });   // bottom octave -> the kit
     auto multi = src.captureMultiState();
 
     VASynthProcessor dst; dst.prepareToPlay (48000.0, 256);
     dst.applyMultiState (multi);
     REQUIRE (dst.isPartKit (1));
-    REQUIRE (dst.getPartKit (1).name == "808 Basics");
+    REQUIRE (dst.getPartKit (1).name == "808");
     REQUIRE (dst.getPartKit (1).pads[6].chokeGroup == 1);         // hats (pad 6 = Hat Closed) choke survived
     REQUIRE (dst.surfaceHasSplit ("B2"));
 }
@@ -606,7 +609,7 @@ TEST_CASE ("kit editor refuses keyboard focus (QWERTY plays for learn-by-play)",
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
-    p.setPartKit (1, p.loadKit ("808 Basics"));
+    p.setPartKit (1, p.loadKit ("808"));
     KitEditor ed (p, 1);
     ed.setSize (660, 560);
     REQUIRE_FALSE (anyFocusable (ed));                    // nothing steals focus while open
@@ -619,7 +622,7 @@ TEST_CASE ("render the KIT EDITOR to docs/kit-editor.png", "[plugin][kitpart][sc
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
-    p.setPartKit (1, p.loadKit ("808 Basics"));
+    p.setPartKit (1, p.loadKit ("808"));
 
     auto ed = std::make_unique<KitEditor> (p, 1);
     ed->setSize (660, 560);

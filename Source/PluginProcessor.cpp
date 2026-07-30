@@ -361,7 +361,7 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 // Only the LAYOUT is set here; no global (tempo/seq grid/macros) is touched.
 void VASynthProcessor::applyDefaultScene()
 {
-    setPartKit (3, factoryKit ("808 Basics"));      // P4: sequencer's drum kit
+    setPartKit (3, factoryKit ("808"));             // P4: sequencer's drum kit
     setPartPreset (2, "Reese Bass");              // P3: dedicated bass voice
     // P2 (part 1) intentionally left at Init — a free spare part.
 }
@@ -1184,7 +1184,11 @@ VASynthProcessor::KitDefinition VASynthProcessor::kitFromTree (const juce::Value
 {
     KitDefinition def;
     if (! t.hasType ("KIT")) return def;
-    def.name = t.getProperty ("name", juce::String()).toString();
+    const juce::String rawName = t.getProperty ("name", juce::String()).toString();
+    const juce::String mapped  = migrateKitName (rawName);
+    if (mapped != rawName && classicKitNames().contains (mapped))
+        return factoryKit (mapped);      // a retired factory kit in an old MULTI/.kit -> rebuild its successor
+    def.name = rawName;
     int idx = 0;
     for (auto p : t)
     {
@@ -1204,7 +1208,28 @@ VASynthProcessor::KitDefinition VASynthProcessor::kitFromTree (const juce::Value
 
 // ---- factory kits -----------------------------------------------------------
 
-juce::StringArray VASynthProcessor::factoryKitNames() { return { "808 Basics", "House Basics", "Industrial", "Studio", "Stab Board" }; }
+// The "Classic Machines" group: synthesized kits inspired by classic drum machines, voiced to sound
+// good first (model shorthand used descriptively; no manufacturer affiliation). Increment 1 = the
+// analog-heritage four; the PCM-homage six land in increment 2.
+juce::StringArray VASynthProcessor::classicKitNames() { return { "808", "909", "606", "78" }; }
+// "Originals": the house-designed kits (kept unchanged).
+juce::StringArray VASynthProcessor::originalKitNames() { return { "Industrial", "Studio" }; }
+juce::StringArray VASynthProcessor::factoryKitNames()
+{
+    juce::StringArray a = classicKitNames();
+    a.addArray (originalKitNames());
+    return a;
+}
+
+// Legacy kit-name migration (roster overhaul): an old MULTI/.kit that stored a retired factory kit
+// loads its SUCCESSOR. "808 Basics" -> "808", "House Basics" -> "909", "Stab Board" (removed) -> "808".
+juce::String VASynthProcessor::migrateKitName (const juce::String& n)
+{
+    if (n == "808 Basics")   return "808";
+    if (n == "House Basics") return "909";
+    if (n == "Stab Board")   return "808";
+    return n;
+}
 
 VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String& name)
 {
@@ -1216,47 +1241,90 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
     auto tuned = [] (int trig, const char* src, int choke, int sound)
     { return KitPadDef { trig, src, { sound, 0, 0, 0 }, 1, 1.0f, choke }; };
 
-    if (name == "808 Basics")
+    if (name == "808")
     {
-        // Full 16-pad 808 kit, triggers 36..51 (the Launchkey pad surface). Hats mutually choke
-        // (group 1); cymbals (crash/splash/ride) ring FREE (group 0) so they wash over the groove.
-        def.pads[0]  = drum  (36, "Kick 808",    0);
-        def.pads[1]  = drum  (37, "Kick Punchy", 0);
-        def.pads[2]  = drum  (38, "Snare",       0);
-        def.pads[3]  = drum  (39, "Rimshot",     0);
-        def.pads[4]  = drum  (40, "Clap",        0);
-        def.pads[5]  = tuned (41, "Snare",       0, 48);     // Snare 2 — the snare tuned up (tighter)
-        def.pads[6]  = drum  (42, "Hat Closed",  1);
-        def.pads[7]  = drum  (43, "Hat Open",    1);
-        def.pads[8]  = tuned (44, "Tom",         0, 40);     // Low Tom  (the Tom preset re-tuned x3)
-        def.pads[9]  = tuned (45, "Tom",         0, 46);     // Mid Tom
-        def.pads[10] = tuned (46, "Tom",         0, 52);     // High Tom
-        def.pads[11] = drum  (47, "Splash",      0);
-        def.pads[12] = drum  (48, "Cowbell",     0);
-        def.pads[13] = drum  (49, "Crash",       0);
-        def.pads[14] = drum  (50, "Clave",       0);
-        def.pads[15] = drum  (51, "Ride",        0);
+        // Synthesized 808: deep sine kick + long decay, two-tone snare, square-stack metallic hats,
+        // the 540/800-flavour cowbell, toms + congas, clave/maraca. Triggers 36..51. Hats choke
+        // (group 1); the cymbal rings FREE (group 0) so it washes over the groove.
+        def.pads[0]  = drum  (36, "808 Kick",       0);
+        def.pads[1]  = drum  (37, "808 Kick Tight", 0);
+        def.pads[2]  = drum  (38, "808 Snare",      0);
+        def.pads[3]  = drum  (39, "808 Rim",        0);
+        def.pads[4]  = drum  (40, "808 Clap",       0);
+        def.pads[5]  = drum  (41, "808 Cowbell",    0);
+        def.pads[6]  = drum  (42, "808 Hat Cl",     1);
+        def.pads[7]  = drum  (43, "808 Hat Op",     1);
+        def.pads[8]  = tuned (44, "808 Tom",        0, 40);   // low / mid / high tom
+        def.pads[9]  = tuned (45, "808 Tom",        0, 46);
+        def.pads[10] = tuned (46, "808 Tom",        0, 52);
+        def.pads[11] = tuned (47, "808 Conga",      0, 43);   // low / high conga
+        def.pads[12] = tuned (48, "808 Conga",      0, 50);
+        def.pads[13] = drum  (49, "808 Cymbal",     0);
+        def.pads[14] = drum  (50, "808 Clave",      0);
+        def.pads[15] = drum  (51, "808 Maraca",     0);
     }
-    else if (name == "House Basics")
+    else if (name == "909")
     {
-        // 909-flavoured house/techno kit: tighter kick, snappy snare, crisp hats. Same layout
-        // conventions as 808 Basics — hats choke (group 1), cymbals ring free.
-        def.pads[0]  = drum  (36, "House Kick",  0);
-        def.pads[1]  = drum  (37, "Kick Punchy", 0);
-        def.pads[2]  = drum  (38, "House Snare", 0);
-        def.pads[3]  = drum  (39, "Rimshot",     0);
-        def.pads[4]  = drum  (40, "Clap",        0);
-        def.pads[5]  = tuned (41, "House Snare", 0, 48);    // Snare 2 — tuned up
-        def.pads[6]  = drum  (42, "House Hat",   1);
-        def.pads[7]  = drum  (43, "Hat Open",    1);
-        def.pads[8]  = tuned (44, "Tom",         0, 40);    // Low / Mid / High Tom
-        def.pads[9]  = tuned (45, "Tom",         0, 46);
-        def.pads[10] = tuned (46, "Tom",         0, 52);
-        def.pads[11] = drum  (47, "Splash",      0);
-        def.pads[12] = drum  (48, "Cowbell",     0);
-        def.pads[13] = drum  (49, "Crash",       0);
-        def.pads[14] = drum  (50, "Clave",       0);
-        def.pads[15] = drum  (51, "Ride",        0);
+        // Synthesized 909: punchy click-attack kick (harder pitch sweep), bright cracking snare,
+        // aggressive toms, hats/ride/crash/rim voiced hotter + dirtier (filter_drive grit).
+        def.pads[0]  = drum  (36, "909 Kick",   0);
+        def.pads[1]  = tuned (37, "909 Kick",   0, 34);       // kick, lower
+        def.pads[2]  = drum  (38, "909 Snare",  0);
+        def.pads[3]  = drum  (39, "909 Rim",    0);
+        def.pads[4]  = drum  (40, "909 Clap",   0);
+        def.pads[5]  = tuned (41, "909 Snare",  0, 48);       // snare 2, tuned up
+        def.pads[6]  = drum  (42, "909 Hat Cl", 1);
+        def.pads[7]  = drum  (43, "909 Hat Op", 1);
+        def.pads[8]  = tuned (44, "909 Tom",    0, 40);       // low / mid / high tom
+        def.pads[9]  = tuned (45, "909 Tom",    0, 46);
+        def.pads[10] = tuned (46, "909 Tom",    0, 52);
+        def.pads[11] = drum  (47, "909 Ride",   0);
+        def.pads[12] = drum  (48, "909 Crash",  0);
+        def.pads[13] = drum  (49, "909 Clave",  0);
+        def.pads[14] = tuned (50, "909 Clap",   0, 44);       // clap, brighter
+        def.pads[15] = tuned (51, "909 Rim",    0, 48);       // rim, higher
+    }
+    else if (name == "606")
+    {
+        // Synthesized 606: thin, sharp, clicky-and-lovely. Few core sounds (kick/snare/hats/cymbal),
+        // filled to 16 with tuned variants -- exactly how the sparse original was used.
+        def.pads[0]  = drum  (36, "606 Kick",   0);
+        def.pads[1]  = tuned (37, "606 Kick",   0, 39);       // kick, higher
+        def.pads[2]  = drum  (38, "606 Snare",  0);
+        def.pads[3]  = tuned (39, "606 Snare",  0, 44);       // snare, higher
+        def.pads[4]  = tuned (40, "606 Snare",  0, 33);       // snare, lower
+        def.pads[5]  = tuned (41, "606 Kick",   0, 45);       // clicky mid perc
+        def.pads[6]  = drum  (42, "606 Hat Cl", 1);
+        def.pads[7]  = drum  (43, "606 Hat Op", 1);
+        def.pads[8]  = tuned (44, "606 Tom",    0, 40);       // low / mid / high tom
+        def.pads[9]  = tuned (45, "606 Tom",    0, 46);
+        def.pads[10] = tuned (46, "606 Tom",    0, 52);
+        def.pads[11] = drum  (47, "606 Cymbal", 0);
+        def.pads[12] = tuned (48, "606 Cymbal", 0, 55);       // cymbal, higher
+        def.pads[13] = tuned (49, "606 Hat Cl", 1, 48);       // extra tight hat (choke)
+        def.pads[14] = tuned (50, "606 Tom",    0, 57);       // top tom / tick
+        def.pads[15] = tuned (51, "606 Snare",  0, 50);       // snare, top
+    }
+    else if (name == "78")
+    {
+        // Synthesized 78: soft vintage preset-rhythm colours -- gentle kick, brushy snare, warm hats,
+        // metallic beat + guiro + bossa woodblocks + latin percussion. Warm and lo-fi.
+        def.pads[0]  = drum  (36, "78 Kick",    0);
+        def.pads[1]  = tuned (37, "78 Kick",    0, 33);       // kick, softer/lower
+        def.pads[2]  = drum  (38, "78 Snare",   0);
+        def.pads[3]  = tuned (39, "78 Snare",   0, 45);       // brush, higher
+        def.pads[4]  = drum  (40, "78 Beat",    0);           // metallic beat
+        def.pads[5]  = drum  (41, "78 Cowbell", 0);
+        def.pads[6]  = drum  (42, "78 Hat",     1);
+        def.pads[7]  = tuned (43, "78 Hat",     1, 55);       // open-ish hat (choke)
+        def.pads[8]  = drum  (44, "78 Guiro",   0);
+        def.pads[9]  = drum  (45, "78 Block",   0);           // bossa woodblock
+        def.pads[10] = tuned (46, "78 Block",   0, 45);       // low block
+        def.pads[11] = drum  (47, "78 Maraca",  0);
+        def.pads[12] = tuned (48, "78 Beat",    0, 55);       // high metallic tick
+        def.pads[13] = tuned (49, "78 Cowbell", 0, 55);       // high cowbell
+        def.pads[14] = tuned (50, "78 Block",   0, 57);       // high block / claves
+        def.pads[15] = tuned (51, "78 Guiro",   0, 60);       // short guiro tick
     }
     else if (name == "Industrial")
     {
@@ -1331,7 +1399,8 @@ juce::StringArray VASynthProcessor::getKitNames() const
 
 VASynthProcessor::KitDefinition VASynthProcessor::loadKit (const juce::String& name) const
 {
-    if (factoryKitNames().contains (name)) return factoryKit (name);
+    const juce::String mn = migrateKitName (name);
+    if (factoryKitNames().contains (mn)) return factoryKit (mn);
     auto file = AppInfo::kitDir().getChildFile (juce::File::createLegalFileName (name) + ".kit");
     if (auto xml = juce::XmlDocument::parse (file)) return kitFromTree (juce::ValueTree::fromXml (*xml));
     return {};

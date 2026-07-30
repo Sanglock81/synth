@@ -52,7 +52,7 @@ TEST_CASE ("808 kick is engine-clean under rapid retriggers", "[plugin][drums][c
 {
     const int block = 128;
     VASynthProcessor p; p.prepareToPlay (48000.0, block);
-    p.setPartKit (1, p.factoryKit ("808 Basics"));   // kick = pad 0 (trigger note 36)
+    p.setPartKit (1, p.factoryKit ("808"));   // kick = pad 0 (trigger note 36)
 
     juce::AudioBuffer<float> buf (2, block); juce::MidiBuffer m;
     std::vector<float> mono;

@@ -118,7 +118,7 @@ TEST_CASE ("Crash rings long, Splash is short (cymbal decay)", "[plugin][drums][
     REQUIRE (rmsRange (splash, 48000, 0.0, 0.1) > 0.02);                  // but splash is audible up front
 }
 
-// --- Inc 2b: House Basics + Industrial kits ------------------------------------------------
+// --- #134: classic-machine + original kits all fill 16 pads with real presets ------------
 TEST_CASE ("factory kits reference only real presets + fill 16 pads", "[plugin][drums][kits]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
@@ -126,7 +126,7 @@ TEST_CASE ("factory kits reference only real presets + fill 16 pads", "[plugin][
     const auto& lib = p.factoryPresetLibrary();
     auto has = [&] (const juce::String& n) { for (auto& fp : lib.all()) if (fp.name == n) return true; return false; };
 
-    for (auto* kitName : { "808 Basics", "House Basics", "Industrial" })
+    for (auto* kitName : { "808", "909", "606", "78", "Industrial", "Studio" })
     {
         auto def = p.factoryKit (kitName);
         for (int i = 0; i < 16; ++i)
@@ -142,7 +142,7 @@ TEST_CASE ("factory kits reference only real presets + fill 16 pads", "[plugin][
 
 TEST_CASE ("House + Industrial kits: a dense mash stays finite + bounded", "[plugin][drums][kits][torture]")
 {
-    for (auto* kitName : { "House Basics", "Industrial" })
+    for (auto* kitName : { "909", "Industrial" })
     {
         juce::ScopedJuceInitialiser_GUI juceInit;
         VASynthProcessor p;

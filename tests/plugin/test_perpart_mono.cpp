@@ -61,7 +61,7 @@ TEST_CASE ("per-part mono: a MONO part and a POLY part play at the same time", "
 TEST_CASE ("per-part mono: a KIT part stays POLY even when Mono is selected", "[plugin][voices][isolation][mono][kit]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
-    p.setPartKit (1, p.factoryKit ("808 Basics"));   // kit on part 1
+    p.setPartKit (1, p.factoryKit ("808"));   // kit on part 1
     setPartMode (p, 1, 1.0f);                        // ...and select Mono for it
 
     for (int n : { 36, 37, 38, 39, 40 }) p.routeNoteOn (n, 0.9f, 1);   // 5 simultaneous pads

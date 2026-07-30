@@ -94,7 +94,7 @@ TEST_CASE ("edit-focus: tapping a kit part focuses it (K2: its EQ/channel is edi
 {
     VASynthProcessor p;
     p.prepareToPlay (48000.0, 128);
-    p.setPartKit (2, p.loadKit ("808 Basics"));
+    p.setPartKit (2, p.loadKit ("808"));
     p.setEditFocus (2);
     REQUIRE (p.playFocus() == 2);      // the keyboard plays the kit (per-pad)
     REQUIRE (p.editFocus() == 2);      // K2: focus lands on the kit so its per-part EQ follows;
@@ -106,7 +106,7 @@ TEST_CASE ("edit-focus: playing a loaded kit triggers per-pad drums, not one pit
 {
     VASynthProcessor p;
     p.prepareToPlay (48000.0, 128);
-    p.setPartKit (2, p.loadKit ("808 Basics"));   // pads on trigger notes 36..41
+    p.setPartKit (2, p.loadKit ("808"));   // pads on trigger notes 36..41
     p.setEditFocus (2);                            // route the keyboard to the kit
 
     auto rms = [&] (int trigNote, int blocks)

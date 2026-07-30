@@ -106,14 +106,18 @@ The Linux ThinkPad is the primary live target (sections A–R). The Windows Surf
 
 ## J. Drum kits
 
-- [ ] **J1. 808 Basics** — all 16 pads (triggers 36–51) fire a distinct drum; the two hats **choke** each other; the cymbals (crash/splash/ride) **ring free**.
-- [ ] **J2. House Basics** — loads on a part; tighter kick, snappy snare, crisp hats + shared claps/toms/cymbals; 16 pads filled.
-- [ ] **J3. Industrial** — driven kick, noise snare, clanging Metal Hit (+ tuned metal toms); 16 pads filled.
-- [ ] **J4. Stab Board** — four drums + four tuned minor-triad chord pads play as chords from single hits.
-- [ ] **J5. Kit picker** — the per-part "Load drum kit" menu splits **Factory / User** and shows each kit's **pad count**.
-- [ ] **J6. Kit editor** — open the editor on a kit part; learn a trigger + sounding note by play; change a pad's source preset, level, choke; **Audition**; edit a pad's voice on the main panel.
-- [ ] **J7. Sample pad** — load a WAV onto a pad; it plays pitch-tracked with a clean tail (no click); clear it.
-- [ ] **J8. Dense mash** — hammer a kit with fast 16ths including the crash → stays clean, no NaN/blowup, output bounded.
+- [ ] **J1. 808** — all 16 pads (triggers 36–51) fire a distinct drum; deep boomy kick, two-tone snare, metallic square-stack hats that **choke** each other, the 540/800 cowbell, toms/congas, clave/maraca; the cymbal **rings free**. Sounds *good*, not just "correct".
+- [ ] **J2. 909** — punchy click-attack kick, bright cracking snare, hotter/dirtier hats + ride/crash; noticeably **more aggressive** than the 808 (they're instantly tellable apart).
+- [ ] **J3. 606** — thin, sharp, clicky; biting snare, sizzly hats; distinct from 808/909.
+- [ ] **J4. 78** — soft/warm/lo-fi: gentle kick, brushy snare, metallic beat, guiro, bossa blocks, latin perc.
+- [ ] **J5. Originals** — **Industrial** (driven kick, noise snare, clanging metal toms) and **Studio** (warm general-purpose) still load and sound as before.
+- [ ] **J6. Kit picker grouping** — the per-part "Load drum kit" menu splits **Classic Machines / Originals / User** and shows each kit's **pad count**.
+- [ ] **J7. Chord pad** — build a pad with 2–4 sounding notes in the Kit Editor → a single hit fires the chord (the retired *Stab Board* feature, now user-buildable).
+- [ ] **J8. Migration** — an old MULTI saved with *808 Basics* / *House Basics* / *Stab Board* opens and its kit part loads the successor (808 / 909 / 808).
+- [ ] **J9. Kit editor** — open the editor on a kit part; learn a trigger + sounding note by play; change a pad's source preset, level, choke; **Audition**; edit a pad's voice on the main panel.
+- [ ] **J10. Sample pad** — load a WAV onto a pad; it plays pitch-tracked with a clean tail (no click); clear it.
+- [ ] **J11. Dense mash** — hammer any kit with fast 16ths including the cymbal → stays clean, no NaN/blowup, output bounded.
+- [ ] **J12. Tour A/B** — play `docs/audio-refs/{808,909,606,78}.wav` back to back; the four are clearly differentiated and each is *usable*, not a clone.
 
 ## K. Rhythm — arp, sequencer, looper, scenes
 

@@ -25,7 +25,7 @@ namespace
     double kickEnergy (bool eqOn)
     {
         VASynthProcessor p; p.prepareToPlay (48000.0, 256);
-        p.setPartKit (3, VASynthProcessor::factoryKit ("808 Basics"));   // P4 = kit
+        p.setPartKit (3, VASynthProcessor::factoryKit ("808"));   // P4 = kit
         REQUIRE (p.isPartKit (3));
         p.setEditFocus (3);                                              // focus it -> panel EQ edits this part
 
@@ -66,9 +66,9 @@ TEST_CASE ("kit EQ enabled-but-flat is transparent on the kit", "[plugin][eq][ki
     // Play a warm-up kick to fire + settle that crossfade, let it decay, THEN compare a fresh
     // kick: b's chain is now steadily EQ-on (flat) so it matches a (EQ-off) sample-for-sample.
     VASynthProcessor a; a.prepareToPlay (48000.0, 256);
-    a.setPartKit (3, VASynthProcessor::factoryKit ("808 Basics")); a.setEditFocus (3);
+    a.setPartKit (3, VASynthProcessor::factoryKit ("808")); a.setEditFocus (3);
     VASynthProcessor b; b.prepareToPlay (48000.0, 256);
-    b.setPartKit (3, VASynthProcessor::factoryKit ("808 Basics")); b.setEditFocus (3);
+    b.setPartKit (3, VASynthProcessor::factoryKit ("808")); b.setEditFocus (3);
     set01 (b, ParamID::peqOn, 1.0f);                       // section on, all bands flat
 
     juce::AudioBuffer<float> ba (2, 256), bb (2, 256);
@@ -101,7 +101,7 @@ TEST_CASE ("kit EQ enabled-but-flat is transparent on the kit", "[plugin][eq][ki
 TEST_CASE ("per-part EQ persists across focus round-trips (kit <-> synth)", "[plugin][eq][kit][editfocus]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
-    p.setPartKit (3, VASynthProcessor::factoryKit ("808 Basics"));   // P4 = kit
+    p.setPartKit (3, VASynthProcessor::factoryKit ("808"));   // P4 = kit
 
     // Focus the kit, dial in a distinctive EQ.
     p.setEditFocus (3);
@@ -129,7 +129,7 @@ TEST_CASE ("focusing a kit dims the synth panels; a synth part does not", "[plug
 {
     juce::ScopedJuceInitialiser_GUI init;
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
-    p.setPartKit (3, VASynthProcessor::factoryKit ("808 Basics"));
+    p.setPartKit (3, VASynthProcessor::factoryKit ("808"));
 
     // Synth part focused -> no scrim.
     p.setEditFocus (0);

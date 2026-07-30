@@ -41,7 +41,27 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   its name, distinct from the other pads), and the two flutes **Soft/Breath Flute** (de-noised —
   breath, not hiss).
 
-### Added
+### Added / Changed
+- **Classic-machine drum kits — increment 1 of 2 (#134).** Began replacing the factory kit lineup with
+  a library of **synthesized recreations inspired by classic drum machines, voiced to sound good
+  first** (documented tunings/circuits as the starting point, then deviated wherever it sounded
+  better; every pad velocity-responsive). This increment ships the **analog-heritage four**, each a
+  full 16-pad kit (hats choke, cymbals ring free): **808** (deep sine kick + long boom, two-tone
+  snare, square-stack metallic hats, 540/800 cowbell, toms/congas), **909** (punchy click-attack kick,
+  bright cracking snare, hats/ride/crash voiced hotter + dirtier via per-voice `filter_drive` grit —
+  kit pads render dry, so grit is in the voice, not an FX block), **606** (thin/sharp/clicky, filled
+  to 16 with tuned variants), **78** (soft vintage preset-rhythm colours — brushy snare, metallic
+  beat, guiro, bossa blocks). 37 new dry drum presets back them. **Replaced:** *808 Basics* → **808**,
+  *House Basics* → **909**. **Removed:** the *Stab Board* factory kit (the chord-pad *feature* stays —
+  build one in the Kit Editor). **Kept unchanged:** *Industrial*, *Studio*. **Migration:** an old
+  MULTI/`.kit` that stored a retired kit loads its successor (*808 Basics*→808, *House Basics*→909,
+  *Stab Board*→808), tested. The kit picker regroups into **Classic Machines / Originals / User**.
+  Verification: per-kit 16-pad non-silent + level-balanced render, hat-choke, and a dense 16th-note
+  reference bar with a long ringing cymbal that stays finite/bounded/click-free (choke + steal
+  torture) — also rendered to `docs/audio-refs/<kit>.wav` (local) to A/B the library by ear. The
+  **PCM-homage six** (707/LM1/DMX/RX5/R50/MP60) land in increment 2; model shorthand is used
+  descriptively with no manufacturer affiliation (disclaimer in `docs/presets.md`). Names,
+  pad maps + characters: `docs/presets.md`.
 - **In-app section guide — a menu-driven reference (#133).** The **?** button now opens a small menu:
   **Keyboard Map** (the existing cheat-sheet) plus a **section list** (the 13 panel areas in panel
   order). Pick one and that section is **spotlighted** (the rest of the panel dims), its controls get

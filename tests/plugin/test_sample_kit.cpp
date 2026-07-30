@@ -54,7 +54,7 @@ TEST_CASE ("importing a WAV into a kit pad makes it play the sample", "[plugin][
     auto wav = makeWav (330.0, 9600);
 
     VASynthProcessor p; p.prepareToPlay (kSR, 256);
-    p.setPartKit (3, VASynthProcessor::factoryKit ("808 Basics"));
+    p.setPartKit (3, VASynthProcessor::factoryKit ("808"));
     const int trig = p.getPartKit (3).pads[0].triggerNote;   // pad 0's trigger note
     const double synth = partEnergy (p, trig, 3);            // synth pad energy
 
@@ -72,7 +72,7 @@ TEST_CASE ("the same WAV in two pads dedupes to one buffer + one on-disk copy", 
     juce::ScopedJuceInitialiser_GUI init;
     auto wav = makeWav (220.0, 4800);
     VASynthProcessor p; p.prepareToPlay (kSR, 256);
-    p.setPartKit (3, VASynthProcessor::factoryKit ("808 Basics"));
+    p.setPartKit (3, VASynthProcessor::factoryKit ("808"));
 
     REQUIRE (p.importPadSample (3, 0, wav));
     const auto key0 = p.getPartKit (3).pads[0].samplePath;
@@ -91,7 +91,7 @@ TEST_CASE ("a sample pad round-trips through a MULTI (session persistence)", "[p
     auto wav = makeWav (440.0, 4800);
 
     VASynthProcessor src; src.prepareToPlay (kSR, 256);
-    src.setPartKit (3, VASynthProcessor::factoryKit ("808 Basics"));
+    src.setPartKit (3, VASynthProcessor::factoryKit ("808"));
     REQUIRE (src.importPadSample (3, 0, wav));
     const auto key = src.getPartKit (3).pads[0].samplePath;
     auto multi = src.captureMultiState();
@@ -110,7 +110,7 @@ TEST_CASE ("a missing sample reference is silent, never a crash", "[plugin][samp
 {
     juce::ScopedJuceInitialiser_GUI init;
     VASynthProcessor p; p.prepareToPlay (kSR, 256);
-    auto def = VASynthProcessor::factoryKit ("808 Basics");
+    auto def = VASynthProcessor::factoryKit ("808");
     def.pads[0].samplePath = "deadbeefdeadbeef";              // no such managed sample
     p.setPartKit (3, def);                                    // must not crash
     const int trig = p.getPartKit (3).pads[0].triggerNote;
@@ -123,7 +123,7 @@ TEST_CASE ("Kit Editor: a loaded sample flips the pad to SMPL (UI + screenshot)"
     auto wav = makeWav (300.0, 6000);
 
     VASynthProcessor p; p.prepareToPlay (kSR, 256);
-    p.setPartKit (3, VASynthProcessor::factoryKit ("808 Basics"));
+    p.setPartKit (3, VASynthProcessor::factoryKit ("808"));
     REQUIRE (p.importPadSample (3, 0, wav));                  // pad 1 becomes a sample
     REQUIRE (p.getPartKit (3).pads[0].samplePath.isNotEmpty());
 
