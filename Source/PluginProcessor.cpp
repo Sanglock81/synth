@@ -1211,7 +1211,7 @@ VASynthProcessor::KitDefinition VASynthProcessor::kitFromTree (const juce::Value
 // The "Classic Machines" group: synthesized kits inspired by classic drum machines, voiced to sound
 // good first (model shorthand used descriptively; no manufacturer affiliation). Increment 1 = the
 // analog-heritage four; the PCM-homage six land in increment 2.
-juce::StringArray VASynthProcessor::classicKitNames() { return { "808", "909", "606", "78" }; }
+juce::StringArray VASynthProcessor::classicKitNames() { return { "808", "909", "606", "78", "707", "LM1", "DMX", "RX5", "R50", "MP60" }; }
 // "Originals": the house-designed kits (kept unchanged).
 juce::StringArray VASynthProcessor::originalKitNames() { return { "Industrial", "Studio" }; }
 juce::StringArray VASynthProcessor::factoryKitNames()
@@ -1325,6 +1325,128 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[13] = tuned (49, "78 Cowbell", 0, 55);       // high cowbell
         def.pads[14] = tuned (50, "78 Block",   0, 57);       // high block / claves
         def.pads[15] = tuned (51, "78 Guiro",   0, 60);       // short guiro tick
+    }
+    else if (name == "707")
+    {
+        // Bright, plasticky, precise: tight kick, papery snare, crisp hats. Hats choke; cymbals free.
+        def.pads[0]  = drum  (36, "707 Kick",   0);
+        def.pads[1]  = tuned (37, "707 Kick",   0, 34);
+        def.pads[2]  = drum  (38, "707 Snare",  0);
+        def.pads[3]  = drum  (39, "707 Rim",    0);
+        def.pads[4]  = drum  (40, "707 Clap",   0);
+        def.pads[5]  = tuned (41, "707 Snare",  0, 48);
+        def.pads[6]  = drum  (42, "707 Hat Cl", 1);
+        def.pads[7]  = drum  (43, "707 Hat Op", 1);
+        def.pads[8]  = tuned (44, "707 Tom",    0, 40);
+        def.pads[9]  = tuned (45, "707 Tom",    0, 46);
+        def.pads[10] = tuned (46, "707 Tom",    0, 52);
+        def.pads[11] = drum  (47, "707 Ride",   0);
+        def.pads[12] = drum  (48, "707 Crash",  0);
+        def.pads[13] = drum  (49, "707 Cowbell",0);
+        def.pads[14] = tuned (50, "707 Clap",   0, 44);
+        def.pads[15] = tuned (51, "707 Rim",    0, 48);
+    }
+    else if (name == "LM1")
+    {
+        // Gated-real-drums feel: thuddy kick, fat cracking snare, prominent toms; warm-dark top.
+        // NO cymbals (honoured) -- filled with congas / claps / tambourine colours.
+        def.pads[0]  = drum  (36, "LM1 Kick",   0);
+        def.pads[1]  = tuned (37, "LM1 Kick",   0, 33);
+        def.pads[2]  = drum  (38, "LM1 Snare",  0);
+        def.pads[3]  = drum  (39, "LM1 Rim",    0);
+        def.pads[4]  = drum  (40, "LM1 Clap",   0);
+        def.pads[5]  = tuned (41, "LM1 Snare",  0, 48);
+        def.pads[6]  = drum  (42, "LM1 Hat Cl", 1);
+        def.pads[7]  = drum  (43, "LM1 Hat Op", 1);
+        def.pads[8]  = tuned (44, "LM1 Tom",    0, 40);
+        def.pads[9]  = tuned (45, "LM1 Tom",    0, 46);
+        def.pads[10] = tuned (46, "LM1 Tom",    0, 52);
+        def.pads[11] = tuned (47, "LM1 Conga",  0, 43);
+        def.pads[12] = tuned (48, "LM1 Conga",  0, 50);
+        def.pads[13] = drum  (49, "LM1 Tamb",   0);
+        def.pads[14] = tuned (50, "LM1 Clap",   0, 44);
+        def.pads[15] = tuned (51, "LM1 Tamb",   0, 55);
+    }
+    else if (name == "DMX")
+    {
+        // Harder, crunchier electro backbone: big gated snare, solid kick, bright claps (SAT-forward).
+        def.pads[0]  = drum  (36, "DMX Kick",   0);
+        def.pads[1]  = tuned (37, "DMX Kick",   0, 34);
+        def.pads[2]  = drum  (38, "DMX Snare",  0);
+        def.pads[3]  = drum  (39, "DMX Rim",    0);
+        def.pads[4]  = drum  (40, "DMX Clap",   0);
+        def.pads[5]  = tuned (41, "DMX Snare",  0, 48);
+        def.pads[6]  = drum  (42, "DMX Hat Cl", 1);
+        def.pads[7]  = drum  (43, "DMX Hat Op", 1);
+        def.pads[8]  = tuned (44, "DMX Tom",    0, 40);
+        def.pads[9]  = tuned (45, "DMX Tom",    0, 46);
+        def.pads[10] = tuned (46, "DMX Tom",    0, 52);
+        def.pads[11] = drum  (47, "DMX Crash",  0);
+        def.pads[12] = drum  (48, "DMX Cowbell",0);
+        def.pads[13] = tuned (49, "DMX Clap",   0, 44);
+        def.pads[14] = tuned (50, "DMX Rim",    0, 48);
+        def.pads[15] = tuned (51, "DMX Tom",    0, 57);
+    }
+    else if (name == "RX5")
+    {
+        // Mid-80s digital sheen: sharp attacks, bright metallics, aggressive toms + rimshot.
+        def.pads[0]  = drum  (36, "RX5 Kick",   0);
+        def.pads[1]  = tuned (37, "RX5 Kick",   0, 34);
+        def.pads[2]  = drum  (38, "RX5 Snare",  0);
+        def.pads[3]  = drum  (39, "RX5 Rim",    0);
+        def.pads[4]  = drum  (40, "RX5 Clap",   0);
+        def.pads[5]  = tuned (41, "RX5 Snare",  0, 48);
+        def.pads[6]  = drum  (42, "RX5 Hat Cl", 1);
+        def.pads[7]  = drum  (43, "RX5 Hat Op", 1);
+        def.pads[8]  = tuned (44, "RX5 Tom",    0, 40);
+        def.pads[9]  = tuned (45, "RX5 Tom",    0, 46);
+        def.pads[10] = tuned (46, "RX5 Tom",    0, 52);
+        def.pads[11] = drum  (47, "RX5 Ride",   0);
+        def.pads[12] = drum  (48, "RX5 Crash",  0);
+        def.pads[13] = tuned (49, "RX5 Rim",    0, 48);
+        def.pads[14] = tuned (50, "RX5 Clap",   0, 44);
+        def.pads[15] = tuned (51, "RX5 Tom",    0, 57);
+    }
+    else if (name == "R50")
+    {
+        // Crisp late-80s PCM: clean, punchy, slightly clinical top.
+        def.pads[0]  = drum  (36, "R50 Kick",   0);
+        def.pads[1]  = tuned (37, "R50 Kick",   0, 34);
+        def.pads[2]  = drum  (38, "R50 Snare",  0);
+        def.pads[3]  = drum  (39, "R50 Rim",    0);
+        def.pads[4]  = drum  (40, "R50 Clap",   0);
+        def.pads[5]  = tuned (41, "R50 Snare",  0, 48);
+        def.pads[6]  = drum  (42, "R50 Hat Cl", 1);
+        def.pads[7]  = drum  (43, "R50 Hat Op", 1);
+        def.pads[8]  = tuned (44, "R50 Tom",    0, 40);
+        def.pads[9]  = tuned (45, "R50 Tom",    0, 46);
+        def.pads[10] = tuned (46, "R50 Tom",    0, 52);
+        def.pads[11] = drum  (47, "R50 Ride",   0);
+        def.pads[12] = drum  (48, "R50 Crash",  0);
+        def.pads[13] = tuned (49, "R50 Rim",    0, 50);
+        def.pads[14] = tuned (50, "R50 Clap",   0, 44);
+        def.pads[15] = tuned (51, "R50 Tom",    0, 57);
+    }
+    else if (name == "MP60")
+    {
+        // Boom-bap: deep rounded kick, dusty snare, dark hats; SAT-forward warmth (filter_drive) is
+        // the point. Dark ride, no crash. Congas fill.
+        def.pads[0]  = drum  (36, "MP60 Kick",  0);
+        def.pads[1]  = tuned (37, "MP60 Kick",  0, 33);
+        def.pads[2]  = drum  (38, "MP60 Snare", 0);
+        def.pads[3]  = drum  (39, "MP60 Rim",   0);
+        def.pads[4]  = drum  (40, "MP60 Clap",  0);
+        def.pads[5]  = tuned (41, "MP60 Snare", 0, 48);
+        def.pads[6]  = drum  (42, "MP60 Hat Cl",1);
+        def.pads[7]  = drum  (43, "MP60 Hat Op",1);
+        def.pads[8]  = tuned (44, "MP60 Tom",   0, 40);
+        def.pads[9]  = tuned (45, "MP60 Tom",   0, 46);
+        def.pads[10] = tuned (46, "MP60 Tom",   0, 52);
+        def.pads[11] = tuned (47, "MP60 Conga", 0, 43);
+        def.pads[12] = tuned (48, "MP60 Conga", 0, 50);
+        def.pads[13] = drum  (49, "MP60 Ride",  0);
+        def.pads[14] = tuned (50, "MP60 Clap",  0, 44);
+        def.pads[15] = tuned (51, "MP60 Rim",   0, 48);
     }
     else if (name == "Industrial")
     {

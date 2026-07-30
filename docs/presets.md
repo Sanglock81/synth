@@ -138,7 +138,7 @@ free (group 0). Grouped in the picker as **Classic Machines** / **Originals** / 
 > **Disclaimer.** Synthesized recreations inspired by classic drum machines; model shorthand is used
 > descriptively; no affiliation with or endorsement by any manufacturer.
 
-*Classic Machines* (increment 1 — the analog-heritage four; the PCM-homage six land next):
+*Classic Machines* (ten kits — the analog-heritage four + the PCM-homage six):
 
 - **808** — deep sine kick with a long boom, two-tone snare, square-stack metallic hats, the
   540/800-flavour cowbell, toms + congas, clave/maraca, a long cymbal. The warm, round benchmark.
@@ -148,6 +148,17 @@ free (group 0). Grouped in the picker as **Classic Machines** / **Originals** / 
   original filled to 16 with tuned variants.
 - **78** — soft vintage preset-rhythm colours: gentle kick, brushy snare, warm hats, a metallic beat,
   guiro, bossa woodblocks, maraca, cowbell. Warm and lo-fi.
+- **707** — bright, plasticky, precise: tight kick, papery snare, crisp hats, ride + crash.
+- **LM1** — gated-real-drums feel: thuddy kick, fat cracking snare, prominent toms, warm-dark top;
+  **no cymbals** (honoured) — filled with congas / claps / tambourine.
+- **DMX** — harder, crunchier electro backbone: solid kick, big gated snare, bright claps
+  (SAT-forward `filter_drive`).
+- **RX5** — mid-80s digital sheen: sharp attacks, bright metallic hats, aggressive toms + rimshot.
+- **R50** — crisp late-80s PCM: clean, punchy, slightly clinical top.
+- **MP60** — boom-bap: deep rounded kick, dusty snare, dark hats, dark ride; **SAT-forward** warmth
+  (`filter_drive`) is the point.
+
+Neighbouring kits are intentionally tellable apart (808/DMX/MP60 kicks; the hats across 606/909/RX5).
 
 *Originals* (house-designed, unchanged): **Industrial** (driven, metallic — distorted kick, harsh
 noise snare, clanging metal-hit toms) and **Studio** (synthesized general-purpose, warm/round for

@@ -1,0 +1,29 @@
+{
+  "name": "RX5 Rim",
+  "category": "Drums",
+  "params": {
+    "osc1_wave": 2,
+    "osc2_on": 0,
+    "osc2_level": 0,
+    "osc3_on": 0,
+    "osc3_level": 0,
+    "noise_level": 0.35,
+    "filter_type": 2,
+    "filter_cutoff": 3200,
+    "filter_reso": 0.3,
+    "filter_drive": 0.2,
+    "filter_env_amt": 0.0,
+    "fltenv_to_pitch": 8,
+    "flt_attack": 0.001,
+    "flt_decay": 0.02,
+    "flt_sustain": 0.0,
+    "flt_release": 0.04,
+    "amp_attack": 0.001,
+    "amp_decay": 0.04,
+    "amp_sustain": 0.0,
+    "amp_release": 0.05,
+    "vel_to_amp": 0.5,
+    "osc1_octave": 1,
+    "osc1_level": 0.6
+  }
+}

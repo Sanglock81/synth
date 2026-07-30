@@ -110,6 +110,7 @@ The Linux ThinkPad is the primary live target (sections A–R). The Windows Surf
 - [ ] **J2. 909** — punchy click-attack kick, bright cracking snare, hotter/dirtier hats + ride/crash; noticeably **more aggressive** than the 808 (they're instantly tellable apart).
 - [ ] **J3. 606** — thin, sharp, clicky; biting snare, sizzly hats; distinct from 808/909.
 - [ ] **J4. 78** — soft/warm/lo-fi: gentle kick, brushy snare, metallic beat, guiro, bossa blocks, latin perc.
+- [ ] **J4b. PCM six** — **707** (bright/plasticky), **LM1** (thuddy kick + fat snare + prominent toms, **no cymbals**), **DMX** (crunchy, big gated snare, SAT-forward), **RX5** (digital sheen, aggressive toms), **R50** (clean/clinical), **MP60** (boom-bap, dark, SAT-forward). Each loads, sounds *good*, and is tellable apart from its neighbours.
 - [ ] **J5. Originals** — **Industrial** (driven kick, noise snare, clanging metal toms) and **Studio** (warm general-purpose) still load and sound as before.
 - [ ] **J6. Kit picker grouping** — the per-part "Load drum kit" menu splits **Classic Machines / Originals / User** and shows each kit's **pad count**.
 - [ ] **J7. Chord pad** — build a pad with 2–4 sounding notes in the Kit Editor → a single hit fires the chord (the retired *Stab Board* feature, now user-buildable).

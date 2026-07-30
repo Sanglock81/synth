@@ -58,10 +58,18 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   *Stab Board*→808), tested. The kit picker regroups into **Classic Machines / Originals / User**.
   Verification: per-kit 16-pad non-silent + level-balanced render, hat-choke, and a dense 16th-note
   reference bar with a long ringing cymbal that stays finite/bounded/click-free (choke + steal
-  torture) — also rendered to `docs/audio-refs/<kit>.wav` (local) to A/B the library by ear. The
-  **PCM-homage six** (707/LM1/DMX/RX5/R50/MP60) land in increment 2; model shorthand is used
-  descriptively with no manufacturer affiliation (disclaimer in `docs/presets.md`). Names,
-  pad maps + characters: `docs/presets.md`.
+  torture) — also rendered to `docs/audio-refs/<kit>.wav` (local) to A/B the library by ear.
+  Model shorthand is used descriptively with no manufacturer affiliation (disclaimer in
+  `docs/presets.md`). Names, pad maps + characters: `docs/presets.md`.
+- **Classic-machine drum kits — increment 2: the PCM-homage six (#134).** Completed the library with
+  **707** (bright, plasticky, precise), **LM1** (gated-real-drums thud + fat snare + prominent toms,
+  warm-dark, **no cymbals** — honoured, filled with congas/claps/tambourine), **DMX** (crunchy electro
+  — big gated snare, bright claps, SAT-forward), **RX5** (mid-80s digital sheen — sharp attacks,
+  bright metallics, aggressive toms), **R50** (crisp, clean, slightly clinical late-80s PCM), and
+  **MP60** (boom-bap — deep rounded kick, dusty snare, dark hats, SAT-forward warmth). Shared PCM
+  language (punchier envelopes, brightness shaping, gated-feeling decays), then voiced to sound good;
+  55 new dry presets. The **ten** Classic Machines are now differentiated pair-by-pair (808/DMX/MP60
+  kicks; 606/909/RX5 hats). Same verification + tour renders as increment 1, extended to all ten.
 - **In-app section guide — a menu-driven reference (#133).** The **?** button now opens a small menu:
   **Keyboard Map** (the existing cheat-sheet) plus a **section list** (the 13 panel areas in panel
   order). Pick one and that section is **spotlighted** (the rest of the panel dims), its controls get

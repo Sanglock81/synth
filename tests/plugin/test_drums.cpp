@@ -126,7 +126,7 @@ TEST_CASE ("factory kits reference only real presets + fill 16 pads", "[plugin][
     const auto& lib = p.factoryPresetLibrary();
     auto has = [&] (const juce::String& n) { for (auto& fp : lib.all()) if (fp.name == n) return true; return false; };
 
-    for (auto* kitName : { "808", "909", "606", "78", "Industrial", "Studio" })
+    for (auto& kitName : p.factoryKitNames())
     {
         auto def = p.factoryKit (kitName);
         for (int i = 0; i < 16; ++i)
