@@ -147,6 +147,7 @@ add_executable(plugin_tests
     plugin/test_fm_plugin.cpp
     plugin/test_guide.cpp
     plugin/test_drumkits.cpp
+    plugin/test_kit_picker_mockup.cpp
     plugin/test_editfocus.cpp
     dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests
 
