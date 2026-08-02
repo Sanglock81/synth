@@ -3042,20 +3042,27 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
             // ONE-SHOT fixed length (#47 correction): record exactly one loop (this lane's bars),
             // then auto-stop at the next downbeat and switch this lane to PLAY. The engage block's
             // own wrap is skipped via loopRecJustEngaged so we get one FULL pass.
+            loopJustCompleted[L] = false;
             if (loopRecording[L] && loopLaneWrapped[L] && ! loopRecJustEngaged[L])
             {
                 loopRecording[L] = false;
+                loopJustCompleted[L] = true;                        // play back THIS block from the downbeat
                 if (auto* pr = apvts.getParameter (recIds[L]))  pr->setValueNotifyingHost (0.0f);   // REC off (one-shot)
                 if (auto* pp = apvts.getParameter (playIds[L])) pp->setValueNotifyingHost (1.0f);   // auto-play the loop
                 loopRecPrev[L] = false;
+                looper.requestDownbeatCatchUp (lane);              // MIDI: catch the just-captured downbeat (events)
+                // AUDIO needs no catch-up: its ring is read continuously from pos (~0 at the wrap).
             }
             loopRecJustEngaged[L] = false;
 
+            // Play state THIS block: the PLAY param round-trips one block, so a fresh record->play
+            // handoff must engage playback immediately (loopJustCompleted) or the new downbeat is lost.
+            const bool playNow = playReq || loopJustCompleted[L];
             looper.setQuantize  (lane, rp (apvts, quantIds[L]) > 0.5f);   // per-lane 1/32 quantize
             looper.setRecording (lane, loopRecording[L]);           // this lane records its own part
             al.setRecording     (loopRecording[L]);
-            looper.setPlaying   (lane, playReq && ! audioMode);     // MIDI lane audible for this part
-            al.setPlaying       (playReq &&   audioMode);           // AUDIO lane audible
+            looper.setPlaying   (lane, playNow && ! audioMode);     // MIDI lane audible for this part
+            al.setPlaying       (playNow &&   audioMode);           // AUDIO lane audible
             loopRecStateDisp[L].store (loopRecording[L] ? 2 : (loopArmPending[L] ? 1 : 0), std::memory_order_relaxed);
 
             // MIDI-lane playback stopped for this lane: release any note it left sounding.

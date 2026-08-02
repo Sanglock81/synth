@@ -9,6 +9,7 @@
 #include "Looper.h"
 #include <vector>
 #include <utility>
+#include <algorithm>
 
 namespace
 {
@@ -139,4 +140,50 @@ TEST_CASE ("looper J2: lane phase = masterPos % laneLen, continuous across the m
     lp.advance (850);
     REQUIRE (lp.position () == 0);                          // master wrapped
     REQUIRE (lp.position (0) == 0);                         // lane phase stays aligned (1200 % 300 == 0)
+}
+
+// #135: the record->play handoff must catch the just-captured downbeat on the SAME cycle (no dead
+// cycle). After a lane wraps into playback, its position is a few samples past 0, so the normal
+// [pos, pos+n) window would MISS a t=0 downbeat event and only play it a full loop later.
+// requestDownbeatCatchUp() widens the next window to start at 0, once, so the downbeat sounds.
+TEST_CASE ("looper: record->play handoff catches the downbeat (no dead cycle) (#135)", "[dsp][looper][timing]")
+{
+    Looper lp;
+    const int len = 4800;
+    lp.setMasterLength (len);
+    lp.setLoopLength (0, len);
+    lp.setQuantize (0, false);
+    lp.setPlaying (0, true);
+
+    // Record a downbeat event at t=0 and one mid-loop, then cross the wrap so they arm and pos > 0.
+    lp.setRecording (0, true);
+    lp.recordNote (0, 0, 60, 1.0f, true);          // downbeat (t == 0)
+    lp.advance (2400);
+    lp.recordNote (0, 0, 64, 1.0f, true);          // mid-loop (t == 2400)
+    lp.advance (2390);                             // pos -> 4790
+    lp.setRecording (0, false);
+    lp.advance (20);                               // crosses the wrap: events arm, pos -> 10
+
+    auto play = [&] {
+        std::vector<int> fired;
+        lp.playBlock (128, [&] (int, int note, float, bool on) { if (on) fired.push_back (note); });
+        return fired;
+    };
+
+    // WITHOUT catch-up: window is [10, 138) -> the t=0 downbeat (60) is missed.
+    {
+        auto f = play();
+        REQUIRE (std::find (f.begin(), f.end(), 60) == f.end());
+    }
+    // WITH catch-up: the same downbeat is emitted immediately (window widened to start at 0).
+    lp.requestDownbeatCatchUp (0);
+    {
+        auto f = play();
+        REQUIRE (std::find (f.begin(), f.end(), 60) != f.end());   // downbeat caught, no dead cycle
+    }
+    // Catch-up is one-shot: it does not re-fire the downbeat on the following block.
+    {
+        auto f = play();
+        REQUIRE (std::find (f.begin(), f.end(), 60) == f.end());
+    }
 }

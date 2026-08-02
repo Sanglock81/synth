@@ -41,6 +41,19 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   its name, distinct from the other pads), and the two flutes **Soft/Breath Flute** (de-noised —
   breath, not hiss).
 
+### Fixed
+- **Looper record → playback timing (#135, P0).** A freshly recorded loop no longer waits a full dead
+  cycle before it sounds. Two root causes, both fixed: (1) the auto-play at record completion set the
+  PLAY *parameter*, which only takes effect the following block, so the completion block — the new
+  downbeat — was skipped (now playback engages **this** block via `loopJustCompleted`); (2) the
+  arm-on-wrap rule + block-phase offset meant a t=0 downbeat event fell just before the first play
+  window and was heard a cycle later (now `Looper::requestDownbeatCatchUp` widens the handoff block's
+  window to start at 0, once, so the just-captured downbeat sounds on the **same** boundary while
+  record disarms). So: arm → record begins at the next downbeat → at loop end, playback starts
+  immediately from that boundary. The captured content was already downbeat-aligned (host-MIDI records
+  sample-accurately; the routed path is snapped by the default 1/32 quantize) — it was the *playback*
+  that dropped the downbeat. DSP regression test proves the downbeat is caught (and not re-fired).
+
 ### Added / Changed
 - **Classic-machine drum kits — increment 1 of 2 (#134).** Began replacing the factory kit lineup with
   a library of **synthesized recreations inspired by classic drum machines, voiced to sound good

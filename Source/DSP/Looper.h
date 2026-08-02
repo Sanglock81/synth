@@ -102,16 +102,25 @@ public:
         p.ev[(std::size_t) p.count++] = { t, note, vel, on, false };
     }
 
+    // A lane whose record just completed plays back from THE SAME downbeat this block (no dead cycle):
+    // its next playBlock widens the window to start at t=0 so the just-captured downbeat is emitted,
+    // not dropped and heard a full cycle later. One-shot; cleared once consumed.
+    void requestDownbeatCatchUp (int part) { if (part >= 0 && part < kParts) catchUp_[(std::size_t) part] = true; }
+
     // Emit this block's armed playback events for every PLAYING lane, each against its OWN length.
     // emit(part, note, vel, on).
     template <typename Emit>
-    void playBlock (int numSamples, Emit&& emit) const
+    void playBlock (int numSamples, Emit&& emit)
     {
         for (int part = 0; part < kParts; ++part)
         {
             if (! playing_[(std::size_t) part]) continue;   // this lane is stopped
             const int len   = loopLen[(std::size_t) part];
-            const int start = loopPos % len, end = start + numSamples;
+            // Normally the window is [pos, pos+n). On the record->play handoff, catch the downbeat by
+            // starting the window at 0 (emit everything from the loop top up to the window end, once).
+            const bool catchUp = catchUp_[(std::size_t) part];
+            catchUp_[(std::size_t) part] = false;
+            const int start = catchUp ? 0 : (loopPos % len), end = (loopPos % len) + numSamples;
             const auto& p = parts[(std::size_t) part];
             for (int i = 0; i < p.count; ++i)
             {
@@ -149,6 +158,7 @@ private:
     int  loopPos = 0;                                                    // master position [0, masterLen)
     std::array<bool, kParts> recording_ { };
     std::array<bool, kParts> playing_ { };
+    std::array<bool, kParts> catchUp_ { };            // one-shot: play from the downbeat on record->play handoff
     std::array<bool, kParts> quantize_ { { true, true, true, true } };   // per-lane 1/32 quantize (default on)
     int quantGrid = 0;                                                   // grid in samples (0 = off; set from tempo)
     std::array<std::array<int, 128>, kParts> lastOnT {};                 // snapped pos of last note-on (pairing guard)
