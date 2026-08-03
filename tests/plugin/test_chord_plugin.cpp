@@ -17,6 +17,15 @@ namespace
         p.apvts.getParameter (id)->setValueNotifyingHost (v);
     }
 
+    // The startup patch (Bright Lead) ships its FX ON (width/sat/delay/reverb). Tests that measure
+    // channel-0 RMS to compare voice counts must NOT run through the FX — the widener/reverb/delay
+    // colour the level and make the ratio depend on FX-algorithm details rather than the note count.
+    void disableFx (VASynthProcessor& p)
+    {
+        for (const char* fx : { "fx_width_on", "fx_sat", "fx_delay_on", "fx_reverb_on", "fx_chorus_on" })
+            p.apvts.getParameter (fx)->setValueNotifyingHost (0.0f);
+    }
+
     void pump (VASynthProcessor& p, juce::MidiBuffer midi, int blocks = 1)
     {
         juce::AudioBuffer<float> buf (2, 256);
@@ -45,6 +54,7 @@ TEST_CASE ("chord ON expands one played note into more voices", "[plugin][7b][ch
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    disableFx (p);                                          // measure note count on a clean (dry) channel
     setP (p, ParamID::chordRoot, 0.0f); setP (p, ParamID::chordScale, 0.0f);   // C major
 
     setP (p, ParamID::chordEnabled, 0.0f);
@@ -59,6 +69,7 @@ TEST_CASE ("chord mode forces poly (a chord sounds even in Mono)", "[plugin][7b]
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    disableFx (p);                                          // measure note count on a clean (dry) channel
     setP (p, ParamID::chordRoot, 0.0f); setP (p, ParamID::chordScale, 0.0f);
     setP (p, ParamID::polyMode, 1.0f);                     // Mono (normalized 1.0 -> index... choice)
 
@@ -149,6 +160,7 @@ TEST_CASE ("sustain pedal holds chord tones until release", "[plugin][7b][chord]
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p; p.prepareToPlay (48000.0, 256);
+    disableFx (p);                                          // measure chord level on a clean (dry) channel
     setP (p, ParamID::chordEnabled, 1.0f);
     setP (p, ParamID::ampSustain, 1.0f);
 

@@ -93,6 +93,19 @@ any nonzero mean / DC or an asymmetric transient, `+outSide`/`−outSide` biases
 on a mono input at max width (should be equal); if unequal, DC-block / zero-mean the synthesized side,
 or balance the pan law. Add an L/R-balance test.
 
+**RESOLVED (commit pending).** Root cause was subtler than "not zero-mean": an allpass cannot
+decorrelate DC, and this cascade left the whole **low-mid** band nearly in-phase with the mid too —
+the mid↔side correlation only crossed zero ~1.8 kHz — so `E[mid·side] > 0` made L hotter (measured up
+to **~18 dB** of per-frequency imbalance at max width; +5.4 dB broadband on a 60/250/1200 Hz mono
+mix). A simple high-pass on the side was insufficient (the correlated band *is* the midrange). Fix:
+**orthogonalise the synthesized side against the mid** (Gram-Schmidt — subtract the leaky running
+`⟨mid·decorr⟩/⟨mid·mid⟩` projection). Balance is now **~0.06 dB at every frequency** and the mono
+fold-down stays bit-exact. The estimator is seeded at β = 1 so a note onset opens *narrow → wide*
+(never over-wide), and the FX-skip→retrigger click test was tightened to the correct invariant
+(boundary jump ≤ steady-state jump, not an absolute slope bound that mis-flags a bright widened saw).
+Regression tests: L/R energy-balance + clean mono fold on a bass-heavy mono source at max width
+(`tests/dsp/test_fx.cpp` `[width][balance]`); `fx_nondefault` golden regenerated (width = 1.7).
+
 ## P1 — Mod animation only shows on some knobs (#12)  **DEFECT (coverage)**
 
 **Observed:** the "something is moving this" animation appears only in a few places (e.g. cutoff), not

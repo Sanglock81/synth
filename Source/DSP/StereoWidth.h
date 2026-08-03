@@ -31,7 +31,11 @@
 class StereoWidth
 {
 public:
-    void prepare (double sampleRate) { sr = (sampleRate > 0.0) ? (float) sampleRate : 48000.0f; designHalfband(); reset(); }
+    void prepare (double sampleRate)
+    {
+        sr = (sampleRate > 0.0) ? (float) sampleRate : 48000.0f;
+        designHalfband(); reset();
+    }
 
     void reset()
     {
@@ -39,6 +43,13 @@ public:
         smSat = sat;
         for (auto& s : ap)    { s.x1 = 0.0f; s.y1 = 0.0f; }
         for (auto& s : satCh) s = SatChannel {};
+        // Seed the Gram-Schmidt estimator at beta = 1 (equal, tiny num/den). Cold (beta = 0) the
+        // side would be the FULL, un-orthogonalised `decorr` (~1.8x the steady-state RMS) for the
+        // ~20 ms it takes to converge -> an audible over-wide swell at every note onset after
+        // silence. beta = 1 means the side starts as (decorr - mid): inherently DC-nulled and
+        // NARROWER than steady state, so it opens UP as the estimator converges (a safe, click-free
+        // direction) instead of blowing wide first.
+        gsNum = 1.0e-6f; gsDen = 1.0e-6f;
     }
 
     // 0 = mono, 1 = unchanged, 2 = maximally wide (synthesized side at full gain).
@@ -102,11 +113,27 @@ public:
             float decorr = mid;
             for (auto& s : ap) decorr = s.process (decorr);
 
+            // Orthogonalise the synthesized side against the mid (Gram-Schmidt). An allpass cannot
+            // decorrelate DC (its phase -> 0 there) and, with this cascade, `decorr` stays IN-PHASE
+            // with `mid` right through the low-mids (correlation only crosses zero ~1.8 kHz). Added
+            // antisymmetrically (L += d, R -= d) that leftover correlation makes E[mid*d] > 0, i.e.
+            // left louder than right — the "width leans left at max" defect. So subtract the mid-
+            // projection: beta = <mid*decorr> / <mid*mid> (leaky running estimate, ~20 ms), and use
+            // d = decorr - beta*mid. That drives E[mid*d] -> 0 at EVERY frequency (balanced L/R),
+            // and because beta -> 1 exactly where decorr ~ mid (the bass), it also nulls the sub-bass
+            // in the side (keeps low end mono) for free. The estimator runs every sample so beta is
+            // already converged when width crosses 1; beta*mid is continuous so it never clicks.
+            // Mono-safety is untouched: d is still added purely to the side (L+R = 2*mid).
+            gsNum += kGsCoef * (mid * decorr - gsNum);
+            gsDen += kGsCoef * (mid * mid    - gsDen);
+            const float beta  = (gsDen > 1.0e-9f) ? gsNum / gsDen : 0.0f;
+            const float dOrth = decorr - beta * mid;
+
             float outSide;
             if (smWidth <= 1.0f)
                 outSide = side * smWidth;                                  // narrow / unity
             else
-                outSide = side + (smWidth - 1.0f) * kDecorrGain * decorr;  // add synthesized side
+                outSide = side + (smWidth - 1.0f) * kDecorrGain * dOrth;   // add synthesized (decorrelated) side
 
             left[i]  = mid + outSide;
             right[i] = mid - outSide;
@@ -115,11 +142,14 @@ public:
 
     // For the reorder crossfade: adopt another instance's smoothing + filter state
     // so the freshly-activated chain copy continues seamlessly.
-    void copyStateFrom (const StereoWidth& other) { smWidth = other.smWidth; ap = other.ap; smSat = other.smSat; satCh = other.satCh; }
+    void copyStateFrom (const StereoWidth& other)
+    { smWidth = other.smWidth; ap = other.ap; smSat = other.smSat; satCh = other.satCh;
+      gsNum = other.gsNum; gsDen = other.gsDen; }
 
 private:
     static constexpr float kSmoothCoef = 0.002f;   // ~one-pole knob smoothing
     static constexpr float kDecorrGain = 0.9f;     // synthesized-side level at width = 2
+    static constexpr float kGsCoef     = 0.001f;   // Gram-Schmidt estimator leak (~20 ms @ 48k): balances L/R
 
     static constexpr int   kHbLen       = 11;      // FIR half-band length (matches the filter)
     static constexpr int   kHbCenterIdx = 5;
@@ -270,4 +300,6 @@ private:
     float smWidth = 1.0f;
     float sat     = 0.0f;
     float smSat   = 0.0f;
+    float gsNum   = 1.0e-6f;    // Gram-Schmidt running <mid*decorr> (seeded so beta starts at 1)
+    float gsDen   = 1.0e-6f;    // Gram-Schmidt running <mid*mid>
 };

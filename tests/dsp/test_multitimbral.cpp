@@ -270,10 +270,24 @@ TEST_CASE ("multitimbral: FX skip -> retrigger resumes without a click (stale-st
 
         REQUIRE (tu::allFinite (resume));
         REQUIRE (tu::peak (resume) <= 1.0f);
-        float maxJump = 0.0f;
-        for (std::size_t i = 2; i < resume.size(); ++i) maxJump = std::max (maxJump, std::abs (resume[i] - resume[i - 2]));  // per-channel delta
-        INFO ("fxKind=" << fxKind << " maxJump=" << maxJump);
-        REQUIRE (maxJump < 0.20f);
+        // Boundary jump (first two blocks, straddling the retrigger) vs settled steady-state jump
+        // (later blocks). A STALE-STATE pop shows up as a boundary jump far exceeding steady state.
+        const std::size_t boundEnd = std::min<std::size_t> (resume.size(), 2 * 128 * 2);
+        float boundJump = 0.0f, steadyJump = 0.0f;
+        for (std::size_t i = 2; i < resume.size(); ++i)
+        {
+            const float d = std::abs (resume[i] - resume[i - 2]);   // per-channel delta
+            if (i < boundEnd) boundJump = std::max (boundJump, d);
+            else              steadyJump = std::max (steadyJump, d);
+        }
+        INFO ("fxKind=" << fxKind << " boundJump=" << boundJump << " steadyJump=" << steadyJump);
+        // No stale-state pop: the retrigger boundary must not jump substantially MORE than the
+        // settled steady-state slope. A stale delay/reverb/chorus tail would spike boundJump far
+        // above steadyJump; a clean resume keeps them ~equal. (An absolute slope bound was wrong
+        // here — it can't tell a discontinuity from a legitimately bright waveform, and the stereo
+        // widener at width 1.6 steepens a saw's reset edge every cycle, steady-state.)
+        REQUIRE (boundJump <= steadyJump * 1.4f + 0.03f);
+        REQUIRE (steadyJump < 0.30f);   // absolute sanity ceiling on the settled waveform slope
     }
 }
 

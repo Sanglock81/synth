@@ -42,6 +42,17 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Fixed
+- **Stereo WIDTH no longer leans left at the top of its range (#14).** At width > 1 the synthesized
+  side is decorrelated from the mid through an allpass cascade — but an allpass cannot decorrelate
+  DC, and this cascade left the *mid-range* nearly in-phase too (the correlation only crossed zero
+  ~1.8 kHz), so adding it antisymmetrically made the left channel measurably louder (up to ~18 dB of
+  imbalance in the low-mids at max width). The synthesized side is now **orthogonalised against the
+  mid** (Gram-Schmidt: subtract the running `⟨mid·decorr⟩ / ⟨mid·mid⟩` projection), which drives the
+  L/R energy balance to within **~0.06 dB at every frequency** while keeping the widening audible.
+  Because the projection → 1 exactly where the decorrelated signal ≈ the mid (the sub-bass), it also
+  keeps the low end mono for free. Mono fold-down stays bit-exact (the side is still purely
+  antisymmetric), and default renders are unchanged (width = 1 uses the mid/side path). Regression
+  tests assert the L/R energy balance and the clean mono fold on a bass-heavy mono source at max width.
 - **Looper record → playback timing (#135, P0).** A freshly recorded loop no longer waits a full dead
   cycle before it sounds. Two root causes, both fixed: (1) the auto-play at record completion set the
   PLAY *parameter*, which only takes effect the following block, so the completion block — the new

@@ -69,6 +69,40 @@ TEST_CASE ("StereoWidth: mono collapse, identity, and widening", "[6b][fx][width
     REQUIRE (rmsDiff (l2, r2) > rmsDiff (L, R));
 }
 
+// #14: at MAX width the synthesized side must not lean left. The allpass cascade passes the bass
+// nearly in-phase with the mid, so before the fix E[mid*decorr] > 0 made L louder than R on any
+// bass-containing mono source. The high-passed side nulls that; the mono fold-down is still exact.
+TEST_CASE ("StereoWidth: max width stays L/R balanced + mono-safe on a bass-heavy mono source (#14)", "[6b][fx][width][balance]")
+{
+    const int N = 1 << 15;
+    std::vector<float> mono ((std::size_t) N);
+    for (int i = 0; i < N; ++i)                                  // a MONO source WITH low-frequency content
+        mono[(std::size_t) i] = 0.3f * (float) (std::sin (tu::kTwoPi *  60.0 * i / kSR)
+                                              + std::sin (tu::kTwoPi * 250.0 * i / kSR)
+                                              + std::sin (tu::kTwoPi * 1200.0 * i / kSR));
+    auto L = mono, R = mono;
+    StereoWidth fx; fx.prepare (kSR); fx.setWidth (2.0f); fx.reset();
+    fx.process (L.data(), R.data(), N);
+
+    const int skip = 6000;                                       // let the width ramp + HP settle
+    double eL = 0, eR = 0, foldErr = 0, refE = 0;
+    for (int i = skip; i < N; ++i)
+    {
+        eL += (double) L[(std::size_t) i] * L[(std::size_t) i];
+        eR += (double) R[(std::size_t) i] * R[(std::size_t) i];
+        const double fold = 0.5 * ((double) L[(std::size_t) i] + R[(std::size_t) i]);   // mono sum
+        foldErr += (fold - mono[(std::size_t) i]) * (fold - mono[(std::size_t) i]);
+        refE    += (double) mono[(std::size_t) i] * mono[(std::size_t) i];
+    }
+    const double lrDb = 10.0 * std::log10 (eL / eR);
+    INFO ("L/R energy balance = " << lrDb << " dB");
+    REQUIRE (std::abs (lrDb) < 0.5);                             // no left lean (the fix)
+    REQUIRE (eL > 0.0);
+    REQUIRE (eR > 0.0);
+    // Mono fold-down == the original mono (the side is purely antisymmetric -> cancels on L+R).
+    REQUIRE (std::sqrt (foldErr / refE) < 1.0e-4);
+}
+
 // ---------------------------------------------------------------------------
 // width > 1 synthesizes side content from the MID via an allpass cascade, so a DRY
 // MONO source audibly widens — and folds back to mono cleanly (no comb notches),
