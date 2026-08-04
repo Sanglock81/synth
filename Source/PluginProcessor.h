@@ -392,7 +392,21 @@ public:
     int   completeModLink (int dest) override
     {
         const int src = modLinkSource.exchange (-1, std::memory_order_acq_rel);
-        return src >= 0 ? linkModRoute (-1, src, dest) : -1;   // -1 = focused part
+        if (src < 0) return -1;
+        // #13a: an LFO only emits as a matrix SOURCE when its own DEST is not "Off" (the engine
+        // zeroes an Off LFO's published source). So LINK-ing an LFO whose DEST is still Off would
+        // create a route that is silent AND un-animated — the reported "LFO link broken". Auto-set
+        // that LFO's DEST to "On" (a live LINK source with no fixed route) so the arm->tap gesture
+        // works end to end. Only when currently Off — a Pitch/Cutoff dest already emits, and we must
+        // not clobber the user's fixed route.
+        if (src >= ModMatrix::LFO1 && src <= ModMatrix::LFO3)
+        {
+            const char* destIds[3] { ParamID::lfoDest, ParamID::lfo2Dest, ParamID::lfo3Dest };
+            if (auto* dp = apvts.getParameter (destIds[(std::size_t) (src - ModMatrix::LFO1)]))
+                if ((int) std::lround (dp->convertFrom0to1 (dp->getValue())) == 0)   // currently Off
+                    dp->setValueNotifyingHost (dp->convertTo0to1 (3.0f));            // -> On (live source)
+        }
+        return linkModRoute (-1, src, dest);   // -1 = focused part
     }
     void  setModRouteDepth (int slot, float depth) override { setModDepth (-1, slot, depth); }
     float modRouteDepth (int slot) const override { return getModSlot (-1, slot).depth; }

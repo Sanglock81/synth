@@ -42,6 +42,15 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Fixed
+- **LINK from an LFO now works end to end (#13a).** Arming an LFO as a mod source and tapping a
+  destination created the route but produced no sound and no animation — because an LFO only emits as
+  a matrix source when its own DEST is not "Off", and the LINK gesture never touched that DEST, so a
+  freshly-linked LFO (DEST at its default Off) published a zero source. The connect gesture now
+  **auto-enables** the LFO as a live source (sets its DEST to "On" — a source with no fixed route)
+  whenever you link *from* an LFO whose DEST is still Off; a Pitch/Cutoff DEST is left alone so an
+  existing fixed route is never clobbered. A real-event regression test (arm LFO1 → tap the cutoff
+  knob, no manual DEST change) proves the cutoff then animates. The broader LINK redesign
+  (hold-to-drag depth, multi-link, links menu, retiring the per-LFO DEST buttons) remains 1.1.
 - **Modulation animation now covers EVERY modulated control (#12).** The standing spec is that any
   control being modulated shows the live motion indicator; two gaps broke that. (1) The **NOISE**
   level was wired as a mod target but its bar widget never built an indicator, so it animated

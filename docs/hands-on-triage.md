@@ -147,6 +147,16 @@ sources (a real "can't set it" break is a defect); (b) **1.1** — the per-LFO h
 + links menu + dropping the DEST selector (a genuine UI rework; the LFO still needs its legacy fixed
 dest for preset back-compat, or a migration).
 
+**RESOLVED (a) (commit pending).** The break: an LFO only emits as a matrix source when its DEST is
+not "Off" (`SynthEngine.h` zeroes an Off LFO's published source), but the LINK arm→tap gesture never
+set the DEST — so linking a fresh LFO (DEST default Off) created a route that was silent and
+un-animated. Macros/wheel/bend have no such gate, which is why only LFO looked "broken." Fix:
+`completeModLink` now **auto-enables** the source LFO (sets DEST → "On", a live source with no fixed
+route) when you link from an LFO whose DEST is currently Off; a Pitch/Cutoff DEST is preserved. The
+gap was untested because the smoke LINK test armed only Macro1 (no dest-gating) and the modmatrix
+test set DEST=On manually — a new real-event test arms LFO1 and taps the cutoff knob with no manual
+DEST write and asserts the cutoff animates. (b) the redesign stays 1.1.
+
 ## P2 — quick UX
 
 - **PW knob drag too insensitive (#2).** All rotaries use `kDragPixelsForFullRange = 313` px

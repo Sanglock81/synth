@@ -239,6 +239,51 @@ TEST_CASE ("LINK connects + animates on EVERY registry destination control (#56 
     REQUIRE (animated  >= (int) (targets.size() * 8 / 10));   // and the vast majority animate live
 }
 
+// #13a: LINK-ing an LFO whose DEST is the default "Off" must still work end to end. The engine
+// zeroes an Off LFO's published source, so before the fix the route was created but SILENT and
+// un-animated ("LFO link broken"). The arm->tap gesture now auto-enables the LFO as a live source
+// ("On"), driven here through the REAL editor event path (not a direct linkModRoute).
+TEST_CASE ("LINK from an LFO auto-enables it as a source (arm->tap, no manual DEST=On) (#13a)",
+           "[plugin][smoke][modmatrix][link][lfo]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+    p.prepareToPlay (48000.0, 128);
+
+    // Clean slate: the startup patch (Bright Lead) already routes its LFO -> cutoff, so clear the
+    // matrix and force LFO 1 DEST to "Off" to model a fresh LFO the user is about to link.
+    for (int s = 0; s < ModMatrix::kSlots; ++s) p.clearModSlot (-1, s);
+    auto* destParam = p.apvts.getParameter (ParamID::lfoDest);
+    auto destIndex  = [&] { return (int) std::lround (destParam->convertFrom0to1 (destParam->getValue())); };
+    destParam->setValueNotifyingHost (destParam->convertTo0to1 (0.0f));
+    REQUIRE (destIndex() == 0);                         // LFO 1 DEST is Off before the link
+
+    p.apvts.getParameter (ParamID::lfoDepth)->setValueNotifyingHost (1.0f);   // deep -> unambiguous motion
+
+    std::vector<LearnableComponent*> targets; collectModTargets (*ed, targets);
+    LearnableComponent* cutoff = nullptr;
+    for (auto* lc : targets) if (lc->parameterID() == ParamID::filterCutoff) { cutoff = lc; break; }
+    REQUIRE (cutoff != nullptr);
+
+    p.armModLink (ModMatrix::LFO1);                     // exactly what the source menu does
+    tap (*cutoff);                                      // a real tap on the destination control
+
+    REQUIRE (destIndex() == 3);                         // the gesture auto-enabled LFO 1 as a live source ("On")
+
+    float mx = 0.0f;
+    for (int b = 0; b < 40; ++b)
+    {
+        juce::AudioBuffer<float> buf (2, 128); buf.clear(); juce::MidiBuffer m;
+        if (b == 0) m.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0);
+        p.processBlock (buf, m);
+        mx = std::max (mx, std::abs (cutoff->modAnim()));
+    }
+    INFO ("cutoff modAnim peak after LFO link = " << mx);
+    REQUIRE (mx > 1.0e-3f);                             // the linked LFO now actually animates the cutoff
+}
+
 // --- J1.3: the LFO SYNC toggle morphs the RATE knob into the DIV (note-division) knob ----
 TEST_CASE ("LFO SYNC swaps the visible RATE<->DIV control (#J1)", "[plugin][smoke][lfo][sync]")
 {
