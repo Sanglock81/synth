@@ -32,10 +32,11 @@ public:
         float  gate     = 0.5f;       // 0..1 of a step
         float  swing    = 0.0f;       // 0..~0.7 (delays odd 16ths)
         double samplesPerStep = 6000; // 16th-note length in samples (from tempo)
-        // Per-step multiplier applied to the played-note velocity (task #54): 0 = rest (step
-        // off), else the step's velocity fraction (0.1..2.0 = 10..200 %). The emit clamps the
-        // product to 1.0 so >100 % still tops out at full MIDI. The velocity belongs to the
-        // STEP, not the note — the same box scales whatever note the pattern lands on it.
+        // Per-step ABSOLUTE velocity (#136): 0 = rest (step off), else the step's velocity
+        // (0.1..2.0 = 10..200 %, where 100 % = full MIDI). When the ARP is active this takes
+        // PRECEDENCE over how hard the note was played — the step value IS the output velocity,
+        // so a pattern sounds identical however you touch the keys. > 100 % accents via the
+        // voice's velocity > 1.0 boost. The velocity belongs to the STEP, not the note.
         std::array<float, kNumSteps> steps { };
     };
 
@@ -148,12 +149,15 @@ private:
         const float sv = cfg.steps[(std::size_t) stepIndex];
         if (heldCount > 0 && sv > 1.0e-3f)
         {
-            int note; float vel;
-            pickNote (note, vel);
-            // sv = this step's velocity fraction (0.1..2.0 = 10..200 %). NOT clamped to 1.0 —
-            // a > 100 % step accents the played note past its own velocity (louder + brighter
-            // via the voice's vel->amp / vel->cutoff); the output safety clipper guards the bus.
-            emit (pos, note, vel * sv, true);
+            int note; float playedVel;
+            pickNote (note, playedVel);
+            (void) playedVel;   // intentionally unused: when the ARP is active its OWN velocity wins
+            // sv = this step's ABSOLUTE velocity (0.1..2.0 = 10..200 %). The ARP's per-step velocity
+            // takes PRECEDENCE over how hard the note was played (#136): the step value IS the output
+            // velocity (100 % = full), independent of playedVel — so an arp pattern sounds the same
+            // however you touch the keys. > 100 % accents via the voice's vel->amp / vel->cutoff
+            // (velocity > 1.0 is a gentle linear boost); the output safety clipper guards the bus.
+            emit (pos, note, sv, true);
             activeNote = note;
             gateRemaining = std::max (1.0, (double) cfg.gate * cfg.samplesPerStep);
         }

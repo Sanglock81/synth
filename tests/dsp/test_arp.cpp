@@ -126,17 +126,27 @@ TEST_CASE ("arp without latch stops when keys released", "[dsp][arp]")
     REQUIRE (onNotes (run (a, 400, 50)).empty());
 }
 
-TEST_CASE ("arp per-step velocity scales the played velocity", "[dsp][arp][vel]")
+TEST_CASE ("arp per-step velocity is ABSOLUTE - ignores played velocity (#136)", "[dsp][arp][vel]")
 {
-    Arpeggiator a; auto c = baseCfg();
-    c.steps[0] = 1.0f;   // step 0 = 100 %
-    c.steps[1] = 0.3f;   // step 1 = 30 %  (a quiet grace step)
-    a.setConfig (c);
-    a.noteOn (60, 0.8f);                         // played velocity 0.8
-    std::vector<float> ons; for (auto& e : run (a, 250, 50)) if (e.on) ons.push_back (e.vel);
-    REQUIRE (ons.size() >= 2);
-    REQUIRE (ons[0] == Catch::Approx (0.80f).margin (0.02));   // 0.8 * 1.0
-    REQUIRE (ons[1] == Catch::Approx (0.24f).margin (0.02));   // 0.8 * 0.3
+    auto emitOns = [] (float playedVel)
+    {
+        Arpeggiator a; auto c = baseCfg();
+        c.steps[0] = 1.0f;   // step 0 = 100 % -> full
+        c.steps[1] = 0.3f;   // step 1 = 30 %  (a quiet grace step)
+        a.setConfig (c);
+        a.noteOn (60, playedVel);
+        std::vector<float> ons; for (auto& e : run (a, 250, 50)) if (e.on) ons.push_back (e.vel);
+        return ons;
+    };
+    // Soft touch vs hard touch must yield the SAME arp velocities — the step value takes precedence.
+    const auto soft = emitOns (0.2f);
+    const auto hard = emitOns (1.0f);
+    REQUIRE (soft.size() >= 2);
+    REQUIRE (hard.size() >= 2);
+    REQUIRE (soft[0] == Catch::Approx (1.0f).margin (0.02));       // step 0 = 100 %, regardless of touch
+    REQUIRE (soft[1] == Catch::Approx (0.3f).margin (0.02));       // step 1 = 30 %
+    REQUIRE (soft[0] == Catch::Approx (hard[0]).margin (0.001));   // independent of how hard the note was played
+    REQUIRE (soft[1] == Catch::Approx (hard[1]).margin (0.001));
 }
 
 TEST_CASE ("arp velocity belongs to the STEP, not the note, across all modes", "[dsp][arp][vel]")
@@ -159,12 +169,17 @@ TEST_CASE ("arp velocity belongs to the STEP, not the note, across all modes", "
     }
 }
 
-TEST_CASE ("arp step velocity > 100% accents past the played velocity (not clamped)", "[dsp][arp][vel]")
+TEST_CASE ("arp step velocity > 100% accents (absolute, not clamped) (#136)", "[dsp][arp][vel]")
 {
-    Arpeggiator a; auto c = baseCfg(); c.steps[0] = 2.0f;   // 200 % accent
-    a.setConfig (c);
-    a.noteOn (60, 0.8f);                                    // played velocity 0.8
-    float first = -1.0f; for (auto& e : run (a, 120, 40)) if (e.on) { first = e.vel; break; }
-    REQUIRE (first == Catch::Approx (1.6f).margin (0.001));   // 0.8 * 2.0 = 1.6 -> over-unity scalar, NOT clamped
-    REQUIRE (first > 1.0f);                                   // the accent range is live (the old clamp is gone)
+    auto firstVel = [] (float playedVel)
+    {
+        Arpeggiator a; auto c = baseCfg(); c.steps[0] = 2.0f;   // 200 % accent
+        a.setConfig (c);
+        a.noteOn (60, playedVel);
+        for (auto& e : run (a, 120, 40)) if (e.on) return e.vel;
+        return -1.0f;
+    };
+    REQUIRE (firstVel (0.8f) == Catch::Approx (2.0f).margin (0.001));   // step 200 % -> 2.0 ABSOLUTE (not 0.8*2)
+    REQUIRE (firstVel (0.2f) == Catch::Approx (2.0f).margin (0.001));   // same however hard you played
+    REQUIRE (firstVel (0.8f) > 1.0f);                                   // accent range is live (voice boosts vel > 1)
 }
