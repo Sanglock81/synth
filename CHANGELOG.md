@@ -42,6 +42,19 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Fixed
+- **ARP velocity is now absolute — the pattern's velocity wins (#136).** With the arpeggiator active,
+  each step's velocity was a *multiplier* of how hard you played (played × step), so a soft touch made
+  the whole arp quiet and dynamics leaked in unpredictably. The per-step velocity is now the **absolute**
+  output velocity (the grid box value IS the velocity; 100 % = full, 0 = rest, > 100 % accents via the
+  voice's over-unity boost), independent of the played note — so an arp pattern sounds the same however
+  you touch the keys. Tests prove a soft and a hard touch yield identical arp velocities.
+- **PW knob is more responsive (#2).** The pulse-width knobs used the global 313-px full-range drag,
+  which felt sluggish given PW's narrow audible range; they now use a snappier ~150-px drag. A smoke
+  test asserts all three osc PW knobs carry the reduced sensitivity.
+- **Discoverability: unison + note-phase (README).** Added a "Finding your way around" note pointing to
+  the in-app **?** section guide and calling out that **unison lives in the top bar** (UNI/DET/WID, a
+  global stack) and that per-osc **RS/RN/FR** is note start-phase (subtle on a sustained tone) — the two
+  spots hands-on testing flagged as confusing. (The in-app guide already documents both.)
 - **LINK from an LFO now works end to end (#13a).** Arming an LFO as a mod source and tapping a
   destination created the route but produced no sound and no animation — because an LFO only emits as
   a matrix source when its own DEST is not "Off", and the LINK gesture never touched that DEST, so a

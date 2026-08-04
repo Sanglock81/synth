@@ -13,6 +13,20 @@ a general-purpose synth that runs in any VST3 host or standalone.
 
 ![editor](docs/editor.png)
 
+## Finding your way around
+
+Every control has a one-line explanation built in: click **?** in the top bar and pick a section
+to get a spotlight, numbered markers, and a side card describing each knob — *what* it does and
+*how/when* to use it. The same text is generated to **[docs/guide.md](docs/guide.md)**. Two spots
+that surprise people:
+
+- **Unison lives in the top bar** — **UNI** (voice count, 1 = off), **DET** (detune spread), **WID**
+  (stereo width). It's a global stack per note, not a per-oscillator control; raise **UNI** for a
+  thick supersaw.
+- **Per-osc note phase is RS / RN / FR** (Reset / Random / Free-run) next to each oscillator. It sets
+  where the waveform starts on each note — audible on transients and with unison spread, but *subtle
+  on a single sustained tone*, which is why it can look like it "does nothing."
+
 ## Features
 
 - **3 anti-aliased oscillators** (PolyBLEP saw/square-PWM/tri/sine + **WT** mip-mapped wavetable with a

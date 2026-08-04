@@ -284,6 +284,29 @@ TEST_CASE ("LINK from an LFO auto-enables it as a source (arm->tap, no manual DE
     REQUIRE (mx > 1.0e-3f);                             // the linked LFO now actually animates the cutoff
 }
 
+// #2: the PW knobs get a snappier drag (narrow audible range felt sluggish at the 313-px default).
+TEST_CASE ("PW knobs use a more responsive drag than the global default (#2)", "[plugin][smoke][pw]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+
+    std::vector<LearnableComponent*> targets; collectModTargets (*ed, targets);
+    int pwChecked = 0;
+    for (auto* lc : targets)
+        if (auto* knob = dynamic_cast<RotaryKnob*> (lc))
+            if (knob->parameterID() == ParamID::osc1PW || knob->parameterID() == ParamID::osc2PW
+                || knob->parameterID() == ParamID::osc3PW)
+            {
+                INFO ("PW knob " << knob->parameterID() << " dragPixels=" << knob->dragPixels());
+                REQUIRE (knob->dragPixels() == OscSection::kPwDragPixels);
+                REQUIRE (knob->dragPixels() < kDragPixelsForFullRange);   // snappier than every other knob
+                ++pwChecked;
+            }
+    REQUIRE (pwChecked == 3);                                            // all three osc PW knobs
+}
+
 // --- J1.3: the LFO SYNC toggle morphs the RATE knob into the DIV (note-division) knob ----
 TEST_CASE ("LFO SYNC swaps the visible RATE<->DIV control (#J1)", "[plugin][smoke][lfo][sync]")
 {

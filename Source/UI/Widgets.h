@@ -716,6 +716,7 @@ public:
     // Override drag sensitivity for this knob (pixels of travel for the full range;
     // fewer px = more responsive). Default is kDragPixelsForFullRange for all controls.
     void setDragPixels (int px) { slider.setMouseDragSensitivity (juce::jmax (1, px)); }
+    int  dragPixels() const { return slider.getMouseDragSensitivity(); }   // for tests / audits
 
     // Accept BOTH horizontal and vertical drag (default is vertical only). For knobs high in
     // the window (the top-bar macros) this lets a touch drag sideways to adjust instead of

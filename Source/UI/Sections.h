@@ -58,6 +58,8 @@ public:
 class OscSection : public juce::Component
 {
 public:
+    static constexpr int kPwDragPixels = 150;   // #2: snappier than the 313-px default (narrow audible range)
+
     explicit OscSection (VASynthProcessor& p) : proc (p)
     {
         namespace ID = ParamID;
@@ -88,6 +90,9 @@ public:
             o.k[1]->setHelp ("Coarse tune this oscillator in semitones (-24..+24) — stack intervals like a fifth");
             o.k[2] = std::make_unique<RotaryKnob> (p.apvts, detIds[i], "DETUNE", p.getMidiLearn());
             o.k[3] = std::make_unique<RotaryKnob> (p.apvts, pwIds[i],  "PW",     p.getMidiLearn());
+            // #2: PW's audible sweet spot is narrow, so the default 313-px full-range drag felt
+            // sluggish. Halve the drag distance for a snappier, more responsive PW knob.
+            o.k[3]->setDragPixels (kPwDragPixels);
             o.k[4] = std::make_unique<RotaryKnob> (p.apvts, lvlIds[i], "LEVEL",  p.getMidiLearn());
             if (fmIds[i] != nullptr)   // #132 FM depth knob (osc1/osc2); enabled state tracks the carrier wave
             {
