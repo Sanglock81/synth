@@ -42,6 +42,18 @@ Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final 
   breath, not hiss).
 
 ### Fixed
+- **Modulation animation now covers EVERY modulated control (#12).** The standing spec is that any
+  control being modulated shows the live motion indicator; two gaps broke that. (1) The **NOISE**
+  level was wired as a mod target but its bar widget never built an indicator, so it animated
+  nothing — it now draws a motion ghost like the knobs and faders. (2) Routes whose SOURCE is a
+  per-voice signal (**velocity, mod/amp envelope, note, random**) never animated *any* destination,
+  because the block-rate snapshot that drives the UI omitted those sources. The engine now publishes
+  the focused part's representative (loudest) live voice's env/velocity/note/random, and the
+  processor feeds them into an **animation-only** mod-source snapshot — so e.g. *velocity → FM* or
+  *env → cutoff* now visibly moves its knob. Audio is unchanged (the block-tier audio path still uses
+  block-level sources only; goldens hold). New tests: every mod target must have actually built its
+  indicator (catches the wired-but-dead class), and each per-voice source animates a voice-tier and a
+  block-tier destination.
 - **Stereo WIDTH no longer leans left at the top of its range (#14).** At width > 1 the synthesized
   side is decorrelated from the mid through an allpass cascade — but an allpass cannot decorrelate
   DC, and this cascade left the *mid-range* nearly in-phase too (the correlation only crossed zero

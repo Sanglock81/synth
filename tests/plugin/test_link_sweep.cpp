@@ -114,6 +114,44 @@ TEST_CASE ("sweep: steady block source moves every checkable dest, removal resto
     REQUIRE (checked > 200);
 }
 
+// #12: PER-VOICE sources (env / velocity / note / random) must also animate their target. The
+// processor publishes a representative live-voice snapshot into the ANIMATION mod-source set, so a
+// route from these sources is no longer silent in the UI (previously only block sources animated).
+TEST_CASE ("sweep: per-voice sources (env/vel/note/random) animate their dest (#12)", "[plugin][modmatrix][sweep]")
+{
+    struct Src { int id; const char* name; };
+    const Src voiceSrcs[] { { ModMatrix::ModEnv, "ModEnv" }, { ModMatrix::AmpEnv, "AmpEnv" },
+                            { ModMatrix::Velocity, "Velocity" }, { ModMatrix::Note, "Note" },
+                            { ModMatrix::Random, "Random" } };
+    const int dests[] { ModMatrix::Cutoff, ModMatrix::ReverbMix };   // a voice-tier AND a block-tier dest
+    int checked = 0;
+    for (auto sc : voiceSrcs)
+        for (int dest : dests)
+        {
+            VASynthProcessor p;
+            auto* prm = paramFor (p, dest);
+            p.linkModRoute (-1, sc.id, dest, 0.9f);
+            p.apvts.getParameter (ParamID::ampSustain)->setValueNotifyingHost (1.0f);
+            p.prepareToPlay (48000.0, 128);
+            float mx = 0.0f;
+            const int notes[] { 72, 64, 79, 67 };    // non-zero noteNorm; several notes so Random S&H varies
+            for (int ni = 0; ni < 4; ++ni)
+            {
+                { juce::AudioBuffer<float> b (2, 128); b.clear(); juce::MidiBuffer on;
+                  on.addEvent (juce::MidiMessage::noteOn (1, notes[ni], 0.92f), 0); p.processBlock (b, on); }
+                for (int bl = 0; bl < 8; ++bl)
+                { juce::AudioBuffer<float> b (2, 128); b.clear(); juce::MidiBuffer m; p.processBlock (b, m);
+                  mx = std::max (mx, std::abs (p.modAnimNorm (dest, prm))); }
+                { juce::AudioBuffer<float> b (2, 128); b.clear(); juce::MidiBuffer off;
+                  off.addEvent (juce::MidiMessage::noteOff (1, notes[ni]), 0); p.processBlock (b, off); }
+            }
+            INFO (sc.name << " -> dest " << dest << "  peak |offset| = " << mx);
+            REQUIRE (mx > 0.02f);                    // the per-voice source moves (animates) the destination
+            ++checked;
+        }
+    REQUIRE (checked == 10);
+}
+
 TEST_CASE ("sweep: LFO sources produce a time-varying offset (#H4)", "[plugin][modmatrix][sweep]")
 {
     for (int lfo = ModMatrix::LFO1; lfo <= ModMatrix::LFO3; ++lfo)

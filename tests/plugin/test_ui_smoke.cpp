@@ -197,6 +197,15 @@ TEST_CASE ("LINK connects + animates on EVERY registry destination control (#56 
     INFO ("mod-target controls found: " << (int) targets.size());
     REQUIRE (targets.size() >= 25);
 
+    // #12: every mod TARGET must have actually BUILT its motion indicator (wired AND drawn) — not
+    // merely report live modAnim() data. The NOISE HBarControl regressed exactly here: it published
+    // a live offset but never created an overlay, so it never animated. Assert the indicator exists.
+    for (auto* lc : targets)
+    {
+        INFO ("mod target with no indicator overlay: " << lc->parameterID());
+        REQUIRE (lc->hasModIndicator());
+    }
+
     // Macro 1 drives both tiers; set it high so the applied offset (and animation) is unambiguous.
     p.apvts.getParameter (ParamID::macro1)->setValueNotifyingHost (1.0f);
     p.prepareToPlay (48000.0, 128);

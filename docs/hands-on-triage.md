@@ -120,6 +120,19 @@ per-destination live-offset for *all* registry dests and have every mod-target k
 active route (LFO/env/velocity/macro) lights its target. Bigger dests (env stages, FX) need their
 block-offset surfaced to the UI. Pitch stays un-animated (no knob) unless we add a pitch indicator.
 
+**RESOLVED (commit pending).** The animation *data* layer was already complete for block/macro
+sources; the two real gaps were: (1) the **NOISE** `HBarControl` was a wired mod target but had no
+`modTargetAttached` override, so it built no indicator and drew nothing (the classic wired-but-dead
+bug) — fixed with a horizontal motion-ghost overlay; and (2) routes sourced from **per-voice**
+signals (velocity / mod-env / amp-env / note / random) never animated any dest, because the block-
+rate `ModSources` snapshot omitted those sources. The engine now publishes the focused part's
+representative (loudest) live voice's env/vel/note/random, and the processor feeds them into an
+**animation-only** snapshot driving `blockOffsetPub` + the voice-tier `voiceOff*` — so every
+source×dest that is actually modulating lights its control, with **no audio change** (the block-tier
+audio application still uses block-level sources only; goldens hold). Pitch remains overlay-only (no
+knob). Tests: a `hasModIndicator()` assertion that every mod target built its indicator (catches the
+NOISE class), and a sweep proving all five per-voice sources animate a voice- and a block-tier dest.
+
 ## P1/1.1 — LFO LINK unusable + redesign (#13)  **DEFECT now, FEATURE later**
 
 **Observed:** can't set an LFO link properly; wants: touch-and-hold the LFO **ON** to start a drag,

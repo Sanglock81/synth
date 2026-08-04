@@ -698,10 +698,20 @@ public:
             }
 
             const int off = startSample + done;
+            // Sample the focused part's LOUDEST live voice as a representative source snapshot for
+            // env/vel/note/random UI animation (published after the loop).
+            float repAmp = -1.0f, repME = 0.0f, repAE = 0.0f, repVel = 0.0f, repNote = 0.0f, repRnd = 0.0f;
             for (auto& v : voices)
             {
                 if (! v.isActive()) continue;
                 const int pt = v.getPart();
+                if (pt == liveIndex)
+                {
+                    const float ae = v.ampEnvLevel();
+                    if (ae > repAmp)
+                    { repAmp = ae; repME = v.modEnvLevel(); repAE = ae; repVel = v.getVelocity();
+                      repNote = v.noteNormVal(); repRnd = v.getRandom(); }
+                }
                 const float bendVib = pitchBendSemis[(std::size_t) pt] + vibRaw * modWheel[(std::size_t) pt] * kVibratoSemis;
                 VoiceParams p = paramsFor (pt, v.getSoundSlot());
                 p.pitchModSemis += pPitch[(std::size_t) pt] + bendVib;
@@ -725,6 +735,13 @@ public:
                 sv.render (partSampleL[(std::size_t) pt].data() + off,
                            partSampleR[(std::size_t) pt].data() + off, chunk);
             }
+            // Publish the focused part's representative voice sources (0 if it had no live voice).
+            const bool hasRep = repAmp >= 0.0f;
+            focusVoiceSrc[0].store (hasRep ? repME  : 0.0f, std::memory_order_relaxed);
+            focusVoiceSrc[1].store (hasRep ? repAE  : 0.0f, std::memory_order_relaxed);
+            focusVoiceSrc[2].store (hasRep ? repVel : 0.0f, std::memory_order_relaxed);
+            focusVoiceSrc[3].store (hasRep ? repNote: 0.0f, std::memory_order_relaxed);
+            focusVoiceSrc[4].store (hasRep ? repRnd : 0.0f, std::memory_order_relaxed);
             done += chunk;
         }
     }
@@ -1010,6 +1027,10 @@ private:
     int liveKitPart = -1, liveKitPad = -1;   // kit pad routed through live panel params (edit mode)
     std::atomic<float> focusMod[4] { };   // focused part's LFO mod per dest (UI knob animation)
     std::atomic<float> focusLfoRaw[3] { };// focused part's raw LFO out (-1..1) for block-tier mod sources
+    // Focused part's REPRESENTATIVE (loudest) live voice: {modEnv, ampEnv, velocity, noteNorm, random}.
+    // Published each block so the processor can animate matrix routes sourced from env/vel/note/random
+    // (which are per-voice and thus have no block-scope value otherwise). 0 when the part is silent.
+    std::atomic<float> focusVoiceSrc[5] { };
 
 public:
     // Current LFO modulation on the focused part for a destination (0 off, 1 pitch semis,
@@ -1019,6 +1040,10 @@ public:
     // Focused part's raw LFO output (-1..1) for block-tier mod sources (k = 0..2).
     float focusLfoRawOut (int k) const
     { return (k >= 0 && k < 3) ? focusLfoRaw[(std::size_t) k].load (std::memory_order_relaxed) : 0.0f; }
+    // Focused part's representative live-voice source (idx: 0 modEnv, 1 ampEnv, 2 velocity, 3 noteNorm,
+    // 4 random) for UI animation of env/vel/note/random routes. 0 when the focused part is silent.
+    float focusVoiceSourceOut (int idx) const
+    { return (idx >= 0 && idx < 5) ? focusVoiceSrc[(std::size_t) idx].load (std::memory_order_relaxed) : 0.0f; }
 private:
     std::array<int, maxParts> fxSilentBlocks {};
     std::array<bool, maxParts> fxCleared {};          // FX state reset on skip-entry (no stale-resume pop)

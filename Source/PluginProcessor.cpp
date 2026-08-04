@@ -2005,13 +2005,28 @@ void VASynthProcessor::applyBlockMods (int part, VoiceParams& vp, FXParams& fx, 
     s.pitchBend = bendRange > 0.0f ? engine.pitchBendSemitones (p) / bendRange : 0.0f;
     for (int k = 0; k < 3; ++k) s.lfo[(std::size_t) k] = engine.focusLfoRawOut (k);   // block-tier LFO sources (1-block latency)
 
+    // AUDIO application uses BLOCK-level sources only (per-voice sources have no single block value;
+    // applying a representative to global block params would be arbitrary — kept out to hold goldens).
     float off[ModMatrix::kNumBlockDests];
     mtx.blockOffsets (s, off, ModMatrix::kNumBlockDests);
-    for (int i = 0; i < ModMatrix::kNumBlockDests; ++i)
-        blockOffsetPub[(std::size_t) i].store (off[(std::size_t) i], std::memory_order_relaxed);   // publish for UI/tests
 
-    // Voice-tier offsets (from the same block-level sources) for UI animation of cutoff/reso/pw/levels.
-    const auto vo = mtx.evaluate (s);
+    // ANIMATION snapshot: the block sources PLUS the focused part's representative live-voice sources
+    // (env/vel/note/random). This is UI-only — it drives blockOffsetPub + the voice-tier voiceOff*
+    // atomics so a route from Velocity/Env/Note/Random animates its target control (#12 full coverage),
+    // WITHOUT changing what the audio path applies (which stays on `off`/block-only `s`).
+    ModSources sa = s;
+    sa.modEnv   = engine.focusVoiceSourceOut (0);
+    sa.ampEnv   = engine.focusVoiceSourceOut (1);
+    sa.velocity = engine.focusVoiceSourceOut (2);
+    sa.noteNorm = engine.focusVoiceSourceOut (3);
+    sa.random   = engine.focusVoiceSourceOut (4);
+    float offAnim[ModMatrix::kNumBlockDests];
+    mtx.blockOffsets (sa, offAnim, ModMatrix::kNumBlockDests);
+    for (int i = 0; i < ModMatrix::kNumBlockDests; ++i)
+        blockOffsetPub[(std::size_t) i].store (offAnim[(std::size_t) i], std::memory_order_relaxed);   // publish for UI/tests
+
+    // Voice-tier offsets (from the animation snapshot) for UI animation of cutoff/reso/pw/levels.
+    const auto vo = mtx.evaluate (sa);
     voiceOffCutoffOct.store (vo.cutoffOct, std::memory_order_relaxed);
     voiceOffPw.store   (vo.pw,   std::memory_order_relaxed);
     voiceOffReso.store (vo.reso, std::memory_order_relaxed);

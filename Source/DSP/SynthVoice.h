@@ -196,6 +196,13 @@ public:
     bool isActive() const  { return active; }
     bool isUnison() const  { return unisonLatched > 1; }   // #96: engine dispatches render vs renderStereo
     int  getNote() const   { return midiNote; }
+    // Per-voice mod-matrix source values (for UI animation of env/vel/note/random routes on the
+    // focused part — the engine samples the loudest live voice and publishes a representative snapshot).
+    float getVelocity() const { return velocity; }
+    float ampEnvLevel() const { return ampEnv.getLevel(); }
+    float modEnvLevel() const { return fltEnv.getLevel(); }
+    float getRandom()   const { return voiceRandom; }
+    float noteNormVal() const { return (float) (midiNote - 60) / 60.0f; }
     int  getPart() const   { return part; }
     int  getSoundSlot() const { return soundSlot; }
     bool isGenerator() const { return generator; }

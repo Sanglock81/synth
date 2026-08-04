@@ -202,6 +202,12 @@ public:
 protected:
     void enableNumericEntry (juce::RangedAudioParameter* p) { numParam = p; }
     virtual void modTargetAttached() {}   // subclass creates its animation indicator (knob arc / fader ghost)
+public:
+    // True once this control has actually built its motion indicator. A mod TARGET (isModTarget)
+    // whose hasModIndicator() is false is wired-but-dead (data flows, nothing draws — the #12 NOISE
+    // bug). Tests assert every target has one, catching the missing-override class of defect.
+    virtual bool hasModIndicator() const { return false; }
+protected:
     bool ccBadgeAtBottom = false;         // move the CC chip to the bottom (two-line-name controls)
 
     // Mod-target state (shared by every registry control). Protected so ModSlider + subclass
@@ -407,6 +413,8 @@ public:
         if (ghost) { ghost->setBounds (slider.getBounds()); ghost->toFront (false); }
     }
 
+    bool hasModIndicator() const override { return ghost != nullptr; }
+
 protected:
     void modTargetAttached() override
     {
@@ -505,13 +513,55 @@ public:
         paintModRing (g);
     }
 
-    void resized() override { slider.setBounds (getLocalBounds()); }
+    void resized() override
+    {
+        slider.setBounds (getLocalBounds());
+        if (ghost) { ghost->setBounds (slider.getBounds()); ghost->toFront (false); }
+    }
+
+    bool hasModIndicator() const override { return ghost != nullptr; }
+
+protected:
+    // #12: a modulated NOISE level must animate like the knobs/faders. Without this override the
+    // base no-op ran and no indicator was ever created (the control was wired but drew nothing).
+    void modTargetAttached() override
+    {
+        if (ghost == nullptr) { ghost = std::make_unique<HBarModOverlay> (slider, *this); addAndMakeVisible (*ghost); }
+        ghost->begin();
+        resized();
+    }
 
 private:
+    // Mouse-transparent ghost marker at the modulated position (horizontal: value runs left->right).
+    // Motion-gated + repaints ~30 Hz only while the route is actually moving (mirrors FaderModOverlay).
+    struct HBarModOverlay : juce::Component, private juce::Timer
+    {
+        HBarModOverlay (juce::Slider& sl, LearnableComponent& o) : s (sl), owner (o) { setInterceptsMouseClicks (false, false); }
+        void begin() { startTimerHz (modanim::kTimerHz); }
+        void timerCallback() override { if (st.tick (owner.modAnim(), juce::Time::getMillisecondCounter())) repaint(); }
+        void paint (juce::Graphics& g) override
+        {
+            if (! st.visible()) return;                                 // motion-gated: nothing at rest
+            const float a = st.alpha();
+            const float base = (float) s.valueToProportionOfLength (s.getValue());
+            const float curP = juce::jlimit (0.0f, 1.0f, base + st.cur);
+            const float lagP = juce::jlimit (0.0f, 1.0f, base + st.lag);
+            auto b = getLocalBounds().toFloat();
+            const float xCur = b.getX() + curP * b.getWidth();          // horizontal bar: value right
+            const float xLag = b.getX() + lagP * b.getWidth();
+            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.35f * a));   // trail echo -> current
+            g.fillRect (juce::jmin (xCur, xLag), b.getY() - 1.0f, std::abs (xCur - xLag), b.getHeight() + 2.0f);
+            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.9f * a));    // ghost marker at current
+            g.fillRoundedRectangle (xCur - 2.0f, b.getY() - 3.0f, 4.0f, b.getHeight() + 6.0f, 2.0f);
+        }
+        juce::Slider& s; LearnableComponent& owner; modanim::State st;
+    };
+
     juce::String name;
     ModSlider slider { *this };
     juce::RangedAudioParameter* param = nullptr;
     std::unique_ptr<juce::SliderParameterAttachment> attachment;
+    std::unique_ptr<HBarModOverlay> ghost;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HBarControl)
 };
 
@@ -675,6 +725,8 @@ public:
 
     // Hide the numeric value readout (macros — keeps the top bar compact).
     void setShowValue (bool b) { if (b != showValue) { showValue = b; resized(); repaint(); } }
+
+    bool hasModIndicator() const override { return overlay != nullptr; }
 
 protected:
     // The base wired this control as a mod target: bring up the arc animation reading modAnim().
