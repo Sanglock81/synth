@@ -1,6 +1,8 @@
 #pragma once
 #include <cmath>
 #include <array>
+#include <algorithm>
+#include "Wavetable.h"
 
 // ============================================================================
 // PolyBLEP anti-aliased oscillator (hand-rolled), oversampled + decimated.
@@ -38,7 +40,8 @@
 class PolyBlepOscillator
 {
 public:
-    enum class Wave { Saw, Square, Triangle, Sine };
+    // APPEND-ONLY (choice values are frozen for state compatibility). Wavetable = 4.
+    enum class Wave { Saw, Square, Triangle, Sine, Wavetable };
 
     // None      — 1x, no decimation. Lowest CPU, audible aliasing (~-26 dB @ 3 kHz).
     //             The skeleton's original behaviour; a benchmark/extreme-CPU baseline.
@@ -70,61 +73,81 @@ public:
         reset();
     }
 
-    void reset()
+    // startPhase: 0 = RESET (today), in (0,1) = RANDOM start, < 0 = FREE (keep the running phase).
+    // The oversampling ring history is always cleared for a fresh voice (avoids stale FIR state).
+    void reset (double startPhase = 0.0)
     {
-        phase = 0.0;
+        if (startPhase >= 0.0) phase = startPhase - std::floor (startPhase);
         ring.fill (0.0);
         ringPos = 0;
+        wtSnap  = true;    // a fresh voice starts AT the WT position (no glide from the last note)
     }
 
-    void setFrequency (double hz)          { phaseInc = hz / osRate; }   // per oversample step
+    void setFrequency (double hz)          { phaseInc = hz / osRate; if (wt != nullptr) wtMip = wt->mipForFreq (hz); }
     void setWave (Wave w)                  { wave = w; }
     void setPulseWidth (double pw)         { pulseWidth = pw; }          // 0.05 .. 0.95
 
+    // Wavetable (Wave::Wavetable): a SHARED, const table (owned elsewhere; null = silent). The
+    // position selects/morphs the frame and is smoothed per oversample step so a moving WT POS (a
+    // knob or an LFO on the WavePos mod dest) never zippers.
+    void setWavetable (const Wavetable* t)  { wt = t; }
+    void setWavePosition (double p)         { wtPosTarget = p < 0.0 ? 0.0 : (p > 1.0 ? 1.0 : p); }
+
     // Render one base-rate sample. Called per-sample from the voice.
-    float nextSample()
+    //
+    // phaseOffset (cycles, #132 phase modulation): the READ phase is offset by this while the
+    // accumulator keeps advancing unmodulated — true PM/"FM". phaseOffset == 0 (the default, and
+    // every non-FM patch) takes the exact original path, so goldens stay bit-identical. Only
+    // continuous-phase carriers (Sine/Triangle/Wavetable) are ever called with a non-zero offset;
+    // saw/square PolyBLEP edge corrections are computed at the un-offset phase and would break.
+    float nextSample (double phaseOffset = 0.0)
     {
         if (wave == Wave::Sine)
         {
             // No aliasing to correct: run at base rate, skip oversampling.
-            const double out = std::sin (phase * kTwoPi);
+            const double out = std::sin ((phase + phaseOffset) * kTwoPi);
             phase += phaseInc * oversample;                   // = hz / baseRate
             if (phase >= 1.0) phase -= 1.0;
             return static_cast<float> (out);
         }
 
         if (oversample == 1)
-            return static_cast<float> (coreSample());         // None: direct polyBLEP
+            return static_cast<float> (coreSample (phaseOffset)); // None: direct polyBLEP
 
         for (int k = 0; k < oversample; ++k)
-            pushRing (coreSample());
+            pushRing (coreSample (phaseOffset));
 
         return static_cast<float> (decimate());
     }
 
 private:
-    static constexpr double kTwoPi = 6.283185307179586;
-    static constexpr double kPi    = 3.141592653589793;
+    static constexpr double kTwoPi    = 6.283185307179586;
+    static constexpr double kPi       = 3.141592653589793;
+    static constexpr double kWtSmooth = 0.004;   // WT-position one-pole per oversample step (~1 ms)
 
     static double wrap (double x) { return x >= 1.0 ? x - 1.0 : x; }
+    static double frac01 (double x) { return x - std::floor (x); }   // general wrap to [0,1) (FM offset may exceed a cycle)
 
     // One band-limited sample at the oversampled rate; advances `phase`.
-    double coreSample()
+    // phaseOffset (cycles): read the waveform at an offset while the accumulator advances
+    // unmodulated (#132 phase modulation). 0 -> read AT `phase`, bit-identical to the original.
+    double coreSample (double phaseOffset = 0.0)
     {
         const double dt = phaseInc;
+        const double rp = (phaseOffset == 0.0) ? phase : frac01 (phase + phaseOffset);   // read phase
         double out = 0.0;
 
         switch (wave)
         {
             case Wave::Saw:
-                out = 2.0 * phase - 1.0;
-                out -= polyBlep (phase, dt);
+                out = 2.0 * rp - 1.0;
+                out -= polyBlep (rp, dt);
                 break;
 
             case Wave::Square:
-                out = (phase < pulseWidth ? 1.0 : -1.0);
-                out += polyBlep (phase, dt);                           // rising edge at 0
-                out -= polyBlep (wrap (phase - pulseWidth + 1.0), dt); // falling edge at PW
+                out = (rp < pulseWidth ? 1.0 : -1.0);
+                out += polyBlep (rp, dt);                           // rising edge at 0
+                out -= polyBlep (wrap (rp - pulseWidth + 1.0), dt); // falling edge at PW
                 break;
 
             case Wave::Triangle:
@@ -135,9 +158,18 @@ private:
                 // (triangle harmonics fall as 1/k^2) and the 4x decimation cleans
                 // it up. This avoids the leaky-integrator's droop/overshoot.
                 // (A polyBLAMP-corrected triangle is a possible v2 refinement.)
-                const double up  = phase / pulseWidth;
-                const double dn  = (1.0 - phase) / (1.0 - pulseWidth);
-                out = 2.0 * (phase < pulseWidth ? up : dn) - 1.0;
+                const double up  = rp / pulseWidth;
+                const double dn  = (1.0 - rp) / (1.0 - pulseWidth);
+                out = 2.0 * (rp < pulseWidth ? up : dn) - 1.0;
+                break;
+            }
+
+            case Wave::Wavetable:
+            {
+                // Smooth the position per oversample step (zipper-safe); snap on a fresh voice.
+                if (wtSnap) { wtPos = wtPosTarget; wtSnap = false; }
+                else        wtPos += kWtSmooth * (wtPosTarget - wtPos);
+                out = (wt != nullptr && wt->valid()) ? (double) wt->read (rp, (float) wtPos, wtMip) : 0.0;
                 break;
             }
 
@@ -230,6 +262,11 @@ private:
     double  pulseWidth = 0.5;
     int     oversample = 4;
     int     firLen     = 48;
+
+    const Wavetable* wt = nullptr;               // shared source for Wave::Wavetable (null = silent)
+    int     wtMip       = 0;                     // mip cached per setFrequency() (pitch-dependent)
+    double  wtPos       = 0.0, wtPosTarget = 0.0;// smoothed frame position in [0,1]
+    bool    wtSnap      = true;                  // snap wtPos to target on the next fresh render
 
     std::array<float,  kMaxFirLen>     h  {};            // decimation taps (symmetric, float MAC)
     std::array<double, kMaxFirLen>     hd {};            // design scratch (double, unused at RT)

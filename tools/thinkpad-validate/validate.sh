@@ -3,11 +3,13 @@
 # ThinkPad validation — run ON the ThinkPad X1 Carbon (3rd gen, Linux).
 # Self-contained: needs only a C++17 compiler (g++/clang++). No JUCE, no cmake.
 #
-#   ./validate.sh                 # full run: build, bench, 10-min soak, PipeWire
+#   ./validate.sh                 # FULL gate: build, bench, 10-min soak @128 & @256, PipeWire
+#   ./validate.sh --quick         # QUICK: build + bench only (no soak) — for iteration, NOT the gate
 #   SOAK_SECS=60 ./validate.sh    # shorter soak (smoke test)
 #
-# Produces thinkpad-report.txt next to this script. Paste it back to the dev box:
-# its measured numbers become the REAL derate factor, replacing the assumed x3.5.
+# Writes ONE report next to this script: thinkpad-report.txt. Paste it back to the
+# dev box — its MEASURED numbers replace the assumed x3.5 derate and settle every
+# provisional CPU decision (see the "report-processing contract" in README.md).
 # ============================================================================
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,37 +18,57 @@ SOAK_SECS="${SOAK_SECS:-600}"
 CXX="${CXX:-g++}"
 CXXFLAGS="-O3 -march=native -std=c++17"
 
-# ---- governor: set performance, restore on exit ----------------------------
+QUICK=0
+for arg in "$@"; do case "$arg" in
+  --quick) QUICK=1 ;;
+  -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  *) echo "unknown arg: $arg (use --quick or -h)"; exit 2 ;;
+esac; done
+
+# ---- governor: set performance, restore on ANY exit (incl. Ctrl-C) ---------
 GOV_PATHS=(/sys/devices/system/cpu/cpu*/cpufreq/scaling_governor)
 declare -a SAVED_GOV=()
+GOV_ARMED=0
 restore_governor() {
-  [ "${#SAVED_GOV[@]}" -eq 0 ] && return
+  [ "$GOV_ARMED" -eq 1 ] || return 0
+  GOV_ARMED=0
   echo "Restoring CPU governor..." >&2
   local i=0
   for g in "${GOV_PATHS[@]}"; do
-    [ -w "$g" ] && echo "${SAVED_GOV[$i]}" | sudo tee "$g" >/dev/null 2>&1
+    [ -e "$g" ] && echo "${SAVED_GOV[$i]}" | sudo tee "$g" >/dev/null 2>&1
     i=$((i+1))
   done
 }
 set_performance() {
   local cur; cur="$(cat "${GOV_PATHS[0]}" 2>/dev/null || echo unknown)"
   for g in "${GOV_PATHS[@]}"; do SAVED_GOV+=("$(cat "$g" 2>/dev/null || echo unknown)"); done
+  # Arm the restore trap BEFORE touching anything, so Ctrl-C mid-run always restores.
+  trap restore_governor EXIT INT TERM
+  GOV_ARMED=1
   if [ "$cur" = "performance" ]; then echo "Governor already 'performance'."; return 0; fi
-  echo "CPU governor is '$cur'. Setting 'performance' (needs sudo; will restore on exit)..."
+  echo "CPU governor is '$cur'. Setting 'performance' (needs sudo; restores on exit)..."
   local ok=1
   for g in "${GOV_PATHS[@]}"; do echo performance | sudo tee "$g" >/dev/null 2>&1 || ok=0; done
-  trap restore_governor EXIT INT TERM
   local now; now="$(cat "${GOV_PATHS[0]}" 2>/dev/null || echo unknown)"
   if [ "$now" = "performance" ]; then echo "Governor set to 'performance'."; return 0; fi
-  echo "!! Could not set 'performance' (ok=$ok). Bench numbers will be INVALID — see memory note."; return 1
+  echo "!! Could not set 'performance' (ok=$ok)."; return 1
 }
 
 section() { echo; echo "======== $* ========"; }
+skip()    { echo "SKIPPED: $*"; }        # honest degrade — a scenario that can't run says so, loudly
+
+GOV_OK=1
 
 run_all() {
   echo "synth ThinkPad validation report"
   echo "generated: $(date -u +%Y-%m-%dT%H:%M:%SZ) (UTC)"
+  if [ "$QUICK" -eq 1 ]; then
+    echo "MODE: QUICK  (build + bench only, NO soak) -- this is NOT the ship gate, do not treat it as one."
+  else
+    echo "MODE: FULL   (build + bench + ${SOAK_SECS}s soak @128 and @256 + PipeWire)"
+  fi
   [ -f "$HERE/BUNDLE_INFO" ] && { echo "bundle:"; sed 's/^/  /' "$HERE/BUNDLE_INFO"; }
+  [ "$GOV_OK" -eq 1 ] || echo "WARNING: governor is NOT 'performance' -- bench/soak numbers are INVALID (see bench-governor note). Re-run with governor set."
 
   section "CPU / CLOCK / GOVERNOR CONTEXT"
   echo "governor (cpu0): $(cat "${GOV_PATHS[0]}" 2>/dev/null || echo n/a)"
@@ -65,24 +87,40 @@ run_all() {
 
   section "BUILD (bare compiler, no JUCE/cmake)"
   if ! command -v "$CXX" >/dev/null 2>&1; then
-    echo "!! '$CXX' not found. Install a compiler, e.g.:  sudo apt-get install -y build-essential"
-    echo "   (then re-run). Skipping bench + soak."
+    skip "compiler '$CXX' not found -- install one (sudo apt-get install -y build-essential) and re-run. Bench + soak cannot run."
     return 0
   fi
   echo "compiler: $($CXX --version | head -1)"
   echo "flags   : $CXXFLAGS"
-  set -x
-  "$CXX" $CXXFLAGS "$HERE/bench/bench_engine.cpp" -I"$HERE/dsp" -o "$HERE/dsp_bench" -lpthread
-  "$CXX" $CXXFLAGS "$HERE/soak_harness.cpp"        -I"$HERE/dsp" -o "$HERE/soak"      -lpthread
-  set +x
-  echo "built: dsp_bench, soak"
+  local built_bench=0 built_soak=0
+  if "$CXX" $CXXFLAGS "$HERE/bench/bench_engine.cpp" -I"$HERE/dsp" -o "$HERE/dsp_bench" -lpthread 2>"$HERE/.bench_build.log"; then
+    built_bench=1; echo "built: dsp_bench"
+  else
+    skip "dsp_bench did not compile -- see error below (report is INCOMPLETE):"; sed 's/^/   /' "$HERE/.bench_build.log"
+  fi
+  if "$CXX" $CXXFLAGS "$HERE/soak_harness.cpp" -I"$HERE/dsp" -o "$HERE/soak" -lpthread 2>"$HERE/.soak_build.log"; then
+    built_soak=1; echo "built: soak"
+  else
+    skip "soak did not compile -- see error below:"; sed 's/^/   /' "$HERE/.soak_build.log"
+  fi
 
-  section "DSP BENCH (measured on THIS machine — the real derate source)"
-  "$HERE/dsp_bench" || echo "!! bench failed"
+  section "DSP BENCH (measured on THIS machine -- the real derate source)"
+  if [ "$built_bench" -eq 1 ]; then "$HERE/dsp_bench" || skip "dsp_bench crashed at runtime."; else skip "no dsp_bench binary (build failed above)."; fi
 
-  section "10-MINUTE SOAK (compute-overrun proxy + thermal stress, ALL FX)"
-  echo "duration: ${SOAK_SECS}s at block=128 (progress on stderr every 30s)"
-  "$HERE/soak" "$SOAK_SECS" 128 || echo "!! soak failed"
+  if [ "$QUICK" -eq 1 ]; then
+    section "SOAK"
+    skip "QUICK mode -- soak not run. Re-run WITHOUT --quick for the ship gate."
+  else
+    for blk in 128 256; do
+      section "${SOAK_SECS}s SOAK @ block=$blk (compute-overrun proxy + thermal stress, ALL FX)"
+      if [ "$built_soak" -eq 1 ]; then
+        echo "duration: ${SOAK_SECS}s at block=$blk (progress on stderr every 30s)"
+        "$HERE/soak" "$SOAK_SECS" "$blk" || skip "soak @${blk} crashed at runtime."
+      else
+        skip "no soak binary (build failed above) -- cannot report overruns @${blk}."
+      fi
+    done
+  fi
 
   section "PIPEWIRE / AUDIO CONFIG (quantum + rate at 128 and 256)"
   if command -v pw-metadata >/dev/null 2>&1; then
@@ -94,18 +132,19 @@ run_all() {
     done
     pw-metadata -n settings 0 clock.force-quantum 0 >/dev/null 2>&1   # back to auto
     echo "(restored clock.force-quantum=0)"
-    command -v pw-top >/dev/null 2>&1 && { echo "-- pw-top snapshot:"; timeout 3 pw-top -b -n 2 2>/dev/null | tail -n +1 | sed 's/^/   /'; }
+    command -v pw-top >/dev/null 2>&1 && { echo "-- pw-top snapshot:"; timeout 3 pw-top -b -n 2 2>/dev/null | sed 's/^/   /'; }
   elif command -v pactl >/dev/null 2>&1; then
-    echo "pw-metadata not found; PulseAudio/pipewire-pulse sink info:"; pactl list sinks short 2>/dev/null | sed 's/^/   /'
+    skip "pw-metadata not found; PulseAudio/pipewire-pulse sink info instead:"; pactl list sinks short 2>/dev/null | sed 's/^/   /'
   else
-    echo "No PipeWire/PulseAudio tools found. ALSA cards:"; cat /proc/asound/cards 2>/dev/null | sed 's/^/   /'
+    skip "no PipeWire/PulseAudio tools found. ALSA cards:"; cat /proc/asound/cards 2>/dev/null | sed 's/^/   /'
   fi
 
   section "DONE"
-  echo "Paste $REPORT back to the dev box. These numbers replace the assumed x3.5 derate."
+  [ "$QUICK" -eq 1 ] && echo "(QUICK run -- soak was skipped; this is NOT the gate.)"
+  echo "DONE -- paste thinkpad-report.txt back"
 }
 
 echo "== synth ThinkPad validation =="
-set_performance || true
+set_performance && GOV_OK=1 || GOV_OK=0
 run_all 2>&1 | tee "$REPORT"
 # governor restored by the EXIT trap

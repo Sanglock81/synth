@@ -12,6 +12,13 @@
 // are read with linear interpolation; rate/depth/mix are smoothed so knob moves
 // never zipper.
 //
+// VOICES (Tier 4c): with `voices == 2` a SECOND modulated tap is read per channel
+// at a longer centre delay (19 ms) with its LFO inverted (180°/270°) relative to
+// the first — dimension-style thickening that further decorrelates L/R. The two
+// taps are summed at half weight so the wet level stays controlled. voices == 1
+// (default) is the exact single-tap path (goldens bit-identical); toggling 1<->2
+// crossfades via a smoothed blend (`smVoices`), so it is click-free mid-note.
+//
 // The delay-line buffers are sized once in prepare() (50 ms) and never resized;
 // process() only reads/writes existing storage.
 // ============================================================================
@@ -36,14 +43,16 @@ public:
         phase = 0.0f;
         smMix = mix;
         smDepth = depth;
+        smVoices = voices2 ? 1.0f : 0.0f;
     }
 
-    // rateHz 0.05..8, depth 0..1, mix 0..1 (wet fraction).
-    void setParams (float rateHz, float depth01, float mix01)
+    // rateHz 0.05..8, depth 0..1, mix 0..1 (wet fraction), voices 1 or 2.
+    void setParams (float rateHz, float depth01, float mix01, int voices = 1)
     {
         rate  = std::clamp (rateHz,  0.05f, 8.0f);
         depth = std::clamp (depth01, 0.0f, 1.0f);
         mix   = std::clamp (mix01,   0.0f, 1.0f);
+        voices2 = voices >= 2;
     }
 
     void process (float* left, float* right, int numSamples)
@@ -52,10 +61,14 @@ public:
         const float centreSamp = kCentreMs * 0.001f * (float) sampleRate;
         const float swingSamp  = kSwingMs  * 0.001f * (float) sampleRate;
 
+        const float centreSamp2 = kCentreMs2 * 0.001f * (float) sampleRate;
+        const float voicesTarget = voices2 ? 1.0f : 0.0f;
+
         for (int i = 0; i < numSamples; ++i)
         {
-            smMix   += kSmoothCoef * (mix   - smMix);
-            smDepth += kSmoothCoef * (depth - smDepth);
+            smMix    += kSmoothCoef * (mix   - smMix);
+            smDepth  += kSmoothCoef * (depth - smDepth);
+            smVoices += kSmoothCoef * (voicesTarget - smVoices);   // dual-tap blend (click-safe toggle)
 
             bufL[(size_t) writePos] = left[i];
             bufR[(size_t) writePos] = right[i];
@@ -66,8 +79,24 @@ public:
             const float dL = centreSamp + swingSamp * smDepth * lfoL;
             const float dR = centreSamp + swingSamp * smDepth * lfoR;
 
-            const float wetL = readInterp (bufL, (float) writePos - dL);
-            const float wetR = readInterp (bufR, (float) writePos - dR);
+            float wetL = readInterp (bufL, (float) writePos - dL);
+            float wetR = readInterp (bufR, (float) writePos - dR);
+
+            if (smVoices > 0.0f)
+            {
+                // Second tap: longer centre delay, LFO at 120°/240° (independent of tap A's
+                // 0°/90°) so L and R gain genuinely different modulation -> wider field. Blend
+                // from tap-A-only (g=0) to half-A + half-B (g=1).
+                const float lfoBL = std::sin (kTwoPi * phase + kThird);
+                const float lfoBR = std::sin (kTwoPi * phase + kTwoThird);
+                const float dL2 = centreSamp2 + swingSamp * smDepth * lfoBL;
+                const float dR2 = centreSamp2 + swingSamp * smDepth * lfoBR;
+                const float wetL2 = readInterp (bufL, (float) writePos - dL2);
+                const float wetR2 = readInterp (bufR, (float) writePos - dR2);
+                const float g = 0.5f * smVoices;
+                wetL = wetL * (1.0f - g) + wetL2 * g;
+                wetR = wetR * (1.0f - g) + wetR2 * g;
+            }
 
             left[i]  = left[i]  * (1.0f - smMix) + wetL * smMix;
             right[i] = right[i] * (1.0f - smMix) + wetR * smMix;
@@ -87,6 +116,7 @@ public:
         phase = other.phase;
         smMix = other.smMix;
         smDepth = other.smDepth;
+        smVoices = other.smVoices;
     }
 
 private:
@@ -103,7 +133,10 @@ private:
 
     static constexpr float kTwoPi   = 6.283185307179586f;
     static constexpr float kHalfPi  = 1.5707963267948966f;
-    static constexpr float kCentreMs = 12.0f;
+    static constexpr float kThird    = 2.0943951023931953f;   // 120°
+    static constexpr float kTwoThird = 4.1887902047863905f;   // 240°
+    static constexpr float kCentreMs  = 12.0f;
+    static constexpr float kCentreMs2 = 19.0f;   // second tap (Tier 4c) — a distinct, longer delay
     static constexpr float kSwingMs  = 8.0f;
     static constexpr float kSmoothCoef = 0.001f;
 
@@ -114,5 +147,6 @@ private:
     float phase = 0.0f;
 
     float rate = 0.8f, depth = 0.5f, mix = 0.5f;
-    float smMix = 0.5f, smDepth = 0.5f;
+    bool  voices2 = false;
+    float smMix = 0.5f, smDepth = 0.5f, smVoices = 0.0f;
 };

@@ -1,3 +1,5 @@
 dsp_bench
 soak
 thinkpad-report.txt
+.bench_build.log
+.soak_build.log
