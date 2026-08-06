@@ -49,6 +49,46 @@ TEST_CASE ("looper: recorded note plays next cycle, not the recording pass", "[d
     REQUIRE (cycle (lp, 100).size() == 1);
 }
 
+// P0 (post-1.0 hands-on): after a couple loops the MIDI looper stacks OVERLAPPING triggers.
+// A recorded note with a duration (on + off) must, every steady-state cycle, emit EXACTLY one
+// on and one off (no doubling) and never leave the note held across the loop top (no hanging
+// voice that the next cycle's on stacks on). Track the running held-count over many cycles.
+TEST_CASE ("looper: multi-cycle playback does not accumulate or double-trigger (P0)", "[dsp][looper]")
+{
+    Looper lp; const int len = 1000; setLen (lp, 0, len);
+    lp.setQuantize (0, false);
+    lp.setPlaying (0, true); lp.setRecording (0, true);
+    lp.recordNote (0, 100, 60, 0.8f, true);      // a normal recorded note: on @100 ...
+    lp.recordNote (0, 600, 60, 0.0f, false);     // ... off @600
+    lp.setRecording (0, false);
+
+    int held = 0, maxHeld = 0, minHeld = 0;
+    for (int c = 0; c < 6; ++c)
+    {
+        int ons = 0, offs = 0;
+        for (int done = 0; done < len; done += 128)
+        {
+            const int n = std::min (128, len - done);
+            lp.playBlock (n, [&] (int, int note, float, bool on)
+            {
+                if (note != 60) return;
+                if (on) { ++ons; ++held; } else { ++offs; --held; }
+                maxHeld = std::max (maxHeld, held); minHeld = std::min (minHeld, held);
+            });
+            lp.advance (n);
+        }
+        INFO ("cycle " << c << " ons=" << ons << " offs=" << offs << " held=" << held);
+        if (c >= 1)                              // cycle 0 arms; steady state from cycle 1
+        {
+            REQUIRE (ons  == 1);                 // exactly one trigger per cycle (no doubling)
+            REQUIRE (offs == 1);                 // exactly one release per cycle (no dropped/hanging off)
+        }
+    }
+    REQUIRE (maxHeld <= 1);                       // the note is never stacked on itself
+    REQUIRE (minHeld >= 0);                       // no spurious extra note-off
+    REQUIRE (held == 0);                          // balanced at the end
+}
+
 TEST_CASE ("looper: per-part lanes are independent", "[dsp][looper]")
 {
     Looper lp; lp.setMasterLength (800); lp.setLoopLength (0, 800); lp.setLoopLength (2, 800);

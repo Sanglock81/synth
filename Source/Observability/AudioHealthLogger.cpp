@@ -146,5 +146,9 @@ AudioHealthLogger::Snapshot AudioHealthLogger::snapshot() const noexcept
     s.cpuPercent      = s.budgetMs > 0.0f ? double (s.p99Ms) / double (s.budgetMs) * 100.0 : 0.0;
     s.clipSamples     = aClip.load();
     s.clipActive      = s.clipSamples > 0;
+    s.voicesLive      = aLive.load (std::memory_order_relaxed);
+    s.voicesGen       = aGen.load  (std::memory_order_relaxed);
+    s.voicesSmp       = aSmp.load  (std::memory_order_relaxed);
+    s.masterPeak      = aPeak.load (std::memory_order_relaxed);
     return s;
 }

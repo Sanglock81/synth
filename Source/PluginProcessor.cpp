@@ -3292,6 +3292,7 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
     const bool smoothing = masterGain.isSmoothing();
     const float gConst = masterGain.getTargetValue();
     int clipSamples = 0;
+    float masterPeak = 0.0f;
     for (int i = 0; i < numSamples; ++i)
     {
         const float g = smoothing ? masterGain.getNextValue() : gConst;
@@ -3299,8 +3300,10 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
         L[i] = SoftClip::process (L[i] * g, engaged);
         R[i] = SoftClip::process (R[i] * g, engaged);
         if (engaged) ++clipSamples;
+        masterPeak = std::max (masterPeak, std::max (std::abs (L[i]), std::abs (R[i])));
     }
     health.logClip (clipSamples);
+    health.logMasterPeak (masterPeak);            // F12 meter: disambiguate "sound at 0 voices" (FX tail vs hole)
     pushScope (L, R, numSamples);                 // master scope/FFT tap (RT-safe)
 
     // --- write to the output bus. Stereo: L/R; extra channels get L; a mono host
@@ -3325,6 +3328,8 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
     if (renderMs > (float) budgetMs)
         health.logOverrun (renderMs, (float) budgetMs, blockIndex);   // xrun early-warning
     health.logVoiceCount (engine.activeVoiceCount());
+    { int vLive = 0, vGen = 0, vSmp = 0; engine.activeVoiceBreakdown (vLive, vGen, vSmp);   // F12 live breakout
+      health.logVoiceBreakdown (vLive, vGen, vSmp); }
     const std::uint64_t steals = engine.stealCount();
     health.logSteals ((int) (steals - lastSteals));
     lastSteals = steals;

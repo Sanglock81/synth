@@ -123,6 +123,63 @@ TEST_CASE ("looper records a performance and plays it back next cycle", "[plugin
     REQUIRE (energyLater > 0.0);           // the recorded note looped back around
 }
 
+// P0 (hands-on): after a couple loops the MIDI looper stacks OVERLAPPING triggers. Record ONE note
+// with a real duration, let it auto-complete + loop many cycles, and watch (a) the lane's recorded
+// event count (must FREEZE after the pass -- growth = the loop re-recording its own playback) and
+// (b) the part's active voice count (must stay bounded -- climbing = voices accumulating each loop).
+TEST_CASE ("looper: MIDI playback does not accumulate voices or events over many loops (P0)", "[plugin][looper]")
+{
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.apvts.getParameter (ParamID::tempo)->setValueNotifyingHost (1.0f);    // fast -> short loop
+    p.apvts.getParameter (ParamID::loopBars)->setValueNotifyingHost (0.0f); // 1 bar
+    p.apvts.getParameter (ParamID::loopRec)->setValueNotifyingHost (1.0f);
+
+    juce::AudioBuffer<float> buf (2, 128); juce::MidiBuffer m;
+    p.routeNoteOn (60, 0.9f, 0);
+    for (int b = 0; b < 6; ++b) { buf.clear(); p.processBlock (buf, m); }    // hold the note a moment
+    p.routeNoteOff (60, 0);
+    for (int b = 0; b < 400; ++b) { buf.clear(); p.processBlock (buf, m); }  // record pass completes + auto-play
+    REQUIRE (p.loopLaneHasContent (0));
+    const int evAfterRec = p.loopLaneEventCount (0);
+
+    int maxVoices = 0, maxEvents = evAfterRec;
+    for (int b = 0; b < 3000; ++b)                                           // ~ many loop cycles
+    {
+        buf.clear(); m.clear(); p.processBlock (buf, m);
+        maxVoices = std::max (maxVoices, p.activeVoicesForPart (0));
+        maxEvents = std::max (maxEvents, p.loopLaneEventCount (0));
+    }
+    WARN ("events after rec=" << evAfterRec << "  max events later=" << maxEvents << "  max voices=" << maxVoices);
+    REQUIRE (maxEvents == evAfterRec);   // the lane's event set is frozen after the one-shot pass (no re-record)
+    REQUIRE (maxVoices <= 3);            // a single looped note never stacks into a growing pile of voices
+}
+
+// #142 (F12 coverage / "voice count reads 0 while the looper is sounding"): while a MIDI loop is
+// audibly replaying, the LIVE voice count must reflect it -- the looper's voices are GENERATOR
+// voices, so they land in GEN. The overlay now reads an instantaneous per-block breakdown, not the
+// 10 s window high-water that used to sit at 0.
+TEST_CASE ("looper: replaying voices show up as GEN in the live count (#142)", "[plugin][looper][voices]")
+{
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.apvts.getParameter (ParamID::tempo)->setValueNotifyingHost (1.0f);
+    p.apvts.getParameter (ParamID::loopRec)->setValueNotifyingHost (1.0f);
+    p.apvts.getParameter (ParamID::loopPlay)->setValueNotifyingHost (1.0f);
+
+    juce::AudioBuffer<float> buf (2, 128); juce::MidiBuffer m;
+    p.routeNoteOn (60, 0.9f, 0);                                         // a sustained note in the loop
+    int maxGen = 0, maxTotal = 0;
+    for (int b = 0; b < 500; ++b)                                        // record the pass, then replay it
+    {
+        buf.clear(); m.clear(); p.processBlock (buf, m);
+        const auto s = p.health.snapshot();
+        maxGen   = std::max (maxGen,   s.voicesGen);
+        maxTotal = std::max (maxTotal, s.voicesLive + s.voicesGen + s.voicesSmp);
+    }
+    INFO ("maxGen=" << maxGen << " maxTotal=" << maxTotal);
+    REQUIRE (maxGen   >= 1);                                             // the looped voice is counted (as GEN), not 0
+    REQUIRE (maxTotal >= 1);
+}
+
 TEST_CASE ("looper REC is one-shot: records the set bars then auto-stops and plays", "[plugin][looper]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);

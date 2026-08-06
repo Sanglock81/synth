@@ -64,6 +64,16 @@ public:
         RtLogEvent e; e.kind = RtLogEvent::Kind::Clip; e.i0 = n;
         ring.push (e);
     }
+    // INSTANTANEOUS live telemetry (audio thread, direct atomic store — NOT the aggregated ring):
+    // the current per-block voice breakdown (LIVE/GEN/SMP) and master output peak, so the overlay
+    // shows the live count/level with ~1-block latency instead of the ~10 s stats window. RT-safe.
+    void logVoiceBreakdown (int live, int gen, int smp) noexcept
+    {
+        aLive.store (live, std::memory_order_relaxed);
+        aGen .store (gen,  std::memory_order_relaxed);
+        aSmp .store (smp,  std::memory_order_relaxed);
+    }
+    void logMasterPeak (float peak) noexcept { aPeak.store (peak, std::memory_order_relaxed); }
 
     // ---- message thread: direct (non-RT) logging ---------------------------
     void logMessage (const juce::String& text) { emit (text); }
@@ -77,6 +87,9 @@ public:
         double         cpuPercent = 0;    // p99 / budget * 100
         std::uint64_t  clipSamples = 0;   // clipper-engaged samples this window
         bool           clipActive = false; // clipper engaged in the last window
+        // Instantaneous (this-block) live values — updated ~every block, not the 10 s window:
+        int            voicesLive = 0, voicesGen = 0, voicesSmp = 0;   // synth LIVE / GEN + sample SMP
+        float          masterPeak = 0.0f;  // master output peak this block (0..~1)
     };
     Snapshot snapshot() const noexcept;
 
@@ -105,6 +118,9 @@ private:
     std::atomic<float> aMedian { 0 }, aP99 { 0 }, aMax { 0 }, aBudget { 2.667f };
     std::atomic<int>   aVoiceHW { 0 }, aSteals { 0 }, aOverrunsTotal { 0 };
     std::atomic<std::uint64_t> aClip { 0 };
+    // instantaneous live values (audio thread writes directly, message thread reads)
+    std::atomic<int>   aLive { 0 }, aGen { 0 }, aSmp { 0 };
+    std::atomic<float> aPeak { 0.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioHealthLogger)
 };

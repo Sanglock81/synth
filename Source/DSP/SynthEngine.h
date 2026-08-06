@@ -225,6 +225,16 @@ public:
         for (auto& v : voices) if (v.isActive() && v.getPart() == part) ++c;
         return c;
     }
+    // Break the live voice count out by ORIGIN so a leak's source is visible: LIVE (played) vs
+    // GEN (arp/seq/looper generator voices) in the synth pool, plus SMP (the separate sample-pad
+    // pool, which activeVoiceCount() does NOT include). Counts ALL sounding voices across parts.
+    void activeVoiceBreakdown (int& live, int& gen, int& smp) const
+    {
+        live = gen = smp = 0;
+        for (auto& v : voices)
+            if (v.isActive()) { if (v.isGenerator()) ++gen; else ++live; }
+        for (auto& sv : sampleVoices) if (sv.isActive()) ++smp;
+    }
     std::uint64_t stealCount() const { return stealCounter; }
 
     void noteOff (int note, int part = 0)

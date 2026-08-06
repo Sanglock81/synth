@@ -60,3 +60,23 @@ TEST_CASE ("voice pool: default pool holds 24 simultaneous voices for multitimbr
     eng.noteOn (84, 0.9f, /*part*/ 0, /*slot*/ 0, /*generator*/ false);
     REQUIRE (eng.activeVoiceCount() == 24);
 }
+
+// #142 (F12 coverage): the live voice count must break out by ORIGIN so a leak's source is visible.
+// LIVE = played voices, GEN = generator voices (arp/seq/looper), SMP = the separate sample-pad pool
+// (which activeVoiceCount() does NOT include). This is what the F12 overlay reads live per block.
+TEST_CASE ("voice breakdown: LIVE / GEN / SMP counted separately (#142)", "[engine][voices]")
+{
+    SynthEngine eng; eng.prepare (48000.0, 128); eng.setMaxVoices (16);
+    int live = -1, gen = -1, smp = -1;
+    eng.activeVoiceBreakdown (live, gen, smp);
+    REQUIRE (live == 0); REQUIRE (gen == 0); REQUIRE (smp == 0);
+
+    eng.noteOn (60, 0.9f, 0, 0, /*generator*/ false);   // a LIVE (played) note
+    eng.noteOn (64, 0.9f, 0, 0, /*generator*/ true);    // a GENERATOR (arp/seq/looper) note
+    eng.noteOn (67, 0.9f, 0, 0, /*generator*/ true);    // another generator note
+    eng.activeVoiceBreakdown (live, gen, smp);
+    REQUIRE (live == 1);                                  // one live voice
+    REQUIRE (gen  == 2);                                  // two generator voices
+    REQUIRE (smp  == 0);                                  // no sample-pad voices
+    REQUIRE (live + gen == eng.activeVoiceCount());       // the synth breakdown reconciles with the total
+}
