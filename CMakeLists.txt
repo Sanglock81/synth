@@ -44,9 +44,11 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
-# Install the built VST3 into the user plugin dir after each build (handy for
-# local dev). OFF in CI, where the system VST3 dir may be unwritable.
-option(VASYNTH_COPY_PLUGIN "Copy the VST3 to the user plugin dir after build" ON)
+# Install the built VST3 into the user plugin dir after each build. OFF by default:
+# a post-build COPY overwrites the ~/.vst3/synth.vst3 SYMLINK that tools/install-vst3.sh
+# creates (the symlink is the never-stale install path). Turn ON for a one-shot copy if
+# you prefer that; CI keeps it OFF anyway (the system VST3 dir may be unwritable).
+option(VASYNTH_COPY_PLUGIN "Copy the VST3 to the user plugin dir after build" OFF)
 
 # One target definition produces BOTH the VST3 and the standalone app.
 juce_add_plugin(VASynth

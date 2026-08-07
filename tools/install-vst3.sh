@@ -34,6 +34,13 @@ case "$(uname -s)" in
     done
     shopt -u nullglob
 
+    # Stop the post-build COPY_PLUGIN_AFTER_BUILD from stomping this symlink back into a real copy.
+    # The CMake default is OFF, but an already-configured build/ has the old ON cached — update it.
+    if [[ -f "$ROOT/build/CMakeCache.txt" ]] && grep -q "VASYNTH_COPY_PLUGIN:BOOL=ON" "$ROOT/build/CMakeCache.txt"; then
+      echo "disabling COPY_PLUGIN in build/ cache (so it won't overwrite the symlink)"
+      cmake -B "$ROOT/build" -DVASYNTH_COPY_PLUGIN=OFF >/dev/null 2>&1 || true
+    fi
+
     # Replace whatever is there (an old symlink, or a real copy left by COPY_PLUGIN_AFTER_BUILD)
     # with a fresh symlink. rm -rf first, else `ln -s` into an existing real dir nests inside it.
     rm -rf "$DEST_DIR/synth.vst3"
