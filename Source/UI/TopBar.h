@@ -80,6 +80,14 @@ public:
         full.onClick = [this] { if (toggleFullscreen) toggleFullscreen(); if (restoreFocus) restoreFocus(); };
         addAndMakeVisible (full);
 
+        // PANIC (Ctrl+.): release EVERY voice — live, looper lanes, seq/arp, and the sample pool —
+        // click-safe (envelope release path, not a hard cut). The engine primitive already exists.
+        panic.setButtonText ("PANIC"); styleBtn (panic);
+        panic.setColour (juce::TextButton::textColourOffId, juce::Colour (0xffd8443a));   // red = emergency stop
+        panic.setTooltip ("PANIC (Ctrl+.): release every voice — live, loops, seq/arp, samples — click-safe");
+        panic.onClick = [this] { proc.requestAllNotesOff(); proc.postToast ("PANIC"); if (restoreFocus) restoreFocus(); };
+        addAndMakeVisible (panic);
+
         help.setButtonText ("?"); styleBtn (help);
         help.onClick = [this] { if (toggleHelp) toggleHelp(); };
         addAndMakeVisible (help);
@@ -197,6 +205,7 @@ public:
         full.setBounds (tb.removeFromRight (36).reduced (0, 16)); tb.removeFromRight (6);
         master->setBounds (tb.removeFromRight (92)); tb.removeFromRight (4);
         rec.setBounds (tb.removeFromRight (54).reduced (0, 16)); tb.removeFromRight (10);
+        panic.setBounds (tb.removeFromRight (62).reduced (0, 16)); tb.removeFromRight (10);   // emergency stop, left of REC
 
         // Voice group (poly/mono/legato + glide), just right of the preset area.
         mode->setBounds (tb.removeFromLeft (120).withSizeKeepingCentre (120, 30)); tb.removeFromLeft (6);
@@ -460,6 +469,7 @@ private:
 
     juce::TextButton presetBtn, save, random, clear, rec, full, help;
     juce::TextButton vary;                              // H5: perturb the current patch
+    juce::TextButton panic;                             // all-notes-off (live + loops + seq/arp + samples)
     juce::TextButton link, mod, inputs, outputs;        // global-action row
     bool linkWasArmed = false;
     inline static const juce::Colour kLinkRing { 0xff4bb3c4 };   // LINK cyan (matches the knob armed ring)

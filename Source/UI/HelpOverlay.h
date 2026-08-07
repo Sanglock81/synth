@@ -62,8 +62,9 @@ public:
             { "VOICES 1|2 (chorus)", "2 adds a second decorrelated tap — thicker, wider chorus" },
             { "SAT knob (FX width)", "tube-style saturation (even harmonics), applied before widening" },
             { "SYNC / DIV (LFO)", "lock the LFO to tempo; DIV sets the note division" },
+            { "PANIC  (Ctrl + .)", "all-notes-off: release every voice (live, loops, seq/arp, samples), click-safe" },
             { "F11", "fullscreen (standalone)" },
-            { "F12", "audio-health debug overlay" },
+            { "F12", "audio-health debug overlay (live LIVE/GEN/SMP voice counts + master meter)" },
             { "?  (Shift + /)", "show / hide this help" },
         };
         for (auto& row : rows)

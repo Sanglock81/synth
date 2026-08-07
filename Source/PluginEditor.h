@@ -278,6 +278,8 @@ public:
     bool keyPressed (const juce::KeyPress& key) override
     {
         if (key == juce::KeyPress::F12Key) { overlay.setVisible (! overlay.isVisible()); return true; }
+        if (key == juce::KeyPress ('.', juce::ModifierKeys::ctrlModifier, 0))   // PANIC: all-notes-off
+            { proc.requestAllNotesOff(); proc.postToast ("PANIC"); return true; }
         if (key == juce::KeyPress::F11Key && isStandalone()) { toggleFullscreen(); return true; }
         if (key.getTextCharacter() == '?') { toggleHelp(); return true; }
         if (key == juce::KeyPress::escapeKey && (helpOverlay.isVisible() || guideOverlay.isVisible())) { hideHelp(); return true; }

@@ -80,3 +80,20 @@ TEST_CASE ("voice breakdown: LIVE / GEN / SMP counted separately (#142)", "[engi
     REQUIRE (smp  == 0);                                  // no sample-pad voices
     REQUIRE (live + gen == eng.activeVoiceCount());       // the synth breakdown reconciles with the total
 }
+
+// #144 PANIC: allNotesOff() must RELEASE every voice — live AND generator (and the sample pool) —
+// via the envelope release path (click-safe), so the pool frees up. Here: 4 live + 4 generator
+// voices on part 0, panic, then render past a short release and confirm the pool is empty.
+TEST_CASE ("allNotesOff releases every voice, live + generator (#144)", "[engine][voices][panic]")
+{
+    SynthEngine eng; eng.prepare (48000.0, 128); eng.setMaxVoices (16);
+    for (int i = 0; i < 4; ++i) eng.noteOn (60 + i, 0.9f, 0, 0, /*generator*/ false);
+    for (int i = 0; i < 4; ++i) eng.noteOn (48 + i, 0.9f, 0, 0, /*generator*/ true);
+    REQUIRE (eng.activeVoiceCount() == 8);
+
+    eng.allNotesOff();                                   // PANIC (release path)
+    VoiceParams p; p.osc1Wave = 0; p.osc1Level = 0.8f; p.ampS = 0.0f; p.ampR = 0.004f;   // short release
+    std::vector<float> out (128, 0.0f);
+    for (int b = 0; b < 300; ++b) eng.render (out.data(), 128, p, 3.0f, 0, 0.3f, 2);
+    REQUIRE (eng.activeVoiceCount() == 0);               // every voice released and freed
+}
