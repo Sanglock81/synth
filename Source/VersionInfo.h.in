@@ -2,3 +2,9 @@
 // GENERATED each build by cmake/gen_version.cmake — always the currently-built commit
 // ("+" suffix = uncommitted changes present). Do not edit; edit VersionInfo.h.in instead.
 #define VASYNTH_GIT_HASH_RT "@GITHASH@"
+
+// Uniquely-greppable build stamp so tooling (run-all-checks.sh) can prove a shipped binary was
+// built from the gated commit — grep the artefact for "VASYNTHBUILD:<hash>". The literal prefix
+// makes the match collision-proof vs. a bare 7-hex token appearing in the binary's byte noise.
+// A "+" suffix (same as the banner) flags a build from an uncommitted tree.
+#define VASYNTH_BUILD_STAMP "VASYNTHBUILD:@GITHASH@"

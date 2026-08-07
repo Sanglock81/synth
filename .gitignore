@@ -16,9 +16,11 @@
 /.deps/
 
 # Fetched tooling (pluginval prebuilt) — run-all-checks.sh / CI re-fetch it.
-# Ignore everything under tools/ EXCEPT the committed ThinkPad validation package.
+# Ignore everything under tools/ EXCEPT the committed ThinkPad validation package
+# and the install-vst3 helper (a tracked source script, not a downloaded binary).
 /tools/*
 !/tools/thinkpad-validate/
+!/tools/install-vst3.sh
 
 # Local app data that must never be committed
 *.settings

@@ -21,6 +21,10 @@
  #define VASYNTH_BUILD_TYPE "?"
 #endif
 
+// Build-fresh, greppable freshness stamp ("VASYNTHBUILD:<hash>") emitted by Source/BuildStamp.cpp.
+// Referenced in the startup banner below so the linker keeps it (the gate greps the binary for it).
+extern "C" const char vasynth_build_stamp[];
+
 // Flush the log with a final marker on a crash so post-mortem logs show where
 // things stopped. The AudioHealthLogger installs its FileLogger as the current
 // JUCE logger, so writeToLog reaches the same file (and flushes).
@@ -342,7 +346,10 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
                        + "  wrapper=" + juce::String ((int) wrapperType)
                        + "  osc-quality=" + quality
                        + "  maxVoices=" + juce::String (VASYNTH_MAX_VOICES)
-                       + "  parts=" + juce::String (SynthEngine::maxParts));
+                       + "  parts=" + juce::String (SynthEngine::maxParts)
+                       // Build-fresh stamp: references vasynth_build_stamp so the linker keeps the
+                       // greppable "VASYNTHBUILD:<hash>" marker (BuildStamp.cpp) the gate verifies.
+                       + "  " + juce::String (vasynth_build_stamp));
     health.prepare (sampleRate, samplesPerBlock);
 
     // Establish the default multitimbral layout ONCE (the engine is now prepared so parts

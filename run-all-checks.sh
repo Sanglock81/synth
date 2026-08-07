@@ -93,8 +93,31 @@ cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DVASYNTH_BUILD_TESTS=ON $FCBAS
 step "Building Standalone + VST3 + tests (-j$JOBS)"
 cmake --build "$BUILD_DIR" -j"$JOBS" || fail "build failed"
 
-[[ -x "$BUILD_DIR/VASynth_artefacts/Release/Standalone/synth" ]] || fail "Standalone artefact missing"
-[[ -e "$BUILD_DIR/VASynth_artefacts/Release/VST3/synth.vst3" ]]   || fail "VST3 artefact missing"
+STANDALONE="$BUILD_DIR/VASynth_artefacts/Release/Standalone/synth"
+VST3_SO="$BUILD_DIR/VASynth_artefacts/Release/VST3/synth.vst3/Contents/x86_64-linux/synth.so"
+[[ -x "$STANDALONE" ]]                                            || fail "Standalone artefact missing"
+[[ -e "$BUILD_DIR/VASynth_artefacts/Release/VST3/synth.vst3" ]]  || fail "VST3 artefact missing"
+
+# ---------------------------------------------------------------------------------------------
+# Honest-gate freshness check. The build above rebuilds both shipping artefacts, but a green
+# gate must MEAN "the binaries on disk are the gated code" — so verify each artefact carries the
+# build stamp of THIS commit (Source/BuildStamp.cpp -> "VASYNTHBUILD:<hash>"). This catches a
+# stale binary from any cause (an incremental miss, a wrong build dir, a rename-orphaned bundle
+# a DAW loads). We compare the COMMIT identity and tolerate the "+" dirty suffix a gate build of
+# an uncommitted tree legitimately carries.
+step "Verifying artefacts were built from HEAD ($(git rev-parse --short HEAD))"
+HEAD_HASH="$(git rev-parse --short HEAD)"
+verify_stamp() {
+    local art="$1" name="$2" emb base
+    emb="$(strings "$art" | grep -oE 'VASYNTHBUILD:[0-9a-f]{7,40}\+?' | head -1)"
+    [[ -n "$emb" ]] || fail "$name has no VASYNTHBUILD stamp — cannot prove it is the gated code (rebuild clean?)"
+    base="${emb#VASYNTHBUILD:}"; base="${base%+}"
+    [[ "$base" == "$HEAD_HASH" ]] \
+        || fail "STALE ARTEFACT: $name embeds '$base' but HEAD is '$HEAD_HASH' — the binary on disk is NOT the gated code"
+    echo "   $name -> $emb"
+}
+verify_stamp "$STANDALONE" "Standalone"
+verify_stamp "$VST3_SO"    "VST3"
 
 step "Running CTest"
 ( cd "$BUILD_DIR" && ctest --output-on-failure -j"$JOBS" ) || fail "ctest reported failures"
