@@ -191,25 +191,34 @@ public:
         // ...or steal a voice. PER-PART ISOLATION, in priority order:
         //   1. the oldest GENERATOR voice (seq / arp / looper) — generators ALWAYS yield to
         //      live playing, so a running sequencer can never cut a note you play.
-        //   2. else the oldest voice OF THIS part (live-vs-live stealing stays inside the part).
-        //   3. else the global oldest (last resort: the pool is exhausted by other live parts).
+        //   2. else the oldest RELEASING voice of this part — a key-up note fading out is the
+        //      cheapest to take (#141: a HELD chord tone must not be dropped while a note whose
+        //      key you already let go is still ringing).
+        //   3. else the oldest HELD voice of this part (live-vs-live stealing stays inside the part).
+        //   4. else the oldest RELEASING voice anywhere, then the global oldest (pool exhausted
+        //      by other live parts). Held-anywhere yields last.
         // The stolen voice keeps its oscillator/filter state and retriggers the amp env from
         // its current level, so the steal is click-free.
-        int oldestGen = -1, oldestOwn = -1;
+        int oldestGen = -1, oldestOwnRel = -1, oldestOwnHeld = -1, oldestAnyRel = -1;
         std::size_t oldestAny = 0;
+        auto older = [this] (int cur, std::size_t i)
+        { return cur < 0 || voices[i].getTimestamp() < voices[(std::size_t) cur].getTimestamp(); };
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
         {
-            if (voices[i].isGenerator()
-                && (oldestGen < 0 || voices[i].getTimestamp() < voices[(std::size_t) oldestGen].getTimestamp()))
-                oldestGen = (int) i;
-            if (voices[i].getPart() == part
-                && (oldestOwn < 0 || voices[i].getTimestamp() < voices[(std::size_t) oldestOwn].getTimestamp()))
-                oldestOwn = (int) i;
-            if (voices[i].getTimestamp() < voices[oldestAny].getTimestamp())
-                oldestAny = i;
+            const bool rel = voices[i].isReleasing();
+            if (voices[i].isGenerator() && older (oldestGen, i)) oldestGen = (int) i;
+            if (voices[i].getPart() == part)
+            {
+                if (rel) { if (older (oldestOwnRel,  i)) oldestOwnRel  = (int) i; }
+                else     { if (older (oldestOwnHeld, i)) oldestOwnHeld = (int) i; }
+            }
+            if (rel && older (oldestAnyRel, i)) oldestAnyRel = (int) i;
+            if (voices[i].getTimestamp() < voices[oldestAny].getTimestamp()) oldestAny = i;
         }
-        const std::size_t steal = (oldestGen >= 0) ? (std::size_t) oldestGen
-                                : (oldestOwn >= 0) ? (std::size_t) oldestOwn : oldestAny;
+        const std::size_t steal = (oldestGen     >= 0) ? (std::size_t) oldestGen
+                                : (oldestOwnRel  >= 0) ? (std::size_t) oldestOwnRel
+                                : (oldestOwnHeld >= 0) ? (std::size_t) oldestOwnHeld
+                                : (oldestAnyRel  >= 0) ? (std::size_t) oldestAnyRel : oldestAny;
 
         sustained[steal] = false;
         ++stealCounter;

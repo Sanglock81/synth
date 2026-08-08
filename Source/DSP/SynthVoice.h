@@ -206,6 +206,9 @@ public:
     int  getPart() const   { return part; }
     int  getSoundSlot() const { return soundSlot; }
     bool isGenerator() const { return generator; }
+    // Sounding but key-up (amp env in its release tail). Voice stealing prefers these over
+    // still-held voices so a held chord is never dropped while a fading voice exists (#141).
+    bool isReleasing() const { return active && ampEnv.inRelease(); }
     std::uint64_t getTimestamp() const { return timestamp; }
 
     // Render `numSamples` and ADD into the (mono) output buffer. `mtx`/`partSrc` are the

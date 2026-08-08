@@ -68,6 +68,10 @@ public:
 
     bool isActive() const { return stage != Stage::Idle; }
 
+    // Key-up: the note has been released and is fading (or being quick-released/choked). Used by
+    // voice stealing to prefer a fading voice over a still-held one (#141).
+    bool inRelease() const { return stage == Stage::Release; }
+
     // Current level WITHOUT advancing — for control-rate modulation targets (e.g.
     // filter-envelope -> pitch) sampled once per render chunk.
     float getLevel() const { return static_cast<float> (level); }

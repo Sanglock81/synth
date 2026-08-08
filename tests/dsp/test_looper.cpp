@@ -227,3 +227,74 @@ TEST_CASE ("looper: record->play handoff catches the downbeat (no dead cycle) (#
         REQUIRE (std::find (f.begin(), f.end(), 60) == f.end());
     }
 }
+
+// ============================================================================
+// #138 accumulation matrix. The reported bug: "after a couple loops, overlapping /
+// accumulating triggers (MIDI, extra note on ~3rd pass)". Root cause closed here: a
+// note still HELD when recording stops never had its note-off recorded, so the lane
+// replayed an unbalanced note-on forever. closeDangling() synthesizes the missing off.
+// ============================================================================
+
+// (c) held-through-record-stop: the missing note-off is synthesized on stop.
+TEST_CASE ("looper: a note held across record-stop is closed (#138)", "[looper][accum]")
+{
+    Looper lp;
+    lp.setMasterLength (1024); lp.setLoopLength (0, 1024); lp.setQuantize (0, false);
+    lp.setRecording (0, true);
+    lp.recordNote (0, 0, 60, 0.9f, true);            // note-on, performer keeps holding
+    REQUIRE (lp.eventCount (0) == 1);
+    lp.advance (512);
+    lp.setRecording (0, false);                      // STOP while held -> synthesize the note-off
+    REQUIRE (lp.eventCount (0) == 2);
+    bool hasOff = false;
+    for (int i = 0; i < lp.eventCount (0); ++i)
+        if (lp.event (0, i).note == 60 && ! lp.event (0, i).on) hasOff = true;
+    REQUIRE (hasOff);
+}
+
+// (c) and the payoff: that closed note plays back BALANCED every pass — one on, one off,
+// no accumulation across passes (pre-fix it emitted an on with no off, forever).
+TEST_CASE ("looper: held-through-stop note replays balanced every pass (#138)", "[looper][accum]")
+{
+    Looper lp;
+    const int len = 1024, n = 128;
+    lp.setMasterLength (len); lp.setLoopLength (0, len); lp.setQuantize (0, false);
+    lp.setRecording (0, true);
+    lp.recordNote (0, 0, 60, 0.9f, true);            // held from the downbeat
+    lp.advance (512);
+    lp.setRecording (0, false);                      // closure appends the off at t=512
+    lp.setPlaying (0, true);
+    lp.advance (len - 512);                          // finish the record pass -> wrap + arm
+
+    for (int pass = 0; pass < 4; ++pass)             // every pass is balanced
+    {
+        int ons = 0, offs = 0;
+        for (int pos = 0; pos < len; pos += n)
+        {
+            lp.playBlock (n, [&] (int, int note, float, bool on)
+                          { if (note == 60) { if (on) ++ons; else ++offs; } });
+            lp.advance (n);
+        }
+        REQUIRE (ons  == 1);
+        REQUIRE (offs == 1);
+    }
+}
+
+// (b) playback must never grow the recorded event set (the lane is frozen once recording stops).
+TEST_CASE ("looper: playback never appends to the lane (#138)", "[looper][accum]")
+{
+    Looper lp;
+    const int len = 1024, n = 128;
+    lp.setMasterLength (len); lp.setLoopLength (0, len); lp.setQuantize (0, false);
+    lp.setRecording (0, true);
+    lp.recordNote (0, 0,   60, 0.9f, true);
+    lp.recordNote (0, 300, 60, 0.0f, false);
+    lp.setRecording (0, false);
+    lp.setPlaying (0, true);
+    lp.advance (len);
+    const int frozen = lp.eventCount (0);
+    for (int pass = 0; pass < 5; ++pass)
+        for (int pos = 0; pos < len; pos += n)
+        { lp.playBlock (n, [] (int, int, float, bool) {}); lp.advance (n); }
+    REQUIRE (lp.eventCount (0) == frozen);
+}

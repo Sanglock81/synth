@@ -97,3 +97,37 @@ TEST_CASE ("allNotesOff releases every voice, live + generator (#144)", "[engine
     for (int b = 0; b < 300; ++b) eng.render (out.data(), 128, p, 3.0f, 0, 0.3f, 2);
     REQUIRE (eng.activeVoiceCount() == 0);               // every voice released and freed
 }
+
+// #141: a HELD chord tone must not be voice-stolen while a RELEASING (key-up, fading) voice exists.
+// Repro of the reported "hold a chord, play higher notes, the held 3rd/5th vanish": hold a 3-note
+// chord FIRST (the oldest voices), then fill the rest of the pool with NEWER key-up (releasing)
+// voices, then play more notes into the full pool. The pre-fix oldest-own policy stole the OLDEST
+// own-part voice — a held chord tone. The fix prefers releasing voices, so the chord survives.
+TEST_CASE ("voice steal: held chord survives while releasing voices exist (#141)", "[engine][voices][steal]")
+{
+    auto& tr = mtrace::tracer();
+    tr.setEnabled (true);
+    tr.drain ([] (const mtrace::Event&) {});
+
+    SynthEngine eng; eng.prepare (48000.0, 128); eng.setMaxVoices (8);
+
+    const int chord[3] { 60, 64, 67 };                   // held, played FIRST -> the OLDEST voices
+    for (int n : chord) eng.noteOn (n, 0.9f, 0);
+    for (int i = 0; i < 5; ++i) eng.noteOn  (80 + i, 0.7f, 0);   // 5 NEWER voices...
+    for (int i = 0; i < 5; ++i) eng.noteOff (80 + i, 0);         // ...released -> fading (still active)
+    REQUIRE (eng.activeVoiceCount() == 8);               // pool full: 3 held + 5 releasing
+
+    tr.drain ([] (const mtrace::Event&) {});             // discard the setup's events
+    for (int n : { 72, 76, 79 }) eng.noteOn (n, 0.9f, 0);        // play into the full pool -> must steal
+
+    std::vector<int> victims;
+    tr.drain ([&] (const mtrace::Event& e) { if (e.kind == mtrace::Ev::VoiceSteal) victims.push_back (e.d); });
+    tr.setEnabled (false);
+
+    for (int n : chord)                                  // no held chord tone was ever the victim
+    {
+        bool stolen = false;
+        for (int v : victims) if (v == n) stolen = true;
+        REQUIRE_FALSE (stolen);
+    }
+}

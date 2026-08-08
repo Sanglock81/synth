@@ -59,7 +59,13 @@ public:
 
     // Per-lane transport: lane N (== part N) has its OWN REC/PLAY, so each part records and
     // plays independently and NOTHING here depends on the edit/play focus (task #47).
-    void setRecording (int part, bool b) { if (part >= 0 && part < kParts) recording_[(std::size_t) part] = b; }
+    void setRecording (int part, bool b)
+    {
+        if (part < 0 || part >= kParts) return;
+        const bool was = recording_[(std::size_t) part];
+        recording_[(std::size_t) part] = b;
+        if (was && ! b) closeDangling (part);   // stop: any note held across the stop gets a note-off
+    }
     void setPlaying   (int part, bool b) { if (part >= 0 && part < kParts) playing_[(std::size_t) part]   = b; }
     bool recording (int part) const { return part >= 0 && part < kParts && recording_[(std::size_t) part]; }
     bool playing   (int part) const { return part >= 0 && part < kParts && playing_[(std::size_t) part]; }
@@ -69,8 +75,8 @@ public:
     // freshly-activated scene plays from the top rather than resuming mid-loop.
     void rewind() { loopPos = 0; for (int p = 0; p < kParts; ++p) armLane (p); }
 
-    void clear (int part) { if (part >= 0 && part < kParts) parts[(std::size_t) part].count = 0; }   // wipe ONE lane
-    void clearAll() { for (auto& p : parts) p.count = 0; loopPos = 0; }
+    void clear (int part) { if (part >= 0 && part < kParts) { parts[(std::size_t) part].count = 0; recHeld_[(std::size_t) part].fill (false); } }   // wipe ONE lane
+    void clearAll() { for (auto& p : parts) p.count = 0; for (auto& r : recHeld_) r.fill (false); loopPos = 0; }
     void reset() { clearAll(); for (int i = 0; i < kParts; ++i) { recording_[(std::size_t) i] = false; playing_[(std::size_t) i] = false; } }
 
     bool hasContent (int part) const { return part >= 0 && part < kParts && parts[(std::size_t) part].count > 0; }
@@ -101,6 +107,7 @@ public:
                 t = (t + g) % len;                                      // note-off snapped onto its on -> +1 grid (no zero-length)
         }
         p.ev[(std::size_t) p.count++] = { t, note, vel, on, false };
+        if (note >= 0 && note < 128) recHeld_[(std::size_t) part][(std::size_t) note] = on;   // track held-across-stop
         mtrace::emit (mtrace::Ev::LoopRec, part, note, (int) (vel * 127.0f), on ? 1 : 0);
     }
 
@@ -155,6 +162,23 @@ private:
         if (p.count > 0) mtrace::emit (mtrace::Ev::LoopWrap, part, p.count);
     }
 
+    // #138 root-cause fix: a note still held when recording STOPS never got its note-off recorded,
+    // so the lane would replay an unbalanced note-on every pass (a stuck/accumulating trigger).
+    // Synthesize the missing note-off at the stop position so every recorded note-on is paired.
+    void closeDangling (int part)
+    {
+        auto& p = parts[(std::size_t) part];
+        const int t = position (part);
+        for (int n = 0; n < 128; ++n)
+            if (recHeld_[(std::size_t) part][(std::size_t) n])
+            {
+                recHeld_[(std::size_t) part][(std::size_t) n] = false;
+                if (p.count >= kMaxEvents) continue;                 // full (rare) — nothing we can append
+                p.ev[(std::size_t) p.count++] = { t, n, 0.0f, false, false };
+                mtrace::emit (mtrace::Ev::LoopRec, part, n, 0, 0);   // trace the synthesized close
+            }
+    }
+
     std::array<Lane, kParts> parts { };
     std::array<int, kParts> loopLen { { 48000, 48000, 48000, 48000 } };  // per-lane length (samples)
     int  masterLen = 48000;                                              // master wrap period (32 bars)
@@ -165,4 +189,5 @@ private:
     std::array<bool, kParts> quantize_ { { true, true, true, true } };   // per-lane 1/32 quantize (default on)
     int quantGrid = 0;                                                   // grid in samples (0 = off; set from tempo)
     std::array<std::array<int, 128>, kParts> lastOnT {};                 // snapped pos of last note-on (pairing guard)
+    std::array<std::array<bool, 128>, kParts> recHeld_ {};               // notes held mid-record (closed on record stop, #138)
 };
