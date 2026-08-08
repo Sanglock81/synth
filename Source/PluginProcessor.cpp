@@ -3181,8 +3181,14 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
             const int barIdxNow = (barLen > 0.0) ? (int) ((double) looper.position() / barLen) : 0;
             if (barIdxNow != prevBarIdx)
             {
-                if (arp.enabled()) arp.realign();
-                if (seq.enabled()) seq.realign();
+                // #145: PHASE-ONLY re-anchor (not a force-fire) — pass the transport's grid position
+                // so the arp/seq bound drift without double-triggering the downbeat.
+                const double gp = (samplesPerStep > 0.0) ? (double) looper.position() / samplesPerStep : 0.0;
+                const long long fg = (long long) std::floor (gp);
+                const int    tStep = (int) (((fg % 16) + 16) % 16);
+                const double tInto = (gp - (double) fg) * samplesPerStep;
+                if (arp.enabled()) arp.realignPhase (tStep, tInto);
+                if (seq.enabled()) seq.realignPhase (tStep, tInto);
                 prevBarIdx = barIdxNow;
             }
         }

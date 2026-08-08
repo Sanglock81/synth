@@ -46,7 +46,14 @@ TEST_CASE ("clock: seq step-1, arp downbeat, looper boundary align over 100 bars
             const int barIdx  = (int) (loopPos / barLen);
             if (barIdx != prevBarIdx)
             {
-                seq.realign(); arp.realign();
+                // #145: exercise the PHASE-ONLY re-anchor (not the old force-fire). Guard 1: this
+                // must still bound drift so seq step-0 / arp downbeat stay on the transport downbeat
+                // over 100 bars + a tempo change (swing on, so per-bar drift is real).
+                const double gp = transport / samplesPerStep;
+                const long long fg = (long long) std::floor (gp);
+                const int    tS = (int) (((fg % 16) + 16) % 16);
+                const double tI = (gp - (double) fg) * samplesPerStep;
+                seq.realignPhase (tS, tI); arp.realignPhase (tS, tI);
                 prevBarIdx = barIdx;
                 barBoundaries.push_back (transport);
             }

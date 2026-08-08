@@ -7,6 +7,7 @@
 #include <catch2/catch_approx.hpp>
 #include "StepSequencer.h"
 #include <vector>
+#include <cmath>
 
 namespace
 {
@@ -107,4 +108,50 @@ TEST_CASE ("stepseq gate releases before the next step", "[dsp][stepseq]")
     for (auto& x : e) { if (x.on && onT < 0) onT = x.t; else if (! x.on && onT >= 0 && offT < 0) offT = x.t; }
     REQUIRE (offT > onT);
     REQUIRE (offT <= 60);                           // gate 0.5 * 100 -> ~50, before the next step at 100
+}
+
+namespace {
+    // Drive the seq exactly like PluginProcessor: phase-only realignPhase(step, into) at each bar
+    // boundary, process() per block. Count kick note-ons within the N-bar window. Pre-fix (force-fire
+    // realign) this doubled the downbeat with a block-size-dependent period (Bug B, #145).
+    int kicksPerRunPhaseRealign (double samplesPerStep, int block, int bars)
+    {
+        StepSequencer s; auto c = baseCfg();
+        c.samplesPerStep = samplesPerStep;
+        for (int st = 0; st < 16; ++st) c.cells[0][(std::size_t) st] = (st % 4 == 0) ? StepSequencer::On : StepSequencer::Off;
+        c.note[0] = 36;
+        s.setConfig (c);
+        const double barLen = 16.0 * samplesPerStep;
+        long long masterPos = 0; int prevBar = -1, kicks = 0;
+        const long long endPos = (long long) (barLen * bars);
+        while (masterPos < endPos)
+        {
+            const int bar = (int) ((double) masterPos / barLen);
+            if (bar != prevBar)
+            {
+                const double gp = (double) masterPos / samplesPerStep;
+                const long long fg = (long long) std::floor (gp);
+                s.realignPhase ((int) (((fg % 16) + 16) % 16), (gp - (double) fg) * samplesPerStep);
+                prevBar = bar;
+            }
+            const int n = (int) std::min ((long long) block, endPos - masterPos);
+            const long long base = masterPos;
+            s.process (n, [&] (int off, int note, float, bool on)
+                       { if (on && note == 36 && base + off < endPos - 2) ++kicks; });   // -2 drops the bar-N
+                       // downbeat, which the eps clock tolerance fires ~1 sample early (it belongs to bar N)
+            masterPos += n;
+        }
+        return kicks;
+    }
+}
+TEST_CASE ("Bug B fixed: phase-only realign fires each downbeat exactly once, any block size (#145)", "[dsp][stepseq]")
+{
+    const int bars = 12;
+    for (double sps : { 5512.5, 6000.0, 4801.7 })          // 44.1k/48k/odd tempo
+        for (int block : { 64, 128, 256, 441, 512 })
+        {
+            const int kicks = kicksPerRunPhaseRealign (sps, block, bars);
+            INFO ("sps=" << sps << " block=" << block);
+            REQUIRE (kicks == 4 * bars);                    // 4 on the floor, no doubled downbeats
+        }
 }

@@ -75,6 +75,26 @@ public:
     // it free-runs its pattern locked to the grid, instead of skipping to the start each bar.
     void realign() { sampleInStep = stepLength(); }
 
+    // #145 (guard 3): PHASE-ONLY bar-boundary re-anchor, same latent double-fire class as the step
+    // sequencer. realign() forces the next step to fire on the downbeat (sampleInStep = a full
+    // step), which advances the pattern an EXTRA step whenever the natural clock already crossed the
+    // boundary in the prior block. This corrects only the fractional phase when the arp and transport
+    // agree on the current step — no forced (extra) step.
+    void realignPhase (int transportStep, double transportInto)
+    {
+        if (! started) return;
+        const int g = ((transportStep % kNumSteps) + kNumSteps) % kNumSteps;
+        // The arp's stepIndex tracks the transport grid (it is started via startAtGrid). If it has
+        // ALREADY advanced onto grid step g (a mid-block boundary: the natural clock fired it in the
+        // prior block), only snap the phase — do NOT force, or the pattern double-advances (the old
+        // realign's latent bug). Otherwise grid step g is due: fire the next pattern step once, on the
+        // downbeat (stepIndex is untouched, so the pattern advances normally — no reset).
+        if (stepIndex == g)
+            sampleInStep = std::clamp (transportInto, 0.0, stepLength());
+        else
+            sampleInStep = stepLength();
+    }
+
     // Start the arp ALREADY LOCKED to the shared grid instead of firing step 0 the instant it's
     // enabled: `g` = the bar's current 16th index, `intoStep` = samples into it. So turning the arp
     // on mid-bar picks up on the beat the transport is at, matching the sequencer (task #127). A
