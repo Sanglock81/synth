@@ -1966,6 +1966,7 @@ void VASynthProcessor::handleControlMessage (const juce::MidiMessage& msg, int p
     if (msg.isController())
     {
         const int cc = msg.getControllerNumber(), val = msg.getControllerValue();
+        mtrace::emit (mtrace::Ev::CC, cc, val, part);
         if (cc == 64) { engine.setSustainPedal (val >= 64); return; }   // damper
 
         // A learned modifier CC (footswitch >=64) is consumed before MIDI-learn.
@@ -2836,13 +2837,17 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
     // Guard against a misbehaving host sending an oversized block.
     jassert (numSamples <= stereoScratch.getNumSamples());
 
+    // G1.2 MIDI trace: stamp this block's index onto subsequent events (no-op unless enabled).
+    mtrace::setBlock (blockIndex, 0);
+    mtrace::emit (mtrace::Ev::BlockStart, numSamples);
+
     // QWERTY notes no longer merge here — they flow through the "QWERTY" surface zones
     // via routeSurfaceMessage() (resolved off the audio thread) and arrive on the routed
     // FIFO, drained below with every other surface. `midi` carries host/DAW events only.
 
     // Panic (RT-safe): a hot-unplug asked us to release everything.
     if (panicRequested.exchange (false, std::memory_order_acq_rel))
-        { engine.allNotesOff(); chordEngine.reset(); midiModMask = 0; lastFedModMask = 0; }
+        { mtrace::emit (mtrace::Ev::Panic); engine.allNotesOff(); chordEngine.reset(); midiModMask = 0; lastFedModMask = 0; }
 
     auto params = snapshotParams();                                     // mutable: block-tier mod may adjust it
     const int editF = editFocusPart.load (std::memory_order_relaxed);   // panel + engine live-param slot

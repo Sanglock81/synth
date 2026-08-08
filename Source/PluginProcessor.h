@@ -18,6 +18,7 @@
 #include "DSP/AudioLoop.h"
 #include "DSP/MidiClock.h"
 #include "Observability/AudioHealthLogger.h"
+#include "Observability/MidiTraceWriter.h"
 #include <atomic>
 #include <functional>
 #include <vector>
@@ -709,6 +710,10 @@ public:
     // Audio-health telemetry + RT-safe logging. The editor reads health.snapshot()
     // for the debug overlay.
     AudioHealthLogger health;
+
+    // G1.2: drains the env-gated MIDI/voice/looper trace ring to a file (no-op unless
+    // VASYNTH_MIDI_TRACE=1). Declared after `health` so it tears down first.
+    MidiTraceWriter midiTraceWriter;
 
     // -- master scope tap (RT-safe SPSC ring) ---------------------------------
     // The audio thread appends the post-master mono mix each block (relaxed atomic

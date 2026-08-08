@@ -4,6 +4,7 @@
 #include "Kit.h"
 #include "LFO.h"
 #include "FXChain.h"
+#include "../Observability/MidiTracer.h"
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -176,13 +177,16 @@ public:
                 sustained[i] = false;
                 if (percussive) { voices[i].steal(); continue; }   // fade tail, fall through to a fresh voice
                 voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3, un);
+                mtrace::emit (mtrace::Ev::NoteRetrig, note, (int) (velocity * 127.0f), part, (int) i);
                 return;
             }
 
         // Otherwise find a free voice...
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
             if (! voices[i].isActive())
-                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3, un); return; }
+                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3, un);
+                  mtrace::emit (generator ? mtrace::Ev::NoteOnGen : mtrace::Ev::NoteOnLive, note, (int) (velocity * 127.0f), part, (int) i);
+                  return; }
 
         // ...or steal a voice. PER-PART ISOLATION, in priority order:
         //   1. the oldest GENERATOR voice (seq / arp / looper) — generators ALWAYS yield to
@@ -209,7 +213,10 @@ public:
 
         sustained[steal] = false;
         ++stealCounter;
+        // Trace the victim BEFORE it is overwritten: names exactly which held note a steal drops (#141).
+        mtrace::emit (mtrace::Ev::VoiceSteal, note, part, (int) steal, voices[steal].getNote());
         voices[steal].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3, un);
+        mtrace::emit (generator ? mtrace::Ev::NoteOnGen : mtrace::Ev::NoteOnLive, note, (int) (velocity * 127.0f), part, (int) steal);
     }
 
     // ---- observability accessors (const; for the processor's telemetry) ----
@@ -245,12 +252,13 @@ public:
             if (voices[i].isActive() && voices[i].getNote() == note && voices[i].getPart() == part)
             {
                 if (sustainPedal) sustained[i] = true;   // held by damper
-                else              voices[i].noteOff();
+                else            { voices[i].noteOff(); mtrace::emit (mtrace::Ev::NoteOff, note, part, (int) i); }
             }
     }
 
     void allNotesOff()
     {
+        mtrace::emit (mtrace::Ev::AllNotesOff);
         for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i) { voices[i].noteOff(); sustained[i] = false; }
         for (auto& sv : sampleVoices) sv.steal();               // I2: fade out any playing samples (click-free)
         sustainPedal = false;

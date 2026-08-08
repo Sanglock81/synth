@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include "../Observability/MidiTracer.h"
 
 // ============================================================================
 // Per-part MIDI looper — JUCE-free, RT-safe (fixed storage, no alloc/lock).
@@ -100,6 +101,7 @@ public:
                 t = (t + g) % len;                                      // note-off snapped onto its on -> +1 grid (no zero-length)
         }
         p.ev[(std::size_t) p.count++] = { t, note, vel, on, false };
+        mtrace::emit (mtrace::Ev::LoopRec, part, note, (int) (vel * 127.0f), on ? 1 : 0);
     }
 
     // A lane whose record just completed plays back from THE SAME downbeat this block (no dead cycle):
@@ -128,7 +130,7 @@ public:
                 if (! e.armed) continue;
                 const bool inWin = (end <= len) ? (e.t >= start && e.t < end)
                                                 : (e.t >= start || e.t < end - len);
-                if (inWin) emit (part, e.note, e.vel, e.on);
+                if (inWin) { mtrace::emit (mtrace::Ev::LoopEmit, part, e.note, e.on ? 1 : 0, e.t); emit (part, e.note, e.vel, e.on); }
             }
         }
     }
@@ -150,6 +152,7 @@ private:
     {
         auto& p = parts[(std::size_t) part];
         for (int i = 0; i < p.count; ++i) p.ev[(std::size_t) i].armed = true;
+        if (p.count > 0) mtrace::emit (mtrace::Ev::LoopWrap, part, p.count);
     }
 
     std::array<Lane, kParts> parts { };

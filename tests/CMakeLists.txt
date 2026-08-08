@@ -52,6 +52,7 @@ add_executable(dsp_tests
     dsp/test_clock_align.cpp
     dsp/test_looper.cpp
     dsp/test_voice_steal.cpp
+    dsp/test_midi_trace.cpp
     dsp/test_audioloop.cpp
     dsp/test_chord.cpp
     dsp/test_rt_safety.cpp
