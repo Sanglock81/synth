@@ -41,6 +41,30 @@ TEST_CASE ("mapped CC (Launchkey default) moves its target parameter", "[plugin]
     REQUIRE (paramValue (p, "macro1") == Catch::Approx (0.0f).margin (1e-3));
 }
 
+// #140: "macro 1 does not auto-link to the Launchkey; the others do." Prove the CC->macro map
+// has NO per-macro asymmetry: every Launchkey pot (CC 21-28) drives ONLY its own macro (1-8),
+// macro1 included. If this ever failed for one macro it would catch the reported symptom in code;
+// it passes, so a knob-1 miss is device-side (the pot emitting a CC other than 21) — use the G1.2
+// CC trace (VASYNTH_MIDI_TRACE=1) to see what the controller actually sends.
+TEST_CASE ("every Launchkey pot CC21-28 drives only its own macro, macro1 included (#140)", "[plugin][midilearn]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 64);
+
+    for (int m = 0; m < 8; ++m)
+    {
+        const int cc = 21 + m;
+        const juce::String target = "macro" + juce::String (m + 1);
+        sendCC (p, cc, 127);
+        REQUIRE (paramValue (p, target) == Catch::Approx (1.0f).margin (1e-3));   // this pot moved its macro
+        for (int other = 0; other < 8; ++other)                                   // and no other macro
+            if (other != m)
+                REQUIRE (paramValue (p, "macro" + juce::String (other + 1)) == Catch::Approx (0.0f).margin (1e-3));
+        sendCC (p, cc, 0);                                                        // reset for the next pot
+    }
+}
+
 TEST_CASE ("Reset MIDI restores the Launchkey macro pots after a stale learn", "[plugin][midilearn]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;

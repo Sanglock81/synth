@@ -92,6 +92,9 @@ public:
         // that land on the slider itself.
         if (e.eventComponent == this && beginLinkGesture (e)) return;
         if (e.mods.isPopupMenu())          { showLearnMenu(); return; }
+        // #139: tapping a control that is already armed for learn CANCELS it (escape hatch for
+        // an accidental long-press that left the amber highlight stuck on).
+        if (learn.isLearningParam (paramID)) { learn.armLearn (juce::String()); stopTimer(); repaint(); return; }
         pressStart = juce::Time::getMillisecondCounter();
         longPressArmed = true;
         startTimer (60);                   // poll for the long-press threshold
@@ -217,6 +220,7 @@ protected:
     bool  linkDepthActive = false;
     float linkDownDepth = 0.0f;
     juce::uint32 linkTime = 0;
+    juce::uint32 armStart = 0;          // #139: when learn was armed, for the stuck-highlight auto-timeout
     std::function<float()> modAnimFn;
     std::vector<std::pair<juce::String, std::function<void()>>> extraMenuItems;
 
@@ -245,13 +249,24 @@ private:
             longPressArmed = false;
             armLearn();
         }
-        if (learn.isLearningParam (paramID)) repaint();   // pulse while armed
+        if (learn.isLearningParam (paramID))
+        {
+            // #139: an accidental stationary long-press arms learn (amber pulse); it would
+            // otherwise stay armed forever if no CC ever arrives, leaving the highlight stuck.
+            // Auto-disarm after a grace period so it always clears itself.
+            if (juce::Time::getMillisecondCounter() - armStart > kLearnArmTimeoutMs)
+            { learn.armLearn (juce::String()); stopTimer(); repaint(); return; }
+            repaint();                     // pulse while armed
+        }
         else if (! longPressArmed) stopTimer();
     }
+
+    static constexpr juce::uint32 kLearnArmTimeoutMs = 8000;   // #139: auto-clear a stuck learn-arm
 
     void armLearn()
     {
         learn.armLearn (paramID);
+        armStart = juce::Time::getMillisecondCounter();
         startTimer (33);                   // ~30 Hz pulse while armed
         repaint();
     }

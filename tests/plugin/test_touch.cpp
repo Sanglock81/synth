@@ -7,6 +7,7 @@
 #include <catch2/catch_approx.hpp>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "UI/Widgets.h"     // kDragPixelsForFullRange
+#include "PluginProcessor.h"   // #139: a real RotaryKnob wired to the MIDI-learn manager
 
 namespace
 {
@@ -75,4 +76,26 @@ TEST_CASE ("grab-mode: drag sensitivity = kDragPixelsForFullRange px for full ra
     const float halfExtentPx = (float) kDragPixelsForFullRange * 0.5f;
     s.mouseDrag (evt (s, { 20.0f, 300.0f - halfExtentPx }, down, true));
     REQUIRE (s.getValue() == Catch::Approx (0.6).margin (0.04));   // 0.1 + 0.5
+}
+
+// #139: an accidental stationary long-press arms MIDI-learn (amber "yellow" highlight) and it
+// used to stay stuck on until a CC arrived. Fix: tapping an armed control CANCELS the arm.
+// Without the mouseDown guard this tap would just re-start the long-press timer and the param
+// would stay armed -> REQUIRE_FALSE fails; with it, the arm (and its highlight) clears.
+TEST_CASE ("learn-arm is cancelled by tapping the armed control (#139)", "[plugin][touch][midilearn]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 64);
+
+    RotaryKnob knob (p.apvts, "macro1", "M1", p.getMidiLearn());
+    knob.setSize (40, 40);
+
+    p.getMidiLearn().armLearn ("macro1");
+    REQUIRE (p.getMidiLearn().isLearningParam ("macro1"));        // armed: amber pulse
+
+    const juce::Point<float> at (5.0f, 5.0f);
+    knob.mouseDown (evt (knob, at, at, false));                   // tap the armed control
+
+    REQUIRE_FALSE (p.getMidiLearn().isLearningParam ("macro1"));  // cancelled -> highlight clears
 }
