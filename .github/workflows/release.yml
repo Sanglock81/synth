@@ -73,34 +73,34 @@ jobs:
           unzip -o pluginval.zip
           chmod +x pluginval
           xvfb-run -a ./pluginval --strictness-level 8 \
-            --validate "build/VASynth_artefacts/Release/VST3/synth.vst3"
+            --validate "build/VASynth_artefacts/Release/VST3/Synth.vst3"
 
       # ---- package: VST3 bundle + Standalone binary + docs -> one zip per OS ----
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
           mkdir -p pkg
-          cp -r build/VASynth_artefacts/Release/VST3/synth.vst3 pkg/
+          cp -r build/VASynth_artefacts/Release/VST3/Synth.vst3 pkg/
           cp build/VASynth_artefacts/Release/Standalone/* pkg/
-          cp README.md CHANGELOG.md LICENSE pkg/
-          (cd pkg && zip -r "../synth-${{ github.ref_name }}-Linux.zip" .)
+          cp README.md CHANGELOG.md LICENSE NOTICES.md pkg/
+          (cd pkg && zip -r "../Synth-${{ github.ref_name }}-Linux.zip" .)
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path pkg | Out-Null
-          Copy-Item -Recurse build/VASynth_artefacts/Release/VST3/synth.vst3 pkg/
+          Copy-Item -Recurse build/VASynth_artefacts/Release/VST3/Synth.vst3 pkg/
           Copy-Item build/VASynth_artefacts/Release/Standalone/* pkg/
-          Copy-Item README.md,CHANGELOG.md,LICENSE pkg/
-          Compress-Archive -Path pkg/* -DestinationPath "synth-${{ github.ref_name }}-Windows.zip"
+          Copy-Item README.md,CHANGELOG.md,LICENSE,NOTICES.md pkg/
+          Compress-Archive -Path pkg/* -DestinationPath "Synth-${{ github.ref_name }}-Windows.zip"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
           name: synth-${{ runner.os }}
           if-no-files-found: error
-          path: synth-*.zip
+          path: Synth-*.zip
 
   release:
     name: publish GitHub Release
@@ -126,5 +126,5 @@ jobs:
             --title "synth ${{ github.ref_name }}" \
             --notes "Downloadable VST3 + Standalone builds for Linux and Windows. See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for the full feature list.
 
-          **Install:** unzip and drop \`synth.vst3\` into your VST3 folder (\`~/.vst3\` on Linux, \`%COMMONPROGRAMFILES%\\VST3\` on Windows), or run the \`synth\` standalone directly." \
-            synth-*.zip
+          **Install:** unzip and drop \`Synth.vst3\` into your VST3 folder (\`~/.vst3\` on Linux, \`%COMMONPROGRAMFILES%\\VST3\` on Windows), or run the \`synth\` standalone directly." \
+            Synth-*.zip

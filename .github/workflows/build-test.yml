@@ -70,7 +70,7 @@ jobs:
           unzip -o pluginval.zip
           chmod +x pluginval
           xvfb-run -a ./pluginval --strictness-level 8 \
-            --validate "build/VASynth_artefacts/Release/VST3/synth.vst3"
+            --validate "build/VASynth_artefacts/Release/VST3/Synth.vst3"
 
       # Downloadable builds for the default branch (e.g. the Surface Pro Windows
       # build) — no Windows dev setup needed.

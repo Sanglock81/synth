@@ -38,8 +38,8 @@ namespace juce { class MidiOutput; }   // #85: only a pointer is held here (full
 //
 // JUCE builds this same class into both the VST3 and the standalone app.
 // In standalone, JUCE's wrapper provides the audio-device / MIDI-input
-// settings dialog (that's where you pick the Scarlett 2i2 and enable both
-// the Korg B2 and Launchkey Mini).
+// settings dialog (that's where you pick your audio output and enable your
+// MIDI input devices).
 // ============================================================================
 
 class VASynthProcessor : public juce::AudioProcessor,
@@ -69,7 +69,7 @@ public:
     bool hasEditor() const override { return true; }
 
     // -- boilerplate -------------------------------------------------------------
-    const juce::String getName() const override { return "synth"; }
+    const juce::String getName() const override { return "Synth"; }
     bool acceptsMidi() const override  { return true; }
     bool producesMidi() const override { return true; }   // #85: MIDI clock out (VST3 host / standalone)
     double getTailLengthSeconds() const override { return 0.0; }

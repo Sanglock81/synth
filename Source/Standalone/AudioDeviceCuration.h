@@ -11,7 +11,7 @@
 //
 //   * pickPreferredDeviceName() — the "just works" default: prefer the
 //     PipeWire/default endpoint, which follows the OS default sink and therefore
-//     routes to whatever the user selected there (including the Scarlett 2i2).
+//     routes to whatever the user selected there (their chosen audio interface).
 //   * curateDeviceList()        — hide the redundant raw ALSA aliases, keeping
 //     the friendly endpoints and per-card names. `showAll` is the escape hatch.
 //

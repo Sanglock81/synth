@@ -1,640 +1,107 @@
-# synth
+# Synth — a free, open-source virtual analog synthesizer by Farmer
 
-[![build-test](https://github.com/Sanglock81/synth/actions/workflows/build-test.yml/badge.svg)](https://github.com/Sanglock81/synth/actions/workflows/build-test.yml)
-[![sanitize](https://github.com/Sanglock81/synth/actions/workflows/sanitize.yml/badge.svg)](https://github.com/Sanglock81/synth/actions/workflows/sanitize.yml)
+[![build-test](https://github.com/Sanglock81/farmer-synth/actions/workflows/build-test.yml/badge.svg)](https://github.com/Sanglock81/farmer-synth/actions/workflows/build-test.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-A hand-rolled **virtual analog polysynth**. C++17 / JUCE 8, built as a **VST3
-plugin and a standalone app from the same code**, on **Linux and Windows**.
+**Synth** is a multitimbral virtual-analog synthesizer: four independent parts (each its own
+patch, FX, EQ and mixer channel), synthesized drum **kits** and **sample pads**, a step
+**sequencer**, a per-part **looper**, launchable **scenes**, an 8-slot **mod matrix**, oscillator
+**FM** and **wavetables**. It builds as a **VST3 plugin and a standalone app from the same code**,
+for **Linux and Windows**. C++17 / JUCE 8.
 
-Designed for live play: Korg B2 (primary keyboard) + Novation Launchkey Mini
-(secondary keys + mappable CC controller) → Focusrite Scarlett 2i2 out — but it's
-a general-purpose synth that runs in any VST3 host or standalone.
+![Synth](docs/editor.png)
 
-![editor](docs/editor.png)
+---
 
-## Finding your way around
+## Install
 
-Every control has a one-line explanation built in: click **?** in the top bar and pick a section
-to get a spotlight, numbered markers, and a side card describing each knob — *what* it does and
-*how/when* to use it. The same text is generated to **[docs/guide.md](docs/guide.md)**. Two spots
-that surprise people:
+### Tier 1 — Download (no building)
 
-- **Unison lives in the top bar** — **UNI** (voice count, 1 = off), **DET** (detune spread), **WID**
-  (stereo width). It's a global stack per note, not a per-oscillator control; raise **UNI** for a
-  thick supersaw.
-- **Per-osc note phase is RS / RN / FR** (Reset / Random / Free-run) next to each oscillator. It sets
-  where the waveform starts on each note — audible on transients and with unison spread, but *subtle
-  on a single sustained tone*, which is why it can look like it "does nothing."
+Grab the packaged build for your platform from the
+**[Releases page](https://github.com/Sanglock81/farmer-synth/releases)** and unzip it.
+Packaged releases begin at **v1.0.0**; until then, download the latest CI build from
+**Actions → build-test → a green run → Artifacts** (`Synth-Linux` / `Synth-Windows`).
+
+**Linux**
+1. Unzip the archive.
+2. Copy the `Synth.vst3` folder into your VST3 directory — `~/.vst3/` (create it if missing).
+3. Run the standalone directly: `./Synth`
+4. In your DAW, rescan plugins; **Synth** appears under vendor **Farmer**.
+
+**Windows**
+1. Unzip the archive.
+2. Copy the `Synth.vst3` folder into `%COMMONPROGRAMFILES%\VST3\` (usually
+   `C:\Program Files\Common Files\VST3\`).
+3. Run `Synth.exe` for the standalone.
+4. Rescan plugins in your DAW.
+
+### Tier 2 — Build from source
+
+**Linux — one command:**
+```bash
+git clone https://github.com/Sanglock81/farmer-synth.git
+cd farmer-synth
+./scripts/bootstrap-linux.sh        # installs deps, configures, builds Release
+./tools/install-vst3.sh             # symlinks the VST3 into ~/.vst3 for your DAW
+```
+Artefacts land at:
+- VST3 — `build/VASynth_artefacts/Release/VST3/Synth.vst3`
+- Standalone — `build/VASynth_artefacts/Release/Standalone/Synth`
+
+**Windows** (developers): install **Visual Studio Build Tools** (Desktop C++ workload), then from
+a Developer Command Prompt:
+```bat
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+```
+The VST3 and `Synth.exe` land under `build\VASynth_artefacts\Release\`.
+**Not a developer? Use Tier 1 above — no build tools needed.**
+
+---
 
 ## Features
 
-- **3 anti-aliased oscillators** (PolyBLEP saw/square-PWM/tri/sine + **WT** mip-mapped wavetable with a
-  sweepable position, factory tables + a seeded random die), 4× oversampled, with **unison** (up to a
-  7-voice detuned/panned/phase-decorrelated stack — a proper supersaw, off by default)
-  with a selectable Efficient/HQ quality-vs-CPU tradeoff, per-osc level + kill switch.
-  **FM (phase-modulation) chain** osc3 → osc2 → osc1: an **FM** depth knob on osc1 and osc2 grows a
-  DX-style sideband spectrum (E-piano, bells, growls); the modulator's OCTAVE/SEMI set the ratio, and
-  **Velocity → FM depth** is the classic harder-is-brighter route. FM needs a sine/tri/WT carrier
-  (the knob disables on saw/square). Off by default.
-- **TPT state-variable filter** (LP/HP/BP/Notch), resonant and stable, with velocity
-  and keytrack routing.
-- **Two exponential ADSR envelopes** (amp + **mod env**), click-free retrigger and
-  steal. The mod env drives the filter *and* **pitch** (`fltenv_to_pitch`, ±48 st) —
-  the basis of the **drum** presets (808/punchy kicks, snare, hats, tom).
-- **Three LFOs per part** (tri/sine/square/S&H) → pitch / cutoff / PW, plus pitch-bend,
-  mod-wheel vibrato, and sustain-pedal handling. Each LFO has a **SYNC** toggle: its RATE knob
-  morphs into a stepped **note-division** knob (4 bar…1/32, plus triplet + dotted), and the LFO
-  **phase-locks to the beat** with no clicks — bar-aligned even for triplet/dotted divisions.
-  Un-syncing returns the LFO to the RATE knob's setting (the knob always shows the live rate).
-- **Master tempo linking.** In a DAW the synth **follows the host tempo and transport** — the
-  arp, sequencer, looper, and synced LFOs all lock to the project BPM + play position; standalone
-  uses the internal **Tempo** knob.
-- **MIDI clock OUT** (the synth as clock master): transmits **24-ppq clock + start/stop** to a
-  selectable MIDI output (standalone) or the host (DAW), with **≤ 1-sample jitter**, so external
-  loopers/pedals (Aeros, Chase Bliss) lock to the synth. Enable + pick the device in **OUTPUTS**.
-- **Reorderable stereo FX** (per part): chorus, ping-pong delay, Freeverb-style reverb,
-  mid/side width — drag to reorder, click-free crossfade — followed by a fixed **5-band
-  parametric EQ at the end of each part's chain**. The EQ is a mixing-desk section that
-  follows edit focus: a vertical gain slider per band (drag sideways = frequency,
-  double-tap = numeric freq/gain/Q), per-band + section on/off. (The old global master EQ
-  is retired — there is now one EQ concept, scoped per part.)
-- **8 macros**, pre-assigned to musical defaults (cutoff, reso, filter-env, release, LFO
-  rate/depth, reverb, focused-part level), routable to any parameter; Launchkey pots drive them.
-- **Mod matrix** (per part, 8 slots): route any source (3 LFOs, mod/amp env, velocity, note,
-  mod wheel, pitch bend, random, the 8 macros) to **any continuous parameter of the focused
-  part** — a categorized registry of ~40 targets across Osc (pitch, PW, levels, octave/detune),
-  Filter (cutoff, resonance, env-amt, keytrack, vel), Env (all ADSR stages + vel/amp), LFO
-  (1–3 rate/depth), FX (chorus/delay/reverb/width — e.g. an LFO or Macro wobbling **delay
-  feedback**), and per-part EQ gains. Combinations are just more slots (summed). The 5 classic
-  per-voice targets keep full per-voice fidelity; block-level targets (FX/EQ/LFO/env) modulate
-  at control rate. Wire routes by **touch-connect** — hit **LINK** (top bar), pick a source,
-  then tap a glowing destination knob; drag it within ~2 s to set the depth in one gesture. The
-  **MOD** overlay (categorized dropdowns, bipolar depth read-out, live-activity dots) inspects,
-  re-points, inverts, re-depths, and deletes routes. Routes travel with the patch; the matrix is
-  bit-identical passthrough when empty.
-- **Bulletproof output stage**: voice-sum headroom trim + transparent safety
-  soft-clip, so the output never clips the DAC on dense chords.
-- **Diatonic chord engine**: one finger → an in-key chord (Major / Natural Minor,
-  any root). Momentary, combinable, **MIDI-learnable** modifiers force the quality —
-  MAJ/MIN/SUS4/SUS2/DIM/DOM7 and a diatonic 7TH — from the QWERTY bottom row, a
-  footswitch (CC≥64), or a pad (a consumed note). A per-note ledger releases exactly
-  the tones a chord triggered no matter how the modifiers churn while it's held.
-- **Plug-and-play MIDI**: hot-plug auto-connect + JSON device profiles (Launchkey,
-  Korg B2), MIDI-learn on every control (learned > user > factory precedence).
-- **Full 4-part multitimbral**: part 0 is LIVE (what the panel edits), parts 1–3 are
-  LOCKED — each with its **own** voice, FX chain, three LFOs, and mixer level/pan. Route
-  each input surface (QWERTY, each MIDI controller) to a part in the **INPUTS** dialog
-  (with key-range split zones), so a B2 can hold a bass part while a Launchkey plays the
-  live patch. A controller whose **drum pads** send on a separate channel/note range (e.g. the
-  Launchkey Mini: notes 36–51 on channel 10) splits into its own **"&lt;device&gt; Pads"** surface,
-  so the pads can drive the drum kit while the keys play a lead. One shared 24-voice pool with
-  full per-part isolation — a running generator never steals a note you play live. **MULTI**
-  save/load recalls the whole layout.
-- **Drum kit parts**: per-pad synth voices **or loaded WAV/AIFF/FLAC samples** (stereo,
-  pitch-tracked, cubic-interpolated), choke groups, learn-by-play, per-pad editing (the full
-  synth panel on any pad), factory kits + user `.kit` files. Samples live in a managed,
-  content-deduplicated library and travel with kits, sessions, and MULTIs.
-- **Groove tools**: a diatonic **arpeggiator**, an 8-row **step sequencer** (dedicated
-  drum grid), and a clock-linked **looper** — four lanes (one per part), armed +
-  measure-quantized, dual MIDI + AUDIO, WAV export, with **per-lane loop length 1–32 bars**
-  (a short groove loops under a long progression, all locked to one downbeat).
-- **Scenes**: eight arrangement snapshots (loop clips — MIDI + audio — + drum pattern + per-lane
-  transport). The
-  active scene is the live state (edits write straight in). **Tap to launch**; by default the switch
-  waits for the current scene's longest loop (and any recording) to finish, then the new scene
-  starts from its downbeat — click-free. A shorter quantum (1/2/4/8 bar) is selectable. Long-press
-  to clone or clear. Great for moving between song sections live.
-- **16 factory presets + 6 drums** + user save/load + sound-design Randomize. Loading a
-  patch is **sound-only** — it never disturbs the sequencer, looper, tempo, or other parts.
-  A default startup scene (P1 lead / P2 spare / P3 bass / P4 808 kit) is playable out of the box.
-- **Standalone extras**: QWERTY computer-keyboard note input, curated audio-device
-  default (PipeWire), F11 fullscreen, F12 live health overlay.
-- **Observability**: RT-safe ring logger, per-block CPU/xrun/saturation telemetry,
-  ASan/UBSan + soak, golden-render regression tests.
-
-## MIDI mapping
-
-Every control is **MIDI-learnable**: right-click (mouse) or long-press (touch) a knob,
-fader, or button — it pulses amber — then move a knob or press a footswitch. The next
-incoming CC binds to it, and the map persists in the patch/MULTI state across restarts.
-The 8 macros ship pre-mapped to a Launchkey (**CC 21–28**); mod wheel (CC 1) and sustain
-(CC 64) work out of the box.
-
-### Footswitch looper rig (e.g. Morningstar MC8 Pro)
-
-The four looper lanes are learnable for a hands-free record/mute rig on release day:
-
-| Lane | REC param | PLAY / mute param |
-|------|-----------|-------------------|
-| 1 (P1) | `loop_rec`  | `loop_play`  |
-| 2 (P2) | `loop_rec2` | `loop_play2` |
-| 3 (P3) | `loop_rec3` | `loop_play3` |
-| 4 (P4) | `loop_rec4` | `loop_play4` |
-
-Two things to get right on the controller:
-
-- **Send a *Toggle* CC, not momentary.** A learned CC sets the value to `cc/127`, so a
-  toggle reads **127 = on, 0 = off** (absolute). A momentary switch would only record
-  *while held*; configure the footswitch to send a **Toggle CC** (alternating 127 / 0)
-  so one tap latches REC on and the next taps it off.
-- **Pick CCs in the undefined 102–119 range** — clear of the macro defaults (21–28),
-  mod wheel (1), and sustain (64).
-
-A controller that can send different messages per press-type (tap vs long-press) can fold
-all four lanes' REC + PLAY onto four switches (tap = REC, long-press = PLAY/mute).
-
-> **Scene ("section") switching from a footswitch, external-audio loop lanes, and a
-> one-shot drum-fill pedal are the [1.1 *Live Rig*](docs/plans/1.1-live-rig.md) package** —
-> scene launch isn't a MIDI-reachable parameter in 1.0.
-
-## Architecture
-
-```
-                    ┌────────────────────────────────────────────┐
- MIDI in ──────────▶│ processBlock                               │
- (Korg B2 +         │   ├─ note on/off ──▶ SynthEngine           │
-  Launchkey, or     │   ├─ CC ───────────▶ MidiLearnManager ──┐  │
-  DAW routing)      │   │                                     ▼  │
-                    │   │                            APVTS params │
- GUI / DAW ────────▶│ APVTS ◀─────────────────────────────────┘  │
- automation         │   │ snapshot once per block                │
-                    │   ▼                                        │
-                    │ SynthEngine (16 voices, global LFO)        │
-                    │   voice: OSC1+OSC2+OSC3+noise → SVF → VCA  │
-                    │   per-source mix + kill  (TPT)  (2× ADSR)  │
-                    │   (PolyBLEP)  velocity → amp & cutoff       │
-                    │   ▼                                        │
-                    │ mono → ×trim → stereo → FX → master → clip → out │
-                    │   reorderable: chorus/delay/reverb/width   │
-                    └────────────────────────────────────────────┘
-```
-
-Key rules baked into the design:
-
-* **Audio thread is sacred.** `SynthEngine` and everything under `Source/DSP/`
-  is allocation-free and lock-free. Parameters cross the thread boundary via
-  APVTS atomics, snapshotted once per block into a POD `VoiceParams`.
-* **Voices are dumb.** They hold DSP state only, never parameter state.
-  All APVTS access lives in `PluginProcessor::snapshotParams()`.
-* **MIDI is sample-accurate.** `processBlock` renders up to each event's
-  sample position before dispatching it.
-* **Parameter IDs are forever.** Once presets exist, never rename an ID in
-  `Parameters.h` — add new ones instead. When a control's *meaning* changes, the
-  old ID stays registered and a migration runs on load. The 2→3-oscillator move
-  (6A) froze the old `osc_mix` crossfade and derives the new independent
-  `osc{1,2,3}_level` faders from it, so pre-6A sessions **and saved presets** load
-  sounding identical (see `migrateLegacyOscLevels` / `PresetManager::load`).
-
-**Oscillators & mixer (6A).** Three PolyBLEP oscillators, each with its own
-level fader and a hardware-style **kill switch** (an off oscillator is skipped
-entirely — measurable CPU savings, not just muted). Velocity routes to amplitude
-(`vel_to_amp`) and filter cutoff (`vel_to_cutoff`) for dynamic playing.
-
-**Oscillator FM (phase-modulation) chain (#132).** DX-style phase modulation wired as a fixed chain
-down the three oscillators — each modulator offsets the next carrier's read phase, growing a rich
-sideband spectrum from a simple carrier:
-
-```
-  OSC3 ──(osc2_fm)──▶ OSC2 ──(osc1_fm)──▶ OSC1 ──▶ mix ──▶ filter
- (modulator)         (carrier &          (carrier)
-                      modulator)
-```
-
-The **FM 3>2** knob (osc2's row) sets how hard osc3 modulates osc2; **FM 2>1** (osc1's row) sets how
-hard osc2 modulates osc1. Depth maps to modulation index `β = 2π·depth` (0.3–0.5 ≈ e-piano/bell, 1.0 =
-aggressive). The modulator uses its **raw** output regardless of mix level — so a modulator at level 0
-is silent alone yet still shapes its carrier (the classic 2-operator patch) — and its **SEMI/OCTAVE
-sets the ratio**, keytracking by construction:
-
-| modulator SEMI/OCT vs carrier | ratio | character |
-|-------------------------------|:-----:|-----------|
-| 0 st (unison)                 | 1:1   | warm, hollow (odd+even harmonics) — e-piano |
-| +12 st (octave)               | 2:1   | brighter, still harmonic |
-| +19 st (octave + fifth)       | 3:1   | hollow / clarinet-ish |
-| non-integer (e.g. +9 st over an octave, ≈3.36:1) | inharmonic | **bell / metallic** |
-
-**Carrier restriction:** FM applies only when the carrier's wave is **sine / triangle / WT** — saw and
-square rely on PolyBLEP edge corrections that a phase offset would break, so their FM knob is disabled
-and dimmed. A **MOD** badge marks whichever oscillator is currently acting as a modulator, and
-**Velocity → FM depth** (mod matrix) gives the classic harder-is-brighter response. Depth is smoothed
-on the live part (click-free) and defaults to 0 (existing patches + goldens bit-identical). Design +
-the honest aliasing note: [`docs/plans/fm-chain.md`](docs/plans/fm-chain.md).
-
-**Output gain staging.** A summing polysynth can drive its output far past
-full-scale on dense chords (16 voices at unity ≈ several ×FS), which hard-clips
-the DAC and sounds like crackle. Two stages keep it clean: a **fixed
-`1/√maxVoices` headroom trim** at the voice sum (the equal-power rule for
-quasi-uncorrelated sources — never a dynamic per-voice-count scale, which would
-pump), and a **transparent safety soft-clipper** as the last stage after master
-gain. The clipper is bit-exact below its 0.8 threshold (normal playing is
-untouched) and gently saturates peaks above it, so the output **never exceeds
-±1.0** for any patch or polyphony — a plugin-layer test enforces that invariant.
-`Source/DSP/SoftClip.h`; clipper activity is logged (`clip=`) and shown as the
-`SAT` line in the F12 overlay.
-
-**Presets (6D).** 16 read-only factory patches spanning Bass / Lead / Keys / Pad /
-Pluck / Brass / Strings / Winds / Organ / FX, plus **Init**, in a category-grouped
-Load menu. Factory patches are embedded JSON (override-on-Init); tweak-and-Save
-makes a user copy. Details in [docs/presets.md](docs/presets.md).
-
-**Plug-and-play MIDI (6C).** In the standalone, plugging a controller in mid-session
-auto-connects it, applies its **device profile** (default CC map), and toasts;
-unplugging releases held notes. Profiles are JSON (factory profiles embedded for
-the Launchkey Mini and Korg B2; user overrides in the config dir), with precedence
-**learned > user > factory**. Full details in [docs/midi.md](docs/midi.md).
-
-**Parts & input routing (7C).** The engine has up to **4 parts**. Part 0 = **LIVE**
-(snapshots the APVTS each block — what the panel edits); parts 1–3 = **LOCKED**, each
-holding a `VoiceParams` baked from a preset on the message thread and published to the
-audio thread lock-free (double-buffer). Voices carry a part index at note-on and render
-with that part's params via a single `paramsFor(part, note)` seam (the `note` arg is
-unused in v1 — it's the seam a future per-note "Kit part" plugs into). One **shared**
-16-voice pool with global oldest-steal. Each input **surface** (QWERTY, each MIDI input)
-routes to a part in the **INPUTS** dialog; assigning a preset bakes it. In the standalone,
-per-input MIDI capture replaces JUCE's device merge so each controller reaches its part
-(no double-trigger). **v1 simplifications (deliberate):** the FX chain, global LFO,
-poly-mode and master are **shared** and follow the LIVE part; a locked part contributes
-only voice-level character (osc/mix/filter/env/vel/env→pitch). On-screen edits, Randomize
-and the chord engine affect the LIVE part only.
-
-**Full multitimbral (Sub-phase 2).** The v1 "shared FX / shared LFO" simplification is
-retired: **each part owns its own FX chain and its own three LFOs**. A part renders into
-its own buffer → its own chorus/delay/reverb/width → summed into the master, so you can
-run a dry bass part next to a lead part drenched in delay + reverb. A part with no voices
-and an idle FX chain is skipped entirely (the CPU control; a decaying reverb/delay tail
-keeps processing until silent). Locked parts **bake** their FX + LFOs from their source
-preset, so a locked part sounds exactly like loading that patch live. The panel edits the
-LIVE part's three LFOs (LFO 1/2/3); `lfo2_*`/`lfo3_*` default off. Still shared across
-parts: poly-mode, master gain, the safety clipper, and pitch-bend / mod-wheel (global
-performance controllers). A **per-part mixer** (MIX section: `partN_level` 0–2, `partN_pan`)
-balances the parts — level fixes the classic "kit too quiet under the lead", pan spreads
-them across the stereo field. Pan uses a **0 dB-centre balance law** (`leftGain =
-level·(pan≤0 ? 1 : 1−pan)`, right symmetric) so centre/unity is bit-identical to no mixer.
-Mixer settings are MIDI-learnable and travel in a MULTI. Kit balance is two layers: the
-part level here, plus each pad's own level in the Kit Editor.
-
-**Key-range zones + routing lifecycle (Part B).** A surface isn't limited to one part —
-each is an ordered, gapless list of **zones** tiling the keyboard `{loNote, hiNote, part,
-transpose}` (default = one full-range LIVE zone). A note resolves to its zone's part and
-is transposed by `transpose` semitones (the trigger is unchanged, clamped to MIDI); a
-note-off releases exactly what its note-on triggered via a **ledger snapshot**, so
-re-splitting mid-hold never strands a voice. Zone lookup sits at the routing seam — the
-chord engine only sees notes that land on the LIVE part. QWERTY is a surface like any
-other, so it's splittable too. The **routing lifecycle** is deliberately conservative:
-
-- **Startup = clean.** On every launch each surface plays the LIVE patch, full range —
-  routing/zones do **not** auto-restore. Only **sound** state (patch params, presets,
-  MIDI-learn, FX order) persists.
-- **Recall is explicit.** Save a **MULTI** (parts + splits + transposes + routing) and
-  load it deliberately; that's the only thing that reapplies a layout. A zone whose
-  part's preset is missing falls back to LIVE, logged.
-- **Session-stable.** A configured surface keeps its assignment across an unplug/replug;
-  the session ends when the app closes → back to the clean startup.
-
-*Headline split:* bottom octave of a controller → **Part 1 / Kick 808** (a drum zone),
-the rest → **LIVE** pad — one keyboard, two instruments by key range.
-
-**Kit parts (Sub-phase 1).** A part can be a **Kit** — a 4×4 map of up to 16 pads, each
-a trigger note → a baked source preset with its own **sounding note(s)** (1 = a hit,
-2–4 = a tuned **chord pad**, pitch decoupled from the trigger), **level**, and **choke
-group**. Choke is click-free (a closed hat silences an open hat in the same group);
-re-hitting a pad retriggers it; an unmapped trigger is silent; note-off releases exactly
-what the hit fired via a ledger. Per-pad params come through the same `paramsFor(part,
-note)` seam the locked parts use. Click a locked part cell (P1–P3) on the PARTS strip to
-open the **Kit Editor** (learn-by-play triggers/sounding notes, per-pad source/level/choke,
-audition). Factory kits **808 Basics** and **Stab Board**; kits save/load and ride in a
-MULTI. This turns a controller's bottom-octave drum zone into a real kit and its pads into
-a trigger board. (v1: all pads of a Kit part share the part's one FX chain — per-part FX
-comes next.) Full recipe + choke semantics in [docs/presets.md](docs/presets.md).
-
-**Where the routing controls live (click-path).** Multitimbral setup is two visible
-surfaces — a **PARTS strip** across the top of the editor and the **INPUTS** dialog it
-opens:
-
-1. Launch the standalone (see *Build & run* for the exact binary path) and look at the
-   **top strip**: `PARTS  P0 LIVE | P1 -- | P2 -- | P3 --   [ INPUTS ]`. Each cell is a
-   part; `--` means unassigned, a preset name means locked. Cells flicker when their part
-   receives a note — a live proof-of-routing readout.
-2. Click the teal **INPUTS** button at the strip's right end. The modal
-   [INPUTS dialog](docs/inputs-dialog.png) lists every playing surface — **QWERTY** first,
-   then each connected MIDI controller **by name** (each gets its own row).
-3. On a surface's row, set the **route** dropdown (Live / Part 1 / Part 2 / Part 3). Pick a
-   part and its **preset** dropdown enables — choose one and it's baked into that part.
-4. To split by **key range**, press **SPLIT** on that row. A segmented bar appears; **+ Split**
-   divides a zone, or **Split by play** arms the row so the next key you press sets the seam.
-   Each zone has its own part, preset and transpose; **Reset surface** returns it to one
-   full-range LIVE zone.
-5. The **activity dot** on the left of each row blinks on incoming events, so a silent
-   controller (dead cable, wrong USB port) is diagnosable without leaving the dialog.
-6. To keep a layout, **Save MULTI** (the bottom bar notes it includes parts + splits +
-   routing); **Load MULTI** reapplies it. **Reset all routing** clears everything back to
-   default. Nothing here auto-saves — a relaunch always starts clean.
-7. Close the dialog (Esc). Play that surface — its notes sound the assigned part/zone; the
-   PARTS strip cell flickers. QWERTY plays the LIVE patch unless you routed or split it.
-
-**Confirming you're on the current build.** If a control seems missing, first rule out a
-stale binary: the startup log banner prints the git hash and build time, e.g.
-`synth 0.x (git 1a2b3c4, built Jul  7 2026 23:14:12, Release) ... parts=4`. Compare the
-hash against `git rev-parse --short HEAD`; if they differ you're running an old binary —
-rebuild (*Build & run*). This banner was added precisely so "I don't see it" can be
-separated from "it isn't there."
-
-**FX chain (6B).** A global, **reorderable** stereo chain of four hand-rolled,
-JUCE-free effects (all in `Source/DSP/`, allocation-free after `prepare`): chorus,
-ping-pong delay, Freeverb-style reverb, and mid/side stereo width. Each block has
-a kill toggle (disabled ⇒ skipped, no CPU) and rotary params. Drag the blocks in
-the far-right FX panel to reorder them; the audio chain crossfades to the new
-order click-free (~30 ms) via a dual-chain equal-power blend. The order is a
-`fx_order` **state-tree property** (a permutation, not an automatable value),
-mirrored to a lock-free atomic for the audio thread and saved with presets.
-
-**Hear that order matters (10-second A/B).** Load **Init**; enable **Delay** and
-**Reverb** only. Set delay feedback high (~0.8), delay mix ~0.5, reverb size large,
-reverb mix ~0.5. Play one short stab and listen through the tail, then drag the two
-blocks to swap them and play the same stab:
-* **Delay → Reverb**: each delay repeat is fed into the reverb, so the echoes melt
-  into one continuous wash.
-* **Reverb → Delay**: the whole reverberated stab is delayed, so you hear distinct,
-  echoing repeats of the reverb tail.
-The difference is obvious by ear — that's the reorder working. (The four-block
-permutation is regression-guarded by the `fx_nondefault` golden, which renders
-delay→width→reverb→chorus.)
-
-## File map
-
-| File | What it is |
-|---|---|
-| `Source/Parameters.h` | Every parameter ID + APVTS layout. Single source of truth. |
-| `Source/DSP/PolyBlepOscillator.h` | Anti-aliased saw/square(PWM)/tri/sine. The character. |
-| `Source/DSP/SVFilter.h` | TPT state-variable filter (Simper/Cytomic). LP/HP/BP/Notch. |
-| `Source/DSP/ADSREnvelope.h` | Exponential-segment ADSR with click-free retrigger + steal fade. |
-| `Source/DSP/LFO.h` | Global control-rate LFO (tri/sine/square/S&H). |
-| `Source/DSP/SynthVoice.h` | One voice's full signal chain. |
-| `Source/DSP/SynthEngine.h` | Voice pool, oldest-note stealing, LFO routing. |
-| `Source/DSP/Chorus.h` `StereoDelay.h` `Reverb.h` `StereoWidth.h` | The four hand-rolled stereo FX. |
-| `Source/DSP/FXChain.h` | Reorderable FX chain + click-free reorder crossfade. |
-| `Source/MidiLearnManager.h` | (channel, CC) → parameter mapping, with learned/user/factory precedence. |
-| `Source/MidiProfile.h` | JSON device-profile parsing + factory/user library (see `resources/midi-profiles/`). |
-| `Source/PluginProcessor.*` | JUCE seam: MIDI dispatch, param snapshot, render, state + legacy migration. |
-| `Source/PluginEditor.*` | Hardware-style custom editor: signal-flow panel sections, touch faders. |
-| `Source/UI/FXPanel.h` | Far-right FX column: rotary blocks with finger drag-reorder. |
-| `Source/PresetManager.h` | User preset save/load (per-user dir) + musical randomize; migrates legacy patches. |
-| `Source/FactoryPresets.h` | Read-only factory presets (JSON in `resources/presets/`, embedded). |
-
-## Build & install
-
-**Fastest path — the one-command installers** (build from source + place the VST3 and
-standalone where your DAW/desktop expect them). Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
-
-```bash
-# Linux (Debian/Ubuntu)
-./scripts/install-linux.sh
-# Windows (PowerShell in the repo root)
-.\scripts\install-windows.ps1
-```
-
-The rest of this section is the manual build.
-
-### Linux (Ubuntu/Debian)
-
-```bash
-sudo apt install build-essential cmake git \
-    libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev \
-    libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev \
-    libgl1-mesa-dev
-
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
-```
-
-Outputs:
-* Standalone: `build/VASynth_artefacts/Release/Standalone/synth`
-* VST3: `build/VASynth_artefacts/Release/VST3/` (auto-copied to `~/.vst3`)
-
-### Windows
-
-Visual Studio 2022 (Desktop C++ workload) + CMake. Same two commands from a
-Developer Prompt. The standalone uses WASAPI/DirectSound by default; for
-lowest latency into the Scarlett, load the VST3 in Ableton (ASIO) or add
-ASIO SDK support later.
-
-### First run (standalone, Linux)
-
-1. Launch the standalone. By default it opens the **PipeWire/default output**,
-   which follows your OS default sink — so it makes sound immediately, and if you
-   set the **Scarlett 2i2** as the system output (or PipeWire sink), it plays
-   there with no fiddling. The chosen device + the full available list are written
-   to the log (`~/.config/synth/synth.log`).
-2. To pick a specific device, open **Options → Audio/MIDI Settings**. The dialog
-   still lists every raw ALSA endpoint (hw:/plughw:/front:/surround:/dmix…) as the
-   advanced/show-all view; prefer the friendly `pipewire`/`default`/card names.
-   Buffer 128–256 @ 48 kHz to start.
-3. MIDI inputs (Korg B2, Launchkey Mini) **auto-connect** — plug them in before or
-   after launch and they're enabled automatically (a device present at startup is
-   now enabled, not just recognised). You can also toggle them in the dialog.
-4. Play the Korg; twist Launchkey knobs (CC 21–28 pre-mapped: cutoff, reso,
-   osc mix, env amt, attack, release, LFO rate, LFO depth).
-
-### Laptop-only operation (no hardware)
-
-**Audio device fallback.** The standalone's Audio/MIDI Settings offers device-type
-selection (ALSA + JACK are compiled in) and any output including built-in laptop
-audio. If a previously-selected device is gone at launch (Scarlett unplugged), it
-falls back to the system default automatically — it won't crash or launch silent
-(`selectDefaultDeviceOnFailure`). The dialog shows which device is active.
-
-**QWERTY computer keyboard.** The standalone editor plays notes from the computer
-keyboard — chromatic, one semitone per key, left to right (US layout):
-
-```
-  q w e r t y u i o p [ ]     C4 … B4   (MIDI 60–71)
-  1 2 3 4 5 6 7 8 9 0 - =     C5 … B5   (MIDI 72–83)
-
-  SHIFT + Q W E R T Y U I O P { }     C3 … B3   (top row, one octave LOWER)
-  SHIFT + ! @ # $ % ^ & * ( ) _ +     C6 … B6   (number row, one octave HIGHER)
-
-  z / x  = octave shift down / up   (moves the whole map; combines with SHIFT)
-```
-
-Holding **Shift** stretches the reach to four octaves (C3 … B6) without leaving the
-home position — the top row drops an octave, the number row rises one. The octave is
-latched when the key is pressed, so releasing Shift mid-note never changes its pitch.
-
-Fixed velocity 0.8. OS auto-repeat is ignored (clean one note-on / one note-off
-per press). Notes merge into the same engine path as hardware MIDI and coexist
-with it. Keys are ignored while a text field is focused; all notes release when
-the window loses focus (Alt-Tab) or closes — no stuck notes. Standalone only; in
-a plugin the host owns the keyboard.
-
-## Custom UI
-
-Hardware-style single-surface panel (`docs/editor.png`), everything visible at once:
-a **top bar** (preset · Save/Random · poly/mono/legato · glide · master · REC ·
-fullscreen · help), a **MACRO strip** (M1–M8), a left **PART RAIL** (P1–P4 + level/
-pan + INPUTS), the **centre** in signal-flow order (**Oscillators · Filter · Envelope
-· LFO · FX**), a right **Scope + FFT + per-part EQ**, and a bottom **workstation**
-(Chord bar · Rhythm arp+sequencer · Looper). Every control is bound to its APVTS
-parameter via attachments (GUI ↔ automation ↔ MIDI-learn stay in sync); dark hardware
-LookAndFeel; layout scales with the window.
-
-- **Section guide (`?`)**: the help button opens a menu — **Keyboard Map** plus a list of the 13
-  panel sections. Pick one and it's spotlighted with numbered markers on its controls and a side
-  card explaining each (what it does + how to use it). A reference, not a tour: Esc / ✕ / tap-out to
-  close, reopen to pick another. All the text lives in one data file (`Source/UI/GuideContent.h`),
-  mirrored to [`docs/guide.md`](docs/guide.md), and a coverage test fails the build if any control in
-  a covered section lacks help.
-
-- **MIDI-learn**: right-click (mouse) or long-press (touch) any control → arms it
-  (amber pulse); the next CC binds it and a `CCnn` badge appears. Same gesture
-  clears a mapping. The 8 Launchkey Mini pots (CC 21–28) map to **the 8 macros**
-  (M1–M8) by default, and the macros ship pre-assigned (M1 cutoff, M2 reso, M3 filter-env,
-  M4 amp release, M5 LFO rate, M6 LFO depth, M7 reverb, M8 focused-part level) — reassign
-  any macro to a destination, or hit **Random**. If a controller's knobs end up driving the
-  wrong things — or the macros point at the wrong destinations (a stale map from a past
-  session) — **Reset MIDI + macros** in the INPUTS dialog restores both to factory
-  (CC 21–28 → the macros, and M1 cutoff … M8 focused-part level).
-- **RANDOM + VARY — two buttons, two jobs.** **RANDOM** (NEW) rolls a *fully random* patch on the
-  focused part — one algorithm, every press — shaped toward playable: perceptual (log) sampling,
-  middle-biased levels, a hidden "temperament" that loosely correlates the envelope tails, musical
-  SEMI intervals, the occasional self-oscillating excursion, and 0–3 mod-matrix routes, with a
-  repair pass so it's never silent or broken. **VARY** (NEIGHBOUR) takes a *small step* from the
-  current sound — the way to explore near a patch you like. Both touch **sound-design** parameters
-  only (oscillators, filter, envelopes, LFO, FX amounts) and leave your **performance** controls put
-  — master gain, velocity routing, poly mode, glide, MIDI mappings, and the whole **rhythm section
-  (arp / sequencer / looper / tempo)** (single `randomizeExclusions()` list). RANDOM also assigns a
-  few macros to random destinations.
-- **Live / touchscreen use — run fullscreen.** The FS button, **F11**, or the window
-  title-bar's maximise button put the app in **kiosk mode**, which fills the screen and
-  **removes the native title bar** — so a touch near the top of the window (e.g. a
-  macro knob) can never be hijacked by the window manager as a window-move/edge gesture.
-  Fullscreen is the recommended live mode; the macros live in the compact top bar
-  alongside the preset selector and master.
-- **Debug overlay**: F12. **Help**: `?` (Shift+/).
-- QWERTY note input keeps working while twisting controls (controls refuse keyboard
-  focus). VST3 uses the same editor, freely resizable.
-
-## Observability (logging, health, debugging)
-
-**Log file.** `~/.config/synth/synth.log` (JUCE default app-log location).
-Each session appends a startup banner (version + git hash, build type, osc
-quality, max voices, sample rate + buffer) and, from the standalone, the selected
-audio device + type and enabled MIDI inputs (re-logged on device/MIDI changes).
-
-**Audio-health stats.** Every ~10 s the log gets a line like:
-```
-render ms  min=0.05 med=0.37 p99=0.89 max=0.93 (16.7% budget)  voices<=6  steals=0  overruns=0  clip=0  dropped=0  n=3750
-```
-`p99 % budget` is the headline CPU number; **overruns** (a callback exceeding the
-buffer period) are logged immediately as an xrun early-warning. Logging is
-real-time-safe: the audio thread only pushes POD events into a lock-free ring; a
-background thread formats and writes them (drops + counts if the ring floods,
-never blocks the audio thread).
-
-**Debug overlay.** Press **F12** in the editor for a live overlay: CPU %, voice
-high-water, steals, overruns, the log-drop counter, and a **`SAT`** saturation-
-activity line (amber + sample count when the output safety clipper is engaging,
-dim when the output is clean).
-
-**Sanitizer builds.**
-```
-./run-all-checks.sh --sanitize      # ASan+LSan then UBSan: tests + memory soak
-```
-Or manually: `cmake -B build-asan -DVASYNTH_ASAN=ON -DVASYNTH_BUILD_TESTS=ON`
-(also `-DVASYNTH_UBSAN=ON`). The soak (`tests/soak`) runs a MIDI storm through
-`processBlock` and checks memory stability; under ASan, LeakSanitizer gates leaks.
-
-**Noise-cleanliness is a permanent regression criterion.** Any change that generates
-notes or touches the audio path must ship, in the same commit, with click-torture
-coverage of its behavior in `tests/plugin/test_click_torture.cpp` — it drives the full
-processor and scans the stereo output for sample-to-sample discontinuities (clicks/pops),
-out-of-range peaks, and non-finite samples. The `[click]` suite runs in every gate.
-
-**Reporting a bug — please send:**
-1. `~/.config/synth/synth.log` (has the banner, health stats, any OVERRUN /
-   CRASH markers, and the log-drop count).
-2. What you were doing (patch, polyphony, which keyboard/controller).
-3. Audio settings (device, sample rate, buffer) — visible in Options → Audio/MIDI
-   Settings and logged in the banner.
-
-## Roadmap
-
-**v1.0.0 — shipped.** See [CHANGELOG.md](CHANGELOG.md) for the full feature list. Highlights:
-- [x] 4× oversampled PolyBLEP oscillators (Efficient/HQ), TPT filter, dual ADSRs, mod-env→pitch
-- [x] Pitch bend + mod wheel + sustain pedal; mono/legato + glide; per-block smoothing
-- [x] Full 4-part multitimbral (per-part FX + 3 LFOs + mixer) with per-part isolation; 24 voices
-- [x] Drum kit parts (per-pad editing, choke); chord engine; arp + step sequencer; looper
-- [x] Master parametric EQ; 8 routable macros; custom touch-reliable editor; default scene
-- [x] Persist MIDI-learn mappings in APVTS state; MULTI layout save/load; sound-only patch load
-- [x] **Oscillator FM (phase-modulation) chain** osc3 → osc2 → osc1 (velocity→FM depth; sine/tri/WT carriers)
-
-**Deployment / validation (not yet done)**
-- [ ] ThinkPad X1 Carbon 3rd gen (2015, dual-core Broadwell) is the live Linux
-      machine: measure real round-trip MIDI-to-audio latency of the standalone
-      under PipeWire at 128 samples / 48 kHz, and document recommended buffer
-      settings (128 vs 256) for that machine. DSP headroom is benched
-      (`tests/bench/dsp_bench`); this is the end-to-end I/O latency check.
-      **This is also the real worst-case gate for the voice cap** (default 12):
-      dev-box p99 is scheduler-jitter-contaminated, so confirm no xruns on the
-      ThinkPad and adjust `VASYNTH_MAX_VOICES` if needed.
-
-**Considered and deferred**
-- Internal multi-core audio (splitting voices across RT worker threads): NOT
-  done. Single-core Efficient at 12 voices is ~23% of the ThinkPad budget
-  (median), and on a 2-core machine internal threading competes with PipeWire on
-  core 1 and adds RT jitter. The DAW already parallelizes across instances.
-  Revisit only if HQ-live or large unison is needed (v2, needs a lock-free pool).
-- **Per-instance memory (multi-instance note).** Each plugin instance pre-allocates its
-  four audio-looper rings up front (RT-safe, never resized): `kMaxLoopSeconds` (64 s) ×
-  48 kHz × 2 ch × 4 B × 4 lanes ≈ **98 MB resident per instance** (J2, raised from ~37 MB
-  to make 32-bar audio loops honest down to ~120 BPM). This is RAM, not CPU — negligible on
-  the ThinkPad — but scales linearly with instance count, so a session with many instances
-  should account for it; lower `kMaxLoopSeconds` for a memory-tight host. MIDI loops cost
-  nothing here.
-- **Curated audio-device selector UI (backlog).** The just-works PipeWire default
-  and curated device *logging* land now (`AudioDeviceCuration`), but the settings
-  dialog still shows JUCE's raw ALSA list as the advanced view. Replacing it with a
-  selector that shows only the curated list (friendly endpoints + card names, with
-  a show-all toggle) needs a custom `AudioDeviceManager`/plugin-holder — deferred.
-
-**v1.1 — planned**
-- [ ] **Live Rig** — footswitch performance package ([spec](docs/plans/1.1-live-rig.md)):
-      MIDI scene control (absolute PC/notes + relative next/prev with queued targets, launch-quantised);
-      external-audio loop lanes (Scarlett in → lane capture, monitoring + latency comp); a one-shot
-      drum-fill engine (CC-triggered, bar-quantised, auto-return); and a documented MC8 Pro factory
-      layout + device profile. The 1.0 README MIDI-mapping section already covers the four-switch
-      loop-record rig that works today.
-- [ ] **Sharing / format** — session-portability bundle + `.vasynthkit` embedding (samples travel
-      with the kit), and a preset-format extension for mod-routed patch concepts.
-- [ ] **Cross-mod pack completion** — ring modulation + hard sync (osc2→osc1). The FM (phase-mod)
-      chain shipped in 1.0 (#132); these two round out the oscillator cross-modulation set.
-
-**v2 (make it deep)**
-- [x] Mod matrix — any source → any continuous parameter (registry-driven), touch-connect LINK + categorized overlay
-- [x] Oscillator FM (phase-modulation) chain osc3→osc2→osc1 (#132)
-- [ ] Second LFO, per-voice LFO option, MIDI-clock sync
-- [ ] Unison/detune stacking; **ring mod + hard sync osc2→osc1** (1.1 cross-mod pack)
-- [ ] Sub-oscillator, filter drive/saturation
-- [ ] Custom GUI with right-click MIDI-learn
-- [ ] Preset browser
-
-**Reference reading (open source to study, not copy blindly)**
-- amsynth — closest architectural sibling, small and readable (GPL)
-- Surge XT — filter algorithms (`sst-filters` is a reusable library), MSEG
-- JUCE examples — `AudioPluginDemo` for processor patterns
+- **Four parts, multitimbral.** Each part has its own patch, 3-band **EQ**, per-part **FX**
+  (saturation, chorus, delay, modulated reverb), level/pan, and its own voices.
+- **Synth engine.** Three oscillators (saw / square / triangle / sine / **wavetable**) plus
+  noise, through-zero **FM** (osc 3→2→1), a resonant filter with drivable self-oscillation, ADSR
+  amp and mod envelopes, **unison**, and subtle per-voice analog drift.
+- **Drum kits + sample pads.** Ten synthesized classic-machine kits, plus user **sample** pads,
+  editable per pad.
+- **Sequencer, looper, scenes.** An 8-row step sequencer, a per-part MIDI **and** audio **looper**
+  (up to 16 bars per lane), and launchable **scenes** that switch patterns and loops on the beat.
+- **Mod matrix.** Eight routing slots from LFOs, envelopes, velocity, note, macros and the mod
+  wheel to any destination, with a touch-to-connect UI.
+- **Tempo-synced LFOs**, host-tempo follow, and MIDI clock out.
+- **VST3 + standalone**, Linux + Windows, from one codebase.
+
+## Using it
+
+- **Play it now.** Plug in any MIDI keyboard, or use the computer keyboard (**A W S E D…** as
+  piano keys, **Z / X** to change octave). No controller required.
+- **The built-in guide is the manual.** Click **?** in the top bar and pick any section for a
+  spotlight, numbered markers, and a card explaining every control — *what* it does and *how* to
+  use it. (Also generated to **[docs/guide.md](docs/guide.md)**.)
+- **In a DAW.** Load **Synth** (vendor **Farmer**) as a VST3 instrument on a track and play.
+- **MIDI-learn.** Right-click (or long-press) any knob to arm learn, then move a hardware control
+  to bind it; tap the knob again to cancel. Bindings are saved with your session.
+- **Controllers.** Any MIDI controller works. Synth **ships with a controller profile for the
+  Novation Launchkey Mini** — its knobs are pre-mapped to the eight macros and its pads to the
+  drum surface; any other controller maps the same way via MIDI-learn. The synth is fully
+  operable with **any** MIDI device, and with **none** (computer-keyboard only).
+
+## Contributing
+
+Issues and pull requests welcome. Build from source (Tier 2) and run the checks before a PR:
+`./run-all-checks.sh` (build + tests + pluginval) and `./run-all-checks.sh --sanitize`
+(ASan/UBSan + a memory soak).
 
 ## License
 
-**synth is licensed under the GNU Affero General Public License v3.0** (see
-[LICENSE](LICENSE)). This is a deliberate, required choice: the project builds on
-**JUCE 8** under its free/personal terms, which permit closed-source distribution
-only with a paid JUCE licence — otherwise the resulting software **must be released
-under the AGPLv3**. As a free, open-source project we use AGPLv3 to match. In
-practice: you may use, study, modify, and redistribute synth freely under the
-AGPLv3, including the requirement to offer corresponding source for network-served
-or distributed versions.
+**GNU AGPL v3** — see [LICENSE](LICENSE). The **source for every release is this repository**
+(<https://github.com/Sanglock81/farmer-synth>); the AGPL's source-availability obligation is met
+by that public repo.
 
-If you fork or redistribute, keep the AGPLv3 notice and provide source. If you want
-to ship a closed-source product built on this code, you would need a commercial
-JUCE licence and would still be bound by this project's AGPLv3 terms for the parts
-derived from it.
+Built with [JUCE](https://juce.com). **VST** is a trademark of Steinberg Media Technologies GmbH.
+
+Factory presets and kits are provided as starting points; the sounds you make and share are yours.

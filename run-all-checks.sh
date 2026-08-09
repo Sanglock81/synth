@@ -93,10 +93,10 @@ cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DVASYNTH_BUILD_TESTS=ON $FCBAS
 step "Building Standalone + VST3 + tests (-j$JOBS)"
 cmake --build "$BUILD_DIR" -j"$JOBS" || fail "build failed"
 
-STANDALONE="$BUILD_DIR/VASynth_artefacts/Release/Standalone/synth"
-VST3_SO="$BUILD_DIR/VASynth_artefacts/Release/VST3/synth.vst3/Contents/x86_64-linux/synth.so"
+STANDALONE="$BUILD_DIR/VASynth_artefacts/Release/Standalone/Synth"
+VST3_SO="$BUILD_DIR/VASynth_artefacts/Release/VST3/Synth.vst3/Contents/x86_64-linux/Synth.so"
 [[ -x "$STANDALONE" ]]                                            || fail "Standalone artefact missing"
-[[ -e "$BUILD_DIR/VASynth_artefacts/Release/VST3/synth.vst3" ]]  || fail "VST3 artefact missing"
+[[ -e "$BUILD_DIR/VASynth_artefacts/Release/VST3/Synth.vst3" ]]  || fail "VST3 artefact missing"
 
 # ---------------------------------------------------------------------------------------------
 # Honest-gate freshness check. The build above rebuilds both shipping artefacts, but a green

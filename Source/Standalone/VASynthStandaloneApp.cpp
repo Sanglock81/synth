@@ -38,7 +38,7 @@ static StringArray availableOutputDeviceNames()
 }
 
 // The "just works" default output: the PipeWire/default endpoint when present, so
-// the synth follows the OS default sink (route the Scarlett there and it plays).
+// the synth follows the OS default sink (route your interface there and it plays).
 static String preferredDefaultOutput()
 {
     return AudioDeviceCuration::pickPreferredDeviceName (availableOutputDeviceNames());
@@ -328,7 +328,7 @@ public:
         // Bug 1: hand the holder a preferred default OUTPUT device — the
         // PipeWire/default endpoint — so a first run (no saved audio setup) opens
         // something that actually makes sound and follows the OS default sink
-        // (select the Scarlett there and it plays). A previously-saved device is
+        // (select your interface there and it plays). A previously-saved device is
         // still honoured; this only picks the default when none is stored.
         const String preferredOut = preferredDefaultOutput();
         Logger::writeToLog ("startup: preferred default output = '" + preferredOut + "'");

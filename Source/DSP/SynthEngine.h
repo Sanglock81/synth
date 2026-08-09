@@ -306,7 +306,7 @@ public:
     void setTransport (double beats, double spb) { transportBeats_ = beats; samplesPerBeat_ = spb > 0.0 ? spb : 1.0; }
 
     // Sustain pedal (CC64). While down, note-offs are deferred; on release the
-    // held notes are let go. The Korg B2's damper is the primary expression.
+    // held notes are let go. A sustain-pedal (CC64) damper is the primary expression.
     void setSustainPedal (bool on)
     {
         if (sustainPedal && ! on)                        // pedal released

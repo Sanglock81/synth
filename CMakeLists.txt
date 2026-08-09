@@ -52,16 +52,16 @@ option(VASYNTH_COPY_PLUGIN "Copy the VST3 to the user plugin dir after build" OF
 
 # One target definition produces BOTH the VST3 and the standalone app.
 juce_add_plugin(VASynth
-    COMPANY_NAME            "HomeStudio"          # rename freely
-    PLUGIN_MANUFACTURER_CODE Hstd
-    PLUGIN_CODE              Vasy
+    COMPANY_NAME            "Farmer"              # author/vendor (shown in DAW plugin lists)
+    PLUGIN_MANUFACTURER_CODE Hstd                 # UNCHANGED — plugin identity / session compatibility
+    PLUGIN_CODE              Vasy                 # UNCHANGED — same reason
     IS_SYNTH                 TRUE
     NEEDS_MIDI_INPUT         TRUE
     NEEDS_MIDI_OUTPUT        FALSE
     IS_MIDI_EFFECT           FALSE
     COPY_PLUGIN_AFTER_BUILD  ${VASYNTH_COPY_PLUGIN} # installs VST3 to user plugin dir (off in CI)
     FORMATS                  VST3 Standalone
-    PRODUCT_NAME             "synth")               # user-facing name (VST3 file, window title)
+    PRODUCT_NAME             "Synth")               # user-facing name (VST3 file, window title, DAW list)
 
 target_sources(VASynth PRIVATE
     Source/PluginProcessor.cpp
@@ -134,6 +134,7 @@ target_compile_definitions(VASynth PUBLIC
     # and enabling multiple MIDI inputs (Korg B2 + Launchkey Mini).
     JUCE_ALSA=1
     JUCE_JACK=1
+    JUCE_ASIO=0            # compliance: never compile the proprietary Steinberg ASIO SDK into distributables
     # Startup-banner metadata (observability).
     VASYNTH_VERSION="${PROJECT_VERSION}"
     VASYNTH_GIT_HASH="${VASYNTH_GIT_HASH}"

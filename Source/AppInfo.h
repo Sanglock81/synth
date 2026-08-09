@@ -15,7 +15,14 @@
 
 namespace AppInfo
 {
-    inline constexpr const char* kName       = "synth";     // user-facing name
+    // Display identity (UI / About / banner). kDisplayName is intentionally SEPARATE from kName:
+    inline constexpr const char* kDisplayName = "Synth";     // product name shown to the user
+    inline constexpr const char* kVendor      = "Farmer";    // author / vendor
+
+    // On-disk config KEY — the config-subdirectory name. Kept lowercase and STABLE (not the display
+    // name) so existing installs' presets / MIDI profiles / settings never move when the display name
+    // changes. Do not repoint this without a migration.
+    inline constexpr const char* kName       = "synth";     // config-dir key (NOT the display name)
     inline constexpr const char* kLegacyName = "VASynth";   // pre-rename config dir
 
     // Base user-data directory (Linux: ~/.config, Windows: AppData/Roaming, etc.).
