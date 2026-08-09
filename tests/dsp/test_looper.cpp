@@ -298,3 +298,23 @@ TEST_CASE ("looper: playback never appends to the lane (#138)", "[looper][accum]
         { lp.playBlock (n, [] (int, int, float, bool) {}); lp.advance (n); }
     REQUIRE (lp.eventCount (0) == frozen);
 }
+
+// #146 Bug A: a note held to the loop end has its synthesized note-off nudged a few ms EARLY so its
+// release doesn't collide with the next pass's re-attack at the seam (the loop click). Balance and
+// pairing are preserved (the #138 tests still pass); this pins the nudge placement.
+TEST_CASE ("looper: held-through-stop note-off is nudged before the seam (#146)", "[looper][seam]")
+{
+    Looper lp;
+    lp.setMasterLength (2048); lp.setLoopLength (0, 2048); lp.setQuantize (0, false);
+    lp.setRecording (0, true);
+    lp.recordNote (0, 0, 60, 0.9f, true);        // note-on at the downbeat
+    lp.advance (2000);                           // hold almost to the loop end
+    lp.setRecording (0, false);                  // stop -> closeDangling synthesizes the off
+
+    int offT = -1;
+    for (int i = 0; i < lp.eventCount (0); ++i)
+        if (lp.event (0, i).note == 60 && ! lp.event (0, i).on) offT = lp.event (0, i).t;
+
+    REQUIRE (offT == 2000 - loopseam::kSeamSamples);   // nudged kSeamSamples before the stop position
+    REQUIRE (offT < 2000);                             // strictly before the seam
+}

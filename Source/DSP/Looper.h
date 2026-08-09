@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include "../Observability/MidiTracer.h"
+#include "LoopSeam.h"
 
 // ============================================================================
 // Per-part MIDI looper — JUCE-free, RT-safe (fixed storage, no alloc/lock).
@@ -168,7 +169,10 @@ private:
     void closeDangling (int part)
     {
         auto& p = parts[(std::size_t) part];
-        const int t = position (part);
+        // #146 Bug A: place the synthesized note-off a few ms BEFORE the stop position so a note held
+        // to the loop end releases before the seam — its release envelope no longer collides with the
+        // next pass's re-attack at the wrap (the seam click). Inaudible on a slow pad; softens a pluck.
+        const int t = std::max (0, position (part) - loopseam::kSeamSamples);
         for (int n = 0; n < 128; ++n)
             if (recHeld_[(std::size_t) part][(std::size_t) n])
             {
