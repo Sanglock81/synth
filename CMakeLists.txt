@@ -84,7 +84,6 @@ set_source_files_properties(Source/DSP/WavetableGen.cpp PROPERTIES COMPILE_OPTIO
 file(GLOB VASYNTH_PRESET_JSON CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/resources/presets/*.json")
 juce_add_binary_data(VASynthData SOURCES
     resources/midi-profiles/launchkey_mini.json
-    resources/midi-profiles/korg_b2.json
     ${VASYNTH_PRESET_JSON})
 target_link_libraries(VASynth PUBLIC VASynthData)
 
@@ -130,8 +129,8 @@ target_compile_definitions(VASynth PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
-    # Standalone: allow runtime selection of audio device (Scarlett 2i2)
-    # and enabling multiple MIDI inputs (Korg B2 + Launchkey Mini).
+    # Standalone: allow runtime selection of audio device (your audio interface)
+    # and enabling multiple MIDI inputs.
     JUCE_ALSA=1
     JUCE_JACK=1
     JUCE_ASIO=0            # compliance: never compile the proprietary Steinberg ASIO SDK into distributables

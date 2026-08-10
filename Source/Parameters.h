@@ -9,7 +9,7 @@
 // Design notes:
 //  * Every parameter lives in the APVTS. That gives us, for free:
 //      - thread-safe atomic reads from the audio thread
-//      - DAW automation (Ableton) of every knob when running as VST3
+//      - DAW automation of every knob when running as VST3
 //      - state save/load (presets) via the ValueTree
 //      - auto-generated GUI via GenericAudioProcessorEditor
 //  * Frequency-ish parameters use a log/skewed NormalisableRange so that

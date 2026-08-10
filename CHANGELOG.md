@@ -6,633 +6,573 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Post-1.0 work on `master` (not yet tagged; the ThinkPad validation is the final pre-tag gate).
+## [1.0.0] — 2026-07-13
 
-### Changed
-- **RANDOM is one button, one algorithm.** Removed the wild / constrained / archetype mode split,
-  the mode toast, and the long-press mode picker — a single press now always rolls the *same*
-  algorithm: a **fully random** patch on the focused part, shaped toward playable. Every continuous
-  parameter still spans its full range (perceptual via the params' log-skewed ranges), with
-  middle-biased oscillator levels, a hidden per-press **temperament** that loosely correlates the
-  envelope tails + reverb size, **musical SEMI intervals** ({0, ±5, ±7, ±12} + rare chromatic), an
-  occasional (~5%) self-oscillating resonance excursion, and 0–3 **shaped** mod-matrix routes (a
-  *moving* source — LFO/env/velocity — into an *audibly-live* destination spread across
-  cutoff/pitch/PW/wave-pos/resonance, so RANDOM's modulation stops sounding like "always an LFO on
-  the filter"; a ~15% wildcard keeps full support) — then a repair pass (exclusion list + audibility
-  floor + broken-patch invariants) so it's never silent or broken.
-  **VARY is unchanged** — the small step from the current sound. Design + the ear-tuned bias
-  constants: `docs/plans/random-density.md`. (The optional offline re-roll check was skipped — the
-  invariants already catch the defects; it can be added later if UAT shows a need.) This delivers the
-  standing "WILD into self-oscillation" follow-up.
-- **Preset bank overhaul (first pass).** Consolidated the factory bank — cut
-  eight duplicates/weak sounds (Fat Saw Bass, Unison Wide Bass, Square Lead, WT Digital Lead,
-  Solo Brass, Supersaw Slim, Shimmer Bed, Noise Riser) and rebuilt the **Bright Lead** flagship
-  (a rich 3-saw poly lead with drift, a slow LFO→cutoff, delay + motion reverb) so the first
-  patch a new user hears earns its place. Eased the resonant "weoh" out of **Acid Bass** (lower
-  resonance + drift = more organic 303). Reworked the roughest drums: a more pitched **Cowbell**,
-  a **Crash**/**Splash** with the pitched resonance pulled down for a brighter metallic wash, a
-  de-toyed **Ride**, and a **Metal Hit** opened up to ring naturally. The loudness match holds
-  across the trimmed bank.
-- **Preset bank overhaul (tonal pass).** Redesigned eight flat patches toward a warmer, more alive
-  bar: **Bell Keys** (velocity brightens the bell timbre; rings and fades like a real bell),
-  **Clav Bite** (snappier, with drive and a filter-env bite), **Synth Pluck** (fuller, with drift
-  and space), **WT Marimba** (warmer body + soft mallet attack), **String Machine** (a drifting,
-  chorused ensemble with a slow filter shimmer), **Motion Pad** (a slow LFO filter sweep that earns
-  its name, distinct from the other pads), and the two flutes **Soft/Breath Flute** (de-noised —
-  breath, not hiss).
+First public release: a JUCE 8 / C++17 virtual-analog polysynth (VST3 + Standalone,
+Linux-first) built for a 2015-class dual-core laptop live target. Every change shipped
+test-first behind a full gate (`run-all-checks.sh` + `--sanitize` + bench).
 
-### Fixed
-- **ARP velocity is now absolute — the pattern's velocity wins (#136).** With the arpeggiator active,
-  each step's velocity was a *multiplier* of how hard you played (played × step), so a soft touch made
-  the whole arp quiet and dynamics leaked in unpredictably. The per-step velocity is now the **absolute**
-  output velocity (the grid box value IS the velocity; 100 % = full, 0 = rest, > 100 % accents via the
-  voice's over-unity boost), independent of the played note — so an arp pattern sounds the same however
-  you touch the keys. Tests prove a soft and a hard touch yield identical arp velocities.
-- **PW knob is more responsive (#2).** The pulse-width knobs used the global 313-px full-range drag,
-  which felt sluggish given PW's narrow audible range; they now use a snappier ~150-px drag. A smoke
-  test asserts all three osc PW knobs carry the reduced sensitivity.
-- **Discoverability: unison + note-phase (README).** Added a "Finding your way around" note pointing to
-  the in-app **?** section guide and calling out that **unison lives in the top bar** (UNI/DET/WID, a
-  global stack) and that per-osc **RS/RN/FR** is note start-phase (subtle on a sustained tone) — the two
-  spots hands-on testing flagged as confusing. (The in-app guide already documents both.)
-- **LINK from an LFO now works end to end (#13a).** Arming an LFO as a mod source and tapping a
-  destination created the route but produced no sound and no animation — because an LFO only emits as
-  a matrix source when its own DEST is not "Off", and the LINK gesture never touched that DEST, so a
-  freshly-linked LFO (DEST at its default Off) published a zero source. The connect gesture now
-  **auto-enables** the LFO as a live source (sets its DEST to "On" — a source with no fixed route)
-  whenever you link *from* an LFO whose DEST is still Off; a Pitch/Cutoff DEST is left alone so an
-  existing fixed route is never clobbered. A real-event regression test (arm LFO1 → tap the cutoff
-  knob, no manual DEST change) proves the cutoff then animates. The broader LINK redesign
-  (hold-to-drag depth, multi-link, links menu, retiring the per-LFO DEST buttons) remains 1.1.
-- **Modulation animation now covers EVERY modulated control (#12).** The standing spec is that any
-  control being modulated shows the live motion indicator; two gaps broke that. (1) The **NOISE**
-  level was wired as a mod target but its bar widget never built an indicator, so it animated
-  nothing — it now draws a motion ghost like the knobs and faders. (2) Routes whose SOURCE is a
-  per-voice signal (**velocity, mod/amp envelope, note, random**) never animated *any* destination,
-  because the block-rate snapshot that drives the UI omitted those sources. The engine now publishes
-  the focused part's representative (loudest) live voice's env/velocity/note/random, and the
-  processor feeds them into an **animation-only** mod-source snapshot — so e.g. *velocity → FM* or
-  *env → cutoff* now visibly moves its knob. Audio is unchanged (the block-tier audio path still uses
-  block-level sources only; goldens hold). New tests: every mod target must have actually built its
-  indicator (catches the wired-but-dead class), and each per-voice source animates a voice-tier and a
-  block-tier destination.
-- **Stereo WIDTH no longer leans left at the top of its range (#14).** At width > 1 the synthesized
-  side is decorrelated from the mid through an allpass cascade — but an allpass cannot decorrelate
-  DC, and this cascade left the *mid-range* nearly in-phase too (the correlation only crossed zero
-  ~1.8 kHz), so adding it antisymmetrically made the left channel measurably louder (up to ~18 dB of
-  imbalance in the low-mids at max width). The synthesized side is now **orthogonalised against the
-  mid** (Gram-Schmidt: subtract the running `⟨mid·decorr⟩ / ⟨mid·mid⟩` projection), which drives the
-  L/R energy balance to within **~0.06 dB at every frequency** while keeping the widening audible.
-  Because the projection → 1 exactly where the decorrelated signal ≈ the mid (the sub-bass), it also
-  keeps the low end mono for free. Mono fold-down stays bit-exact (the side is still purely
-  antisymmetric), and default renders are unchanged (width = 1 uses the mid/side path). Regression
-  tests assert the L/R energy balance and the clean mono fold on a bass-heavy mono source at max width.
-- **Looper record → playback timing (#135, P0).** A freshly recorded loop no longer waits a full dead
-  cycle before it sounds. Two root causes, both fixed: (1) the auto-play at record completion set the
-  PLAY *parameter*, which only takes effect the following block, so the completion block — the new
-  downbeat — was skipped (now playback engages **this** block via `loopJustCompleted`); (2) the
-  arm-on-wrap rule + block-phase offset meant a t=0 downbeat event fell just before the first play
-  window and was heard a cycle later (now `Looper::requestDownbeatCatchUp` widens the handoff block's
-  window to start at 0, once, so the just-captured downbeat sounds on the **same** boundary while
-  record disarms). So: arm → record begins at the next downbeat → at loop end, playback starts
-  immediately from that boundary. The captured content was already downbeat-aligned (host-MIDI records
-  sample-accurately; the routed path is snapped by the default 1/32 quantize) — it was the *playback*
-  that dropped the downbeat. DSP regression test proves the downbeat is caught (and not re-fired).
+### Added
 
-### Added / Changed
-- **Classic-machine drum kits — increment 1 of 2 (#134).** Began replacing the factory kit lineup with
-  a library of **synthesized recreations inspired by classic drum machines, voiced to sound good
-  first** (documented tunings/circuits as the starting point, then deviated wherever it sounded
-  better; every pad velocity-responsive). This increment ships the **analog-heritage four**, each a
-  full 16-pad kit (hats choke, cymbals ring free): **808** (deep sine kick + long boom, two-tone
-  snare, square-stack metallic hats, 540/800 cowbell, toms/congas), **909** (punchy click-attack kick,
-  bright cracking snare, hats/ride/crash voiced hotter + dirtier via per-voice `filter_drive` grit —
-  kit pads render dry, so grit is in the voice, not an FX block), **606** (thin/sharp/clicky, filled
-  to 16 with tuned variants), **78** (soft vintage preset-rhythm colours — brushy snare, metallic
-  beat, guiro, bossa blocks). 37 new dry drum presets back them. **Replaced:** *808 Basics* → **808**,
-  *House Basics* → **909**. **Removed:** the *Stab Board* factory kit (the chord-pad *feature* stays —
-  build one in the Kit Editor). **Kept unchanged:** *Industrial*, *Studio*. **Migration:** an old
-  MULTI/`.kit` that stored a retired kit loads its successor (*808 Basics*→808, *House Basics*→909,
-  *Stab Board*→808), tested. The kit picker regroups into **Classic Machines / Originals / User**.
-  Verification: per-kit 16-pad non-silent + level-balanced render, hat-choke, and a dense 16th-note
-  reference bar with a long ringing cymbal that stays finite/bounded/click-free (choke + steal
-  torture) — also rendered to `docs/audio-refs/<kit>.wav` (local) to A/B the library by ear.
-  Model shorthand is used descriptively with no manufacturer affiliation (disclaimer in
-  `docs/presets.md`). Names, pad maps + characters: `docs/presets.md`.
-- **Classic-machine drum kits — increment 2: the PCM-homage six (#134).** Completed the library with
-  **707** (bright, plasticky, precise), **LM1** (gated-real-drums thud + fat snare + prominent toms,
-  warm-dark, **no cymbals** — honoured, filled with congas/claps/tambourine), **DMX** (crunchy electro
-  — big gated snare, bright claps, SAT-forward), **RX5** (mid-80s digital sheen — sharp attacks,
-  bright metallics, aggressive toms), **R50** (crisp, clean, slightly clinical late-80s PCM), and
-  **MP60** (boom-bap — deep rounded kick, dusty snare, dark hats, SAT-forward warmth). Shared PCM
-  language (punchier envelopes, brightness shaping, gated-feeling decays), then voiced to sound good;
-  55 new dry presets. The **ten** Classic Machines are now differentiated pair-by-pair (808/DMX/MP60
-  kicks; 606/909/RX5 hats). Same verification + tour renders as increment 1, extended to all ten.
-- **In-app section guide — a menu-driven reference (#133).** The **?** button now opens a small menu:
-  **Keyboard Map** (the existing cheat-sheet) plus a **section list** (the 13 panel areas in panel
-  order). Pick one and that section is **spotlighted** (the rest of the panel dims), its controls get
-  **numbered markers**, and a side card shows the section's role-in-the-signal-flow intro then a
-  numbered entry per control — NAME, one line of *what* it does, one line of *how/when* to use it
-  (practical + musical). Close with Esc, the card's ✕, or a tap on the dimmed area; reopen the menu to
-  pick another. It's a reference, not a tour — no next/prev, no state, never touches audio. **All the
-  text lives in one data file** (`Source/UI/GuideContent.h`), exported to a generated, PR-diffable
-  [`docs/guide.md`](docs/guide.md); a **coverage test** cross-references the entries against every
-  param-attached control in each covered section, so a future control shipped without help fails the
-  gate (the `noise_level`-was-undocumented lesson, institutionalized). *(Markers are functional, not
-  yet pixel-polished — marker styling + the EQ/scope custom surfaces get a UI pass in 1.1.)*
-- **Oscillator FM (phase-modulation) chain — osc3 → osc2 → osc1 (#132).** Two new depth knobs on the
-  osc1 and osc2 rows: **osc2 phase-modulates osc1** (`osc1_fm`) and **osc3 phase-modulates osc2**
-  (`osc2_fm`). This is DX-style phase modulation — a modulator's output offsets the carrier's read
-  phase while the accumulator advances unmodulated, so a simple carrier grows a rich sideband
-  spectrum at `fc ± n·f_mod`. Depth 0.3–0.5 ≈ E-piano/bell territory, 1.0 = aggressive (modulation
-  index up to ~2π). The modulator uses its *raw* output regardless of its mix level, so an inaudible
-  modulator (level 0) still shapes its carrier; its OCTAVE/SEMI set the **FM ratio** and keytrack by
+- **Classic-machine drum kits — the analog-heritage four.** The factory kit lineup is a library of
+  **synthesized recreations inspired by classic drum machines, voiced to sound good first**
+  (documented tunings/circuits as the starting point, then deviated wherever it sounded better;
+  every pad velocity-responsive). This set ships the analog-heritage four, each a full 16-pad kit
+  (hats choke, cymbals ring free): **808** (deep sine kick + long boom, two-tone snare, square-stack
+  metallic hats, 540/800 cowbell, toms/congas), **909** (punchy click-attack kick, bright cracking
+  snare, hats/ride/crash voiced hotter + dirtier via per-voice `filter_drive` grit — kit pads render
+  dry, so grit is in the voice, not an FX block), **606** (thin/sharp/clicky, filled to 16 with tuned
+  variants), **78** (soft vintage preset-rhythm colours — brushy snare, metallic beat, guiro, bossa
+  blocks). 37 new dry drum presets back them. **Replaced:** *808 Basics* → **808**, *House Basics* →
+  **909**. **Removed:** the *Stab Board* factory kit (the chord-pad *feature* stays — build one in the
+  Kit Editor). **Kept unchanged:** *Industrial*, *Studio*. **Migration:** an old MULTI/`.kit` that
+  stored a retired kit loads its successor (*808 Basics*→808, *House Basics*→909, *Stab Board*→808),
+  tested. The kit picker regroups into **Classic Machines / Originals / User**. Verification: per-kit
+  16-pad non-silent + level-balanced render, hat-choke, and a dense 16th-note reference bar with a
+  long ringing cymbal that stays finite/bounded/click-free (choke + steal torture) — also rendered to
+  `docs/audio-refs/<kit>.wav` (local) to A/B the library by ear. Model shorthand is used descriptively
+  with no manufacturer affiliation (disclaimer in `docs/presets.md`). Names, pad maps + characters:
+  `docs/presets.md`.
+- **Classic-machine drum kits — the PCM-homage six.** Completed the library with **707** (bright,
+  plasticky, precise), **LM1** (gated-real-drums thud + fat snare + prominent toms, warm-dark, **no
+  cymbals** — honoured, filled with congas/claps/tambourine), **DMX** (crunchy electro — big gated
+  snare, bright claps, SAT-forward), **RX5** (mid-80s digital sheen — sharp attacks, bright metallics,
+  aggressive toms), **R50** (crisp, clean, slightly clinical late-80s PCM), and **MP60** (boom-bap —
+  deep rounded kick, dusty snare, dark hats, SAT-forward warmth). Shared PCM language (punchier
+  envelopes, brightness shaping, gated-feeling decays), then voiced to sound good; 55 new dry presets.
+  The **ten** Classic Machines are differentiated pair-by-pair (808/DMX/MP60 kicks; 606/909/RX5 hats).
+  Same verification + tour renders, extended to all ten.
+- **In-app section guide — a menu-driven reference.** The **?** button opens a small menu: **Keyboard
+  Map** (the cheat-sheet) plus a **section list** (the 13 panel areas in panel order). Pick one and
+  that section is **spotlighted** (the rest of the panel dims), its controls get **numbered markers**,
+  and a side card shows the section's role-in-the-signal-flow intro then a numbered entry per control —
+  NAME, one line of *what* it does, one line of *how/when* to use it (practical + musical). Close with
+  Esc, the card's ✕, or a tap on the dimmed area; reopen the menu to pick another. It's a reference,
+  not a tour — no next/prev, no state, never touches audio. **All the text lives in one data file**
+  (`Source/UI/GuideContent.h`), exported to a generated, diffable `docs/guide.md`; a **coverage test**
+  cross-references the entries against every param-attached control in each covered section, so a
+  future control shipped without help fails the gate. *(Markers are functional, not yet pixel-polished
+  — marker styling + the EQ/scope custom surfaces get a UI pass in 1.1.)*
+- **Oscillator FM (phase-modulation) chain — osc3 → osc2 → osc1.** Two depth knobs on the osc1 and
+  osc2 rows: **osc2 phase-modulates osc1** (`osc1_fm`) and **osc3 phase-modulates osc2** (`osc2_fm`).
+  This is classic FM-style phase modulation — a modulator's output offsets the carrier's read phase
+  while the accumulator advances unmodulated, so a simple carrier grows a rich sideband spectrum at
+  `fc ± n·f_mod`. Depth 0.3–0.5 ≈ E-piano/bell territory, 1.0 = aggressive (modulation index up to
+  ~2π). The modulator uses its *raw* output regardless of its mix level, so an inaudible modulator
+  (level 0) still shapes its carrier; its OCTAVE/SEMI set the **FM ratio** and keytrack by
   construction. Both depths are **mod-matrix destinations** ("Osc 1 FM" / "Osc 2 FM") — the headline
-  is **Velocity → FM depth** for a harder-hit-is-brighter DX response. **Carrier restriction:** FM
-  applies only when the carrier wave is **sine / triangle / WT** (saw/square PolyBLEP edge
-  corrections break under a phase offset); on a saw/square carrier the depth is inert and the knob is
-  disabled + dimmed with a tooltip saying why. Depth is smoothed on the live part (click-free knob /
-  automation / LFO sweeps) and defaults to 0, so every existing patch — and the goldens — is
-  bit-identical. Three showcase patches: **FM E-Piano** (Keys), **Bell Ratio** (inharmonic bell,
-  Pluck), **Sideband Growl** (FM into a driven filter, Experimental) — bank now 126. *(This closed the
-  scoped R3 cross-modulation item; ring modulation + hard sync move to 1.1.)*
-- **Eight SEMI interval variants (audition batch, bank now 123).** Showcasing the new coarse-tune on
-  existing patches — power-fifth voicings (**Power Grind 5th**, **Screamer 5th**, **Foundry 5th**,
-  **Bright Lead 5th**), suspended/quartal pad color (**Dark Hollow Sus**, **Anvil 5ths**,
-  **Warm Sus4**), and an octave sub-reinforced **Reese Sub**. Originals are untouched — these are
-  new patches. *Candidates pending the final listening pass; any that don't earn their slot next to
-  their base will be cut.* (String Machine's trim was nudged to stay in the loudness bank as the
-  median shifted.)
-- **Studio drum kit — a synthesized general-purpose kit + 14 drum presets (bank now 115).** A
-  warmer, rounder, less-stylized kit than the 808/House/Industrial ones, aimed at singer-songwriter
-  / pop / rock demos: Kick Studio + Kick Tight, Snare Studio, Sidestick, Clap Soft, Snare Brush,
-  softer closed/open hats (they choke each other), three warm Tom Studio toms, Shaker, Tambourine,
-  a darker Crash, Ride Soft, and a mellower Cowbell Low. **It's synthesized, not sampled** —
-  fully-acoustic realism is the planned 1.1 CC0 sampled-kit pass, and you can already load your own
-  samples onto any pad (Kit Editor → Load sample).
-- **Per-oscillator coarse tune (SEMI) + Fifth Stack (bank now 101).** Each oscillator gains a
-  **SEMI** knob — coarse tune in semitones (−24…+24), next to OCTAVE — so you can stack intervals
-  (a fifth, a fourth) from a single key, not just octaves. New **Fifth Stack** lead uses it: osc2 a
-  fifth up, osc3 an octave up, for an instant power-interval lead. Default 0 (no effect on existing
-  patches); RANDOM keeps it in tune.
+  is **Velocity → FM depth** for a harder-hit-is-brighter FM response. **Carrier restriction:** FM
+  applies only when the carrier wave is **sine / triangle / WT** (saw/square PolyBLEP edge corrections
+  break under a phase offset); on a saw/square carrier the depth is inert and the knob is disabled +
+  dimmed with a tooltip saying why. Depth is smoothed on the live part (click-free knob / automation /
+  LFO sweeps) and defaults to 0, so every existing patch — and the goldens — is bit-identical. Three
+  showcase patches: **FM E-Piano** (Keys), **Bell Ratio** (inharmonic bell, Pluck), **Sideband Growl**
+  (FM into a driven filter, Experimental) — bank now 126. *(Ring modulation and hard sync are planned
+  for 1.1.)*
+- **Eight SEMI interval variants (bank now 123).** Showcasing the coarse-tune on existing patches —
+  power-fifth voicings (**Power Grind 5th**, **Screamer 5th**, **Foundry 5th**, **Bright Lead 5th**),
+  suspended/quartal pad color (**Dark Hollow Sus**, **Anvil 5ths**, **Warm Sus4**), and an octave
+  sub-reinforced **Reese Sub**. Originals are untouched — these are new patches. (String Machine's trim
+  was nudged to stay in the loudness bank as the median shifted.)
+- **Studio drum kit — a synthesized general-purpose kit + 14 drum presets (bank now 115).** A warmer,
+  rounder, less-stylized kit than the 808/House/Industrial ones, aimed at singer-songwriter / pop /
+  rock demos: Kick Studio + Kick Tight, Snare Studio, Sidestick, Clap Soft, Snare Brush, softer
+  closed/open hats (they choke each other), three warm Tom Studio toms, Shaker, Tambourine, a darker
+  Crash, Ride Soft, and a mellower Cowbell Low. **It's synthesized, not sampled** — fully-acoustic
+  realism is the planned 1.1 sampled-kit pass, and you can already load your own samples onto any pad
+  (Kit Editor → Load sample).
+- **Per-oscillator coarse tune (SEMI) + Fifth Stack (bank now 101).** Each oscillator gains a **SEMI**
+  knob — coarse tune in semitones (−24…+24), next to OCTAVE — so you can stack intervals (a fifth, a
+  fourth) from a single key, not just octaves. New **Fifth Stack** lead uses it: osc2 a fifth up, osc3
+  an octave up, for an instant power-interval lead. Default 0 (no effect on existing patches); RANDOM
+  keeps it in tune.
 - **Category deepening — 18 more patches (bank now 100).** Filling gaps across the bank: Bass
   (**Velvet Bass**, **Stab Bass**, **Cavern Bass**), Lead (**PWM Anthem**, **Chip Lead**), Pad
   (**Choir Ahh**, **Boreal**, **Submerged**), Keys (**Toy Piano**, **Glass Harmonica**), Pluck
   (**Kalimba**, **Raindrop**), Brass (**Ska Stab**), Winds (**Ocarina**), Organ (**Cathedral Pipe**,
-  **Percussive B**), and FX (**Thunder Sheet**, **Radio Ghost**). Each is voiced to sit apart from
-  its neighbours (e.g. Velvet Bass is a dynamic finger bass vs Deep Sub's bed; Choir Ahh holds a
-  static vowel where WT Vowel Pad sweeps).
+  **Percussive B**), and FX (**Thunder Sheet**, **Radio Ghost**). Each is voiced to sit apart from its
+  neighbours (e.g. Velvet Bass is a dynamic finger bass vs Deep Sub's bed; Choir Ahh holds a static
+  vowel where WT Vowel Pad sweeps).
 - **New EXPERIMENTAL category + six new patches (bank now 82).** A dedicated home (after FX) for
   *wholly unique instruments — sounds that exist nowhere else; play them to find out what they do.*
-  Moved **Metal Ping**, **Pendulum**, and **Feedback Bloom** into it, and added: **Breathing
-  Machine** (a respirator you can chord — a 1-bar-synced LFO inhales/exhales the filter), **One-Voice
-  Choir** (three oscillators detuned ±45 cents so the beating itself is the instrument), **Gamelan
-  Ghost** (a seeded inharmonic wavetable — bells that refuse equal temperament), **Gravity Well**
-  (a filter-envelope pitch-drop, so every note is born and falls), **Insect Swarm** (a free-running
-  sample-&-hold LFO chittering the pitch over band-passed noise), and **Sputter** (a 1/16-synced
-  S&H stutters the pulse width — a broken machine on the grid). *Cave Drone* and *Static Riser* stay
-  in FX/Texture as production tools.
-- **Fifteen new patches across five families (bank now 76).** A big content pass:
-  *Prologue-lush* — **Prairie Ensemble** & **Floating Poly** (wide unison-stacked pads), **Tape Keys**
-  (worn tape-aged synth keys), **Dawn Brass** (a slow poly brass swell); *Industrial* — **Power Grind**
-  (a saturated metal rhythm bass, velocity drives the grind), **Anvil Choir** (a metallic high-resonance
-  pad), **Sheet Metal Riser** (a resonant screaming riser), **Foundry Stomp** (a melodic industrial
-  percussion voice); *Folk/organic* — **Harmonium Reed** (a breathy pump-organ), **Music Box**,
-  **Tin Whistle** (chiffy folk whistle with vibrato), **Nylon Pluck** (a woody classical-guitar pluck);
-  *Melodic* — **Dream Chime** (an airy dream-pop lead whose LFO morphs the vowel table); *Experimental*
-  — **Pendulum** (a tempo-synced sample-&-hold LFO steps the cutoff into a clock-locked random melody —
-  the first patch to ship LFO-sync inside a preset) and **Feedback Bloom** (a self-oscillating filter
-  drifted by two LFOs).
+  Moved **Metal Ping**, **Pendulum**, and **Feedback Bloom** into it, and added: **Breathing Machine**
+  (a respirator you can chord — a 1-bar-synced LFO inhales/exhales the filter), **One-Voice Choir**
+  (three oscillators detuned ±45 cents so the beating itself is the instrument), **Gamelan Ghost** (a
+  seeded inharmonic wavetable — bells that refuse equal temperament), **Gravity Well** (a
+  filter-envelope pitch-drop, so every note is born and falls), **Insect Swarm** (a free-running
+  sample-&-hold LFO chittering the pitch over band-passed noise), and **Sputter** (a 1/16-synced S&H
+  stutters the pulse width — a broken machine on the grid). *Cave Drone* and *Static Riser* stay in
+  FX/Texture as production tools.
+- **Fifteen new patches across five families (bank now 76).** A big content pass: *Lush* — **Prairie
+  Ensemble** & **Floating Poly** (wide unison-stacked pads), **Tape Keys** (worn tape-aged synth keys),
+  **Dawn Brass** (a slow poly brass swell); *Industrial* — **Power Grind** (a saturated metal rhythm
+  bass, velocity drives the grind), **Anvil Choir** (a metallic high-resonance pad), **Sheet Metal
+  Riser** (a resonant screaming riser), **Foundry Stomp** (a melodic industrial percussion voice);
+  *Folk/organic* — **Harmonium Reed** (a breathy pump-organ), **Music Box**, **Tin Whistle** (chiffy
+  folk whistle with vibrato), **Nylon Pluck** (a woody classical-guitar pluck); *Melodic* — **Dream
+  Chime** (an airy dream-pop lead whose LFO morphs the vowel table); *Experimental* — **Pendulum** (a
+  tempo-synced sample-&-hold LFO steps the cutoff into a clock-locked random melody — the first patch
+  to ship LFO-sync inside a preset) and **Feedback Bloom** (a self-oscillating filter drifted by two
+  LFOs).
 - **Four showcase patches (bank now 61).** New patches that lean on the mod-matrix-in-presets in
   experimental ways: **Aurora Pad** (an ethereal wavetable pad whose spectrum slowly morphs — LFO 1
-  sweeps the wave position while LFO 2 modulates the reverb's motion), **Velvet Poly** (a lush
-  drifting analog poly with slow LFO-driven PWM), **Foundry Lead** (an industrial in-loop-driven,
-  tube-saturated mono lead where velocity pushes the saturation harder), and **Ghost Sine** (a
-  self-oscillating filter texture — LFO 1 sweeps the singing cutoff while LFO 2 pulses resonance in
-  and out of self-oscillation).
-- **Manage your presets from the Load menu.** Each of your saved patches now carries **Load /
-  Rename… / Delete** actions inline (rename preserves the patch's category and won't clobber an
-  existing name; delete asks first). Factory patches stay read-only. The **Load** menu is also now
-  **collapsible** — factory categories and a **My Presets** group open as submenus instead of one
-  long scroll.
-- **Patches carry their modulation.** A preset can now save **mod-matrix routes** as part of its
-  sound. Factory patches declare them in JSON (`"routes": [{ "src": "LFO 1", "dest": "Wave Pos",
-  "depth": 0.45 }]`); your saved user patches round-trip their routes automatically. Loading a
-  patch applies its routes to the focused part (and clears any it doesn't define — a patch is its
-  complete sound). First showcase: **Vowel Talk Lead** now has an LFO slowly morphing the vowel
-  wavetable. Sources: LFO 1–3, Mod/Amp Env, Velocity, Note, Mod Wheel, Pitch Bend, Random,
-  Macro 1–8; destinations: any registry parameter (Cutoff, Wave Pos, Reverb Motion, …).
-- **Preset & kit menus tidied.** The **Load** menu now lists factory patches in a fixed musical
-  category order (Bass → Lead → Keys → … → Drums) and **alphabetically within each category**, with
-  **Init** pinned on top. The **Save** dialog gains a **Category** picker (stored with the patch;
-  older presets read back as *User*), and user presets appear in their own section grouped by that
-  category. The per-part **Load synth patch** picker uses the same grouping, and **Load drum kit**
-  now splits **Factory** / **User** kits and shows each kit's **pad count**. No search/tags/favorites.
-- **Two new factory drum kits — House Basics + Industrial.** *House Basics* is a 909-flavoured
-  house/techno kit (tighter House Kick, snappy House Snare, crisp House Hat + shared claps/toms/
-  cymbals); *Industrial* is a driven, metallic kit (distorted Industrial Kick, harsh Noise Snare, a
-  clanging Metal Hit that also voices the three tuned toms). Six new synthesized drums back them.
-  Both are full 16-pad kits on triggers 36–51 with the 808's choke layout (hats choke, cymbals ring).
+  sweeps the wave position while LFO 2 modulates the reverb's motion), **Velvet Poly** (a lush drifting
+  analog poly with slow LFO-driven PWM), **Foundry Lead** (an industrial in-loop-driven, tube-saturated
+  mono lead where velocity pushes the saturation harder), and **Ghost Sine** (a self-oscillating filter
+  texture — LFO 1 sweeps the singing cutoff while LFO 2 pulses resonance in and out of self-oscillation).
+- **Manage your presets from the Load menu.** Each of your saved patches carries **Load / Rename… /
+  Delete** actions inline (rename preserves the patch's category and won't clobber an existing name;
+  delete asks first). Factory patches stay read-only. The **Load** menu is **collapsible** — factory
+  categories and a **My Presets** group open as submenus instead of one long scroll.
+- **Patches carry their modulation.** A preset can save **mod-matrix routes** as part of its sound.
+  Factory patches declare them in JSON (`"routes": [{ "src": "LFO 1", "dest": "Wave Pos", "depth":
+  0.45 }]`); your saved user patches round-trip their routes automatically. Loading a patch applies its
+  routes to the focused part (and clears any it doesn't define — a patch is its complete sound). First
+  showcase: **Vowel Talk Lead** has an LFO slowly morphing the vowel wavetable. Sources: LFO 1–3,
+  Mod/Amp Env, Velocity, Note, Mod Wheel, Pitch Bend, Random, Macro 1–8; destinations: any registry
+  parameter (Cutoff, Wave Pos, Reverb Motion, …).
 - **27 new factory patches + a loudness-matched bank.** The factory library grows to **59 patches**
   with a fresh roster across every category — Bass (Acid, WT Growl, Sub + Click, Unison Wide, Reese
   Redux), Lead (Screamer, Vowel Talk, Glass Whistle, Soft Solo, Supersaw Slim), Pad (Motion, WT Drift,
   Dark Hollow, Shimmer Bed), Keys/EP (EP Bark, Soft EP, Bell Keys, Clav Bite), Pluck (Ice, WT Marimba,
   Rubber), Brass/Winds (Solo Brass, Breath Flute), Strings Redux, and textures (Cave Drone, Static
-  Riser, Metal Ping). Each is a characterful starting point that shows off the new engine (wavetable,
+  Riser, Metal Ping). Each is a characterful starting point that shows off the engine (wavetable,
   unison, filter drive, saturation, reverb motion).
-- **Per-patch TRIM (program level).** A new `patch_trim` parameter — the **TRIM** knob in the top
-  bar — is a transparent post-FX gain baked *with the sound* (saved in the preset, unlike MASTER).
-  It's the standard "program level" every hardware synth has, and it's a LINK target that animates
-  like the rest. With it, the **sustained** factory patches are level-matched to within **±4 dB** of
-  the bank median (~−30 dBFS) — no oscillator re-voicing, so every patch keeps its exact character.
-  Percussive/evolving patches (plucks, bells, EPs, drums, risers) stay feel-matched with TRIM at unity.
-- **808 Basics is now a full 16-pad kit.** The factory drum kit fills all 16 pads (triggers 36–51,
-  the Launchkey grid): the existing kick/snare/hats/tom plus **seven new synthesized drums** — Clap,
+- **Per-patch TRIM (program level).** A new `patch_trim` parameter — the **TRIM** knob in the top bar
+  — is a transparent post-FX gain baked *with the sound* (saved in the preset, unlike MASTER). It's the
+  standard "program level" every hardware synth has, and it's a LINK target that animates like the rest.
+  With it, the **sustained** factory patches are level-matched to within **±4 dB** of the bank median
+  (~−30 dBFS) — no oscillator re-voicing, so every patch keeps its exact character. Percussive/evolving
+  patches (plucks, bells, EPs, drums, risers) stay feel-matched with TRIM at unity.
+- **808 Basics is now a full 16-pad kit.** The factory drum kit fills all 16 pads (triggers 36–51, the
+  Launchkey grid): the existing kick/snare/hats/tom plus **seven new synthesized drums** — Clap,
   Rimshot, Clave, Cowbell, Splash, Crash, Ride — with three toms and a tuned second snare voiced from
   the existing presets. Hats choke each other; the cymbals ring free over the groove. The step
-  sequencer's default 8 rows now spread across the expanded kit (kick·snare·clap·closed-hat·open-hat·
+  sequencer's default 8 rows spread across the expanded kit (kick·snare·clap·closed-hat·open-hat·
   low-tom·crash·cowbell). Clean under a dense 16th-note mash with the crash ringing (torture-tested).
 - **Session export — a DAW-handoff bounce (one folder).** A **BOUNCE** button (by the loop exports)
-  renders the whole session **offline** into a folder your DAW can open: a **WAV stem per part**
-  (each part through its full chain — voices → FX → EQ → level/pan), the **master WAV**, a **MIDI
-  file per part** (looper + step-seq content), and a **manifest.json** (BPM, bar length, stem list,
-  version). It renders the current scene's **realign cycle** by default, with a **bar-count override**
-  in the dialog. Offline means it's exact and faster than real time; the stems sum to the master for
-  a clean handoff (stems are pre-master-bus, master is post-clip — noted in the manifest). Drag the
-  folder into Ableton or Reaper and it lines up at the manifest BPM. (Audio-loop *recordings* are not
-  stemmed — they're separately WAV-exportable; MP3 output is a later optional-if-a-system-encoder add.)
-- **QWERTY: Shift extends the octave range.** Holding **Shift** while you play the standalone's
-  computer keyboard drops the top row an octave (`Shift+Q…}` → C3…B3) and lifts the number row an
-  octave (`Shift+!…+` → C6…B6) — four octaves (C3…B6) reachable from the home position, no `z`/`x`
-  needed. The octave is latched at key-down, so letting go of Shift mid-note never bends its pitch.
+  renders the whole session **offline** into a folder your DAW can open: a **WAV stem per part** (each
+  part through its full chain — voices → FX → EQ → level/pan), the **master WAV**, a **MIDI file per
+  part** (looper + step-seq content), and a **manifest.json** (BPM, bar length, stem list, version). It
+  renders the current scene's **realign cycle** by default, with a **bar-count override** in the
+  dialog. Offline means it's exact and faster than real time; the stems sum to the master for a clean
+  handoff (stems are pre-master-bus, master is post-clip — noted in the manifest). Drag the folder into
+  your DAW and it lines up at the manifest BPM. (Audio-loop *recordings* are not stemmed — they're
+  separately WAV-exportable; MP3 output is a later optional-if-a-system-encoder add.)
+- **QWERTY: Shift extends the octave range.** Holding **Shift** while you play the standalone's computer
+  keyboard drops the top row an octave (`Shift+Q…}` → C3…B3) and lifts the number row an octave
+  (`Shift+!…+` → C6…B6) — four octaves (C3…B6) reachable from the home position, no `z`/`x` needed. The
+  octave is latched at key-down, so letting go of Shift mid-note never bends its pitch.
 - **Unison — a real supersaw.** Each note can stack up to **7 detuned voices** (a voice-wide **UNI**
   count, off by default). It's not a chorus: each stack voice gets a **random start phase** (so they
   don't collapse into one loud voice), a **non-uniform detune spread** (**DET**), an **independent
   analog drift**, and its own **place in the stereo field** (**WID**) — the thing that sounds
-  expensive. An equal-power level trim keeps the volume steady as you raise the count. Off (count 1)
-  is bit-identical to before. The live profile caps high counts to protect the CPU budget (studio
-  keeps all 7); a **Supersaw** preset ships to show it off.
-- **Wavetable oscillator — a 5th wave, "WT".** Each of the three oscillators can select **WT**
-  alongside saw/square/triangle/sine. A wavetable is band-limited with **per-octave mip-maps** (built
-  off the audio thread), so high notes stay clean; playback picks the mip by pitch, interpolates within
-  the frame, and crossfades between frames by a **WT POS** position (a per-osc knob that shares the PW
-  slot — PW is meaningless for a wavetable — and is a mod destination, so an LFO/envelope can sweep it).
-  Four **factory tables** (Analog, Sweep, Vowel, Digital) plus a **random die**: one tap re-rolls a
-  fresh table. Tables are **equal-RMS normalized** through one shared build path (factory *and* random),
-  so switching or re-rolling never jumps the level. **Tap a selected WT to pick a table; tap the die to
+  expensive. An equal-power level trim keeps the volume steady as you raise the count. Off (count 1) is
+  bit-identical to before. The live profile caps high counts to protect the CPU budget (studio keeps
+  all 7); a **Supersaw** preset ships to show it off.
+- **Wavetable oscillator — a 5th wave, "WT".** Each of the three oscillators can select **WT** alongside
+  saw/square/triangle/sine. A wavetable is band-limited with **per-octave mip-maps** (built off the
+  audio thread), so high notes stay clean; playback picks the mip by pitch, interpolates within the
+  frame, and crossfades between frames by a **WT POS** position (a per-osc knob that shares the PW slot
+  — PW is meaningless for a wavetable — and is a mod destination, so an LFO/envelope can sweep it). Four
+  **factory tables** (Analog, Sweep, Vowel, Digital) plus a **random die**: one tap re-rolls a fresh
+  table. Tables are **equal-RMS normalized** through one shared build path (factory *and* random), so
+  switching or re-rolling never jumps the level. **Tap a selected WT to pick a table; tap the die to
   re-roll.** Random tables persist **by seed** — compact, and byte-identical on every platform (an owned
   fixed-seed generator, no `std` distributions, pinned by a committed golden) so a shared preset can
-  never silently fork. Two showcase presets ride along: **WT Digital Lead** and **WT Vowel Pad**.
-  (The random table build is handed to the audio thread lock-free — a double-buffered atomic pointer —
-  so re-rolling never allocates on the audio path.)
-- **FX SAT — a real overdrive/fuzz (two-stage clipper), and WIDTH now runs first.** The WIDTH FX
-  block gains a **SAT** knob: a per-channel clipper applied *before* the widening — modelled on how
-  overdrive/fuzz pedals actually work, not a volume boost. The shaper has **unity gain near zero**, so
-  a signal below the threshold passes ~unchanged and only what pokes above clips; turning SAT up
-  **lowers the threshold** across the whole range (progressively more clipping), while the knee and a
-  smoothing filter split the sweep into **two musically distinct halves**:
+  never silently fork. Two showcase presets ride along: **WT Digital Lead** and **WT Vowel Pad**. (The
+  random table build is handed to the audio thread lock-free — a double-buffered atomic pointer — so
+  re-rolling never allocates on the audio path.)
+- **FX SAT — a real overdrive/fuzz (two-stage clipper), and WIDTH now runs first.** The WIDTH FX block
+  gains a **SAT** knob: a per-channel clipper applied *before* the widening — modelled on how
+  overdrive/fuzz pedals actually work, not a volume boost. The shaper has **unity gain near zero**, so a
+  signal below the threshold passes ~unchanged and only what pokes above clips; turning SAT up **lowers
+  the threshold** across the whole range (progressively more clipping), while the knee and a smoothing
+  filter split the sweep into **two musically distinct halves**:
   - **0 → ~30 %: onset of a warm SOFT overdrive.** An asymmetric soft-clip knee, then **rounded by a
-    smoothing lowpass** so the drive is smooth, not fizzy. The asymmetry (both polarities unity-slope
-    at zero, the positive knee reached sooner) generates **even harmonics** only as a note is *driven*
-    — so a soft note stays clean and it's genuinely **velocity-sensitive** (measured ~5× more
-    distortion on a hard note than a soft one). Tuned so a **single note starts to break up by ~30 %**,
-    not only stacked chords.
+    smoothing lowpass** so the drive is smooth, not fizzy. The asymmetry (both polarities unity-slope at
+    zero, the positive knee reached sooner) generates **even harmonics** only as a note is *driven* — so
+    a soft note stays clean and it's genuinely **velocity-sensitive** (measured ~5× more distortion on a
+    hard note than a soft one). Tuned so a **single note starts to break up by ~30 %**, not only stacked
+    chords.
   - **~50 % → 90 %: hardening toward a FUZZ.** From noon the knee hardens (soft → hard clamp) and the
-    smoothing lowpass **opens up**, reaching a full hard square — a **fuzz — by 90 %** (holding there
-    to max), with the threshold diving in step so the clip gets rawer and edgier the higher you go.
+    smoothing lowpass **opens up**, reaching a full hard square — a **fuzz — by 90 %** (holding there to
+    max), with the threshold diving in step so the clip gets rawer and edgier the higher you go.
 
-  Loudness stays flat across the sweep and across velocity via an **envelope-following auto-makeup**
-  that restores each note to its own input level *including* the lowpass loss (never a hidden boost —
-  the output peak only ever drops), so the per-part **LEVEL** stays the volume control. Runs **2×
-  oversampled** while engaged, so even a hard-clipped high note stays clean (measured ~1 % aliasing);
-  the wet crossfade folds the oversampling in/out click-free as SAT crosses zero. `sat = 0` is a
-  **bit-exact bypass** (goldens hold); it's a full mod destination (an LFO can lean on it). Distinct
-  from the filter panel's DRIVE. The block is relabelled **SAT + WIDTH**, and the **default FX chain
-  now runs WIDTH first** — you clip/spatialize the dry signal, then delay/reverb bloom over it.
-- **Oscilloscope reads bigger.** The master scope's vertical gain is doubled and the horizontal window
-  is zoomed in ~20 %, so the waveform shape is easy to read at typical playing levels (hot peaks still
-  fold smoothly to the panel edge, never overdrawn).
-- **FX blocks reorder by header chevrons, not drag; presets no longer rearrange them.** Each FX
-  block's name bar carries small **up/down chevrons** — tap them to move that effect one slot earlier
-  or later in the chain (EQ stays last). There is deliberately **no drag gesture**, so grabbing a
-  knob can never nudge a block; the chevrons are dimmed at the ends of the chain. The order is a
-  **global, user-controlled setting that persists in the session** and is **no longer clobbered by
-  loading a SOUND preset** — fixing a bug where every order-less factory preset silently reset the
-  chain to the old order (snapping WIDTH out of first place). Tapping the rest of the bar still
-  toggles the effect on/off.
-- **Chorus VOICES 1|2 (Musicality Pass, Tier 4c — dual-tap thickening).** The CHORUS block gains a
-  small **1|2** selector. At **2** a second modulated tap is read per channel at a longer centre
-  delay (19 ms) with its LFO at 120°/240° — independent of the first tap's 0°/90° — so the two taps
-  give L and R genuinely different motion: a classic dimension-style **thicker, wider** chorus.
-  The two taps sum at half weight so the level stays controlled. **Default 1 ⇒ the single-tap chorus,
-  bit-identical** (goldens hold); toggling 1↔2 crossfades via a smoothed blend, so it is click-free
-  mid-note. Measured: voices=2 lowers L/R correlation and substantially changes the wet voice.
-  This completes the **Musicality Pass** (#99): Tier 1 (voicing) → Tier 2 (nonlinear filter: drive,
-  self-oscillation, oversampling) → Tier 4a (modulated reverb) → Tier 4c (dual-tap chorus). Tier 3
-  (unison character) lives in the unison work item.
-- **Reverb MOTION (Musicality Pass, Tier 4a — modulated tail).** Static reverb comb tunings ring
-  at fixed frequencies, which reads *metallic* on a long tail. A new per-part **MOTION** knob (in
-  the REVERB block) adds very slow, very small modulation to a subset of the reverb's **allpass
-  diffusers** — three of the four series allpass, each on its own slow LFO (0.13–0.29 Hz, so there
-  is no single coherent wobble), a few samples deep via interpolated reads. Wobbling the diffusion
-  continuously reshuffles the echo pattern and **smears the fixed coloration** — pads *swim* instead
-  of ringing. Chosen by measurement: modulating the parallel combs instead only *reinforced* the
-  resonant peaks, so the allpass (the classic Dattorro-plate approach) is modulated. Measured:
-  the time-averaged HF spectral crest drops ~19 % with motion at full depth (the peaks smear).
+  Loudness stays flat across the sweep and across velocity via an **envelope-following auto-makeup** that
+  restores each note to its own input level *including* the lowpass loss (never a hidden boost — the
+  output peak only ever drops), so the per-part **LEVEL** stays the volume control. Runs **2×
+  oversampled** while engaged, so even a hard-clipped high note stays clean (measured ~1 % aliasing); the
+  wet crossfade folds the oversampling in/out click-free as SAT crosses zero. `sat = 0` is a **bit-exact
+  bypass** (goldens hold); it's a full mod destination (an LFO can lean on it). Distinct from the filter
+  panel's DRIVE. The block is relabelled **SAT + WIDTH**, and the **default FX chain now runs WIDTH
+  first** — you clip/spatialize the dry signal, then delay/reverb bloom over it.
+- **Oscilloscope reads bigger.** The master scope's vertical gain is doubled and the horizontal window is
+  zoomed in ~20 %, so the waveform shape is easy to read at typical playing levels (hot peaks still fold
+  smoothly to the panel edge, never overdrawn).
+- **FX blocks reorder by header chevrons, not drag; presets no longer rearrange them.** Each FX block's
+  name bar carries small **up/down chevrons** — tap them to move that effect one slot earlier or later in
+  the chain (EQ stays last). There is deliberately **no drag gesture**, so grabbing a knob can never nudge
+  a block; the chevrons are dimmed at the ends of the chain. The order is a **global, user-controlled
+  setting that persists in the session** and is **no longer clobbered by loading a SOUND preset** —
+  fixing a bug where every order-less factory preset silently reset the chain to the old order (snapping
+  WIDTH out of first place). Tapping the rest of the bar still toggles the effect on/off.
+- **Chorus VOICES 1|2 — dual-tap thickening.** The CHORUS block gains a small **1|2** selector. At **2** a
+  second modulated tap is read per channel at a longer centre delay (19 ms) with its LFO at 120°/240° —
+  independent of the first tap's 0°/90° — so the two taps give L and R genuinely different motion: a
+  classic dimension-style **thicker, wider** chorus. The two taps sum at half weight so the level stays
+  controlled. **Default 1 ⇒ the single-tap chorus, bit-identical** (goldens hold); toggling 1↔2 crossfades
+  via a smoothed blend, so it is click-free mid-note. Measured: voices=2 lowers L/R correlation and
+  substantially changes the wet voice.
+- **Reverb MOTION — modulated tail.** Static reverb comb tunings ring at fixed frequencies, which reads
+  *metallic* on a long tail. A new per-part **MOTION** knob (in the REVERB block) adds very slow, very
+  small modulation to a subset of the reverb's **allpass diffusers** — three of the four series allpass,
+  each on its own slow LFO (0.13–0.29 Hz, so there is no single coherent wobble), a few samples deep via
+  interpolated reads. Wobbling the diffusion continuously reshuffles the echo pattern and **smears the
+  fixed coloration** — pads *swim* instead of ringing. Chosen by measurement: modulating the parallel
+  combs instead only *reinforced* the resonant peaks, so the allpass (the classic Dattorro-plate approach)
+  is modulated. Measured: the time-averaged HF spectral crest drops ~19 % with motion at full depth.
   **Default 0 ⇒ the classic static reverb, bit-identical** (goldens hold). Zipper-safe on the knob,
   denormal-safe on the modulated decay, and a full mod destination (LINK / automation / MIDI-learn).
   Bench: +~0.004 ms/block (negligible — interpolated reads on three short lines).
-- **NOISE is now a visible control.** White noise was always a fourth sound source in the engine
-  but had **no knob** — you couldn't reach it. It now has a **LEVEL** knob in a fourth source row
-  beneath the three oscillators (aligned under their LEVEL column), a full mod destination (LINK,
-  automation, MIDI-learn, numeric entry). (Its COLOR — white/pink — is a documented post-1.0 slot.)
-
-### Fixed
-- **Top-bar knobs are draggable again when pinned to the window edge.** MASTER, GLIDE, ANALOG,
-  UNI, DET, WID and TRIM sit right under the title bar, so a vertical-only drag ran out of room
-  to go *up* and the knob felt stuck. They now accept **horizontal drag too** (drag right to
-  raise), matching the macros. Also gave GLIDE a hover-help description like the other voice knobs
-  (hover any control ~1 s for its help).
-- **Arp no longer skips to its start at each bar.** With the shared clock, striking a key mid-bar
-  used to make the arpeggiator snap back to pattern step 0 at the next measure boundary — an audible
-  discontinuity. The bar re-lock now keeps the arp's **rhythm on the grid** (its steps still land on
-  the beat, drift bounded) but lets the **pattern free-run** from where you started instead of
-  resetting to step 0. So the arp stays locked to the sequencer/looper's beats without the skip.
-- **LFO can now be turned on without a fixed destination — "On" replaces "PW".** The LFO DEST used
-  to be Off / Pitch / Cutoff / **PW**, so the only way to enable an LFO was to hardwire it to Pitch,
-  Cutoff, or PW — you couldn't run it purely as a **LINK** (mod-matrix) source. DEST is now
-  Off / Pitch / Cutoff / **On**: **On** runs the LFO with **no fixed route** (route it anywhere via
-  LINK), **Off** genuinely turns it off (no longer a live source), and Pitch/Cutoff keep their
-  hardwired routes. The dropped fixed **PW** route is fully covered by LINK → PulseWidth. *(Migration:
-  an old LFO set to "PW" (index 3) now reads as "On"; a patch that linked an LFO left at "Off" should
-  set its DEST to "On".)*
-- **Velocity now shapes volume properly, and does so PERCEPTUALLY.** The default **VEL>AMP** was 0.7
-  with a *linear* amp map, which left even the softest note at 70 % of full amplitude — velocity
-  barely moved the level. Now the default is **0.9** and the curve is **dB-linear (logarithmic)**:
-  equal velocity steps give equal loudness (dB) steps below unity, matching how hearing works, so
-  soft notes are genuinely quiet and dynamics feel even across the range (>1.0 accents get a gentle
-  linear boost). velocity's other routings (cutoff, etc.) are unchanged. The render golden was
-  regenerated for this intended change.
-- **Turning a sequencer/arp step off is now a single tap.** A step used to require a *double-tap* to
-  silence (a stray single tap was ignored), which was fiddly — the double-tap window was tight and a
-  slightly-long press slid into velocity mode instead. Now **a single quick tap toggles** a step
-  (dark→on, lit→off); only a deliberate hold or a clear vertical drag enters velocity mode, so
-  turning steps off is easy and velocity edits still can't happen by accident. (Applies to both the
-  step sequencer and the arp gate row.)
-
-### Fixed (earlier)
-- **Windows CI green again (#110).** Two test-suite `TEST_CASE` names contained an **em-dash (—)**.
-  ctest re-invokes each test by name as a Catch2 filter; the UTF-8 em-dash round-trips on Linux but
-  mangles on the Windows console codepage, so the exe matched no test and ctest called it a failure —
-  Windows `build-test` had been red since the Musicality Pass Tier 1 for this reason (it was never a
-  DSP determinism bug; the audio was always bit-identical). Renamed the two tests to ASCII and added
-  an **ASCII-only-test-name guard to the gate** (`run-all-checks.sh`) so it can't recur.
+- **NOISE is now a visible control.** White noise was always a fourth sound source in the engine but had
+  **no knob** — you couldn't reach it. It now has a **LEVEL** knob in a fourth source row beneath the
+  three oscillators (aligned under their LEVEL column), a full mod destination (LINK, automation,
+  MIDI-learn, numeric entry). (Its COLOR — white/pink — is a documented post-1.0 slot.)
+- **Cleaner filter drive — 2× oversampling.** The in-loop tanh saturation aliases at base rate — audible
+  as harshness on high, hard-driven notes (measured −22 dB at note C7, drive/self-osc). The
+  driven/self-oscillating filter now runs **2× oversampled** (a contained half-band around just the
+  filter), cutting that aliasing by **~10–12 dB** at the worst case. It engages **only when a voice is
+  actually driven or self-oscillating** (a clean voice stays on the bit-exact base-rate path and pays
+  nothing), and it's **latched for the note's whole life** so the rate never switches mid-note (no click).
+  Self-oscillation stays in tune at 2× (±1.5 cents). The contained 2× keeps the clean path bit-exact and
+  is active in both Efficient and HQ so the fix reaches the live machine.
+- **Filter SELF-OSCILLATION.** Push **RESO** past the top and the filter blooms into a **pure, keytracked
+  sine at the cutoff** — a playable voice (sine bass, whistles, drones), the way a cranked analog filter
+  sings. It **starts reliably even with no input**: the loop carries an inaudible (~-120 dB) noise floor,
+  the digital stand-in for analog thermal noise, so silence always blooms (in ~0.2 s). It **plays in
+  tune** — the self-oscillation lands within ~1.5 cents of the note across the whole keyboard at full
+  keytrack. Old presets are safe: RESO's range is unchanged and **only the very top sliver opens into
+  self-osc** (everything below is bit-identical), and randomize never reaches it. Decaying tails are
+  denormal-safe.
+- **Filter DRIVE.** The state-variable filter gains an in-loop **tanh saturation**: a new **DRIVE** knob
+  (per part) soft-clips the signal entering the filter loop and bounds the resonance-feedback path — the
+  way the classic analog filters get their growl (saturation *inside* the loop, not a waveshaper in
+  front). Clean playing is untouched: **drive 0 takes a bit-exact fast path that is literally the old
+  linear code** (goldens hold, and you pay for the tanh only when driven). The nonlinearity uses a fast
+  rational tanh (pinned within ~0.024 of `std::tanh` by the DSP suite); driven output is makeup-matched to
+  stay within ~2 dB of clean across the range, and the drive amount is **smoothed** so knob/automation/
+  macro moves don't click. DRIVE is macro-routable.
+- **Analog life for the oscillators.** Each oscillator gains a **start-phase policy** — **RESET** (today's
+  bit-identical alignment), **RANDOM** (a fresh phase per note, so detuned stacks and chords bloom
+  differently every strike), or **FREE** (the oscillator runs continuously and a note picks up wherever
+  the phase is). A global **ANALOG** knob adds subtle per-voice pitch/PW **drift** (a slow bounded random
+  walk) — the "alive" quality of vintage polys. Both default to off (RESET / analog 0), so existing
+  patches are bit-identical; the new controls live in the oscillator rows (phase) and beside GLIDE
+  (ANALOG).
+- **MIDI clock OUT — the synth as clock master.** Transmits **24-ppq MIDI clock + start/stop** derived
+  from the same transport as everything else: **standalone** sends the internal Tempo, and in a **DAW** it
+  relays the host tempo + play state. Enable it (and, in the standalone, pick the MIDI output device) in
+  the new **OUTPUTS** dialog, so external gear (loopers, pedals) locks to the synth. Clock ticks are
+  placed at sample-accurate offsets — jitter is **≤ 1 sample (~21 µs)**, far tighter than pedal loopers
+  need. The instrument's MIDI output carries only the clock (it never echoes played notes).
+- **Scenes.** Eight arrangement snapshots — **loop clips (MIDI + audio) + drum pattern + per-lane
+  transport** — as a row of numbered buttons in the looper section. The **active scene is the live
+  state**: recordings and pattern edits write into it automatically (no "store" step). **Tap** a scene to
+  launch it; the switch is **quantized** and, by default (**Loop end**), waits for the **longest loop in
+  the current scene to finish** so a single tap never cuts a phrase short — and it won't switch until any
+  in-progress **recording** has completed too. A newly-activated scene **starts from its beginning** (the
+  loops rewind to the downbeat rather than resuming mid-phrase), and the flip is click-free (held loop
+  notes are flushed). A shorter quantum (**1 / 2 / 4 / 8 bar**) is selectable if you want faster switches.
+  **Long-press** a scene for a menu: *Copy active scene here* (clone) or *Clear scene*. Launching an empty
+  scene is a valid blank canvas. Buttons show empty (outline), filled (has content), pending (blinking),
+  and active (solid). **Audio loop recordings are per-scene too** — captured lazily (only the recorded
+  region, so memory scales with what you actually record); scene content is session-runtime (exported via
+  MIDI/WAV).
+- **Hover help tooltips.** Resting the mouse on any control for ~1 s shows its full name (e.g. hovering the
+  looper **R** button shows "Loop Rec", a knob shows "Filter Cutoff"). The label comes from the control's
+  parameter, so every knob, selector, and toggle is covered.
+- **Per-part looper loop lengths, up to 32 bars.** Each of the four looper lanes sets its **own** length —
+  a compact **BARS** knob on every row (turn to **1 / 2 / 4 / 8 / 16 / 32**) instead of one shared grid.
+  So a 2-bar drum groove on P4 can loop under an 8-bar chord progression on P1, and the lanes stay locked
+  to a single downbeat (a shorter loop simply wraps a whole number of times inside a longer one — driven
+  by one master clock, `masterPos % laneLength`, so there is no phase drift). **MIDI** loops offer all
+  lengths at any tempo; **AUDIO** loops are honestly capped by the ring size (shown as "aud Nb" on the row
+  when a slower tempo can't fit the selection). Old sessions restore unchanged (the length list was
+  extended append-only).
+- **Master tempo linking + tempo-synced LFOs.** In a DAW the synth **follows the host's tempo and
+  transport** — the arpeggiator, step sequencer, looper **and** LFOs lock to the project BPM and play
+  position (via `AudioPlayHead`); standalone keeps using the internal **Tempo** knob. Each of the three
+  per-part LFOs gains a **SYNC** toggle: when on, its **RATE** knob morphs into a stepped **DIV**
+  (note-division) knob — **4 bar, 2 bar, 1/1…1/32** straight, **1/4T–1/16T** triplet, **1/4.–1/16.** dotted
+  (14 divisions). A synced LFO's phase is derived from the transport position, so it stays **bar-locked
+  with no phase jump** — even for triplet/dotted divisions that don't divide the bar evenly, and across
+  tempo changes and host loop braces. Toggling SYNC on engages at the next bar boundary (no mid-note
+  jump); toggling off freezes the current rate as free Hz. The effective rate is computed live in the
+  engine, so **locked parts** track tempo changes too.
+- **Sample-playback kit pads.** Any drum-kit pad can play a loaded **WAV / AIFF / FLAC** one-shot instead
+  of a synthesized voice — load it in the **Kit Editor** ("Load sample…"; the pad shows **SMPL**).
+  Playback is **stereo**, **pitch-tracked** (the sample transposes with the note; 4-point cubic
+  interpolation, which also does the file-rate→engine-rate conversion), and **play-as-recorded** by
+  default (root = the pad's note, ratio 1.0). Samples get the pad's level, choke group, trigger/sounding
+  notes, and the part's FX + EQ + pan like any pad, with a short anti-click fade at each end and on choke.
+  Files live in a **managed, content-deduplicated** library (`~/.config/synth/samples/`), so a pad
+  references a sample by content hash — five kits loading the same file share one copy, and the reference
+  travels with `.kit` files, sessions, and MULTIs. A missing sample is silent, never a crash.
+- **Launchkey drum pads are their own routable input surface.** A controller whose pads send on a separate
+  MIDI channel + note range (declared in its device profile — the Launchkey Mini's 16 pads are notes
+  36–51 on channel 10) split off into an independent **"&lt;device&gt; Pads"** surface. It appears as its
+  own row in **INPUTS** right under the device, so the pads can route to a different part than the keys —
+  e.g. pads → the P4 drum kit while the keys play a lead. The split is data-driven (`padChannel` /
+  `padNotes` in the profile JSON), so the pads get their own key-range zones, activity indicator, and
+  MULTI persistence like any surface; keys and other CCs stay on the device's own surface.
 
 ### Changed
-- **UI audit + layout polish.** A full parameter-vs-control audit (every registered parameter now
-  has a control, or is intentionally hidden). Highlights: the **macro row** shows full assignment
-  names (no truncation) with the CC badge relocated so it never collides, and a **value readout that
-  appears only while you adjust** a knob (nothing at rest); **sequencer rows** show the pad name *and*
-  trigger note ("Snare D1", "Snare E1") so no two read alike; **VARY** sits next to RANDOM; the
-  **chord modifier** keys are now keycap badges; the **oscilloscope trace runs hotter** (fills the
-  panel, soft-clipped) and the EQ gets more room; **envelope values** are transient (ms/s, shown only
-  while dragging); and hover **tooltips + the help overlay** now explain the cryptic controls (osc
-  phase RS/RN/FR, ANALOG, DRIVE, LFO SYNC/DIV, NOISE).
+
+- **RANDOM is one button, one algorithm.** Removed the wild / constrained / archetype mode split, the mode
+  toast, and the long-press mode picker — a single press always rolls the *same* algorithm: a **fully
+  random** patch on the focused part, shaped toward playable. Every continuous parameter spans its full
+  range (perceptual via the params' log-skewed ranges), with middle-biased oscillator levels, a hidden
+  per-press **temperament** that loosely correlates the envelope tails + reverb size, **musical SEMI
+  intervals** ({0, ±5, ±7, ±12} + rare chromatic), an occasional (~5%) self-oscillating resonance
+  excursion, and 0–3 **shaped** mod-matrix routes (a *moving* source — LFO/env/velocity — into an
+  *audibly-live* destination spread across cutoff/pitch/PW/wave-pos/resonance, so RANDOM's modulation
+  stops sounding like "always an LFO on the filter"; a ~15% wildcard keeps full support) — then a repair
+  pass (exclusion list + audibility floor + broken-patch invariants) so it's never silent or broken.
+  **VARY is unchanged** — the small step from the current sound.
+- **Preset bank overhaul (first pass).** Consolidated the factory bank — cut eight duplicates/weak sounds
+  (Fat Saw Bass, Unison Wide Bass, Square Lead, WT Digital Lead, Solo Brass, Supersaw Slim, Shimmer Bed,
+  Noise Riser) and rebuilt the **Bright Lead** flagship (a rich 3-saw poly lead with drift, a slow
+  LFO→cutoff, delay + motion reverb) so the first patch a new user hears earns its place. Eased the
+  resonant "weoh" out of **Acid Bass** (lower resonance + drift = more organic 303). Reworked the roughest
+  drums: a more pitched **Cowbell**, a **Crash**/**Splash** with the pitched resonance pulled down for a
+  brighter metallic wash, a de-toyed **Ride**, and a **Metal Hit** opened up to ring naturally. The
+  loudness match holds across the trimmed bank.
+- **Preset bank overhaul (tonal pass).** Redesigned eight flat patches toward a warmer, more alive bar:
+  **Bell Keys** (velocity brightens the bell timbre; rings and fades like a real bell), **Clav Bite**
+  (snappier, with drive and a filter-env bite), **Synth Pluck** (fuller, with drift and space), **WT
+  Marimba** (warmer body + soft mallet attack), **String Machine** (a drifting, chorused ensemble with a
+  slow filter shimmer), **Motion Pad** (a slow LFO filter sweep that earns its name, distinct from the
+  other pads), and the two flutes **Soft/Breath Flute** (de-noised — breath, not hiss).
+- **UI audit + layout polish.** A full parameter-vs-control audit (every registered parameter now has a
+  control, or is intentionally hidden). Highlights: the **macro row** shows full assignment names (no
+  truncation) with the CC badge relocated so it never collides, and a **value readout that appears only
+  while you adjust** a knob (nothing at rest); **sequencer rows** show the pad name *and* trigger note
+  ("Snare D1", "Snare E1") so no two read alike; **VARY** sits next to RANDOM; the **chord modifier** keys
+  are now keycap badges; the **oscilloscope trace runs hotter** (fills the panel, soft-clipped) and the EQ
+  gets more room; **envelope values** are transient (ms/s, shown only while dragging); and hover
+  **tooltips + the help overlay** explain the cryptic controls (osc phase RS/RN/FR, ANALOG, DRIVE, LFO
+  SYNC/DIV, NOISE).
 - **Removed 12 dead parameters** (the retired master EQ `eq_*` and `arp_latch`) — pre-1.0 cleanup of
   never-functional params ahead of the ID freeze. Old sessions carrying them load cleanly (values
   discarded). `osc_mix` is retained (it drives legacy osc-level migration, so it is not dead).
-
-### Added (cont.)
-- **Cleaner filter drive (Musicality Pass, Tier 2C — 2× oversampling).** The in-loop tanh
-  saturation aliases at base rate — audible as harshness on high, hard-driven notes (measured
-  −22 dB at note C7, drive/self-osc). The driven/self-oscillating filter now runs **2× oversampled**
-  (a contained half-band around just the filter), cutting that aliasing by **~10–12 dB** at the
-  worst case. It engages **only when a voice is actually driven or self-oscillating** (a clean voice
-  stays on the bit-exact base-rate path and pays nothing), and it's **latched for the note's whole
-  life** so the rate never switches mid-note (no click). Self-oscillation stays in tune at 2× (±1.5
-  cents). Evaluated against folding into the oscillator oversampling domain and benched both:
-  the contained 2× wins on cost (half the added work) and diff size, and keeps the clean path
-  bit-exact. Active in both Efficient and HQ so the fix reaches the live machine.
-- **Filter SELF-OSCILLATION (Musicality Pass, Tier 2B).** Push **RESO** past the top and the filter
-  blooms into a **pure, keytracked sine at the cutoff** — a playable voice (sine bass, whistles,
-  drones), the way a cranked analog filter sings. It **starts reliably even with no input**: the loop
-  carries an inaudible (~-120 dB) noise floor, the digital stand-in for analog thermal noise, so
-  silence always blooms (in ~0.2 s). It **plays in tune** — the self-oscillation lands within ~1.5
-  cents of the note across the whole keyboard at full keytrack. Old presets are safe: RESO's range is
-  unchanged and **only the very top sliver opens into self-osc** (everything below is bit-identical),
-  and randomize never reaches it. Decaying tails are denormal-safe.
-- **Filter DRIVE (Musicality Pass, Tier 2 — the big one).** The state-variable filter gains an
-  in-loop **tanh saturation**: a new **DRIVE** knob (per part) soft-clips the signal entering the
-  filter loop and bounds the resonance-feedback path — the way the classic analog filters get their
-  growl (saturation *inside* the loop, not a waveshaper in front). Clean playing is untouched:
-  **drive 0 takes a bit-exact fast path that is literally the old linear code** (goldens hold, and
-  you pay for the tanh only when driven). The nonlinearity uses a fast rational tanh (pinned within
-  ~0.024 of `std::tanh` by the DSP suite); driven output is makeup-matched to stay within ~2 dB of
-  clean across the range, and the drive amount is **smoothed** so knob/automation/macro moves don't
-  click. DRIVE is macro-routable.
-- **Analog life for the oscillators (Musicality Pass, Tier 1).** Each oscillator gains a
-  **start-phase policy** — **RESET** (today's bit-identical alignment), **RANDOM** (a fresh phase
-  per note, so detuned stacks and chords bloom differently every strike), or **FREE** (the
-  oscillator runs continuously and a note picks up wherever the phase is). A global **ANALOG** knob
-  adds subtle per-voice pitch/PW **drift** (a slow bounded random walk) — the "alive" quality of
-  vintage polys. Both default to off (RESET / analog 0), so existing patches are bit-identical; the
-  new controls live in the oscillator rows (phase) and beside GLIDE (ANALOG).
-- **MIDI clock OUT (#85) — the synth as clock master.** Transmits **24-ppq MIDI clock + start/stop**
-  derived from the same transport as everything else: **standalone** sends the internal Tempo, and
-  in a **DAW** it relays the host tempo + play state. Enable it (and, in the standalone, pick the
-  MIDI output device) in the new **OUTPUTS** dialog, so external gear (Aeros looper, Chase Bliss
-  pedals) locks to the synth. Clock ticks are placed at sample-accurate offsets — jitter is **≤ 1
-  sample (~21 µs)**, far tighter than pedal loopers need. The instrument's MIDI output carries only
-  the clock (it never echoes played notes).
-- **Scenes (J3).** Eight arrangement snapshots — **loop clips (MIDI + audio) + drum pattern +
-  per-lane transport** — as a row of numbered buttons in the looper section. The **active scene is the live
-  state**: recordings and pattern edits write into it automatically (no "store" step). **Tap** a
-  scene to launch it; the switch is **quantized** and, by default (**Loop end**), waits for the
-  **longest loop in the current scene to finish** so a single tap never cuts a phrase short — and it
-  won't switch until any in-progress **recording** has completed too. A newly-activated scene
-  **starts from its beginning** (the loops rewind to the downbeat rather than resuming mid-phrase),
-  and the flip is click-free (held loop notes are flushed). A shorter quantum (**1 / 2 / 4 / 8 bar**)
-  is selectable if you want faster switches. **Long-press** a scene for a menu: *Copy active scene
-  here* (clone) or *Clear scene*. Launching an empty scene is a valid blank canvas. Buttons show
-  empty (outline), filled (has content), pending (blinking), and active (solid). **Audio loop
-  recordings are per-scene too** — captured lazily (only the recorded region, so memory scales with
-  what you actually record); scene content is session-runtime (exported via MIDI/WAV).
-- **Hover help tooltips.** Resting the mouse on any control for ~1 s now shows its full name
-  (e.g. hovering the looper **R** button shows "Loop Rec", a knob shows "Filter Cutoff"). The
-  label comes from the control's parameter, so every knob, selector, and toggle is covered.
-- **Per-part looper loop lengths, up to 32 bars (J2).** Each of the four looper lanes now sets
-  its **own** length — a compact **BARS** knob on every row (turn to **1 / 2 / 4 / 8 / 16 / 32**)
-  instead of one shared grid. So a 2-bar drum groove on P4 can loop under an 8-bar chord progression on P1, and the
-  lanes stay locked to a single downbeat (a shorter loop simply wraps a whole number of times inside
-  a longer one — driven by one master clock, `masterPos % laneLength`, so there is no phase drift).
-  **MIDI** loops offer all lengths at any tempo; **AUDIO** loops are honestly capped by the ring size
-  (shown as "aud Nb" on the row when a slower tempo can't fit the selection). Old sessions restore
-  unchanged (the length list was extended append-only).
-- **Master tempo linking + tempo-synced LFOs (J1).** In a DAW the synth now **follows the host's
-  tempo and transport** — the arpeggiator, step sequencer, looper **and** LFOs lock to the project
-  BPM and play position (via `AudioPlayHead`); standalone keeps using the internal **Tempo** knob.
-  Each of the three per-part LFOs gains a **SYNC** toggle: when on, its **RATE** knob morphs into a
-  stepped **DIV** (note-division) knob — **4 bar, 2 bar, 1/1…1/32** straight, **1/4T–1/16T** triplet,
-  **1/4.–1/16.** dotted (14 divisions). A synced LFO's phase is derived from the transport position,
-  so it stays **bar-locked with no phase jump** — even for triplet/dotted divisions that don't
-  divide the bar evenly, and across tempo changes and host loop braces. Toggling SYNC on engages at
-  the next bar boundary (no mid-note jump); toggling off freezes the current rate as free Hz. The
-  effective rate is computed live in the engine, so **locked parts** track tempo changes too.
-
-- **Sample-playback kit pads (I2).** Any drum-kit pad can now play a loaded **WAV / AIFF / FLAC**
-  one-shot instead of a synthesized voice — load it in the **Kit Editor** ("Load sample…"; the pad
-  shows **SMPL**). Playback is **stereo**, **pitch-tracked** (the sample transposes with the note;
-  4-point cubic interpolation, which also does the file-rate→engine-rate conversion), and
-  **play-as-recorded** by default (root = the pad's note, ratio 1.0). Samples get the pad's level,
-  choke group, trigger/sounding notes, and the part's FX + EQ + pan like any pad, with a short
-  anti-click fade at each end and on choke. Files live in a **managed, content-deduplicated**
-  library (`~/.config/synth/samples/`), so a pad references a sample by content hash — five kits
-  loading the same file share one copy, and the reference travels with `.kit` files, sessions, and
-  MULTIs. A missing sample is silent, never a crash.
-- **Launchkey drum pads are their own routable input surface (I1).** A controller whose pads
-  send on a separate MIDI channel + note range (declared in its device profile — the Launchkey
-  Mini's 16 pads are notes 36–51 on channel 10) now split off into an independent
-  **"&lt;device&gt; Pads"** surface. It appears as its own row in **INPUTS** right under the device, so
-  the pads can route to a different part than the keys — e.g. pads → the P4 drum kit while the
-  keys play a lead. The split is data-driven (`padChannel` / `padNotes` in the profile JSON), so
-  the pads get their own key-range zones, activity indicator, and MULTI persistence like any
-  surface; keys and other CCs stay on the device's own surface.
-
-### Changed
-- **The per-part EQ reaches drum-kit parts, and kit parts are now focusable (K2).** Tapping any
-  part cell — synth **or** kit — moves the shared edit-focus, so the EQ section (and the part's
-  channel) follows it. A kit's summed output now runs through its per-part EQ (the creative FX —
-  chorus/delay/reverb/width — stay dry on kits, only the EQ passes through). Because a drum kit has
-  no single synth sound, while a kit is focused the OSC / FILTER / ENVELOPE / LFO panels dim with a
-  "KIT — edit pads in Kit Editor" hint and a one-tap button; the kit keeps playing from its per-pad
-  voices. Each part remembers its own EQ across focus changes and in the session. *(Previously the
-  whole FX chain was bypassed for kits, and tapping a kit refused edit-focus — so its EQ was
-  unreachable and the FFT showed no EQ shaping on drums. The master scope/FFT was already post-EQ.)*
-- **One EQ, per part, at the end of the chain (K1).** The plugin now has a single EQ concept:
-  a fixed **5-band parametric EQ** applied as the **last stage of the focused part's chain**
-  (post-FX), living in its own right-column section that **follows edit focus** (the header
-  names the part). It replaces two older, overlapping EQs — the **master finisher EQ is
-  retired** (its `eq_*` params stay registered but are inert/hidden for state back-compat), and
-  the per-part EQ is **removed from the FX drag-reorder chain** (that chain is now the four
-  reorderable FX: chorus/delay/reverb/width). The new section is a mixing-desk surface: a
-  vertical **gain slider per band** (drag up/down = gain, **drag sideways = frequency** with a
-  live readout, **double-tap = numeric freq/gain/Q**), a per-band on/off dot, and a section
-  on/off bar; editing any band auto-enables the section so a boosted band is never silently
-  bypassed. The four band gains (`EQ Low/L-Mid/H-Mid/High Gain`) are mod-matrix / macro targets.
-  Old presets migrate transparently: an EQ anywhere in a saved `fx_order` now always runs last
-  (its slot is inert), and band 4 + the per-band switches default to a neutral, on state.
-  *Fixes a latent bug:* the per-part EQ previously did nothing on the LIVE/focused part
-  (`snapshotFXParams` never carried it) — it now works on every part.
-- **Macros ship pre-assigned.** The 8 macros now default to musical targets — M1 filter
-  cutoff, M2 resonance, M3 filter-env amount, M4 amp release, M5 LFO1 rate, M6 LFO1 depth,
-  M7 reverb mix, and M8 the **focused part's level** (follows the edit focus). Older sessions
-  with no saved macro map inherit these defaults; an explicitly-cleared map is respected. The
-  Launchkey Mini pots (CC 21–28) already drive M1–M8, so the controller is expressive out of
-  the box.
-- **Per-step velocity on both rhythm surfaces.** Every sequencer step AND every arpeggiator
-  step carries its own velocity percentage (10–200 %), edited with one grammar on both grids:
-  **single-tap a dark box turns it on; double-tap a lit box turns it off** (a stray tap never
-  silences a step); **touch-and-hold a box then drag up/down sets its velocity** — shown as a
-  number in the box while adjusting and a bottom-up fill (accented, > 100 %, brightens) at
-  rest. On the arp the velocity belongs to the STEP, not the note — the same box scales
-  whatever note the pattern lands on it. Replaces the old binary sequencer accent (legacy
-  accented steps migrate to a high velocity). Persists with patterns/presets/MULTIs; states
-  without per-step velocities load at 100 %. (The brief single arp-velocity knob added earlier
-  in this cycle is retired in favour of per-step control.)
-- **Clock alignment:** the sequencer, arpeggiator and looper now share one transport origin
-  (the loop clock), re-anchoring to the bar downbeat every bar — the seq no longer leads the
-  arp/looper. Swing self-accumulates within the bar. Looper MIDI recording is quantized to a
-  1/32 grid (per-lane toggle, default on) with note-pairing protection.
-- **Looper is now 4 fixed per-part lanes** (lane N ↔ part N), each with its own
-  REC/PLAY/CLEAR/MIDI-AUDIO transport and its own audio ring. Capture is by lane (part N),
-  fully decoupled from the edit/play focus (switching focus no longer disturbs the looper).
-  Shared loop-grid; honest audio-bar cap at low tempo; per-lane UI rows. REC is one-shot:
-  arm, engage at the loop downbeat, record exactly the set bars (1/2/4), then auto-stop and
-  play.
-- **Poly/Mono/Legato is now per-part** (edited via focus like the rest of the sound). Each
-  part has its own mode, mono voice, note stack and glide; kit parts are always poly. Fixes a
-  real isolation break — a mono lead on part 1 was cut whenever the sequencer ran on part 4
-  (global single-voice mono). The master EQ / per-part EQ, filter, FX and LFOs are all per-part.
-- **Per-part 3-band parametric EQ** as a 5th reorderable FX block; the master EQ stays a global
-  finisher. Every FX/EQ on/off header is a loud lit toggle.
-- **Stereo width now widens a dry mono source.** width > 1 synthesizes side content from
-  the mid via a Schroeder allpass cascade (phase-only, not a Haas delay), added purely
-  antisymmetrically so the mono fold-down is unchanged. width ≤ 1 and width == 1 unchanged.
-- **Default scene:** the drum kit moved to **P4** (the sequencer's default target); P3 stays
-  the bass, P2 is now the free spare.
+- **The per-part EQ reaches drum-kit parts, and kit parts are now focusable.** Tapping any part cell —
+  synth **or** kit — moves the shared edit-focus, so the EQ section (and the part's channel) follows it. A
+  kit's summed output now runs through its per-part EQ (the creative FX — chorus/delay/reverb/width — stay
+  dry on kits, only the EQ passes through). Because a drum kit has no single synth sound, while a kit is
+  focused the OSC / FILTER / ENVELOPE / LFO panels dim with a "KIT — edit pads in Kit Editor" hint and a
+  one-tap button; the kit keeps playing from its per-pad voices. Each part remembers its own EQ across
+  focus changes and in the session. *(Previously the whole FX chain was bypassed for kits, and tapping a
+  kit refused edit-focus — so its EQ was unreachable and the FFT showed no EQ shaping on drums. The master
+  scope/FFT was already post-EQ.)*
+- **One EQ, per part, at the end of the chain.** The plugin has a single EQ concept: a fixed **5-band
+  parametric EQ** applied as the **last stage of the focused part's chain** (post-FX), living in its own
+  right-column section that **follows edit focus** (the header names the part). It replaces two older,
+  overlapping EQs — the **master finisher EQ is retired** (its `eq_*` params stay registered but are
+  inert/hidden for state back-compat), and the per-part EQ is **removed from the FX drag-reorder chain**
+  (that chain is now the four reorderable FX: chorus/delay/reverb/width). The new section is a mixing-desk
+  surface: a vertical **gain slider per band** (drag up/down = gain, **drag sideways = frequency** with a
+  live readout, **double-tap = numeric freq/gain/Q**), a per-band on/off dot, and a section on/off bar;
+  editing any band auto-enables the section so a boosted band is never silently bypassed. The four band
+  gains (`EQ Low/L-Mid/H-Mid/High Gain`) are mod-matrix / macro targets. Old presets migrate transparently:
+  an EQ anywhere in a saved `fx_order` now always runs last (its slot is inert), and band 4 + the per-band
+  switches default to a neutral, on state. *Fixes a latent bug:* the per-part EQ previously did nothing on
+  the LIVE/focused part (`snapshotFXParams` never carried it) — it now works on every part.
+- **Macros ship pre-assigned.** The 8 macros default to musical targets — M1 filter cutoff, M2 resonance,
+  M3 filter-env amount, M4 amp release, M5 LFO1 rate, M6 LFO1 depth, M7 reverb mix, and M8 the **focused
+  part's level** (follows the edit focus). Older sessions with no saved macro map inherit these defaults;
+  an explicitly-cleared map is respected. The Launchkey Mini pots (CC 21–28) already drive M1–M8, so the
+  controller is expressive out of the box.
+- **Per-step velocity on both rhythm surfaces.** Every sequencer step AND every arpeggiator step carries
+  its own velocity percentage (10–200 %), edited with one grammar on both grids: **single-tap a dark box
+  turns it on; double-tap a lit box turns it off** (a stray tap never silences a step); **touch-and-hold a
+  box then drag up/down sets its velocity** — shown as a number in the box while adjusting and a bottom-up
+  fill (accented, > 100 %, brightens) at rest. On the arp the velocity belongs to the STEP, not the note —
+  the same box scales whatever note the pattern lands on it. Replaces the old binary sequencer accent
+  (legacy accented steps migrate to a high velocity). Persists with patterns/presets/MULTIs; states
+  without per-step velocities load at 100 %. (The brief single arp-velocity knob is retired in favour of
+  per-step control.)
+- **Clock alignment:** the sequencer, arpeggiator and looper share one transport origin (the loop clock),
+  re-anchoring to the bar downbeat every bar — the seq no longer leads the arp/looper. Swing
+  self-accumulates within the bar. Looper MIDI recording is quantized to a 1/32 grid (per-lane toggle,
+  default on) with note-pairing protection.
+- **Looper is now 4 fixed per-part lanes** (lane N ↔ part N), each with its own REC/PLAY/CLEAR/MIDI-AUDIO
+  transport and its own audio ring. Capture is by lane (part N), fully decoupled from the edit/play focus
+  (switching focus no longer disturbs the looper). Shared loop-grid; honest audio-bar cap at low tempo;
+  per-lane UI rows. REC is one-shot: arm, engage at the loop downbeat, record exactly the set bars
+  (1/2/4), then auto-stop and play.
+- **Poly/Mono/Legato is now per-part** (edited via focus like the rest of the sound). Each part has its own
+  mode, mono voice, note stack and glide; kit parts are always poly. Fixes a real isolation break — a mono
+  lead on part 1 was cut whenever the sequencer ran on part 4 (global single-voice mono). The master EQ /
+  per-part EQ, filter, FX and LFOs are all per-part.
+- **Per-part 3-band parametric EQ** as a 5th reorderable FX block; the master EQ stays a global finisher.
+  Every FX/EQ on/off header is a loud lit toggle.
+- **Stereo width now widens a dry mono source.** width > 1 synthesizes side content from the mid via a
+  Schroeder allpass cascade (phase-only, not a Haas delay), added purely antisymmetrically so the mono
+  fold-down is unchanged. width ≤ 1 and width == 1 unchanged.
+- **Default scene:** the drum kit moved to **P4** (the sequencer's default target); P3 stays the bass, P2
+  is now the free spare.
 - **808 / Punchy kick voicing:** amp attack softened 1 ms → 2 ms for a defined transient.
 
-### Fixed / investigated
-- **FX SAT is now obvious, and WIDTH-first reaches existing sessions.** Follow-up to the SAT
-  feature: the knob felt inert because most of its travel crossfaded dry/wet at low drive. It now
-  reaches **full wet by ~8 %** of the sweep, so the rest of the knob controls **drive** — a small
-  turn already bites and the top is heavy (drive range 8× → **20×**; measured THD ~0.38 at full
-  vs ~0 clean). The tube even-harmonic colour lives at moderate settings; cranked, it goes fuzzy
-  (odd), as a real tube does. Separately, the **WIDTH-first default** didn't reach anyone with a
-  saved session (the persisted `fx_order` restored the old order); a one-time, version-stamped
-  migration now moves a legacy session that carried the *old default* `[0,1,2,3]` to width-first,
-  while leaving any custom order — or a deliberate new save — alone.
+### Fixed
+
+- **ARP velocity is now absolute — the pattern's velocity wins.** With the arpeggiator active, each step's
+  velocity was a *multiplier* of how hard you played (played × step), so a soft touch made the whole arp
+  quiet and dynamics leaked in unpredictably. The per-step velocity is now the **absolute** output velocity
+  (the grid box value IS the velocity; 100 % = full, 0 = rest, > 100 % accents via the voice's over-unity
+  boost), independent of the played note — so an arp pattern sounds the same however you touch the keys.
+  Tests prove a soft and a hard touch yield identical arp velocities.
+- **PW knob is more responsive.** The pulse-width knobs used the global 313-px full-range drag, which felt
+  sluggish given PW's narrow audible range; they now use a snappier ~150-px drag. A smoke test asserts all
+  three osc PW knobs carry the reduced sensitivity.
+- **Discoverability: unison + note-phase.** Added a "Finding your way around" note pointing to the in-app
+  **?** section guide and calling out that **unison lives in the top bar** (UNI/DET/WID, a global stack)
+  and that per-osc **RS/RN/FR** is note start-phase (subtle on a sustained tone) — the two spots hands-on
+  testing flagged as confusing. (The in-app guide already documents both.)
+- **LINK from an LFO now works end to end.** Arming an LFO as a mod source and tapping a destination created
+  the route but produced no sound and no animation — because an LFO only emits as a matrix source when its
+  own DEST is not "Off", and the LINK gesture never touched that DEST, so a freshly-linked LFO (DEST at its
+  default Off) published a zero source. The connect gesture now **auto-enables** the LFO as a live source
+  (sets its DEST to "On" — a source with no fixed route) whenever you link *from* an LFO whose DEST is still
+  Off; a Pitch/Cutoff DEST is left alone so an existing fixed route is never clobbered. A real-event
+  regression test (arm LFO1 → tap the cutoff knob, no manual DEST change) proves the cutoff then animates.
+  The broader LINK redesign (hold-to-drag depth, multi-link, links menu, retiring the per-LFO DEST buttons)
+  remains 1.1.
+- **Modulation animation now covers EVERY modulated control.** The standing spec is that any control being
+  modulated shows the live motion indicator; two gaps broke that. (1) The **NOISE** level was wired as a mod
+  target but its bar widget never built an indicator, so it animated nothing — it now draws a motion ghost
+  like the knobs and faders. (2) Routes whose SOURCE is a per-voice signal (**velocity, mod/amp envelope,
+  note, random**) never animated *any* destination, because the block-rate snapshot that drives the UI
+  omitted those sources. The engine now publishes the focused part's representative (loudest) live voice's
+  env/velocity/note/random, and the processor feeds them into an **animation-only** mod-source snapshot — so
+  e.g. *velocity → FM* or *env → cutoff* now visibly moves its knob. Audio is unchanged (the block-tier
+  audio path still uses block-level sources only; goldens hold). New tests: every mod target must have
+  actually built its indicator (catches the wired-but-dead class), and each per-voice source animates a
+  voice-tier and a block-tier destination.
+- **Stereo WIDTH no longer leans left at the top of its range.** At width > 1 the synthesized side is
+  decorrelated from the mid through an allpass cascade — but an allpass cannot decorrelate DC, and this
+  cascade left the *mid-range* nearly in-phase too (the correlation only crossed zero ~1.8 kHz), so adding
+  it antisymmetrically made the left channel measurably louder (up to ~18 dB of imbalance in the low-mids
+  at max width). The synthesized side is now **orthogonalised against the mid** (Gram-Schmidt: subtract the
+  running `⟨mid·decorr⟩ / ⟨mid·mid⟩` projection), which drives the L/R energy balance to within **~0.06 dB
+  at every frequency** while keeping the widening audible. Because the projection → 1 exactly where the
+  decorrelated signal ≈ the mid (the sub-bass), it also keeps the low end mono for free. Mono fold-down
+  stays bit-exact (the side is still purely antisymmetric), and default renders are unchanged (width = 1
+  uses the mid/side path). Regression tests assert the L/R energy balance and the clean mono fold on a
+  bass-heavy mono source at max width.
+- **Looper record → playback timing.** A freshly recorded loop no longer waits a full dead cycle before it
+  sounds. Two root causes, both fixed: (1) the auto-play at record completion set the PLAY *parameter*,
+  which only takes effect the following block, so the completion block — the new downbeat — was skipped
+  (now playback engages **this** block via `loopJustCompleted`); (2) the arm-on-wrap rule + block-phase
+  offset meant a t=0 downbeat event fell just before the first play window and was heard a cycle later (now
+  `Looper::requestDownbeatCatchUp` widens the handoff block's window to start at 0, once, so the
+  just-captured downbeat sounds on the **same** boundary while record disarms). So: arm → record begins at
+  the next downbeat → at loop end, playback starts immediately from that boundary. The captured content was
+  already downbeat-aligned (host-MIDI records sample-accurately; the routed path is snapped by the default
+  1/32 quantize) — it was the *playback* that dropped the downbeat. DSP regression test proves the downbeat
+  is caught (and not re-fired).
+- **Top-bar knobs are draggable again when pinned to the window edge.** MASTER, GLIDE, ANALOG, UNI, DET, WID
+  and TRIM sit right under the title bar, so a vertical-only drag ran out of room to go *up* and the knob
+  felt stuck. They now accept **horizontal drag too** (drag right to raise), matching the macros. Also gave
+  GLIDE a hover-help description like the other voice knobs (hover any control ~1 s for its help).
+- **Arp no longer skips to its start at each bar.** With the shared clock, striking a key mid-bar used to
+  make the arpeggiator snap back to pattern step 0 at the next measure boundary — an audible discontinuity.
+  The bar re-lock now keeps the arp's **rhythm on the grid** (its steps still land on the beat, drift
+  bounded) but lets the **pattern free-run** from where you started instead of resetting to step 0. So the
+  arp stays locked to the sequencer/looper's beats without the skip.
+- **LFO can now be turned on without a fixed destination — "On" replaces "PW".** The LFO DEST used to be
+  Off / Pitch / Cutoff / **PW**, so the only way to enable an LFO was to hardwire it to Pitch, Cutoff, or
+  PW — you couldn't run it purely as a **LINK** (mod-matrix) source. DEST is now Off / Pitch / Cutoff /
+  **On**: **On** runs the LFO with **no fixed route** (route it anywhere via LINK), **Off** genuinely turns
+  it off (no longer a live source), and Pitch/Cutoff keep their hardwired routes. The dropped fixed **PW**
+  route is fully covered by LINK → PulseWidth. *(Migration: an old LFO set to "PW" (index 3) now reads as
+  "On"; a patch that linked an LFO left at "Off" should set its DEST to "On".)*
+- **Velocity now shapes volume properly, and does so PERCEPTUALLY.** The default **VEL>AMP** was 0.7 with a
+  *linear* amp map, which left even the softest note at 70 % of full amplitude — velocity barely moved the
+  level. Now the default is **0.9** and the curve is **dB-linear (logarithmic)**: equal velocity steps give
+  equal loudness (dB) steps below unity, matching how hearing works, so soft notes are genuinely quiet and
+  dynamics feel even across the range (>1.0 accents get a gentle linear boost). Velocity's other routings
+  (cutoff, etc.) are unchanged. The render golden was regenerated for this intended change.
+- **Turning a sequencer/arp step off is now a single tap.** A step used to require a *double-tap* to silence
+  (a stray single tap was ignored), which was fiddly — the double-tap window was tight and a slightly-long
+  press slid into velocity mode instead. Now **a single quick tap toggles** a step (dark→on, lit→off); only
+  a deliberate hold or a clear vertical drag enters velocity mode, so turning steps off is easy and velocity
+  edits still can't happen by accident. (Applies to both the step sequencer and the arp gate row.)
+- **Windows CI green again.** Two test-suite `TEST_CASE` names contained an **em-dash (—)**. ctest
+  re-invokes each test by name as a Catch2 filter; the UTF-8 em-dash round-trips on Linux but mangles on the
+  Windows console codepage, so the exe matched no test and ctest called it a failure — Windows `build-test`
+  had been red since an earlier change for this reason (it was never a DSP determinism bug; the audio was
+  always bit-identical). Renamed the two tests to ASCII and added an **ASCII-only-test-name guard to the
+  gate** (`run-all-checks.sh`) so it can't recur.
+- **FX SAT is now obvious, and WIDTH-first reaches existing sessions.** Follow-up to the SAT feature: the
+  knob felt inert because most of its travel crossfaded dry/wet at low drive. It now reaches **full wet by
+  ~8 %** of the sweep, so the rest of the knob controls **drive** — a small turn already bites and the top
+  is heavy (drive range 8× → **20×**; measured THD ~0.38 at full vs ~0 clean). The tube even-harmonic colour
+  lives at moderate settings; cranked, it goes fuzzy (odd), as a real tube does. Separately, the
+  **WIDTH-first default** didn't reach anyone with a saved session (the persisted `fx_order` restored the
+  old order); a one-time, version-stamped migration now moves a legacy session that carried the *old
+  default* `[0,1,2,3]` to width-first, while leaving any custom order — or a deliberate new save — alone.
 - **MIDI auto-detect at startup restored.** A controller present at launch played only after an
-  unplug/replug: it was enabled before our routing callback was attached (JUCE wires the callback
-  at device-open time). The app now reopens already-enabled inputs after attaching the callback.
-- **INPUTS: "Live" and "Part 1" are now separate routing choices.** A surface's routing offered
-  *P1 (Live)*, P2, P3, P4 — but "P1" secretly meant **follow the focused part**, so you could
-  never *pin* a surface to Part 1 (it always chased whatever part was in focus). Each surface now
-  chooses **Live** (follows the edit/play focus — the default) **or** a fixed **Part 1–4** that
-  plays that part regardless of focus, exactly like Parts 2–4 already did. Implemented as a
-  `kLivePart` (-1) sentinel distinct from part index 0; the routed-event FIFO carries a *signed*
-  part so the sentinel survives (it was previously stored unsigned and any negative part was
-  silently dropped). MULTI files are version-stamped: a legacy layout that saved "P1 (Live)"
-  (part 0) still loads as **Live**, while newly-saved *Part 1* pins correctly. Behavioural test:
-  a Live surface follows the focus; a Part-1-pinned surface sounds on part 0 even with focus
-  elsewhere.
-- **Launchkey (any MIDI input) going dead after a hot-plug reconnect.** A controller worked at
-  startup but delivered nothing after a disconnect→reconnect (no notes, nothing in the F12
-  monitor) until an app restart. On reconnect JUCE reopened the device with its "enabled" flag
-  still set, so the all-device MIDI callback was never reattached — enabled yet silent. The
-  hot-plug watcher now forces a clean disable→enable on reconnect and re-asserts the all-device
-  callback, so a reconnected device delivers again. (Hardware-confirmed.)
-- **808 kick "double-hit pop" (two kicks in a row).** Re-striking a percussive sound while its
-  tail still sounded re-attacked the voice **in place**, which clicked: the amp re-attack corner
-  **and** the mod-envelope pitch restart (Kick 808 sweeps pitch **+22 st**) both landed as slope
-  discontinuities against the live tail — the worst inter-sample step of the whole render, ~2.6×
-  the kick's own onset. A percussive voice (amp env with no sustain) now **re-strikes from silence**
-  instead: the old tail gets a quick fade and the new hit starts on a fresh voice (phase 0,
-  envelopes from 0), so both corners vanish and the brief overlap is smooth. Sustained sounds are
-  unchanged (they still retrigger in place, which is click-free for them). Regression-tested in the
-  DSP suite (the re-struck step must stay within the onset's own ceiling).
-- **A matched controller profile is now authoritative.** Plugging in a Launchkey re-asserts
-  its 8 pots (CC 21–28) onto the 8 macros on connect, overriding any stale/learned binding an
-  old session left on those CCs — so the pots always drive the macros with no manual step. The
-  match is broadened to any "Launchkey" (Mini/MK3/25/…); learn still wins live until the next
-  hot-plug. (Reset MIDI + macros remains as a manual factory-restore.)
-- **Standalone launches full-screen** by default (the recommended live mode — no OS title bar
-  for a touch drag to catch); the maximise button still toggles back to a window.
-- **Reset MIDI + macros, and touch-friendly macro knobs.** Added a **Reset MIDI + macros**
-  button (INPUTS dialog) that restores BOTH the controller map (CC 21–28 → the 8 macros,
-  clearing any learned/stale binding) AND the macro→target assignments (M1 cutoff … M8
-  focused-part level) — recovers the Launchkey pots and the macro destinations when a past
-  session had them pointing elsewhere. The top-bar macro knobs now also accept **horizontal**
-  drag (not just vertical), so on a windowed touch screen you can adjust them sideways instead
-  of dragging up into the OS title bar (which would grab the drag and move the window).
-- **Per-step velocity now audibly shapes the note.** The seq/arp emit was clamping velocity
-  to `min(1.0, …)`, so a step at 100 % already emitted the maximum and the whole 100–200 %
-  "accent" range was inert. Velocity is now a real `0.1–2.0` scalar (100 % unchanged; > 100 %
-  boosts, < 100 % ghosts). It reaches the voice and drives BOTH the VCA (`vel→amp`) and the
-  filter (`vel→cutoff`) — louder *and* brighter on a harder step — verified end-to-end. The
-  output safety clipper still guarantees the bus never exceeds ±1.0 on an over-unity accent.
-  (Brightness response is per-preset via `vel_to_cutoff`; amplitude response is on by default.)
-- Investigated a reported width/EQ "does nothing": both work in the real processor topology
-  (added real-topology tests); width was a mono no-op (now fixed above), the master EQ works.
-- Investigated a reported 808 kick "HF click/pop": the kick is **engine-clean** (measured far
-  below the click standard, single hit and rapid retrigger; block-size-independent) — locked
-  in by a regression. Remaining transient character is preset voicing.
-
-## [1.0.0] — 2026-07-13
-
-First public release: a JUCE 8 / C++17 virtual-analog polysynth (VST3 + Standalone,
-Linux-first) built for a 2015 dual-core ThinkPad live target. Every change shipped
-test-first behind a full gate (`run-all-checks.sh` + `--sanitize` + bench).
+  unplug/replug: it was enabled before our routing callback was attached (JUCE wires the callback at
+  device-open time). The app now reopens already-enabled inputs after attaching the callback.
+- **INPUTS: "Live" and "Part 1" are now separate routing choices.** A surface's routing offered *P1 (Live)*,
+  P2, P3, P4 — but "P1" secretly meant **follow the focused part**, so you could never *pin* a surface to
+  Part 1 (it always chased whatever part was in focus). Each surface now chooses **Live** (follows the
+  edit/play focus — the default) **or** a fixed **Part 1–4** that plays that part regardless of focus,
+  exactly like Parts 2–4 already did. Implemented as a `kLivePart` (-1) sentinel distinct from part index 0;
+  the routed-event FIFO carries a *signed* part so the sentinel survives (it was previously stored unsigned
+  and any negative part was silently dropped). MULTI files are version-stamped: a legacy layout that saved
+  "P1 (Live)" (part 0) still loads as **Live**, while newly-saved *Part 1* pins correctly. Behavioural test:
+  a Live surface follows the focus; a Part-1-pinned surface sounds on part 0 even with focus elsewhere.
+- **Launchkey (any MIDI input) going dead after a hot-plug reconnect.** A controller worked at startup but
+  delivered nothing after a disconnect→reconnect (no notes, nothing in the F12 monitor) until an app
+  restart. On reconnect JUCE reopened the device with its "enabled" flag still set, so the all-device MIDI
+  callback was never reattached — enabled yet silent. The hot-plug watcher now forces a clean
+  disable→enable on reconnect and re-asserts the all-device callback, so a reconnected device delivers
+  again. (Hardware-confirmed.)
+- **808 kick "double-hit pop" (two kicks in a row).** Re-striking a percussive sound while its tail still
+  sounded re-attacked the voice **in place**, which clicked: the amp re-attack corner **and** the
+  mod-envelope pitch restart (Kick 808 sweeps pitch **+22 st**) both landed as slope discontinuities against
+  the live tail — the worst inter-sample step of the whole render, ~2.6× the kick's own onset. A percussive
+  voice (amp env with no sustain) now **re-strikes from silence** instead: the old tail gets a quick fade
+  and the new hit starts on a fresh voice (phase 0, envelopes from 0), so both corners vanish and the brief
+  overlap is smooth. Sustained sounds are unchanged (they still retrigger in place, which is click-free for
+  them). Regression-tested in the DSP suite (the re-struck step must stay within the onset's own ceiling).
+- **A matched controller profile is now authoritative.** Plugging in a Launchkey re-asserts its 8 pots (CC
+  21–28) onto the 8 macros on connect, overriding any stale/learned binding an old session left on those CCs
+  — so the pots always drive the macros with no manual step. The match is broadened to any "Launchkey"
+  (Mini/MK3/25/…); learn still wins live until the next hot-plug. (Reset MIDI + macros remains as a manual
+  factory-restore.)
+- **Standalone launches full-screen** by default (the recommended live mode — no OS title bar for a touch
+  drag to catch); the maximise button still toggles back to a window.
+- **Reset MIDI + macros, and touch-friendly macro knobs.** Added a **Reset MIDI + macros** button (INPUTS
+  dialog) that restores BOTH the controller map (CC 21–28 → the 8 macros, clearing any learned/stale
+  binding) AND the macro→target assignments (M1 cutoff … M8 focused-part level) — recovers the Launchkey
+  pots and the macro destinations when a past session had them pointing elsewhere. The top-bar macro knobs
+  now also accept **horizontal** drag (not just vertical), so on a windowed touch screen you can adjust them
+  sideways instead of dragging up into the OS title bar (which would grab the drag and move the window).
+- **Per-step velocity now audibly shapes the note.** The seq/arp emit was clamping velocity to `min(1.0,
+  …)`, so a step at 100 % already emitted the maximum and the whole 100–200 % "accent" range was inert.
+  Velocity is now a real `0.1–2.0` scalar (100 % unchanged; > 100 % boosts, < 100 % ghosts). It reaches the
+  voice and drives BOTH the VCA (`vel→amp`) and the filter (`vel→cutoff`) — louder *and* brighter on a
+  harder step — verified end-to-end. The output safety clipper still guarantees the bus never exceeds ±1.0
+  on an over-unity accent. (Brightness response is per-preset via `vel_to_cutoff`; amplitude response is on
+  by default.)
+- Investigated a reported width/EQ "does nothing": both work in the real processor topology (added
+  real-topology tests); width was a mono no-op (now fixed above), the master EQ works.
+- Investigated a reported 808 kick "HF click/pop": the kick is **engine-clean** (measured far below the
+  click standard, single hit and rapid retrigger; block-size-independent) — locked in by a regression.
+  Remaining transient character is preset voicing.
 
 ### Synth engine
 - Three PolyBLEP oscillators (saw / square+PWM / triangle / sine), 4× oversampled with a
@@ -675,14 +615,14 @@ test-first behind a full gate (`run-all-checks.sh` + `--sanitize` + bench).
 ### UI / UX
 - Hardware-style custom editor: left part rail (P1–P4 + kit-pad seam), signal-flow centre,
   right oscilloscope + FFT (RT-safe SPSC tap), slim top bar, chord/rhythm/looper bottom
-  zones, `?` help overlay, fullscreen (kiosk) mode. Touch-reliable (Surface-confirmed);
-  nothing on the main panel steals keyboard focus.
+  zones, `?` help overlay, fullscreen (kiosk) mode. Touch-reliable; nothing on the main panel
+  steals keyboard focus.
 - **Default startup scene**: P1 lead · P2 spare · P3 bass · P4 808 kit (the sequencer's
   target) — playable and audibly distinct out of the box.
 - Edit-focus: tapping a part swaps the whole panel to its sound with per-part persistence,
   MULTI edit-capture, and revert. Double-tap numeric entry; LFO→knob modulation animation.
-- Factory preset library (16 patches across categories) + Init; **loading a patch is
-  sound-only** — it never disturbs the sequencer, looper, tempo, macros, mixer, or other parts.
+- Factory preset library + Init; **loading a patch is sound-only** — it never disturbs the
+  sequencer, looper, tempo, macros, mixer, or other parts.
 
 ### Persistence & recall
 - APVTS state round-trip (incl. persisted MIDI-learn maps); a preset persists SOUND only.
@@ -701,14 +641,13 @@ test-first behind a full gate (`run-all-checks.sh` + `--sanitize` + bench).
   a snapshot), audio thread free of allocation/locks/IO.
 - Catch2 test suite (DSP + plugin-layer + RT-alloc guards + golden render + click-torture
   noise-cleanliness), pluginval strictness 8, ASan/LSan/UBSan + MIDI-storm soak, and a
-  `dsp_bench` reporting block time against the ThinkPad budget. CI green on Linux + Windows.
+  `dsp_bench` reporting block time against the target budget. CI green on Linux + Windows.
 - Licensed under **AGPLv3**.
 
-### Known limitations / deferred to v2
-- On-ThinkPad round-trip latency + voice-cap validation under PipeWire is the final
-  pre-deploy check (`tools/thinkpad-validate/`); the dev-box ×3.5 derate flags the 24-voice
-  pathological worst case, so the measured ThinkPad number is the arbiter for the voice cap.
-- Not in v1 (planned for v2): mod matrix, MIDI-clock sync, unison/detune stacking, oscillator
-  hard-sync / cross-mod, sub-oscillator, filter drive, and a preset browser.
+### Known limitations
+- On-target round-trip latency + voice-cap validation under PipeWire is the final pre-deploy
+  check (`tools/target-validate/`); the dev-box ×3.5 derate flags the 24-voice pathological
+  worst case, so the measured target number is the arbiter for the voice cap.
+- Host time-signature other than 4/4 is treated as 4/4 for the bar math.
 
 [1.0.0]: https://github.com/Sanglock81/synth/releases/tag/v1.0.0

@@ -1,7 +1,7 @@
-# MIDI / voice / looper event trace (G1.2)
+# MIDI / voice / looper event trace
 
-A debugging lens for "notes pile up / get stuck" bugs (looper accumulation #138, poly
-voice-steal drop #141): it records, in time order, every note reaching the engine, every
+A debugging lens for "notes pile up / get stuck" bugs (looper accumulation, poly
+voice-steal drops): it records, in time order, every note reaching the engine, every
 voice **alloc / steal / stop**, and every looper **record / playback / wrap** — so the exact
 event that starts an extra voice is *named*, not guessed.
 
@@ -43,9 +43,9 @@ The trailing `# end (dropped=N)` line reports events lost to ring overflow (0 in
 
 ## What to look for
 
-- **Looper accumulation (#138):** on the third pass, a note whose `LEMIT … on=1` has **no
+- **Looper accumulation:** on the third pass, a note whose `LEMIT … on=1` has **no
   matching `on=0`** within the cycle, or a lane emitting **more `LEMIT on=1` than it recorded
   `LREC on=1`** — that names an unpaired/duplicated trigger.
-- **Poly steal drop (#141):** a `STEAL` whose `victimNote` is one of the held chord tones while
+- **Poly steal drop:** a `STEAL` whose `victimNote` is one of the held chord tones while
   the pool is full of leaked voices — cross-reference `NLIV`/`NGEN` counts vs. the F12 LIVE/GEN
   breakdown to see whether stuck voices filled the pool.

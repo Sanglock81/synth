@@ -21,4 +21,4 @@ trademark of Steinberg Media Technologies GmbH.
 ## Source availability (AGPL)
 
 The complete corresponding source for this release is the public repository
-<https://github.com/Sanglock81/farmer-synth>.
+<https://github.com/Sanglock81/synth>.

@@ -4,7 +4,7 @@
 
 // ============================================================================
 // MIDI device profiles: a small JSON schema mapping a controller to sensible
-// default CC->parameter bindings, so a known device (Launchkey Mini, Korg B2)
+// default CC->parameter bindings, so a known device (Launchkey Mini, a MIDI keyboard)
 // works the moment it's plugged in — no manual MIDI-learn required.
 //
 //   { "name": "...", "match": ["substr", ...], "pitchBendRange": 2,

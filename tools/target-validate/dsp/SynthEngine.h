@@ -94,7 +94,7 @@ public:
     }
 
     // Max simultaneously-sounding voices (voice pool is always maxVoices; this
-    // caps how many are allocated). The live ThinkPad profile caps this to keep
+    // caps how many are allocated). The live minimum-spec target profile caps this to keep
     // worst-case CPU under budget; studio can use the full pool.
     void setMaxVoices (int n)
     {
@@ -109,7 +109,7 @@ public:
     }
 
     // Oscillator anti-aliasing quality. Re-prepares the voices if already
-    // prepared. Efficient (default) for the live ThinkPad; HQ for studio use.
+    // prepared. Efficient (default) for the live minimum-spec target; HQ for studio use.
     void setOscQuality (PolyBlepOscillator::Quality q)
     {
         oscQuality = q;
@@ -279,7 +279,7 @@ public:
     void setTransport (double beats, double spb) { transportBeats_ = beats; samplesPerBeat_ = spb > 0.0 ? spb : 1.0; }
 
     // Sustain pedal (CC64). While down, note-offs are deferred; on release the
-    // held notes are let go. The Korg B2's damper is the primary expression.
+    // held notes are let go. A MIDI keyboard's damper is the primary expression.
     void setSustainPedal (bool on)
     {
         if (sustainPedal && ! on)                        // pedal released

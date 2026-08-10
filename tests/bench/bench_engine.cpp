@@ -1,8 +1,8 @@
 // ============================================================================
 // DSP performance benchmark (JUCE-free). Measures worst-case 128-sample block
 // render time at 48 kHz for the full engine, across oscillator quality modes,
-// so we can keep VA Synth glitch-free on modest hardware (2-core Broadwell
-// ThinkPad X1 Carbon 3rd gen, the live machine).
+// so we can keep VA Synth glitch-free on modest hardware (2015-class dual-core,
+// the live machine).
 //
 // Not a CTest gate (wall time is machine-dependent). Run before/after DSP
 // changes to watch the budget:  ./build/tests/dsp_bench
@@ -24,9 +24,9 @@ namespace
     constexpr double kSR       = 48000.0;
     constexpr int    kBlock    = 128;
     constexpr double kBudgetMs = kBlock / kSR * 1000.0;     // 2.667 ms
-    // Conservative derating: this dev machine (Ryzen 7) is ~3.5x faster single-
-    // thread than the 2015 Broadwell ThinkPad. Scale measured times up by this.
-    constexpr double kThinkpadDerate = 3.5;
+    // Conservative derating: this dev machine is ~3.5x faster single-
+    // thread than the 2015-class dual-core target. Scale measured times up by this.
+    constexpr double kTargetDerate = 3.5;
 
     struct Stat { double medMs, p99Ms, maxMs; };
 
@@ -300,10 +300,10 @@ namespace
 
     void row (const std::string& label, Stat s)
     {
-        const double tpP99 = s.p99Ms * kThinkpadDerate;      // robust worst-case, derated
+        const double tpP99 = s.p99Ms * kTargetDerate;      // robust worst-case, derated
         const double tpPct = tpP99   / kBudgetMs * 100.0;
         std::printf ("  %-22s  p50 %6.3f  p99 %6.3f  max %6.3f ms  | "
-                     "ThinkPad~ p99 %6.3f ms (%5.1f%% budget)  %s\n",
+                     "target~ p99 %6.3f ms (%5.1f%% budget)  %s\n",
                      label.c_str(), s.medMs, s.p99Ms, s.maxMs, tpP99, tpPct,
                      tpPct < 30.0 ? "OK<30%" : (tpPct < 100.0 ? "runs" : "OVERRUN"));
     }
@@ -314,7 +314,7 @@ int main()
     std::printf ("VA Synth block benchmark @ 48 kHz, 128-sample block "
                  "(budget %.3f ms)\n", kBudgetMs);
     std::printf ("Worst-case = saw+saw, per-sample filter-env cutoff mod. "
-                 "ThinkPad~ = measured x%.1f.\n\n", kThinkpadDerate);
+                 "target~ = measured x%.1f.\n\n", kTargetDerate);
 
     struct Qc { const char* name; PolyBlepOscillator::Quality q; };
     const Qc modes[] {
@@ -365,7 +365,7 @@ int main()
 
     // 2C: filter DRIVE puts every voice on the 2x oversampled path (worst case for the driven
     // filter). Compare clean vs driven to see the oversampling cost; the drive=0 fast path means
-    // ordinary patches pay nothing. This is the number the ThinkPad validation (#100) watches.
+    // ordinary patches pay nothing. This is the number the minimum-spec target validation (#100) watches.
     std::printf ("\n2C driven filter (2x oversampled path, 3 osc):\n");
     row ("16v clean (drive 0)",  measure (PolyBlepOscillator::Quality::Efficient, 16, 4000, 3, 0.0f));
     row ("16v driven (drive 1)", measure (PolyBlepOscillator::Quality::Efficient, 16, 4000, 3, 1.0f));
@@ -423,7 +423,7 @@ int main()
     std::printf ("\nRealistic live set (lead + unison pad + FM/driven bass + sequenced kit, all FX + LFOs):\n");
     row ("live set (4 parts)", measureLiveSet (4000));
 
-    std::printf ("\nBudget = 2.667 ms/block. Target: worst-case ThinkPad < 30%% "
+    std::printf ("\nBudget = 2.667 ms/block. Target: worst-case target < 30%% "
                  "leaves headroom for GUI, other tracks, and OS jitter.\n");
     return 0;
 }

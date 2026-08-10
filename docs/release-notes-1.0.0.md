@@ -1,5 +1,4 @@
-<!-- DRAFT — GitHub release body for v1.0.0. Edit to match the CHANGELOG reconciliation
-     (docs/RELEASING.md Step 2) before publishing. Not auto-generated; keep it honest. -->
+<!-- GitHub release body for v1.0.0. Kept in sync with the CHANGELOG. -->
 
 # synth 1.0.0
 
@@ -24,7 +23,7 @@ performance looper, scenes, and a full modulation matrix, in a touch-reliable ha
 - **Arpeggiator + step sequencer + a 4-lane looper** (MIDI or audio, up to 32 bars, WAV export) and
   **scenes** that swap drum patterns and loop clips on a bar boundary.
 - Host-tempo follow, **MIDI clock out** (synth as master), and a one-folder **session BOUNCE** (per-part
-  WAV stems + MIDI + manifest) that drops straight into Ableton or Reaper.
+  WAV stems + MIDI + manifest) that drops straight into your DAW.
 
 **Sound & control**
 - **59 factory patches** across every category, **loudness-matched** via a per-patch TRIM control, in

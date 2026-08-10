@@ -1,7 +1,7 @@
 // ============================================================================
 // Pitch bend, mod-wheel vibrato, and sustain pedal — driven with synthetic MIDI
 // through processBlock. These arrive from the Launchkey touch strips (bend/mod)
-// and the Korg B2 damper (CC64), and must work regardless of source device.
+// and a MIDI keyboard damper (CC64), and must work regardless of source device.
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>

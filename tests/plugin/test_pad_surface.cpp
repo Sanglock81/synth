@@ -36,7 +36,7 @@ TEST_CASE ("only a pad-capable device exposes a '<device> Pads' surface", "[plug
 {
     VASynthProcessor p;
     REQUIRE (p.padSubSurfaceName (kLK) == kLKPads);              // Launchkey profile declares pads
-    REQUIRE (p.padSubSurfaceName ("Korg B2").isEmpty());        // keyboard, no pads
+    REQUIRE (p.padSubSurfaceName ("MIDI Keyboard").isEmpty());        // keyboard, no pads
     REQUIRE (p.padSubSurfaceName ("Generic USB MIDI").isEmpty());
 }
 
@@ -79,9 +79,9 @@ TEST_CASE ("pad notes split to the pads surface; keys stay on the device", "[plu
 TEST_CASE ("a non-pad device is never split (routeDeviceMessage == routeSurfaceMessage)", "[plugin][pads][routing]")
 {
     VASynthProcessor p; p.prepareToPlay (kSR, 256);
-    p.setSurfaceRouting ("Korg B2", 3);
+    p.setSurfaceRouting ("MIDI Keyboard", 3);
     const auto h0 = p.partActivity (3);
-    p.routeDeviceMessage ("Korg B2", juce::MidiMessage::noteOn (10, 40, 0.9f));  // ch10 but device has no pads
+    p.routeDeviceMessage ("MIDI Keyboard", juce::MidiMessage::noteOn (10, 40, 0.9f));  // ch10 but device has no pads
     juce::AudioBuffer<float> b (2, 256); b.clear(); juce::MidiBuffer m; p.processBlock (b, m);
     REQUIRE (p.partActivity (3) > h0);               // whole device (incl ch10) -> its one part
 }

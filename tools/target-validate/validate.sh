@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # ============================================================================
-# ThinkPad validation — run ON the ThinkPad X1 Carbon (3rd gen, Linux).
+# Minimum-spec target validation — run ON the target (2015-class dual-core, Linux).
 # Self-contained: needs only a C++17 compiler (g++/clang++). No JUCE, no cmake.
 #
 #   ./validate.sh                 # FULL gate: build, bench, 10-min soak @128 & @256, PipeWire
 #   ./validate.sh --quick         # QUICK: build + bench only (no soak) — for iteration, NOT the gate
 #   SOAK_SECS=60 ./validate.sh    # shorter soak (smoke test)
 #
-# Writes ONE report next to this script: thinkpad-report.txt. Paste it back to the
+# Writes ONE report next to this script: target-report.txt. Paste it back to the
 # dev box — its MEASURED numbers replace the assumed x3.5 derate and settle every
 # provisional CPU decision (see the "report-processing contract" in README.md).
 # ============================================================================
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPORT="$HERE/thinkpad-report.txt"
+REPORT="$HERE/target-report.txt"
 SOAK_SECS="${SOAK_SECS:-600}"
 CXX="${CXX:-g++}"
 CXXFLAGS="-O3 -march=native -std=c++17"
@@ -60,7 +60,7 @@ skip()    { echo "SKIPPED: $*"; }        # honest degrade — a scenario that ca
 GOV_OK=1
 
 run_all() {
-  echo "synth ThinkPad validation report"
+  echo "synth minimum-spec target validation report"
   echo "generated: $(date -u +%Y-%m-%dT%H:%M:%SZ) (UTC)"
   if [ "$QUICK" -eq 1 ]; then
     echo "MODE: QUICK  (build + bench only, NO soak) -- this is NOT the ship gate, do not treat it as one."
@@ -141,10 +141,10 @@ run_all() {
 
   section "DONE"
   [ "$QUICK" -eq 1 ] && echo "(QUICK run -- soak was skipped; this is NOT the gate.)"
-  echo "DONE -- paste thinkpad-report.txt back"
+  echo "DONE -- paste target-report.txt back"
 }
 
-echo "== synth ThinkPad validation =="
+echo "== synth minimum-spec target validation =="
 set_performance && GOV_OK=1 || GOV_OK=0
 run_all 2>&1 | tee "$REPORT"
 # governor restored by the EXIT trap

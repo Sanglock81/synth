@@ -24,7 +24,7 @@
 //
 // DRIVE + SELF-OSC (Musicality Pass, Tier 2). The celebrated analog filters get
 // their sound from saturation INSIDE the loop, not a waveshaper in front
-// (Huovilainen; the Korg 35's diode clipper bounds the feedback). So `drive`
+// (Huovilainen; a diode soft-clipper bounds the feedback). So `drive`
 // (0..1) adds an IN-LOOP nonlinearity: the driven input is soft-clipped (tanh)
 // and the bandpass integrator state — the signal that feeds resonance back — is
 // bounded by tanh too. That colours the passband and tames screaming resonance.
@@ -33,7 +33,7 @@
 // noise floor so it blooms even from silence — see setCutoff.
 //
 // drive == 0 takes a fast path that is LITERALLY the old linear code — bit-exact,
-// so goldens and the ThinkPad budget are unchanged; you pay for the tanh evals
+// so goldens and the minimum-spec target budget are unchanged; you pay for the tanh evals
 // only when the filter is actually driven. tanh cost dominates the nonlinear
 // path, so it uses a fast rational approximation (tanhFast, tested to a tight
 // tolerance against std::tanh).

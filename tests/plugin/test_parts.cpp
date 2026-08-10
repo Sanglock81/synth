@@ -145,7 +145,7 @@ TEST_CASE ("ordinary state persists SOUND but RESETS routing/parts (lifecycle ru
     setP (src, ParamID::filterCutoff, 0.33f);
     const float wantCutoff = src.apvts.getRawParameterValue (ParamID::filterCutoff)->load();
     src.setPartPreset (1, "Kick 808");
-    src.setSurfaceRouting ("Korg B2", 1);
+    src.setSurfaceRouting ("MIDI Keyboard", 1);
     src.setSurfaceRouting ("Launchkey Mini", 2);
     juce::MemoryBlock blob; src.getStateInformation (blob);
 
@@ -158,7 +158,7 @@ TEST_CASE ("ordinary state persists SOUND but RESETS routing/parts (lifecycle ru
 
     // ROUTING resets: every surface back to LIVE. Locked parts reset to the
     // DEFAULT SCENE (not src's custom part-1 sound), proving the layout didn't persist.
-    REQUIRE (dst.getSurfaceRouting ("Korg B2") == VASynthProcessor::kLivePart);
+    REQUIRE (dst.getSurfaceRouting ("MIDI Keyboard") == VASynthProcessor::kLivePart);
     REQUIRE (dst.getSurfaceRouting ("Launchkey Mini") == VASynthProcessor::kLivePart);
     REQUIRE (dst.getPartPreset (1).isEmpty());        // P2 (part 1) is a spare again, not src's "Kick 808"
     REQUIRE (dst.getPartPreset (3) == "808");  // the default scene's kit is on P4
@@ -248,11 +248,11 @@ TEST_CASE ("zones: a key-range split routes each range to its part", "[plugin][p
     p.setPartPreset (1, "Kick 808");
 
     // Bottom octave -> Part 1 (drums); the rest -> LIVE.
-    p.setSurfaceZones ("Korg B2", { { 0, 47, 1, 0 }, { 48, 127, 0, 0 } });
-    REQUIRE (p.surfaceHasSplit ("Korg B2"));
+    p.setSurfaceZones ("MIDI Keyboard", { { 0, 47, 1, 0 }, { 48, 127, 0, 0 } });
+    REQUIRE (p.surfaceHasSplit ("MIDI Keyboard"));
 
-    p.routeSurfaceMessage ("Korg B2", juce::MidiMessage::noteOn (1, 36, 1.0f));   // low -> kick
-    p.routeSurfaceMessage ("Korg B2", juce::MidiMessage::noteOn (1, 72, 0.8f));   // high -> live sine
+    p.routeSurfaceMessage ("MIDI Keyboard", juce::MidiMessage::noteOn (1, 36, 1.0f));   // low -> kick
+    p.routeSurfaceMessage ("MIDI Keyboard", juce::MidiMessage::noteOn (1, 72, 0.8f));   // high -> live sine
     auto out = capture (p, 12);
     REQUIRE (tu::allFinite (out));
     REQUIRE (p.partActivity (1) > 0);                      // kick part hit
@@ -513,18 +513,18 @@ TEST_CASE ("MULTI captures + reapplies the layout (parts + surface zones)", "[pl
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor src; src.prepareToPlay (48000.0, 256);
     src.setPartPreset (1, "Kick 808");
-    src.setSurfaceZones ("Korg B2", { { 0, 47, 1, 0 }, { 48, 127, 0, +12 } });
+    src.setSurfaceZones ("MIDI Keyboard", { { 0, 47, 1, 0 }, { 48, 127, 0, +12 } });
     src.setSurfaceRouting ("Launchkey", 0);
     auto multi = src.captureMultiState();
 
     // A fresh instance recalls it ONLY via applyMultiState.
     VASynthProcessor dst; dst.prepareToPlay (48000.0, 256);
-    REQUIRE_FALSE (dst.surfaceHasSplit ("Korg B2"));         // nothing yet
+    REQUIRE_FALSE (dst.surfaceHasSplit ("MIDI Keyboard"));         // nothing yet
     dst.applyMultiState (multi);
 
     REQUIRE (dst.getPartPreset (1) == "Kick 808");
-    REQUIRE (dst.surfaceHasSplit ("Korg B2"));
-    auto z = dst.getSurfaceZones ("Korg B2");
+    REQUIRE (dst.surfaceHasSplit ("MIDI Keyboard"));
+    auto z = dst.getSurfaceZones ("MIDI Keyboard");
     REQUIRE (z.size() == 2);
     REQUIRE (z[0].part == 1);
     REQUIRE (z[1].transpose == 12);

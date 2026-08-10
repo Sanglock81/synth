@@ -3,7 +3,7 @@
 **synth** ships in two forms from one build:
 
 - a **Standalone** application (its own window + audio/MIDI device handling), and
-- a **VST3 plugin** you load inside a DAW (Ableton, Reaper, Bitwig, …).
+- a **VST3 plugin** you load inside a DAW (any VST3 host).
 
 There are no prebuilt binaries yet — you build from source (it's one command once the
 tools are in place) and the install scripts place the results where your system and DAW
@@ -112,11 +112,11 @@ log — lives in the data folder above and is **never touched** by install/unins
 ## First run
 
 - **Standalone (Linux):** it opens the PipeWire/default output and makes sound immediately;
-  it follows your system default sink, so setting the Focusrite/Scarlett as the default
+  it follows your system default sink, so setting your audio interface as the default
   routes it there. Pick a specific device in **Options → Audio/MIDI Settings** (buffer
   128–256 @ 48 kHz to start). MIDI controllers auto-connect on plug-in.
-- **Standalone (Windows):** uses WASAPI by default. For lowest latency into a Focusrite,
-  load the **VST3 in a DAW on the ASIO driver** rather than the standalone.
+- **Standalone (Windows):** uses WASAPI by default. For lowest latency into your audio
+  interface, load the **VST3 in a DAW on the ASIO driver** rather than the standalone.
 - **VST3:** rescan/refresh plugins in your DAW; it appears as **synth** (instrument).
 
 The window shows a **version + git-hash banner** — handy for confirming you're running the

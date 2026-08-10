@@ -45,7 +45,7 @@ Patches can also carry **modulation routes** (see "Modulation routes in a patch"
 sound's movement — an LFO morphing the wavetable vowel, an envelope opening a filter beyond its
 static amount — travels with the preset. Showcases: *Vowel Talk Lead*, *Aurora Pad*, *Foundry Lead*, *Ghost Sine*, *Dream Chime* (LFO morphs the vowel table), *Pendulum* (a tempo-synced S&H LFO steps the cutoff — a clock-locked random melody), and *Feedback Bloom* (LFOs drift a self-oscillating filter).
 
-### Drum recipes (7A)
+### Drum recipes
 
 The drums use the **Mod Env → Pitch** route (a filter/mod-envelope that also drives
 pitch): an instant-attack env sweeps the pitch down over the hit, then the amp
@@ -61,7 +61,7 @@ the note). Recipes:
 | Hat Open | same, ~400 ms |
 | Tom | sine, +7 st / ~80 ms drop, ~260 ms decay |
 
-Full simultaneous **kits** arrive with 7C parts (pads on a locked drum part).
+Full simultaneous **kits** are locked drum parts (pads on a locked drum part).
 
 Factory presets are **read-only** — embedded in the binary, never overwritten.
 Tweak one and hit **Save** to keep your version as a user preset (a copy); the

@@ -75,20 +75,17 @@ TEST_CASE ("a matched device profile is authoritative: it forces its map over a 
     REQUIRE (p.getMidiLearn().getCCForParam (ParamID::filterCutoff) == -1);   // no longer on the pot
 }
 
-TEST_CASE ("a no-CC-map profile still passes notes through (Korg B2)", "[plugin][6c][hotplug][bug2]")
+TEST_CASE ("a controller with no factory profile still passes notes through", "[plugin][hotplug]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     VASynthProcessor p;
     p.prepareToPlay (kSR, kBlock);
     p.loadInitPreset();   // dry sine on the live part: this checks note flow + release, not the default lead's delay tail
 
-    // The Korg B2 factory profile is notes + damper only — its CC map is EMPTY.
-    // Applying such a profile must never interfere with note handling (notes flow
-    // through processBlock, not the profile). This locks in that an empty-map
-    // profile does not filter/swallow note-on/off (Bug 2 hypothesis: the profile
-    // blocked notes). The separate root cause — the standalone not enabling a
-    // device present at launch — is verified by hand (see the wrap-up checklist).
-    p.applyDeviceProfile ("Korg B2");         // empty CC map: applies nothing, harmless
+    // The lifecycle contract: a generic MIDI controller with NO matching factory profile must play
+    // exactly like one with a profile — notes flow through processBlock, not the profile. Applying a
+    // name with no factory entry applies nothing and must never filter/swallow note-on/off.
+    p.applyDeviceProfile ("Generic MIDI Keyboard");   // no factory profile: applies nothing, harmless
 
     juce::MidiBuffer on; on.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0);
     blockRms (p, on);

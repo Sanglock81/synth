@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Assemble the self-contained ThinkPad validation bundle (run on the DEV box).
+# Assemble the self-contained minimum-spec target validation bundle (run on the DEV box).
 # Snapshots the JUCE-free DSP sources + the bench source into this folder so the
-# whole tools/thinkpad-validate/ directory can be copied to the ThinkPad and built
+# whole tools/target-validate/ directory can be copied to the target and built
 # there with nothing but g++. Re-run after any DSP/bench change (e.g. Sub-phase 2).
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

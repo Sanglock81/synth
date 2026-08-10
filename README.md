@@ -1,6 +1,6 @@
 # Synth — a free, open-source virtual analog synthesizer by Farmer
 
-[![build-test](https://github.com/Sanglock81/farmer-synth/actions/workflows/build-test.yml/badge.svg)](https://github.com/Sanglock81/farmer-synth/actions/workflows/build-test.yml)
+[![build-test](https://github.com/Sanglock81/synth/actions/workflows/build-test.yml/badge.svg)](https://github.com/Sanglock81/synth/actions/workflows/build-test.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 **Synth** is a multitimbral virtual-analog synthesizer: four independent parts (each its own
@@ -18,7 +18,7 @@ for **Linux and Windows**. C++17 / JUCE 8.
 ### Tier 1 — Download (no building)
 
 Grab the packaged build for your platform from the
-**[Releases page](https://github.com/Sanglock81/farmer-synth/releases)** and unzip it.
+**[Releases page](https://github.com/Sanglock81/synth/releases)** and unzip it.
 Packaged releases begin at **v1.0.0**; until then, download the latest CI build from
 **Actions → build-test → a green run → Artifacts** (`Synth-Linux` / `Synth-Windows`).
 
@@ -39,8 +39,8 @@ Packaged releases begin at **v1.0.0**; until then, download the latest CI build 
 
 **Linux — one command:**
 ```bash
-git clone https://github.com/Sanglock81/farmer-synth.git
-cd farmer-synth
+git clone https://github.com/Sanglock81/synth.git
+cd synth
 ./scripts/bootstrap-linux.sh        # installs deps, configures, builds Release
 ./tools/install-vst3.sh             # symlinks the VST3 into ~/.vst3 for your DAW
 ```
@@ -99,7 +99,7 @@ Issues and pull requests welcome. Build from source (Tier 2) and run the checks 
 ## License
 
 **GNU AGPL v3** — see [LICENSE](LICENSE). The **source for every release is this repository**
-(<https://github.com/Sanglock81/farmer-synth>); the AGPL's source-availability obligation is met
+(<https://github.com/Sanglock81/synth>); the AGPL's source-availability obligation is met
 by that public repo.
 
 Built with [JUCE](https://juce.com). **VST** is a trademark of Steinberg Media Technologies GmbH.

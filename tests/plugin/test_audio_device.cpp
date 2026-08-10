@@ -2,14 +2,14 @@
 // Audio device flexibility + fallback (Item A). What's testable headlessly:
 //   * ALSA/JACK device types are compiled in -> the standalone's Audio/MIDI
 //     Settings can offer device-type selection.
-//   * When a saved/preferred output device is absent (e.g. the Scarlett is
+//   * When a saved/preferred output device is absent (e.g. your audio interface is
 //     unplugged), AudioDeviceManager falls back to a working default rather than
 //     opening nothing (silent) — this mirrors the standalone's
 //     initialise(..., selectDefaultDeviceOnFailure = true, ...).
 //
 // Opening real hardware may not be possible in a headless CI sandbox; those
 // cases are reported (WARN) rather than failed. End-to-end verification (built-
-// in audio output, GUI type switching, real Scarlett-absent launch) needs hands.
+// in audio output, GUI type switching, real interface-absent launch) needs hands.
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -46,10 +46,10 @@ TEST_CASE ("device manager falls back to default when the saved device is absent
     juce::ScopedJuceInitialiser_GUI juceInit;
     juce::AudioDeviceManager dm;
 
-    // Saved state naming a device that isn't present (the Scarlett, unplugged).
+    // Saved state naming a device that isn't present (your audio interface, unplugged).
     const char* xmlText =
-        "<DEVICESETUP audioDeviceName=\"VA-Synth-Absent-Scarlett-XYZ\" "
-        "audioOutputDeviceName=\"VA-Synth-Absent-Scarlett-XYZ\" "
+        "<DEVICESETUP audioDeviceName=\"VA-Synth-Absent-Interface-XYZ\" "
+        "audioOutputDeviceName=\"VA-Synth-Absent-Interface-XYZ\" "
         "audioInputDeviceName=\"\" audioDeviceRate=\"48000\"/>";
     auto saved = juce::parseXML (xmlText);
 
@@ -60,12 +60,12 @@ TEST_CASE ("device manager falls back to default when the saved device is absent
     if (dev == nullptr)
     {
         WARN ("no openable audio output device in this environment ('" << err
-              << "') — fallback not exercisable headlessly; verify on the ThinkPad.");
+              << "') — fallback not exercisable headlessly; verify on the minimum-spec target.");
         SUCCEED();
         return;
     }
 
     INFO ("fell back to: " << dev->getName());
-    REQUIRE (dev->getName() != "VA-Synth-Absent-Scarlett-XYZ");   // did NOT open the absent device
+    REQUIRE (dev->getName() != "VA-Synth-Absent-Interface-XYZ");   // did NOT open the absent device
     REQUIRE (dev->getName().isNotEmpty());                        // opened *something* (not silent)
 }

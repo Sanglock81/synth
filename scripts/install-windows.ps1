@@ -93,4 +93,4 @@ try {
 Say "Done."
 Write-Host "  Standalone : $InstallDir\synth.exe  (or the 'synth' Start Menu entry)"
 Write-Host "  VST3       : $vst3Dst  (rescan plugins in your DAW)"
-Write-Host "  Tip        : for lowest latency into the Focusrite, load the VST3 in a DAW on the ASIO driver."
+Write-Host "  Tip        : for lowest latency into your audio interface, load the VST3 in a DAW on the ASIO driver."

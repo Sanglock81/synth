@@ -10,7 +10,7 @@
 //
 // Works identically standalone and as a plugin, because it keys on message
 // content, not device. (In standalone, JUCE merges all enabled MIDI inputs —
-// Korg B2 + Launchkey Mini both arrive here. In Ableton, the track's MIDI
+// a MIDI keyboard + Launchkey Mini both arrive here. In your DAW, the track's MIDI
 // routing decides what we see.)
 //
 // Launchkey Mini default knob CCs: 21-28. A sensible starter map is provided;

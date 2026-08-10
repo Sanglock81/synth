@@ -7,16 +7,16 @@
 
 namespace
 {
-    // A representative ThinkPad list: the friendly PipeWire endpoint, a couple of
+    // A representative minimum-spec target list: the friendly PipeWire endpoint, a couple of
     // real cards, and the usual pile of raw ALSA aliases/duplicates.
-    juce::StringArray thinkpadWall()
+    juce::StringArray targetWall()
     {
         return {
             "Default ALSA Output (currently PipeWire Media Server)",
             "pipewire",
             "pulse",
             "default",
-            "Scarlett 2i2 USB",
+            "USB Audio Interface 2i2",
             "HDA Intel PCH",
             "hw:0,0",
             "hw:1,0",
@@ -36,7 +36,7 @@ namespace
 TEST_CASE ("curation prefers the PipeWire/default endpoint as the default device", "[plugin][bug1][curation]")
 {
     using namespace AudioDeviceCuration;
-    const auto chosen = pickPreferredDeviceName (thinkpadWall());
+    const auto chosen = pickPreferredDeviceName (targetWall());
     INFO ("picked: " << chosen);
     REQUIRE (chosen.containsIgnoreCase ("Default ALSA Output"));   // the OS-default-following endpoint
 }
@@ -44,21 +44,21 @@ TEST_CASE ("curation prefers the PipeWire/default endpoint as the default device
 TEST_CASE ("curation falls back to a friendly card name when no endpoint exists", "[plugin][bug1][curation]")
 {
     using namespace AudioDeviceCuration;
-    juce::StringArray noEndpoint { "hw:0,0", "plughw:0,0", "Scarlett 2i2 USB", "front:CARD=PCH,DEV=0" };
+    juce::StringArray noEndpoint { "hw:0,0", "plughw:0,0", "USB Audio Interface 2i2", "front:CARD=PCH,DEV=0" };
     const auto chosen = pickPreferredDeviceName (noEndpoint);
-    REQUIRE (chosen == "Scarlett 2i2 USB");        // the one non-alias, friendly name
+    REQUIRE (chosen == "USB Audio Interface 2i2");        // the one non-alias, friendly name
 }
 
 TEST_CASE ("curated list drops raw ALSA aliases but keeps endpoints + card names", "[plugin][bug1][curation]")
 {
     using namespace AudioDeviceCuration;
-    const auto curated = curateDeviceList (thinkpadWall());
+    const auto curated = curateDeviceList (targetWall());
     INFO ("curated: " << curated.joinIntoString (" | "));
 
     // Kept: the friendly endpoints and the real card names.
     REQUIRE (curated.contains ("Default ALSA Output (currently PipeWire Media Server)"));
     REQUIRE (curated.contains ("pipewire"));
-    REQUIRE (curated.contains ("Scarlett 2i2 USB"));
+    REQUIRE (curated.contains ("USB Audio Interface 2i2"));
     REQUIRE (curated.contains ("HDA Intel PCH"));
 
     // Dropped: every raw alias / duplicate the user complained about.
@@ -69,14 +69,14 @@ TEST_CASE ("curated list drops raw ALSA aliases but keeps endpoints + card names
                                "sysdefault:CARD=PCH" })
         REQUIRE_FALSE (curated.contains (alias));
 
-    REQUIRE (curated.size() < thinkpadWall().size());     // genuinely shorter
+    REQUIRE (curated.size() < targetWall().size());     // genuinely shorter
 }
 
 TEST_CASE ("showAll escape hatch returns the full raw list unchanged", "[plugin][bug1][curation]")
 {
     using namespace AudioDeviceCuration;
-    const auto all = curateDeviceList (thinkpadWall(), /*showAll=*/true);
-    REQUIRE (all == thinkpadWall());
+    const auto all = curateDeviceList (targetWall(), /*showAll=*/true);
+    REQUIRE (all == targetWall());
 }
 
 TEST_CASE ("curation never hides everything (all-alias list survives)", "[plugin][bug1][curation]")

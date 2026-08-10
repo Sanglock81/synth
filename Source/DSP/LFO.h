@@ -13,7 +13,7 @@
 // and it keeps CPU essentially free.
 //
 // TODO v2: MIDI clock sync (rate as note divisions) — hooks into the
-// Ableton/MC8 rig for tempo-locked filter wobble.
+// DAW / footswitch rig for tempo-locked filter wobble.
 // ============================================================================
 
 class LFO

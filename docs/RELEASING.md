@@ -1,14 +1,14 @@
 # Releasing synth (tag-time runbook for v1.0.0)
 
 The tag is a **deliberate, human-triggered** cut. It fires **only on the maintainer's explicit
-call**, after the ThinkPad validation (#100) and the UAT (#115) are done and every **BLOCKER**
+call**, after the performance validation and the UAT are done and every **BLOCKER**
 defect is fixed + re-gated. This runbook makes the actual cut a clean, one-pass job.
 
 ## Pre-flight — all must be true
 - [ ] `git status` clean, on `master`, up to date with origin.
-- [ ] **#100 ThinkPad validation** complete and acceptable (latency + no xruns + voice cap settled).
-- [ ] **#115 UAT** signed off; all BLOCKER defects fixed, re-gated, and CI green on **both** platforms.
-- [ ] Known-issues (KNOWN-ISSUE from UAT + the pluginval teardown flake #103) captured in the CHANGELOG.
+- [ ] **Performance validation** complete and acceptable (latency + no xruns + voice cap settled).
+- [ ] **UAT** signed off; all BLOCKER defects fixed, re-gated, and CI green on **both** platforms.
+- [ ] Known-issues (KNOWN-ISSUE from UAT + the pluginval teardown flake) captured in the CHANGELOG.
 - [ ] `./run-all-checks.sh` **and** `./run-all-checks.sh --sanitize` green locally on the commit you'll tag.
 
 ## Step 1 — confirm the version
@@ -81,7 +81,7 @@ gh release create v1.0.0 \
 
 ## Step 7 — after the tag
 - [ ] Verify the banner in a fresh build shows a hash at/after the tag (`git describe` now finds `v1.0.0`).
-- [ ] Close #101; the freeze lifts — 1.1 opens with **Sessions first**, then the Live Rig.
+- [ ] The freeze lifts — 1.1 opens with **Sessions first**, then the Live Rig.
 - [ ] Announce / update the README roadmap (`v1.0.0 — shipped` becomes literally true).
 
 ---

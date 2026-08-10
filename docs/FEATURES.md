@@ -5,8 +5,8 @@ walk-through checklist: each bullet is a distinct feature or control you can exe
 scenario checklist `docs/uat-1.0.md`; in-app help is the **`?`** menu (Keyboard Map + the 13-section
 guide, mirrored to `docs/guide.md`); preset/kit detail `docs/presets.md`.
 
-_Generated for hands-on review — not auto-maintained. If a detail here disagrees with the running
-build, trust the build and tell me._
+_A hands-on reference — not auto-maintained. If a detail here disagrees with the running
+build, trust the build._
 
 ---
 
@@ -146,7 +146,7 @@ build, trust the build and tell me._
 - **Host-tempo follow** — in a DAW the arp/seq/looper **and** synced LFOs lock to the project BPM +
   play position; the Tempo knob shows host BPM.
 - **MIDI clock OUT** — the synth as clock master: 24-ppq clock + start/stop to a selectable output
-  (standalone) or the host, ≤ 1-sample jitter (Aeros / Chase Bliss lock to it). Enable in **OUTPUTS**.
+  (standalone) or the host, ≤ 1-sample jitter (external gear locks to it). Enable in **OUTPUTS**.
 
 ## 13. Presets
 
@@ -187,7 +187,7 @@ build, trust the build and tell me._
 ## 16. Session, persistence & format
 
 - **MULTI** — save/load the whole 4-part layout (patches, kits, routing, mixer) as one file.
-- **Session Export (#98)** — one-folder DAW handoff: per-part MIDI + WAV stems, master WAV, a
+- **Session Export** — one-folder DAW handoff: per-part MIDI + WAV stems, master WAV, a
   manifest, offline render of the scene realign cycle.
 - **State round-trip** — SOUND persists; routing/parts reset to the default scene on reopen (only
   MULTI recalls a layout). MIDI-learn mappings persist in APVTS state.
@@ -207,6 +207,6 @@ build, trust the build and tell me._
 - Kit pads render **dry** (no per-pad FX block) — drum grit is per-voice `filter_drive`.
 - Section-guide markers are **functional, not pixel-polished**; the EQ + Scope are custom-drawn
   surfaces so their guide cards have no anchored markers (1.1 UI pass).
-- Fully-acoustic drum realism is the **1.1 sampled-kit** pass (Farmer); you can load your own samples
+- Fully-acoustic drum realism is the **1.1 sampled-kit** pass; you can load your own samples
   onto any pad today.
 - Host time-signature other than 4/4 is treated as 4/4 for the bar math.

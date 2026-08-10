@@ -50,7 +50,6 @@ VASynthProcessor::VASynthProcessor()
 
     // Factory MIDI device profiles (embedded), plus any user overrides on disk.
     profileLib.addFactory (juce::String::fromUTF8 (BinaryData::launchkey_mini_json, BinaryData::launchkey_mini_jsonSize));
-    profileLib.addFactory (juce::String::fromUTF8 (BinaryData::korg_b2_json,        BinaryData::korg_b2_jsonSize));
     profileLib.loadUserDir (userMidiProfileDir());
 
     // Factory presets: every embedded JSON that parses as a preset (a device
@@ -283,7 +282,7 @@ void VASynthProcessor::routeDeviceMessage (const juce::String& deviceName, const
 }
 
 // Oscillator anti-aliasing quality. Compile-time default is Efficient (glitch-
-// free with headroom on the 2-core live ThinkPad); build with
+// free with headroom on the 2-core live minimum-spec target); build with
 // -DVASYNTH_OSC_QUALITY_HQ for the studio/Windows HQ default. A runtime GUI
 // selector (re-preparing voices off the audio thread) is a v2 item.
 #ifdef VASYNTH_OSC_QUALITY_HQ
@@ -297,7 +296,7 @@ void VASynthProcessor::routeDeviceMessage (const juce::String& deviceName, const
 // sounding at once). The voice-sum trim is DECOUPLED from the pool size
 // (SynthEngine kTrimVoices = 16), so this bump never changes single-note level
 // or the render goldens. CPU: the pathological worst case (all 24 held x 3 saws
-// + all FX) hits ~109% of the derated ThinkPad block budget (would glitch);
+// + all FX) hits ~109% of the derated minimum-spec target block budget (would glitch);
 // normal multitimbral use sits far lower. Reviewed and accepted (user, keep 24
 // / accept the risk). Drop to 20 + an active-voice cap if live glitching shows up.
 #ifndef VASYNTH_MAX_VOICES

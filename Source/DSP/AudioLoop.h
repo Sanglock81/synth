@@ -26,7 +26,7 @@ public:
     // is reduced (the processor's honest clamp) so the UI never promises a length the ring can't
     // hold. MIDI lanes keep full length (1..32 bars) at ANY tempo.
     // Total resident audio memory = kMaxLoopSeconds * sampleRate * 2 ch * 4 B * 4 lanes
-    // (~98 MB @ 48 kHz — negligible RAM; the ThinkPad deploy constraint is CPU %, not memory).
+    // (~98 MB @ 48 kHz — negligible RAM; the minimum-spec target deploy constraint is CPU %, not memory).
     static constexpr double kMaxLoopSeconds = 64.0;
 
     // Allocate the ring for the largest loop the transport can ask for. Call from

@@ -42,7 +42,7 @@ Profiles are small JSON files:
   `Source/Parameters.h`).
 
 **Factory** profiles are embedded in the binary (`resources/midi-profiles/`):
-Novation Launchkey Mini and Korg B2. **User** overrides are JSON files you drop in:
+the Novation Launchkey Mini and a general-purpose MIDI keyboard. **User** overrides are JSON files you drop in:
 
 ```
 ~/.local/share/synth/midi-profiles/*.json      # Linux

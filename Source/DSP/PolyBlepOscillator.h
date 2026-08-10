@@ -19,7 +19,7 @@
 //
 // QUALITY MODES (set before prepare(); see SynthEngine::setOscQuality):
 //   * Efficient — 4x + 48-tap FIR. Audible band (<=18 kHz) below -60 dB for a
-//     3 kHz saw. Cheap enough for a 2-core ThinkPad. DEFAULT.
+//     3 kHz saw. Cheap enough for a 2-core minimum-spec target. DEFAULT.
 //   * HQ        — 4x + long FIR. Full band (<=23 kHz) below -60 dB. ~5x the
 //     decimation cost; for studio / Windows use.
 // The residual top-octave aliasing in Efficient mode (~-35 dB above 18 kHz) is

@@ -14,7 +14,7 @@ namespace
              "mappings":[ {"cc":21,"param":"filter_cutoff"}, {"cc":22,"param":"filter_reso"} ] })";
 
     const char* kEmptyMap =
-        R"({ "name":"Korg B2", "match":["Korg B2","B2"], "mappings":[] })";
+        R"({ "name":"MIDI Keyboard", "match":["MIDI Keyboard"], "mappings":[] })";
 }
 
 TEST_CASE ("MidiProfile parses a well-formed profile", "[plugin][6c][profile]")
@@ -36,7 +36,7 @@ TEST_CASE ("MidiProfile device matching is case-insensitive substring", "[plugin
     REQUIRE (ok);
     REQUIRE (p.matchesDevice ("Launchkey Mini MK3 MIDI"));   // substring + extra text
     REQUIRE (p.matchesDevice ("novation launchkey mini"));   // case-insensitive
-    REQUIRE_FALSE (p.matchesDevice ("Korg B2"));
+    REQUIRE_FALSE (p.matchesDevice ("MIDI Keyboard"));
 }
 
 TEST_CASE ("MidiProfile tolerates an empty mapping list and rejects junk", "[plugin][6c][profile]")

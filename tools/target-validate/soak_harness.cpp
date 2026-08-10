@@ -1,5 +1,5 @@
 // ============================================================================
-// ThinkPad soak harness (JUCE-free). Runs the real DSP path (SynthEngine +
+// Minimum-spec target soak harness (JUCE-free). Runs the real DSP path (SynthEngine +
 // FXChain, exactly as the processor does per block) flat-out for a wall-clock
 // duration under a synthetic MIDI storm, with ALL FX engaged and the voice pool
 // kept saturated. This is the portable proxy for a device xrun test: it counts

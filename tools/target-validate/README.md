@@ -1,8 +1,8 @@
-# ThinkPad validation package
+# Minimum-spec target validation package
 
-Self-contained CPU/timing validation for the **live target** — the 2015 ThinkPad
-X1 Carbon (3rd gen, dual-core Broadwell, Linux). Copy this whole folder to the
-ThinkPad and run `./validate.sh`. It produces **`thinkpad-report.txt`** — paste that
+Self-contained CPU/timing validation for the **live target** — a 2015-class dual-core
+machine (Linux). Copy this whole folder to the
+target and run `./validate.sh`. It produces **`target-report.txt`** — paste that
 back. Its measured numbers become the **real derate factor**, replacing the assumed
 `x3.5` used in the dev-box bench gates, and settle every provisional CPU decision.
 
@@ -22,14 +22,14 @@ Expected duration: **~10–12 min** full (dominated by the two soaks: 10 min eac
 
 The DSP layer (`Source/DSP/`) is **100% JUCE-free**, and the benchmark is literally
 `g++ bench_engine.cpp -Idsp` — no JUCE, no cmake, no network fetch. So the most reliable
-path is to **compile on the ThinkPad itself**:
+path is to **compile on the target itself**:
 
 - The only dependency is a C++17 compiler (`g++`); if it's missing the script prints a
   `SKIPPED:` line telling you `sudo apt-get install -y build-essential`. That's the entire
   "dev setup" — there is no dev environment to install.
-- Compiling **on the target** with `-march=native` gives the ThinkPad's *own* optimal
+- Compiling **on the target** with `-march=native` gives the target's *own* optimal
   codegen — the honest measurement, not a cross-built binary that might use instructions
-  Broadwell lacks (a prebuilt from the Ryzen dev box risks SIGILL / different codegen).
+  the target lacks (a prebuilt from the dev box risks SIGILL / different codegen).
 - No glibc/ABI mismatch, no shared-library surprises.
 
 The bundled `dsp/` and `bench/` are a **snapshot** of the repo's JUCE-free sources,
@@ -65,12 +65,12 @@ stamps the report `MODE: QUICK` so it can't be mistaken for the gate.
 
 ## The report-processing contract (what happens when you paste it back)
 
-When `thinkpad-report.txt` comes back to the dev box, we:
+When `target-report.txt` comes back to the dev box, we:
 
 1. **Recompute the derate.** Compute the measured derate factor(s) = dev-box p99 ÷
-   ThinkPad p99 (per scenario, and a headline single-thread figure) and **replace the
-   assumed `x3.5`** everywhere it appears — `tests/bench/bench_engine.cpp` (`kThinkpadDerate`),
-   the bench header, `docs/thinkpad-1.0-perf.md`, and any code comment that cites `x3.5`.
+   target p99 (per scenario, and a headline single-thread figure) and **replace the
+   assumed `x3.5`** everywhere it appears — `tests/bench/bench_engine.cpp` (`kTargetDerate`),
+   the bench header, `docs/target-1.0-perf.md`, and any code comment that cites `x3.5`.
 2. **Restate every provisional CPU decision** against measured numbers, in one table —
    **24-voice cap · per-part FX · always-oversample-when-driven · unison live cap · FM cost**
    — each marked **CONFIRMED** or **REOPENED**.
@@ -80,14 +80,14 @@ When `thinkpad-report.txt` comes back to the dev box, we:
    realistic play ⇒ we present the pre-agreed mitigation options (lower default part count /
    shared-reverb mode / voice-cap / Efficient-only unison) **for the user's call** — the
    decision is never absorbed silently.
-4. **Commit the report** to `docs/thinkpad-1.0-perf.md` (or alongside it) — it is the 1.0
+4. **Commit the report** to `docs/target-1.0-perf.md` (or alongside it) — it is the 1.0
    performance record and the baseline for the post-1.0 performance review.
 
 ## Interpreting the report at a glance
 
 - **Soak** `COMPUTE OVERRUNS: 0` at both 128 and 256, and a `max` block time that does **not**
   climb over the run (no thermal throttling) — this is the ship signal.
-- **Bench** `realistic live set` row: its `ThinkPad~ p99` (once the derate is remeasured) well
+- **Bench** `realistic live set` row: its `target~ p99` (once the derate is remeasured) well
   under the 2.667 ms budget.
 - The synthetic worst cases (unison HQ x7, 24-voice driven+self-osc) may show high `%budget` —
   that's expected and is **not** the gate; it tells us where the margin is.
@@ -96,7 +96,7 @@ When `thinkpad-report.txt` comes back to the dev box, we:
 
 | file | purpose |
 |------|---------|
-| `validate.sh` | entry point (run this on the ThinkPad); `--quick` for bench-only |
+| `validate.sh` | entry point (run this on the target); `--quick` for bench-only |
 | `soak_harness.cpp` | JUCE-free compute-overrun soak (block size is arg 2) |
 | `bench/bench_engine.cpp` | snapshot of the dev bench |
 | `dsp/` | snapshot of the JUCE-free DSP headers |
