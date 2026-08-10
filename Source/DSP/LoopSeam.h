@@ -8,9 +8,11 @@
 // fade — no new fade path. Inaudible on a slow-release pad; softens a fast pluck's transient.
 // ~5 ms @ 48 kHz.
 //
-// (The AUDIO-lane seam is the same class but needs a tempo-safe crossfade — a naive edge-window
-// dips audibly on sustained material and alters playback fidelity — so it is deferred to a
-// dedicated pass. Named here as one shared constant for when that lands.)
+// AUDIO lane (AudioLoop::playBlock): over the last kSeamSamples the loop tail is ramped toward the
+// head's first sample, so the circular-buffer wrap is continuous with no step. Loop length is
+// preserved exactly (tempo locked); the ramp approaches a real sample value, not silence, so
+// steady/sustained material passes through transparently (no dip) while any start/end mismatch is
+// declicked. One shared constant, one ramp to trust.
 // ============================================================================
 
 namespace loopseam

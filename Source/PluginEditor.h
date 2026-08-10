@@ -164,7 +164,7 @@ public:
         // Version banner (H0): the running build, confirmable on screen. VASYNTH_GIT_HASH_RT is
         // regenerated every build so it always names the exact binary. Shown persistently in the
         // F12 overlay and flashed as a toast at launch (the log-only banner was invisible before).
-        versionBanner = juce::String ("Synth ") + VASYNTH_VERSION + " \xe2\x80\x94 by Farmer   git "
+        versionBanner = juce::String ("Synth ") + VASYNTH_VERSION + "   git "
                         + VASYNTH_GIT_HASH_RT + "   " + VASYNTH_BUILD_TYPE;
         overlay.setVersionLine (versionBanner);
         if (isStandalone()) proc.postToast (versionBanner);

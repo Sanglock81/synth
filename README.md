@@ -1,4 +1,4 @@
-# Synth — a free, open-source virtual analog synthesizer by Farmer
+# Synth — a free, open-source virtual analog synthesizer
 
 [![build-test](https://github.com/Sanglock81/synth/actions/workflows/build-test.yml/badge.svg)](https://github.com/Sanglock81/synth/actions/workflows/build-test.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
@@ -26,7 +26,7 @@ Packaged releases begin at **v1.0.0**; until then, download the latest CI build 
 1. Unzip the archive.
 2. Copy the `Synth.vst3` folder into your VST3 directory — `~/.vst3/` (create it if missing).
 3. Run the standalone directly: `./Synth`
-4. In your DAW, rescan plugins; **Synth** appears under vendor **Farmer**.
+4. In your DAW, rescan plugins; **Synth** appears in the instrument list.
 
 **Windows**
 1. Unzip the archive.
@@ -82,7 +82,7 @@ The VST3 and `Synth.exe` land under `build\VASynth_artefacts\Release\`.
 - **The built-in guide is the manual.** Click **?** in the top bar and pick any section for a
   spotlight, numbered markers, and a card explaining every control — *what* it does and *how* to
   use it. (Also generated to **[docs/guide.md](docs/guide.md)**.)
-- **In a DAW.** Load **Synth** (vendor **Farmer**) as a VST3 instrument on a track and play.
+- **In a DAW.** Load **Synth** as a VST3 instrument on a track and play.
 - **MIDI-learn.** Right-click (or long-press) any knob to arm learn, then move a hardware control
   to bind it; tap the knob again to cancel. Bindings are saved with your session.
 - **Controllers.** Any MIDI controller works. Synth **ships with a controller profile for the

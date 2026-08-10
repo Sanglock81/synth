@@ -6,6 +6,7 @@
 #include <catch2/catch_approx.hpp>
 #include "AudioLoop.h"
 #include <vector>
+#include <cmath>
 
 TEST_CASE ("AudioLoop snapshot + reload round-trips the recorded region (J3 scenes)", "[audioloop][scene]")
 {
@@ -84,7 +85,10 @@ TEST_CASE ("AudioLoop record wraps within a block", "[audioloop]")
     REQUIRE (lp.position() == 0);
     std::vector<float> oL (100, 0.0f), oR (100, 0.0f);
     lp.playBlock (oL.data(), oR.data(), 100);
-    for (int i = 0; i < 100; ++i)
+    // Check the content OUTSIDE the seam crossfade (the last loopLen/4 samples ramp toward buf[0]
+    // to declick the wrap, #146 — that region is covered by the [audioloop][click] tests).
+    const int seam = 100 / 4;
+    for (int i = 0; i < 100 - seam; ++i)
     {
         const bool written = (i >= 80) || (i < 20);
         REQUIRE (oL[i] == Catch::Approx (written ? 1.0f : 0.0f));
@@ -126,4 +130,46 @@ TEST_CASE ("AudioLoop is inert while not recording / not playing", "[audioloop]"
     std::vector<float> oL (128, 0.0f), oR (128, 0.0f);
     lp.playBlock (oL.data(), oR.data(), 128);         // playing defaults OFF -> no-op
     for (int i = 0; i < 128; ++i) REQUIRE (oL[i] == Catch::Approx (0.0f));
+}
+
+// #146 Bug A (audio lane): the loop seam is declicked. Record a ramp whose end (~0.8) and start (0)
+// don't match — the raw wrap is a ~0.8 step (a click). The tail-ramp-to-head[0] crossfade must keep
+// every sample-to-sample jump small across two full loops (i.e. across the seam).
+TEST_CASE ("AudioLoop: the loop seam is declicked at the wrap (#146)", "[audioloop][click]")
+{
+    const int len = 480;                              // > 4*seam so the crossfade window fits
+    AudioLoop lp; lp.prepare (len); lp.setLoopLength (len);
+    std::vector<float> in ((std::size_t) len);
+    for (int i = 0; i < len; ++i) in[(std::size_t) i] = 0.8f * (float) i / (float) len;   // 0 -> ~0.8 ramp
+    lp.setRecording (true); lp.recordBlock (in.data(), in.data(), len); lp.setRecording (false);
+    lp.setPlaying (true);
+
+    std::vector<float> o; o.reserve ((std::size_t) (2 * len));
+    for (int done = 0; done < 2 * len; )
+    {
+        const int nb = std::min (64, 2 * len - done);
+        std::vector<float> bL ((std::size_t) nb, 0.0f), bR ((std::size_t) nb, 0.0f);
+        lp.playBlock (bL.data(), bR.data(), nb); lp.advance (nb);
+        for (int i = 0; i < nb; ++i) o.push_back (bL[(std::size_t) i]);
+        done += nb;
+    }
+    float maxJump = 0.0f;
+    for (std::size_t i = 1; i < o.size(); ++i) maxJump = std::max (maxJump, std::abs (o[i] - o[i - 1]));
+    INFO ("maxJump=" << maxJump);
+    REQUIRE (maxJump < 0.05f);                        // raw seam step is ~0.8; the crossfade keeps it tiny
+}
+
+// The declick must be TRANSPARENT on steady/sustained material — no dip at the seam (the "inaudible
+// on a pad" guarantee): a DC loop plays back at its level everywhere, including across the wrap.
+TEST_CASE ("AudioLoop: seam declick is transparent on sustained content (#146)", "[audioloop][click]")
+{
+    const int len = 400;
+    AudioLoop lp; lp.prepare (len); lp.setLoopLength (len);
+    std::vector<float> in ((std::size_t) len, 0.5f);                       // steady DC (start == end)
+    lp.setRecording (true); lp.recordBlock (in.data(), in.data(), len); lp.setRecording (false);
+    lp.setPlaying (true);
+    lp.advance (len - 32);                                                 // position so a block spans the seam
+    std::vector<float> oL (64, 0.0f), oR (64, 0.0f);
+    lp.playBlock (oL.data(), oR.data(), 64);                              // crosses buf[len-1] -> buf[0]
+    for (int i = 0; i < 64; ++i) REQUIRE (oL[i] == Catch::Approx (0.5f).margin (1e-4));   // no dip, no step
 }

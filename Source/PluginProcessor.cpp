@@ -340,7 +340,7 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
       : (VASYNTH_OSC_QUALITY == PolyBlepOscillator::Quality::None) ? "None" : "Efficient";
     // Build provenance so a stale binary is obvious: git hash (configure time) +
     // this TU's compile timestamp (updates on every rebuild) + build type.
-    health.logMessage (juce::String ("Synth by Farmer ") + VASYNTH_VERSION + " (git " + VASYNTH_GIT_HASH
+    health.logMessage (juce::String ("Synth ") + VASYNTH_VERSION + " (git " + VASYNTH_GIT_HASH
                        + ", built " __DATE__ " " __TIME__ ", " + VASYNTH_BUILD_TYPE + ")"
                        + "  wrapper=" + juce::String ((int) wrapperType)
                        + "  osc-quality=" + quality
