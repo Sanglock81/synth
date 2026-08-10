@@ -49,6 +49,62 @@ TEST_CASE ("looper: recorded note plays next cycle, not the recording pass", "[d
     REQUIRE (cycle (lp, 100).size() == 1);
 }
 
+// A key held across the record downbeat used to be skipped: its note-on arrived while the lane
+// wasn't yet recording, so it landed nowhere and the first note never played back. captureHeldAtStart
+// (called at record engage) injects it as a note-on at t=0 — the note-on mirror of closeDangling.
+TEST_CASE ("looper: a key held across the record downbeat is captured at t=0, not skipped", "[dsp][looper]")
+{
+    const int len = 1000, block = 100;
+
+    // The bug: struck before REC engages, WITHOUT the capture -> note 60 is lost.
+    {
+        Looper lp; setLen (lp, 0, len); lp.setPlaying (0, true);
+        lp.recordNote (0, 0, 60, 0.8f, true);        // held key, arrives while NOT recording (tracked only)
+        lp.setRecording (0, true);                   // record engages...
+        lp.recordNote (0, 500, 62, 0.7f, true);      // ...a later note during the pass
+        lp.setRecording (0, false);
+        cycle (lp, block);                           // pass 1 arms the events
+        auto ons = cycle (lp, block);                // pass 2 plays back
+        std::vector<int> notes; for (auto& o : ons) notes.push_back (o.second);
+        REQUIRE (std::find (notes.begin(), notes.end(), 60) == notes.end());   // 60 skipped (documents the bug)
+        REQUIRE (std::find (notes.begin(), notes.end(), 62) != notes.end());
+    }
+
+    // The fix: captureHeldAtStart at engage -> 60 is recorded at t=0, plays at the loop TOP.
+    {
+        Looper lp; setLen (lp, 0, len); lp.setPlaying (0, true);
+        lp.recordNote (0, 0, 60, 0.8f, true);
+        lp.setRecording (0, true);
+        lp.captureHeldAtStart (0);                   // <-- the fix
+        lp.recordNote (0, 500, 62, 0.7f, true);
+        lp.setRecording (0, false);
+
+        cycle (lp, block);                           // pass 1 arms
+        std::vector<std::pair<int,int>> pass2;       // (blockIndex, note)
+        for (int b = 0, done = 0; done < len; ++b, done += block)
+        {
+            lp.playBlock (block, [&] (int, int note, float, bool on) { if (on) pass2.emplace_back (b, note); });
+            lp.advance (block);
+        }
+        bool sixtyAtTop = false, has62 = false;
+        for (auto& e : pass2) { if (e.second == 60) { REQUIRE (e.first == 0); sixtyAtTop = true; } if (e.second == 62) has62 = true; }
+        REQUIRE (sixtyAtTop);                         // 60 sounds in the first block (t=0)
+        REQUIRE (has62);
+
+        // Steady state: exactly ONE 60 per cycle (balanced by closeDangling — no accumulation).
+        for (int c = 0; c < 4; ++c)
+        {
+            int count60 = 0;
+            for (int done = 0; done < len; done += block)
+            {
+                lp.playBlock (block, [&] (int, int note, float, bool on) { if (on && note == 60) ++count60; });
+                lp.advance (block);
+            }
+            REQUIRE (count60 == 1);
+        }
+    }
+}
+
 // P0 (post-1.0 hands-on): after a couple loops the MIDI looper stacks OVERLAPPING triggers.
 // A recorded note with a duration (on + off) must, every steady-state cycle, emit EXACTLY one
 // on and one off (no doubling) and never leave the note held across the loop top (no hanging

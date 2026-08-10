@@ -567,10 +567,20 @@ void VASynthProcessor::flushLoopNotes (bool chordOn)
 void VASynthProcessor::flushLoopNotesForPart (int pt, bool chordOn)
 {
     if (pt < 0 || pt >= SynthEngine::maxParts) return;
+    // If this part's looped notes were feeding the arp (arp on + play-focus part), release them THROUGH
+    // the arp — emptying its held set makes it self-release its sounding voice. Dispatching a raw
+    // note-off here instead would leave the arp holding a phantom key (a stuck arpeggio). [[vasynth-transition-stuck-notes]]
+    const int  pf    = playFocusPart.load (std::memory_order_relaxed);
+    const bool toArp = arp.enabled() && pt == pf;
     for (int n = 0; n < 128; ++n)
         if (loopNoteHeld[(std::size_t) pt][(std::size_t) n])
-        { dispatchNoteOff (n, pt, chordOn); loopNoteHeld[(std::size_t) pt][(std::size_t) n] = false; }
+        {
+            if (toArp) arp.noteOff (n);
+            else       dispatchNoteOff (n, pt, chordOn);
+            loopNoteHeld[(std::size_t) pt][(std::size_t) n] = false;
+        }
 }
+
 
 // ============================================================================
 // J3 scenes. The ACTIVE scene IS the live state (looper clips + drum pattern + per-lane
@@ -3062,8 +3072,9 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
             if (! recReq)                 { loopArmPending[L] = false; loopRecording[L] = false; }   // REC off -> cancel
             loopRecPrev[L] = recReq;
             // Engage at THIS lane's downbeat: its very start (phase 0) or the block after its wrap.
+            bool recJustEngaged = false;
             if (loopArmPending[L] && (looper.position (lane) == 0 || loopLaneWrapped[L]))
-            { loopArmPending[L] = false; loopRecording[L] = true; loopRecJustEngaged[L] = true; }
+            { loopArmPending[L] = false; loopRecording[L] = true; loopRecJustEngaged[L] = true; recJustEngaged = true; }
 
             // ONE-SHOT fixed length (#47 correction): record exactly one loop (this lane's bars),
             // then auto-stop at the next downbeat and switch this lane to PLAY. The engage block's
@@ -3086,6 +3097,8 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
             const bool playNow = playReq || loopJustCompleted[L];
             looper.setQuantize  (lane, rp (apvts, quantIds[L]) > 0.5f);   // per-lane 1/32 quantize
             looper.setRecording (lane, loopRecording[L]);           // this lane records its own part
+            // A key held across the record downbeat is captured at t=0 (else the first note is skipped).
+            if (recJustEngaged) looper.captureHeldAtStart (lane);
             al.setRecording     (loopRecording[L]);
             looper.setPlaying   (lane, playNow && ! audioMode);     // MIDI lane audible for this part
             al.setPlaying       (playNow &&   audioMode);           // AUDIO lane audible
@@ -3097,11 +3110,17 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
             loopPlayWasOn[L] = midiPlayingNow;
         }
     }
-    looper.playBlock (numSamples, [this, chordOn] (int part, int note, float vel, bool on)
+    looper.playBlock (numSamples, [this, chordOn, playF] (int part, int note, float vel, bool on)
     {
         if (part >= 0 && part < SynthEngine::maxParts && note >= 0 && note < 128)
             loopNoteHeld[(std::size_t) part][(std::size_t) note] = on;     // track for the stop/clear flush
-        if (on) dispatchNoteOn (note, vel, part, chordOn, /*generator*/ true); else dispatchNoteOff (note, part, chordOn);
+        // A loop records the STRUCK keys (pre-arp). When the arp is running on the play-focus part, its
+        // looped notes must feed the arp so the loop arpeggiates — mirroring live input (the arp self-
+        // releases when its held set empties, and flushLoopNotesForPart routes the stop/clear through
+        // arp.noteOff, so no note is left stuck). Other lanes, or arp off, dispatch straight to voices.
+        if (arp.enabled() && part == playF) { if (on) arp.noteOn (note, vel); else arp.noteOff (note); }
+        else if (on)                          dispatchNoteOn (note, vel, part, chordOn, /*generator*/ true);
+        else                                  dispatchNoteOff (note, part, chordOn);
     });
 
     // Routed surfaces (per-input MIDI / QWERTY-to-part) — drained at block start, so

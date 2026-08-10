@@ -64,6 +64,39 @@ TEST_CASE ("no hang: CLEAR while a loop is playing releases sounding notes", "[p
     REQUIRE (r.tailPeak() < 1.0e-4f);
 }
 
+TEST_CASE ("looper: a recorded chord drives the arp on playback, then stops clean", "[plugin][looper][arp][stuck]")
+{
+    // A loop records the STRUCK keys (pre-arp). With the arp on the play-focus part, its looped notes
+    // must feed the arp so the loop arpeggiates — and stopping playback must leave NO stuck arpeggio
+    // (the flush releases the loop's held notes THROUGH the arp).
+    Rig r; setVal (r.p, ParamID::tempo, 220.0f);
+    s01 (r.p, ParamID::arpOn, 1.0f);                                     // arp on (play-focus part 0)
+    s01 (r.p, ParamID::loopRec, 1.0f); s01 (r.p, ParamID::loopPlay, 1.0f);
+    r.pump (2);                                                          // record engages at the downbeat
+    r.p.routeNoteOn (60, 0.9f, 0); r.p.routeNoteOn (64, 0.9f, 0); r.p.routeNoteOn (67, 0.9f, 0);   // held chord
+    r.pump (300);
+    s01 (r.p, ParamID::loopRec, 0.0f);                                  // stop record (chord held -> closeDangling closes it)
+    r.p.routeNoteOff (60, 0); r.p.routeNoteOff (64, 0); r.p.routeNoteOff (67, 0);   // release the LIVE keys
+    r.pump (30);
+
+    REQUIRE (r.p.loopLaneHasContent (0));
+    // Playback: the looped chord drives the arp -> a running step playhead + actual sound. If the
+    // looped notes reached NOTHING (routing broken) the arp would stay idle (-1) and it'd be silent.
+    bool arpRan = false; float pk = 0.0f;
+    for (int b = 0; b < 500; ++b)
+    {
+        r.buf.clear(); r.p.processBlock (r.buf, r.m);
+        if (r.p.arpDisplayStep() >= 0) arpRan = true;
+        for (int i = 0; i < r.buf.getNumSamples(); ++i) pk = std::max (pk, std::abs (r.buf.getSample (0, i)));
+    }
+    REQUIRE (arpRan);                                                   // the loop drives the arp
+    REQUIRE (pk > 1.0e-3f);                                             // ...and it sounds
+
+    s01 (r.p, ParamID::loopPlay, 0.0f);                                // stop playback
+    REQUIRE (r.tailPeak() < 1.0e-4f);                                  // no stuck arpeggio
+    REQUIRE (r.p.arpDisplayStep() == -1);                              // arp idled
+}
+
 TEST_CASE ("no hang: switching loop MIDI->AUDIO then stopping releases the MIDI note", "[plugin][looper][stuck]")
 {
     // Flip to AUDIO (the MIDI lane stops -> its held note must be released), then stop all

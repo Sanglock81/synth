@@ -94,7 +94,12 @@ public:
     // only while ITS OWN REC is armed (part is the note's routed part — fixed, not focus).
     void recordNote (int part, int offsetInBlock, int note, float vel, bool on)
     {
-        if (part < 0 || part >= kParts || ! recording_[(std::size_t) part]) return;
+        if (part < 0 || part >= kParts) return;
+        // Track the live-held key set for THIS part, always — even while not recording. A note struck
+        // before REC engages must still be known at the downbeat (captureHeldAtStart injects it at t=0),
+        // else the first note is skipped. Cleared by its own note-off. Velocity kept for a faithful re-hit.
+        if (note >= 0 && note < 128) heldVel_[(std::size_t) part][(std::size_t) note] = on ? (vel > 0.0f ? vel : 1.0f) : 0.0f;
+        if (! recording_[(std::size_t) part]) return;
         auto& p = parts[(std::size_t) part];
         if (p.count >= kMaxEvents) return;
         const int len = loopLen[(std::size_t) part];
@@ -116,6 +121,26 @@ public:
     // its next playBlock widens the window to start at t=0 so the just-captured downbeat is emitted,
     // not dropped and heard a full cycle later. One-shot; cleared once consumed.
     void requestDownbeatCatchUp (int part) { if (part >= 0 && part < kParts) catchUp_[(std::size_t) part] = true; }
+
+    // Called once when a lane's record ENGAGES at its downbeat: any key already held (struck before
+    // the downbeat) is captured as a note-on at t=0 — the note-on mirror of closeDangling. Without
+    // this, a note held across the loop start lands nowhere (its note-on arrived while this lane
+    // wasn't recording) and the first note is skipped unless struck exactly on the grid. recHeld_ is
+    // set so record-stop's closeDangling pairs a note-off; skip notes already recorded-on this pass.
+    void captureHeldAtStart (int part)
+    {
+        if (part < 0 || part >= kParts || ! recording_[(std::size_t) part]) return;
+        auto& p = parts[(std::size_t) part];
+        for (int n = 0; n < 128; ++n)
+            if (heldVel_[(std::size_t) part][(std::size_t) n] > 0.0f && ! recHeld_[(std::size_t) part][(std::size_t) n])
+            {
+                if (p.count >= kMaxEvents) break;
+                const float v = heldVel_[(std::size_t) part][(std::size_t) n];
+                p.ev[(std::size_t) p.count++] = { 0, n, v, true, false };
+                recHeld_[(std::size_t) part][(std::size_t) n] = true;
+                mtrace::emit (mtrace::Ev::LoopRec, part, n, (int) (v * 127.0f), 1);
+            }
+    }
 
     // Emit this block's armed playback events for every PLAYING lane, each against its OWN length.
     // emit(part, note, vel, on).
@@ -194,4 +219,5 @@ private:
     int quantGrid = 0;                                                   // grid in samples (0 = off; set from tempo)
     std::array<std::array<int, 128>, kParts> lastOnT {};                 // snapped pos of last note-on (pairing guard)
     std::array<std::array<bool, 128>, kParts> recHeld_ {};               // notes held mid-record (closed on record stop, #138)
+    std::array<std::array<float, 128>, kParts> heldVel_ {};              // live-held key velocities per part (0 = up); for captureHeldAtStart
 };
