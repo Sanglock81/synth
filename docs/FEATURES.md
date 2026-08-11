@@ -68,7 +68,13 @@ build, trust the build._
     S&H), Macro 1–8.
   - Destinations: pitch, cutoff, resonance, PW, wave pos, osc 1/2/3 level, noise level, **osc FM
     depth (Osc 1/2 FM)**, amp, all FX params (chorus/delay/reverb/width/SAT/EQ bands), LFO rate/depth,
-    every envelope stage, filter env-amt/keytrack/vel routes, osc octave/detune, glide, trim.
+    every envelope stage, filter env-amt/keytrack/vel routes, osc octave/detune, glide, trim,
+    **part level (tremolo)** and **part pan (equal-power auto-pan)**.
+  - **Known limitation (interim):** *block-tier* destinations — all FX/EQ params plus part level/pan —
+    currently modulate the **edit-focus part** only; *voice-tier* destinations (pitch, cutoff, osc,
+    FM, noise…) already modulate **every** part. So a background part's LFO→auto-pan/tremolo/FX route
+    is silent until you focus that part. A per-part block-mod rework (a 1.1 pre-req for route-carrying
+    presets) removes this; until then, keep FX/level/pan modulation on the part you're playing.
 - **LINK** — touch-connect: arm LINK, tap any control → routes the armed source to it (drag ~2 s to
   set depth). **MOD** overlay lists/edits routes.
 - **8 assignable macros** (M1–M8), each labelled with what it drives; default map (M1 cutoff … M8

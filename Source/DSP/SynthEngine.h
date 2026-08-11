@@ -1024,8 +1024,37 @@ private:
     // smoothed L/R gain as level/pan — post-FX, click-safe, riding the existing ramp so a stepped
     // trim (automation / preset load) never zippers. Unity trim (1.0) leaves the gain bit-identical,
     // so goldens are unchanged.
-    float targetLg (int p) const { const float pan = partPanUse[(std::size_t) p]; return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * (pan <= 0.0f ? 1.0f : 1.0f - pan); }
-    float targetRg (int p) const { const float pan = partPanUse[(std::size_t) p]; return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * (pan >= 0.0f ? 1.0f : 1.0f + pan); }
+    // Mixer-tier matrix mods (LINK P0): PartLevel + PartPan are matrix destinations applied HERE,
+    // riding the existing per-block gain ramp (prevLg->targetLg) so they are click-safe for free.
+    // FOCUS-SCOPED for now: the processor sets these for the edit-focus part only (block-tier mods
+    // are focus-scoped; voice-tier mods are already per-part). A per-part block-mod rework — REQUIRED
+    // before route-carrying presets ship — will make a background part's tremolo/auto-pan sound.
+    //  - PartLevel: multiplies the part level, floored at kPartLevelModFloor (-12 dB) so full-depth
+    //    tremolo stays musical, never gating to silence. Range [-12 dB .. 0 dB]; no boost (loudness-sane).
+    //  - PartPan: DUAL-LAW. The base pan stays LINEAR (unchanged -> existing patches/goldens bit-
+    //    identical; converting the base to equal-power would drop every centre-panned patch 3 dB and
+    //    force a bank re-trim, which the freeze forbids). The MOD layers a constant-power auto-pan
+    //    factor that is UNITY at mod=0, so only the moving sweep is equal-power (constant perceived
+    //    loudness L<->R; the extreme channel rides to +3 dB under the master safety clipper).
+    //    1.1 roadmap: unify pan to equal-power + re-trim the bank, retiring this dual-law layering.
+    static constexpr float kPartLevelModFloor = 0.25f;             // -12 dB: full-depth tremolo floor (never silence)
+    static constexpr float kAutoPanUnity      = 1.41421356237f;    // sqrt(2): the auto-pan factor is unity at centre
+public:
+    void  setPartLevelMod (int p, float m) { if (p >= 0 && p < maxParts) partLevelMod[(std::size_t) p] = m; }
+    void  setPartPanMod   (int p, float m) { if (p >= 0 && p < maxParts) partPanMod  [(std::size_t) p] = m; }
+    void  resetMixerMods  () { partLevelMod.fill (0.0f); partPanMod.fill (0.0f); }   // each block, before the focus part is set
+private:
+    static constexpr float kHalfPi = 1.57079632679f;   // pi/2 (engine is JUCE-free; no juce::MathConstants)
+    float levelModMul (int p) const { return std::clamp (1.0f + partLevelMod[(std::size_t) p], kPartLevelModFloor, 1.0f); }
+    void  autoPanGains (int p, float& gl, float& gr) const
+    {
+        const float m  = std::clamp (partPanMod[(std::size_t) p], -1.0f, 1.0f);
+        const float th = (m + 1.0f) * 0.5f * kHalfPi;   // 0..pi/2, centre at pi/4 -> unity
+        gl = kAutoPanUnity * std::cos (th); gr = kAutoPanUnity * std::sin (th);
+    }
+    std::array<float, maxParts> partLevelMod {}, partPanMod {};    // mixer-tier matrix offsets (0 = no mod)
+    float targetLg (int p) const { const float pan = partPanUse[(std::size_t) p]; float gl, gr; autoPanGains (p, gl, gr); return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * levelModMul (p) * (pan <= 0.0f ? 1.0f : 1.0f - pan) * gl; }
+    float targetRg (int p) const { const float pan = partPanUse[(std::size_t) p]; float gl, gr; autoPanGains (p, gl, gr); return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * levelModMul (p) * (pan >= 0.0f ? 1.0f : 1.0f + pan) * gr; }
 
     // Kit parts: per-part double-buffered KitData (pads + baked params). Published on
     // the message thread; the audio thread reads buf[kitReadIdx[part]] (sampled once

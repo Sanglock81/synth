@@ -99,9 +99,10 @@ namespace moddest
             { ModMatrix::EqB4Gain,     P::peqB4Gain,     "EQ High Gain",   Fx },
             { ModMatrix::EqB5Gain,     P::peqB5Gain,     "EQ Air Gain",    Fx },
             // Part
-            { ModMatrix::GlideTime, P::glideTime, "Glide",   Part },
-            { ModMatrix::PartTrim,  P::patchTrim, "Trim",    Part },   // per-patch program level (LINK target + animates)
-            // PartLevel / PartPan reserved (enum stable) — they modulate the mixer, a later seam.
+            { ModMatrix::GlideTime, P::glideTime, "Glide",      Part },
+            { ModMatrix::PartLevel, "",           "Part Level", Part },   // mixer-tier: LFO->tremolo (overlay dest; no single knob)
+            { ModMatrix::PartPan,   "",           "Part Pan",   Part },   // mixer-tier: LFO->auto-pan (equal-power sweep)
+            { ModMatrix::PartTrim,  P::patchTrim, "Trim",       Part },   // per-patch program level (LINK target + animates)
         };
         return t;
     }

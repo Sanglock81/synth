@@ -245,6 +245,112 @@ TEST_CASE ("sweep: an LFO route modulates from ANY fixed-DEST + SYNC state, incl
     }
 }
 
+// LINK P0 mixer-tier dests: PartLevel (tremolo) + PartPan (equal-power auto-pan), layered on the
+// untouched linear base pan law. Focus-scoped for now (a per-part rework lands before route presets).
+namespace
+{
+    double blkRms (const juce::AudioBuffer<float>& b, int ch)
+    {
+        double acc = 0.0; for (int i = 0; i < b.getNumSamples(); ++i) { const float s = b.getSample (ch, i); acc += (double) s * s; }
+        return std::sqrt (acc / b.getNumSamples());
+    }
+}
+
+TEST_CASE ("PartLevel dest tremolos the output (floored, never silent); PartPan auto-pans it (LINK P0)",
+           "[plugin][modmatrix][mixer]")
+{
+    {   // PartLevel -> tremolo: the output amplitude PULSES, floored (-12 dB) so it never gates out.
+        VASynthProcessor p;
+        p.apvts.getParameter (ParamID::lfoRate)->setValueNotifyingHost (0.6f);
+        p.apvts.getParameter (ParamID::ampSustain)->setValueNotifyingHost (1.0f);
+        p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::PartLevel, 1.0f);
+        p.prepareToPlay (48000.0, 128);
+        float lo = 1.0e9f, hi = -1.0e9f;
+        for (int b = 0; b < 280; ++b)
+        {
+            juce::AudioBuffer<float> buf (2, 128); buf.clear(); juce::MidiBuffer m;
+            if (b == 0) m.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0);
+            p.processBlock (buf, m);
+            if (b > 30) { const float r = (float) blkRms (buf, 0); lo = std::min (lo, r); hi = std::max (hi, r); }
+        }
+        INFO ("PartLevel tremolo RMS lo=" << lo << " hi=" << hi);
+        REQUIRE (hi > 1.0e-3f);            // there is sound
+        REQUIRE (hi - lo > 0.10f * hi);    // amplitude pulses by a clear margin (tremolo)
+        REQUIRE (lo > 0.0f);               // floored: never fully gates to silence
+    }
+    {   // PartPan -> auto-pan: the L/R balance swings and crosses centre (pans both ways).
+        VASynthProcessor p;
+        p.apvts.getParameter (ParamID::lfoRate)->setValueNotifyingHost (0.6f);
+        p.apvts.getParameter (ParamID::ampSustain)->setValueNotifyingHost (1.0f);
+        p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::PartPan, 1.0f);
+        p.prepareToPlay (48000.0, 128);
+        float lo = 1.0e9f, hi = -1.0e9f;
+        for (int b = 0; b < 280; ++b)
+        {
+            juce::AudioBuffer<float> buf (2, 128); buf.clear(); juce::MidiBuffer m;
+            if (b == 0) m.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0);
+            p.processBlock (buf, m);
+            if (b > 30) { const float bal = (float) (blkRms (buf, 0) - blkRms (buf, 1)); lo = std::min (lo, bal); hi = std::max (hi, bal); }
+        }
+        INFO ("PartPan balance (L-R RMS) lo=" << lo << " hi=" << hi);
+        REQUIRE (hi - lo > 0.05f);          // the balance swings (auto-pan)
+        REQUIRE (hi > 0.0f); REQUIRE (lo < 0.0f);   // crosses centre: pans both ways
+    }
+}
+
+// TARGET STATE (rider c): a BACKGROUND part's own PartLevel route must tremolo it while edit focus is
+// elsewhere. Block-tier mods are FOCUS-SCOPED today, so this FAILS now — [!shouldfail] keeps the gate
+// green and AUTO-FLAGS the moment the per-part block-mod rework lands (remove the tag then).
+TEST_CASE ("multi-part: a background part's PartLevel route tremolos it with focus elsewhere (target state)",
+           "[plugin][modmatrix][mixer][!shouldfail]")
+{
+    VASynthProcessor p;                                        // edit focus defaults to part 0
+    p.apvts.getParameter (ParamID::lfoRate)->setValueNotifyingHost (0.6f);
+    p.apvts.getParameter (ParamID::ampSustain)->setValueNotifyingHost (1.0f);
+    p.linkModRoute (1, ModMatrix::LFO1, ModMatrix::PartLevel, 1.0f);   // route on part 1 (NOT the edit focus, which is 0)
+    p.prepareToPlay (48000.0, 128);
+    p.routeNoteOn (60, 0.9f, 1);                               // sound part 1 (background) ONCE, then hold it
+    // CHUNK-average the RMS: a tonal note's per-block RMS wobbles from partial-cycle windowing;
+    // averaging over 20 blocks cancels that, so only a REAL tremolo makes the chunk means diverge.
+    double acc = 0.0; int n = 0; float lo = 1.0e9f, hi = -1.0e9f, level = 0.0f;
+    for (int b = 0; b < 340; ++b)
+    {
+        juce::AudioBuffer<float> buf (2, 128); buf.clear(); juce::MidiBuffer m;
+        p.processBlock (buf, m);
+        if (b >= 60) { acc += blkRms (buf, 0); level = std::max (level, (float) blkRms (buf, 0));
+                       if (++n == 20) { const float cm = (float) (acc / n); lo = std::min (lo, cm); hi = std::max (hi, cm); acc = 0.0; n = 0; } }
+    }
+    INFO ("background-part chunk-RMS lo=" << lo << " hi=" << hi << " (level " << level << ")");
+    REQUIRE (level > 1.0e-3f);           // part 1 sounds
+    REQUIRE (hi - lo > 0.08f * hi);      // ...and its PartLevel route tremolos it (FAILS until per-part rework)
+}
+
+// Rider 2 headroom: a full-depth auto-pan rides one channel to +3 dB. On a normal patch the master
+// safety clipper must not be AUDIBLY engaged (peak stays under the ceiling; near-zero samples clipped).
+TEST_CASE ("PartPan auto-pan headroom: full depth does not audibly engage the safety clipper (rider 2)",
+           "[plugin][modmatrix][mixer][headroom]")
+{
+    VASynthProcessor p;
+    p.apvts.getParameter (ParamID::ampSustain)->setValueNotifyingHost (1.0f);
+    p.apvts.getParameter (ParamID::lfoRate)->setValueNotifyingHost (0.5f);
+    p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::PartPan, 1.0f);
+    p.prepareToPlay (48000.0, 128);
+    float peak = 0.0f; long clipped = 0, total = 0;
+    for (int b = 0; b < 320; ++b)
+    {
+        juce::AudioBuffer<float> buf (2, 128); buf.clear(); juce::MidiBuffer m;
+        if (b == 0) { m.addEvent (juce::MidiMessage::noteOn (1, 48, 1.0f), 0);   // a chord = hot input
+                      m.addEvent (juce::MidiMessage::noteOn (1, 55, 1.0f), 0);
+                      m.addEvent (juce::MidiMessage::noteOn (1, 60, 1.0f), 0); }
+        p.processBlock (buf, m);
+        if (b > 30) for (int ch = 0; ch < 2; ++ch) for (int i = 0; i < 128; ++i)
+        { const float a = std::abs (buf.getSample (ch, i)); peak = std::max (peak, a); ++total; if (a >= 0.999f) ++clipped; }
+    }
+    INFO ("auto-pan peak=" << peak << "  clipped=" << clipped << "/" << total);
+    REQUIRE (peak <= 1.0f);                              // the ceiling holds (safety clipper)
+    REQUIRE ((double) clipped / (double) total < 0.01); // ...but is not audibly engaged (<1% at ceiling)
+}
+
 TEST_CASE ("route editing through the real overlay handlers takes effect immediately (#H4)",
            "[plugin][modmatrix][sweep][ui]")
 {
