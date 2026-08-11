@@ -22,6 +22,10 @@
 !/tools/target-validate/
 !/tools/install-vst3.sh
 
+# Audition renders — regenerated on demand by the [.audition] test
+# (tests/plugin/test_bass_auditions.cpp); large throwaway WAVs, never committed.
+/docs/auditions/
+
 # Local app data that must never be committed
 *.settings
 *.log

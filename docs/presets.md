@@ -24,7 +24,7 @@ same grouping; **Load drum kit** lists **Classic Machines** / **Originals** / **
 
 | Category | Presets |
 |---|---|
-| Bass    | Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Reese Redux, Power Grind, Velvet Bass, Stab Bass, Cavern Bass, Power Grind 5th, Reese Sub |
+| Bass    | Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Reese Redux, Power Grind, Velvet Bass, Stab Bass, Cavern Bass, Power Grind 5th, Reese Sub, Knuckle Bass, Rubber Band, Prowler, Bite Sub, FM Slap, Tar Pit, Hoover Bass, Gutter Saw, Pocket Round, Trapdoor, Metal Strider |
 | Lead    | Bright Lead, Foundry Lead, Dream Chime, PWM Anthem, Chip Lead, Fifth Stack, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo, Bright Lead 5th, Foundry 5th, Screamer 5th |
 | Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite, Velvet Poly, Tape Keys, Toy Piano, Glass Harmonica |
 | Pad     | Aurora Pad, Boreal, Choir Ahh, Submerged, Prairie Ensemble, Floating Poly, Anvil Choir, Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow, Anvil 5ths, Dark Hollow Sus, Warm Sus4 |

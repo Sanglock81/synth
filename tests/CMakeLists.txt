@@ -98,6 +98,7 @@ add_executable(plugin_tests
     plugin/test_modmatrix.cpp
     plugin/test_preset_velocity.cpp
     plugin/test_preset_loudness.cpp
+    plugin/test_bass_auditions.cpp
     plugin/test_layout_mockup.cpp
     plugin/test_drums.cpp
     plugin/test_chord_plugin.cpp

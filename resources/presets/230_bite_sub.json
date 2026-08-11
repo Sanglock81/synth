@@ -1,0 +1,33 @@
+{
+  "name": "Bite Sub",
+  "category": "Bass",
+  "params": {
+    "osc1_wave": 3,
+    "osc1_octave": -2,
+    "osc1_level": 0.9,
+    "osc2_on": 1,
+    "osc2_wave": 1,
+    "osc2_octave": 0,
+    "osc2_detune": 0,
+    "osc2_level": 0.32,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 900,
+    "filter_reso": 0.2,
+    "filter_drive": 0.35,
+    "filter_env_amt": 0.3,
+    "vel_to_cutoff": 0.3,
+    "vel_to_amp": 0.5,
+    "flt_attack": 0.002,
+    "flt_decay": 0.15,
+    "flt_sustain": 0.25,
+    "flt_release": 0.1,
+    "amp_attack": 0.002,
+    "amp_decay": 0.2,
+    "amp_sustain": 0.7,
+    "amp_release": 0.12,
+    "poly_mode": 1,
+    "glide_time": 0.015,
+    "patch_trim": 0.86
+  }
+}

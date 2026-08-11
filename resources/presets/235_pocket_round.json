@@ -1,0 +1,33 @@
+{
+  "name": "Pocket Round",
+  "category": "Bass",
+  "params": {
+    "osc1_wave": 2,
+    "osc1_octave": -1,
+    "osc1_level": 0.85,
+    "osc2_on": 1,
+    "osc2_wave": 3,
+    "osc2_octave": -1,
+    "osc2_detune": 4,
+    "osc2_level": 0.5,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 430,
+    "filter_reso": 0.24,
+    "filter_drive": 0.15,
+    "filter_env_amt": 0.15,
+    "vel_to_cutoff": 0.45,
+    "vel_to_amp": 0.85,
+    "flt_attack": 0.003,
+    "flt_decay": 0.16,
+    "flt_sustain": 0.2,
+    "flt_release": 0.1,
+    "amp_attack": 0.004,
+    "amp_decay": 0.18,
+    "amp_sustain": 0.5,
+    "amp_release": 0.1,
+    "poly_mode": 1,
+    "glide_time": 0.025,
+    "patch_trim": 1.37
+  }
+}
