@@ -178,6 +178,73 @@ TEST_CASE ("sweep: LFO sources produce a time-varying offset (#H4)", "[plugin][m
     }
 }
 
+// LINK P0 — the regression the old #H4 LFO test masked by pre-setting DEST=On. An LFO must publish
+// its matrix source and MODULATE regardless of its fixed DEST (Off/Pitch/Cutoff/On) and SYNC state,
+// from any route-creation path — the previously-silent cells were routes made with DEST left at the
+// default Off (MOD overlay add, a loaded preset, RANDOM). Every cell here uses linkModRoute (the
+// non-auto-enable path) and a plain completeModLink gesture; each must move the destination.
+TEST_CASE ("sweep: an LFO route modulates from ANY fixed-DEST + SYNC state, incl. DEST=Off (LINK P0)",
+           "[plugin][modmatrix][sweep][lfo]")
+{
+    struct D { int dest; const char* name; };
+    const D dests[] { { ModMatrix::Cutoff, "Cutoff" }, { ModMatrix::ReverbMix, "ReverbMix" },
+                      { ModMatrix::EqB3Gain, "EqB3Gain" }, { ModMatrix::StereoWidth, "StereoWidth" },
+                      { ModMatrix::DelayFeedback, "DelayFeedback" }, { ModMatrix::ChorusDepth, "ChorusDepth" } };
+    const char* stateName[] { "Off", "Pitch", "Cutoff", "On" };
+    const char* rateIds[] { ParamID::lfoRate, ParamID::lfo2Rate, ParamID::lfo3Rate };
+    const char* destIds[] { ParamID::lfoDest, ParamID::lfo2Dest, ParamID::lfo3Dest };
+    const char* syncIds[] { ParamID::lfoSync, ParamID::lfo2Sync, ParamID::lfo3Sync };
+    const char* divIds[]  { ParamID::lfoDiv,  ParamID::lfo2Div,  ParamID::lfo3Div };
+
+    // Peak-to-peak of the destination's modulated offset (modAnimNorm works for BOTH voice-tier
+    // dests like Cutoff and block-tier dests like ReverbMix — the metric the steady sweep validated).
+    auto rangeOf = [] (VASynthProcessor& p, int dest, juce::RangedAudioParameter* param)
+    {
+        p.prepareToPlay (48000.0, 128);
+        float lo = 1.0e9f, hi = -1.0e9f;
+        for (int b = 0; b < 220; ++b)
+        {
+            juce::AudioBuffer<float> buf (2, 128); buf.clear();
+            juce::MidiBuffer m; if (b == 0) m.addEvent (juce::MidiMessage::noteOn (1, 60, 0.8f), 0);
+            p.processBlock (buf, m);
+            const float o = p.modAnimNorm (dest, param); lo = std::min (lo, o); hi = std::max (hi, o);
+        }
+        return hi - lo;
+    };
+
+    int cells = 0;
+    for (int li = 0; li < 3; ++li)
+        for (int ds = 0; ds <= 3; ++ds)                  // the LFO's OWN fixed DEST: Off / Pitch / Cutoff / On
+            for (int sync = 0; sync <= 1; ++sync)
+                for (auto& d : dests)
+                {
+                    VASynthProcessor p;
+                    auto setChoice = [&] (const char* id, float idx)
+                    { auto* pr = p.apvts.getParameter (id); pr->setValueNotifyingHost (pr->convertTo0to1 (idx)); };
+                    p.apvts.getParameter (rateIds[li])->setValueNotifyingHost (0.7f);   // brisk free rate
+                    setChoice (destIds[li], (float) ds);                                // fixed DEST state under test
+                    p.apvts.getParameter (syncIds[li])->setValueNotifyingHost (sync ? 1.0f : 0.0f);
+                    setChoice (divIds[li], 5.0f);                                       // ~1/8 for the synced case
+                    p.linkModRoute (-1, ModMatrix::LFO1 + li, d.dest, 1.0f);            // the non-auto-enable path
+                    const float range = rangeOf (p, d.dest, paramFor (p, d.dest));
+                    INFO ("LFO" << (li + 1) << "  entry=linkModRoute  DEST=" << stateName[ds]
+                          << "  SYNC=" << (sync ? "on" : "off") << "  -> " << d.name << "  range=" << range);
+                    REQUIRE (range > 0.02f);                                            // modulates in EVERY cell
+                    ++cells;
+                }
+    REQUIRE (cells == 3 * 4 * 2 * 6);
+
+    // The LINK-button gesture path (arm the source, tap the knob) with DEST left at its default Off.
+    {
+        VASynthProcessor p;
+        p.apvts.getParameter (ParamID::lfoRate)->setValueNotifyingHost (0.7f);
+        p.armModLink (ModMatrix::LFO1);
+        REQUIRE (p.completeModLink (ModMatrix::ReverbMix) >= 0);   // arm->tap makes a route
+        INFO ("completeModLink gesture, DEST default Off");
+        REQUIRE (rangeOf (p, ModMatrix::ReverbMix, paramFor (p, ModMatrix::ReverbMix)) > 0.02f);   // ...that actually modulates
+    }
+}
+
 TEST_CASE ("route editing through the real overlay handlers takes effect immediately (#H4)",
            "[plugin][modmatrix][sweep][ui]")
 {

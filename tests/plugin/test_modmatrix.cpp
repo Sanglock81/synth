@@ -198,12 +198,15 @@ TEST_CASE ("block-tier: an LFO drives an FX dest and the offset varies over time
     REQUIRE (hi - lo > 0.2f);        // the LFO actually sweeps the reverb-mix offset
 }
 
-TEST_CASE ("LFO dest Off gates the source (inert); On enables it with no fixed route (#56)",
+TEST_CASE ("LFO matrix source is DECOUPLED from its fixed DEST - a link swings in every DEST state (LINK P0)",
            "[plugin][modmatrix][lfo]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
-    // Same LFO1 -> ReverbMix link; only the LFO's own DEST changes. Off must make it inert (dead
-    // matrix source); On must make it a live source (routed only via the link, no fixed route).
+    // Same LFO1 -> ReverbMix matrix link; only the LFO's own fixed DEST changes. Historically an
+    // Off DEST zeroed the LFO's published matrix source, so a link made by any path that left DEST
+    // at the default Off (overlay add, preset, RANDOM) was DEAD — the reported "LFO link broken".
+    // The source is now decoupled: the LFO always publishes its raw value, so the link swings for
+    // EVERY fixed-DEST value (Off / Pitch / Cutoff / On). The fixed route stays independent.
     auto reverbSwing = [] (float destNorm)
     {
         VASynthProcessor p;
@@ -223,8 +226,13 @@ TEST_CASE ("LFO dest Off gates the source (inert); On enables it with no fixed r
         }
         return hi - lo;
     };
-    REQUIRE (reverbSwing (0.0f) < 1.0e-4f);   // dest = Off -> LFO inert -> the linked route is dead
-    REQUIRE (reverbSwing (1.0f) > 0.2f);      // dest = On  -> LFO runs as a source (no fixed route)
+    const char* names[] { "Off", "Pitch", "Cutoff", "On" };
+    for (int d = 0; d <= 3; ++d)
+    {
+        const float sw = reverbSwing (d / 3.0f);   // choice norm: 0=Off .. 1=On
+        INFO ("LFO1 fixed DEST=" << names[d] << " -> ReverbMix swing=" << sw);
+        REQUIRE (sw > 0.2f);                        // the matrix link modulates regardless of fixed DEST
+    }
 }
 
 TEST_CASE ("block-tier is inert with no block route (bit-identical) (#56 G4)", "[plugin][modmatrix][blocktier]")

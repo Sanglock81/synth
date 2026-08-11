@@ -684,10 +684,14 @@ public:
                         l.setRate (c.rate);
                         raw = l.advance (chunk);
                     }
-                    // dest: 0 Off (inert — not even a matrix source), 1 Pitch, 2 Cutoff, 3 On (a live
-                    // LINK source with NO fixed route). Phase is advanced regardless (kept coherent),
-                    // but Off zeroes the published source so "Off" genuinely turns the LFO off.
-                    lfoRaw[(std::size_t) p][(std::size_t) k] = (c.dest == 0) ? 0.0f : raw;
+                    // dest: 0 Off, 1 Pitch, 2 Cutoff, 3 On — this is the LFO's FIXED (legacy) route
+                    // ONLY. The matrix source is DECOUPLED from it (LINK P0): the LFO always publishes
+                    // its raw value as a matrix source, so an LFO route created by ANY path (LINK tap,
+                    // MOD overlay, a preset, RANDOM) modulates — not just the one gesture that used to
+                    // auto-flip DEST to On. Phase advances regardless. An Off LFO with NO matrix route
+                    // referencing it costs nothing: partSrc is built only for parts with a live matrix
+                    // (see below) and ps.lfo[k] is read only by a route that names LFO k.
+                    lfoRaw[(std::size_t) p][(std::size_t) k] = raw;
                     const float v = raw * c.depth;
                     switch (c.dest)
                     {
