@@ -331,6 +331,37 @@ TEST_CASE ("multi-part: a background part's PartLevel route tremolos it with foc
     REQUIRE (hi - lo > 0.08f * hi);      // ...and its PartLevel route tremolos it (per-part mixer mod)
 }
 
+// Increment B: a BACKGROUND part's baked FX route (LFO->ReverbMix) modulates it while edit focus is
+// elsewhere. The engine applies non-focus parts' block-tier routes (range-mapped) in beginMasterBlock.
+// Reverb wet is modulated full-depth, so the summed output RMS oscillates.
+TEST_CASE ("multi-part: a background part's FX route (LFO->ReverbMix) modulates it with focus elsewhere (Increment B)",
+           "[plugin][modmatrix][mixer]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    p.setEditFocus (1);
+    p.apvts.getParameter (ParamID::lfoRate)->setValueNotifyingHost (0.45f);           // slow enough for the tail to follow
+    p.apvts.getParameter (ParamID::ampSustain)->setValueNotifyingHost (1.0f);
+    p.apvts.getParameter (ParamID::fxReverbOn)->setValueNotifyingHost (1.0f);
+    p.apvts.getParameter (ParamID::reverbSize)->setValueNotifyingHost (0.9f);
+    p.apvts.getParameter (ParamID::reverbMix)->setValueNotifyingHost (0.5f);           // base; the route swings it 0..1
+    p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::ReverbMix, 1.0f);                  // on the focused part (part 1)
+    p.setEditFocus (0);                                                               // bake part 1 (reverb + route); focus -> 0
+    p.prepareToPlay (48000.0, 128);
+    p.routeNoteOn (60, 0.9f, 1);                                                      // sound the background part
+    double acc = 0.0; int n = 0; float lo = 1.0e9f, hi = -1.0e9f, level = 0.0f;
+    for (int b = 0; b < 500; ++b)
+    {
+        juce::AudioBuffer<float> buf (2, 128); buf.clear(); juce::MidiBuffer m;
+        p.processBlock (buf, m);
+        if (b >= 100) { acc += blkRms (buf, 0); level = std::max (level, (float) blkRms (buf, 0));
+                        if (++n == 24) { const float cm = (float) (acc / n); lo = std::min (lo, cm); hi = std::max (hi, cm); acc = 0.0; n = 0; } }
+    }
+    INFO ("bg-part reverb-mix chunk-RMS lo=" << lo << " hi=" << hi << " (level " << level << ")");
+    REQUIRE (level > 1.0e-3f);            // the background part sounds
+    REQUIRE (hi - lo > 0.03f * hi);       // ...and its LFO->ReverbMix route modulates it (per-part block mod)
+}
+
 // Rider 2 headroom: a full-depth auto-pan rides one channel to +3 dB. On a normal patch the master
 // safety clipper must not be AUDIBLY engaged (peak stays under the ceiling; near-zero samples clipped).
 TEST_CASE ("PartPan auto-pan headroom: full depth does not audibly engage the safety clipper (rider 2)",

@@ -309,6 +309,19 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     engine.setMaxVoices (VASYNTH_MAX_VOICES);
     engine.prepare (sampleRate, juce::jmax (1, samplesPerBlock));   // sizes the per-part FX buffers too
 
+    // Increment B: hand the engine each BLOCK-tier dest's APVTS range (start/end/skew) so it can apply
+    // NON-focus parts' baked block routes with the exact skew transform, JUCE-free. Ranges are static,
+    // so once per prepare. PartLevel/PartPan (paramId "") are the mixer path, applied directly (skip).
+    for (auto& e : moddest::table())
+    {
+        if (e.dest < ModMatrix::kFirstBlockDest || e.paramId == nullptr || *e.paramId == 0) continue;
+        if (auto* prm = apvts.getParameter (e.paramId))
+        {
+            const auto& r = prm->getNormalisableRange();
+            engine.setBlockRange (e.dest - ModMatrix::kFirstBlockDest, r.start, r.end, r.skew);
+        }
+    }
+
     // #95: (re)build the wavetable factory bank at this sample rate (message thread). The mip pitch
     // selection is sample-rate dependent, so rebuild on every prepare; pointers stay stable for the run.
     for (int id = 0; id < wtgen::kFactoryMax; ++id) wtFactory[(std::size_t) id] = wtgen::buildFactory (id, sampleRate);

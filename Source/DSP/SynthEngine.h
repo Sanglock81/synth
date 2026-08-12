@@ -588,6 +588,45 @@ public:
             else                { partFxUse[(std::size_t) pt] = cur.fx;          partLfoUse[(std::size_t) pt] = cur.lfo; }
             partMatrixUse[(std::size_t) pt] = cur.mtx;   // baked per-part matrix (empty until a part bakes one)
         }
+
+        // Increment B: apply each NON-focus part's OWN baked block-tier routes (FX/EQ/LFO-rate/env/tune/
+        // glide) to its base FX/LFO/params — ONCE here, on the base (no accumulation). The focus part is
+        // untouched (the processor still mods it, bit-identically). LFO sources are 1-block latent
+        // (partLfoRawPrev_), matching how the focus part reads focusLfoRawOut. Zero effect for a part with
+        // no such route (blockOffsets returns 0). This is what makes a background part's baked FX/EQ/LFO
+        // route modulate while you edit another part.
+        for (int pt = 0; pt < maxParts; ++pt)
+        {
+            if (pt == focus || ! partMatrixUse[(std::size_t) pt].active()) continue;
+            ModSources ps;
+            ps.lfo[0] = partLfoRawPrev_[(std::size_t) pt][0]; ps.lfo[1] = partLfoRawPrev_[(std::size_t) pt][1]; ps.lfo[2] = partLfoRawPrev_[(std::size_t) pt][2];
+            ps.modWheel  = modWheel[(std::size_t) pt];
+            ps.pitchBend = pitchBendSemis[(std::size_t) pt] / 12.0f;
+            for (int mi = 0; mi < 8; ++mi) ps.macro[(std::size_t) mi] = macroVals[(std::size_t) mi];
+            float bo[ModMatrix::kNumBlockDests];
+            partMatrixUse[(std::size_t) pt].blockOffsets (ps, bo, ModMatrix::kNumBlockDests);
+            auto& fx = partFxUse[(std::size_t) pt]; auto& lf = partLfoUse[(std::size_t) pt]; auto& vp = partParams[(std::size_t) pt];
+            auto bm = [&] (int dest, float& field)
+            {
+                const int i = dest - ModMatrix::kFirstBlockDest;
+                if (i < 0 || i >= ModMatrix::kNumBlockDests || bo[(std::size_t) i] == 0.0f) return;
+                const BlockRange& r = blockRanges_[(std::size_t) i];
+                field = brVal (r, br01 (r, field) + bo[(std::size_t) i]);
+            };
+            bm (ModMatrix::ChorusRate, fx.chorusRate);   bm (ModMatrix::ChorusDepth, fx.chorusDepth); bm (ModMatrix::ChorusMix, fx.chorusMix);
+            bm (ModMatrix::DelayTime, fx.delayTimeMs);   bm (ModMatrix::DelayFeedback, fx.delayFeedback); bm (ModMatrix::DelayMix, fx.delayMix); bm (ModMatrix::DelaySpread, fx.delaySpread);
+            bm (ModMatrix::ReverbSize, fx.reverbSize);   bm (ModMatrix::ReverbDamp, fx.reverbDamp); bm (ModMatrix::ReverbWidth, fx.reverbWidth); bm (ModMatrix::ReverbMix, fx.reverbMix); bm (ModMatrix::ReverbMotion, fx.reverbMotion);
+            bm (ModMatrix::StereoWidth, fx.width);        bm (ModMatrix::Saturation, fx.sat);
+            bm (ModMatrix::EqB1Gain, fx.eqBand1.gainDb);  bm (ModMatrix::EqB2Gain, fx.eqBand2.gainDb); bm (ModMatrix::EqB3Gain, fx.eqBand3.gainDb); bm (ModMatrix::EqB4Gain, fx.eqBand4.gainDb); bm (ModMatrix::EqB5Gain, fx.eqBand5.gainDb);
+            bm (ModMatrix::Lfo1Rate, lf.lfo[0].rate);     bm (ModMatrix::Lfo1Depth, lf.lfo[0].depth);
+            bm (ModMatrix::Lfo2Rate, lf.lfo[1].rate);     bm (ModMatrix::Lfo2Depth, lf.lfo[1].depth);
+            bm (ModMatrix::Lfo3Rate, lf.lfo[2].rate);     bm (ModMatrix::Lfo3Depth, lf.lfo[2].depth);
+            bm (ModMatrix::AmpAttack, vp.ampA);  bm (ModMatrix::AmpDecay, vp.ampD);  bm (ModMatrix::AmpSustain, vp.ampS);  bm (ModMatrix::AmpRelease, vp.ampR);
+            bm (ModMatrix::FltAttack, vp.fltA);  bm (ModMatrix::FltDecay, vp.fltD);  bm (ModMatrix::FltSustain, vp.fltS);  bm (ModMatrix::FltRelease, vp.fltR);
+            bm (ModMatrix::FilterEnvAmt, vp.filterEnvAmt); bm (ModMatrix::FilterKeytrack, vp.keytrack); bm (ModMatrix::VelToCutoff, vp.velToCutoff); bm (ModMatrix::VelToAmp, vp.velToAmp); bm (ModMatrix::FltEnvToPitch, vp.fltEnvToPitch);
+            bm (ModMatrix::Osc1Octave, vp.osc1Octave); bm (ModMatrix::Osc1Detune, vp.osc1Detune); bm (ModMatrix::Osc2Octave, vp.osc2Octave); bm (ModMatrix::Osc2Detune, vp.osc2Detune); bm (ModMatrix::Osc3Octave, vp.osc3Octave); bm (ModMatrix::Osc3Detune, vp.osc3Detune);
+            bm (ModMatrix::GlideTime, vp.glideTime);
+        }
         if (! smoothPrimed)
         {
             smCutoff = liveParams.cutoffHz; smReso = liveParams.resonance;
@@ -710,6 +749,11 @@ public:
             // LFO 1-3 as block-tier mod sources (one-block latency, fine at control rate).
             for (int k = 0; k < 3; ++k)
                 focusLfoRaw[(std::size_t) k].store (lfoRaw[(std::size_t) liveIndex][(std::size_t) k], std::memory_order_relaxed);
+            // Increment B: carry every part's LFO raw to next block's beginMasterBlock (1-block latent,
+            // like the focus part) so a non-focus part's baked LFO->block-dest route can be applied there.
+            for (int p = 0; p < maxParts; ++p)
+                for (int k = 0; k < 3; ++k)
+                    partLfoRawPrev_[(std::size_t) p][(std::size_t) k] = lfoRaw[(std::size_t) p][(std::size_t) k];
 
             // Per-part performance mods (bend + mod-wheel vibrato). The vibrato LFO advances
             // once per chunk (shared phase); its depth + the bend are per part.
@@ -1057,6 +1101,9 @@ public:
     void  setPartLevelMod (int p, float m) { if (p >= 0 && p < maxParts) partLevelMod[(std::size_t) p] = m; }
     void  setPartPanMod   (int p, float m) { if (p >= 0 && p < maxParts) partPanMod  [(std::size_t) p] = m; }
     void  resetMixerMods  () { partLevelMod.fill (0.0f); partPanMod.fill (0.0f); }   // each block, before the focus part is set
+    // Processor fills this at prepare from the real APVTS range of each block dest's param (Increment B).
+    void  setBlockRange (int blockIdx, float lo, float hi, float skew)
+    { if (blockIdx >= 0 && blockIdx < ModMatrix::kNumBlockDests) blockRanges_[(std::size_t) blockIdx] = { lo, hi, skew }; }
 private:
     static constexpr float kHalfPi = 1.57079632679f;   // pi/2 (engine is JUCE-free; no juce::MathConstants)
     float levelModMul (int p) const { return std::clamp (1.0f + partLevelMod[(std::size_t) p], kPartLevelModFloor, 1.0f); }
@@ -1067,6 +1114,28 @@ private:
         gl = kAutoPanUnity * std::cos (th); gr = kAutoPanUnity * std::sin (th);
     }
     std::array<float, maxParts> partLevelMod {}, partPanMod {};    // mixer-tier matrix offsets (0 = no mod)
+
+    // Increment B — per-part BLOCK-tier mods (FX/EQ/LFO-rate/env/tune/glide) for NON-focus parts.
+    // The focus part's block mods stay on the processor path (bit-identical); locked/background parts
+    // gain their own baked routes here. A JUCE-free {start,end,skew} descriptor per block dest is filled
+    // by the processor at prepare (from the real APVTS ranges) so the engine reproduces the exact skew
+    // transform without depending on JUCE. Matches juce::NormalisableRange (non-symmetric, step ignored):
+    //   to01(v)  = ((v-lo)/(hi-lo)) ^ (1/skew)     from01(p) = lo + (hi-lo) * p^skew.
+    struct BlockRange { float lo = 0.0f, hi = 1.0f, skew = 1.0f; };
+    static float br01 (const BlockRange& r, float v)
+    {
+        const float span = r.hi - r.lo; if (span <= 0.0f) return 0.0f;
+        float p = (v - r.lo) / span; p = std::clamp (p, 0.0f, 1.0f);
+        return (r.skew == 1.0f || p <= 0.0f) ? p : std::pow (p, 1.0f / r.skew);
+    }
+    static float brVal (const BlockRange& r, float p)
+    {
+        p = std::clamp (p, 0.0f, 1.0f);
+        const float q = (r.skew == 1.0f || p <= 0.0f) ? p : std::pow (p, r.skew);
+        return r.lo + (r.hi - r.lo) * q;
+    }
+    std::array<BlockRange, ModMatrix::kNumBlockDests> blockRanges_ {};
+    std::array<std::array<float, 3>, maxParts> partLfoRawPrev_ {};   // last block's per-part LFO raw (1-block latent, for beginMasterBlock)
     float targetLg (int p) const { const float pan = partPanUse[(std::size_t) p]; float gl, gr; autoPanGains (p, gl, gr); return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * levelModMul (p) * (pan <= 0.0f ? 1.0f : 1.0f - pan) * gl; }
     float targetRg (int p) const { const float pan = partPanUse[(std::size_t) p]; float gl, gr; autoPanGains (p, gl, gr); return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * levelModMul (p) * (pan >= 0.0f ? 1.0f : 1.0f + pan) * gr; }
 

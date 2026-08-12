@@ -213,7 +213,8 @@ so its movement recalls with the sound. In a factory JSON:
 - **`src`** — one of `LFO 1`/`2`/`3`, `Mod Env`, `Amp Env`, `Velocity`, `Note`, `Mod Wheel`,
   `Pitch Bend`, `Random`, `Macro 1`…`8` (exact display names).
 - **`dest`** — any modulation destination's display name (`Cutoff`, `Resonance`, `Wave Pos`,
-  `Reverb Motion`, `Delay Feedback`, an EQ band gain, …).
+  `Osc 1 FM`/`Osc 2 FM`, `Reverb Motion`, `Delay Feedback`, an EQ band gain, and the mixer-tier
+  `Part Level` (→ **tremolo**) and `Part Pan` (→ **equal-power auto-pan**), …).
 - **`depth`** — −1.0…+1.0.
 
 Routes apply to the **focused part** on load; a patch that declares none clears the focused
@@ -221,6 +222,11 @@ part's routing (a patch is its complete sound). **User** patches round-trip thei
 automatically — saving captures the focused part's routes, loading reapplies them.
 (Unknown source/dest names are skipped, never a bad slot. Full DAW/MULTI recall uses the
 separate all-parts `mod_matrix` state.)
+
+A patch's routes are **live wherever the part sounds** — a background pad with an `LFO 1 → Part Pan`
+route keeps auto-panning while you edit another part (routes are applied per part, not only to the
+part in focus). So a **Tremolo Keys** (`LFO 1 → Part Level`) or **Auto-Pan Pad** (`LFO 1 → Part Pan`)
+patch moves the same whether it's the live part or a locked background layer in a MULTI.
 
 Kits are XML under the app's `kits/` folder (factory kits are built in). A kit lists its
 pads (trigger, source preset, sounding notes, level, choke); each pad's source is baked
