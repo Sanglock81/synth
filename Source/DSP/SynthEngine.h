@@ -728,6 +728,20 @@ public:
                 for (int mi = 0; mi < 8; ++mi) ps.macro[(std::size_t) mi] = macroVals[(std::size_t) mi];
             }
 
+            // Mixer-tier mods PER PART (LINK P0 per-part): each part's OWN matrix drives its
+            // PartLevel/PartPan from its own sources, regardless of edit focus — so a background
+            // part's tremolo/auto-pan route keeps modulating while you edit another part. (FX/EQ/
+            // LFO-rate block dests remain focus-scoped pending the range-mapped rework; PartLevel/
+            // PartPan need no range mapping — the offset is the multiplier/pan delta directly.)
+            for (int p = 0; p < maxParts; ++p)
+            {
+                if (! partMatrixUse[(std::size_t) p].active()) { partLevelMod[(std::size_t) p] = 0.0f; partPanMod[(std::size_t) p] = 0.0f; continue; }
+                float bo[ModMatrix::kNumBlockDests];
+                partMatrixUse[(std::size_t) p].blockOffsets (partSrc[(std::size_t) p], bo, ModMatrix::kNumBlockDests);
+                partLevelMod[(std::size_t) p] = bo[ModMatrix::PartLevel - ModMatrix::kFirstBlockDest];
+                partPanMod  [(std::size_t) p] = bo[ModMatrix::PartPan   - ModMatrix::kFirstBlockDest];
+            }
+
             const int off = startSample + done;
             // Sample the focused part's LOUDEST live voice as a representative source snapshot for
             // env/vel/note/random UI animation (published after the loop).

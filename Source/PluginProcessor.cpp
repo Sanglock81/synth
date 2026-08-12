@@ -2026,13 +2026,8 @@ void VASynthProcessor::applyBlockMods (int part, VoiceParams& vp, FXParams& fx, 
     // applying a representative to global block params would be arbitrary — kept out to hold goldens).
     float off[ModMatrix::kNumBlockDests];
     mtx.blockOffsets (s, off, ModMatrix::kNumBlockDests);
-
-    // Mixer-tier dests (LINK P0): route this part's PartLevel/PartPan matrix offset into the engine
-    // mixer, where it rides the per-block gain ramp (click-safe) with the -12 dB tremolo floor +
-    // equal-power auto-pan. Focus-scoped for now (block-tier mods apply to the edit-focus part; a
-    // per-part rework — required before route-carrying presets ship — lets background parts pan/tremolo).
-    engine.setPartLevelMod (p, off[ModMatrix::PartLevel - ModMatrix::kFirstBlockDest]);
-    engine.setPartPanMod   (p, off[ModMatrix::PartPan   - ModMatrix::kFirstBlockDest]);
+    // (PartLevel/PartPan are applied PER PART in the engine — see SynthEngine renderParts — so a
+    // background part's tremolo/auto-pan works regardless of edit focus. Not applied here.)
 
     // ANIMATION snapshot: the block sources PLUS the focused part's representative live-voice sources
     // (env/vel/note/random). This is UI-only — it drives blockOffsetPub + the voice-tier voiceOff*
@@ -3150,7 +3145,6 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
     // for THIS block, before they reach the engine. Voice-tier dests (pitch/cutoff/...) are
     // handled per-voice in the engine. No-op (bit-identical) when the matrix is inert.
     FXParams blockFx = snapshotFXParams();
-    engine.resetMixerMods();   // zero every part's mixer-tier mod; applyBlockMods sets the focus part's
     applyBlockMods (editF, params, blockFx, live0Lfo);
 
     // --- sample-accurate MIDI dispatch --------------------------------------

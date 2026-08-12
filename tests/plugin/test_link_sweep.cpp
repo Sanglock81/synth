@@ -298,16 +298,22 @@ TEST_CASE ("PartLevel dest tremolos the output (floored, never silent); PartPan 
     }
 }
 
-// TARGET STATE (rider c): a BACKGROUND part's own PartLevel route must tremolo it while edit focus is
-// elsewhere. Block-tier mods are FOCUS-SCOPED today, so this FAILS now — [!shouldfail] keeps the gate
-// green and AUTO-FLAGS the moment the per-part block-mod rework lands (remove the tag then).
-TEST_CASE ("multi-part: a background part's PartLevel route tremolos it with focus elsewhere (target state)",
-           "[plugin][modmatrix][mixer][!shouldfail]")
+// PER-PART invariant (LINK P0 rework): a BACKGROUND part's own PartLevel route tremolos it while edit
+// focus is elsewhere. The engine computes PartLevel/PartPan per part from each part's own matrix, so
+// this holds regardless of focus. (Was a [!shouldfail] target before the per-part mixer-mod landed.)
+TEST_CASE ("multi-part: a background part's PartLevel route tremolos it with focus elsewhere (per-part)",
+           "[plugin][modmatrix][mixer]")
 {
-    VASynthProcessor p;                                        // edit focus defaults to part 0
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    // Make part 1 a real BACKGROUND part: focus it, set its LFO + route + sustain, then focus back to
+    // part 0 (setEditFocus bakes the outgoing part's matrix into its locked slot). Now part 1 carries
+    // the LFO1->PartLevel route while edit focus is on part 0 — the true "background pad auto-pan" case.
+    p.setEditFocus (1);
     p.apvts.getParameter (ParamID::lfoRate)->setValueNotifyingHost (0.6f);
     p.apvts.getParameter (ParamID::ampSustain)->setValueNotifyingHost (1.0f);
-    p.linkModRoute (1, ModMatrix::LFO1, ModMatrix::PartLevel, 1.0f);   // route on part 1 (NOT the edit focus, which is 0)
+    p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::PartLevel, 1.0f);   // -1 = the focused part (part 1)
+    p.setEditFocus (0);                                        // bakes part 1 (with its route); focus now part 0
     p.prepareToPlay (48000.0, 128);
     p.routeNoteOn (60, 0.9f, 1);                               // sound part 1 (background) ONCE, then hold it
     // CHUNK-average the RMS: a tonal note's per-block RMS wobbles from partial-cycle windowing;
@@ -322,7 +328,7 @@ TEST_CASE ("multi-part: a background part's PartLevel route tremolos it with foc
     }
     INFO ("background-part chunk-RMS lo=" << lo << " hi=" << hi << " (level " << level << ")");
     REQUIRE (level > 1.0e-3f);           // part 1 sounds
-    REQUIRE (hi - lo > 0.08f * hi);      // ...and its PartLevel route tremolos it (FAILS until per-part rework)
+    REQUIRE (hi - lo > 0.08f * hi);      // ...and its PartLevel route tremolos it (per-part mixer mod)
 }
 
 // Rider 2 headroom: a full-depth auto-pan rides one channel to +3 dB. On a normal patch the master
