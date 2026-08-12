@@ -1,0 +1,25 @@
+{
+  "name": "Underlight",
+  "category": "Brass",
+  "params": {
+    "osc1_wave": 0,
+    "osc1_level": 0.75,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "filter_type": 2,
+    "filter_cutoff": 350,
+    "filter_reso": 0.6,
+    "filter_keytrack": 0.0,
+    "vel_to_amp": 0.4,
+    "amp_attack": 0.6,
+    "amp_decay": 0.5,
+    "amp_sustain": 0.85,
+    "amp_release": 1.8,
+    "fx_chorus_on": 1,
+    "chorus_voices": 2,
+    "chorus_rate": 0.3,
+    "chorus_depth": 0.4,
+    "chorus_mix": 0.3,
+    "patch_trim": 1.15
+  }
+}

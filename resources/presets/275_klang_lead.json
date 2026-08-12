@@ -1,0 +1,28 @@
+{
+  "name": "Klang Lead",
+  "category": "Lead",
+  "params": {
+    "osc1_wave": 0,
+    "osc1_octave": -1,
+    "osc1_level": 0.5,
+    "osc2_on": 1,
+    "osc2_wave": 3,
+    "osc2_level": 0.6,
+    "osc2_fm": 0.6,
+    "osc3_on": 1,
+    "osc3_wave": 3,
+    "osc3_semi": 19,
+    "osc3_level": 0.0,
+    "osc1_fm": 0.0,
+    "filter_type": 0,
+    "filter_cutoff": 2000,
+    "filter_reso": 0.3,
+    "vel_to_cutoff": 0.4,
+    "vel_to_amp": 0.7,
+    "amp_attack": 0.005,
+    "amp_decay": 0.5,
+    "amp_sustain": 0.7,
+    "amp_release": 0.4,
+    "patch_trim": 0.7
+  }
+}

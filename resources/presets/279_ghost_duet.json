@@ -1,0 +1,31 @@
+{
+  "name": "Ghost Duet",
+  "category": "FX",
+  "params": {
+    "osc1_wave": 3,
+    "osc1_level": 0.05,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "noise_level": 0.5,
+    "filter_type": 0,
+    "filter_cutoff": 500,
+    "filter_reso": 0.985,
+    "filter_keytrack": 1.0,
+    "filter_drive": 0.4,
+    "vel_to_amp": 0.7,
+    "amp_attack": 1.2,
+    "amp_decay": 0.5,
+    "amp_sustain": 0.9,
+    "amp_release": 3.0,
+    "lfo_rate": 0.15,
+    "lfo_depth": 0.12,
+    "lfo_shape": 1,
+    "lfo_dest": 2,
+    "fx_reverb_on": 1,
+    "reverb_size": 0.9,
+    "reverb_damp": 0.5,
+    "reverb_mix": 0.45,
+    "reverb_motion": 0.7,
+    "patch_trim": 0.8
+  }
+}

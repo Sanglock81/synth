@@ -1,0 +1,32 @@
+{
+  "name": "Hymnal",
+  "category": "Organ",
+  "params": {
+    "osc1_wave": 3,
+    "osc1_level": 0.7,
+    "osc2_on": 1,
+    "osc2_wave": 3,
+    "osc2_octave": 1,
+    "osc2_level": 0.45,
+    "osc3_on": 1,
+    "osc3_wave": 2,
+    "osc3_octave": -1,
+    "osc3_level": 0.5,
+    "filter_type": 0,
+    "filter_cutoff": 1600,
+    "filter_reso": 0.05,
+    "vel_to_amp": 0.0,
+    "amp_attack": 1.8,
+    "amp_decay": 0.5,
+    "amp_sustain": 0.95,
+    "amp_release": 3.5,
+    "fx_reverb_on": 1,
+    "reverb_size": 1.0,
+    "reverb_damp": 0.35,
+    "reverb_mix": 0.5,
+    "reverb_motion": 0.5,
+    "fx_width_on": 1,
+    "stereo_width": 1.25,
+    "patch_trim": 0.62
+  }
+}

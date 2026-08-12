@@ -1,0 +1,27 @@
+{
+  "name": "Wet World",
+  "category": "FX",
+  "params": {
+    "osc1_wave": 3,
+    "osc1_level": 0.5,
+    "osc2_on": 1,
+    "osc2_wave": 3,
+    "osc2_semi": 7,
+    "osc2_level": 0.3,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 1600,
+    "filter_reso": 0.1,
+    "vel_to_amp": 0.7,
+    "amp_attack": 0.05,
+    "amp_decay": 0.3,
+    "amp_sustain": 0.6,
+    "amp_release": 1.0,
+    "fx_reverb_on": 1,
+    "reverb_size": 1.0,
+    "reverb_damp": 0.3,
+    "reverb_mix": 0.85,
+    "reverb_motion": 0.8,
+    "patch_trim": 1.5
+  }
+}

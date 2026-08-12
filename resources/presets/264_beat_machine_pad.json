@@ -1,0 +1,32 @@
+{
+  "name": "Beat Machine Pad",
+  "category": "Pad",
+  "params": {
+    "osc1_wave": 0,
+    "osc1_level": 0.65,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 900,
+    "filter_reso": 0.35,
+    "vel_to_amp": 0.7,
+    "amp_attack": 1.8,
+    "amp_decay": 0.8,
+    "amp_sustain": 0.85,
+    "amp_release": 3.0,
+    "lfo_rate": 0.31,
+    "lfo_depth": 0.3,
+    "lfo_shape": 1,
+    "lfo_dest": 2,
+    "lfo2_rate": 0.37,
+    "lfo2_depth": 0.3,
+    "lfo2_shape": 1,
+    "lfo2_dest": 2,
+    "fx_reverb_on": 1,
+    "reverb_size": 0.8,
+    "reverb_damp": 0.5,
+    "reverb_mix": 0.4,
+    "reverb_motion": 0.5,
+    "patch_trim": 1.4
+  }
+}

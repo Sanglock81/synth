@@ -1,6 +1,6 @@
 # Presets
 
-synth ships with 160+ read-only **factory presets** (including the classic-machine kit voices) plus **Init**, and you can
+synth ships with **284** read-only **factory presets** (including the classic-machine kit voices) plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
@@ -22,6 +22,13 @@ same grouping; **Load drum kit** lists **Classic Machines** / **Originals** / **
 
 ## Factory presets
 
+**284 factory presets.** New across this content cycle, by numeric-prefix batch:
+`227–237` Bass Rework (11) · `238–243` Industrial/Heavy (6) · `244–250` Ambient (7) ·
+`251–259` Experimental (9) · `260–279` the Uncharted 20 · `280–288` Expansion III overflow (9) ·
+`289–292` Format-v2 route proofs (Tremolo Keys, Auto-Pan Pad, FM E-Piano II, Vapor Morph).
+Numeric prefixes drive load/BinaryData order only — the **Load menu groups by category, alphabetical
+within**, so new names slot in wherever they sort.
+
 | Category | Presets |
 |---|---|
 | Bass    | Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Reese Redux, Power Grind, Velvet Bass, Stab Bass, Cavern Bass, Power Grind 5th, Reese Sub, Knuckle Bass, Rubber Band, Prowler, Bite Sub, FM Slap, Tar Pit, Hoover Bass, Gutter Saw, Pocket Round, Trapdoor, Metal Strider |
@@ -40,6 +47,23 @@ same grouping; **Load drum kit** lists **Classic Machines** / **Originals** / **
 **Experimental** is its own category: wholly unique instruments — sounds that exist nowhere
 else; play them to find out what they do. (Cave Drone and Static Riser stay in *FX/Texture* —
 they read as production tools, an ambient bed and a riser, rather than play-to-discover voices.)
+
+### Bank map (file prefixes)
+
+**284 factory patches.** The newest content, by numeric file prefix in `resources/presets/`:
+
+| Prefix range | Batch | Count |
+|---|---|--:|
+| 227–237 | Bass rework (Expansion III A) | 11 |
+| 238–243 | Recipe Book — Industrial/Heavy (Lead/Pad/FX/Pluck/Keys) | 6 |
+| 244–250 | Recipe Book — Ambient/Lush (Pad/Organ/Experimental) | 7 |
+| 251–259 | Recipe Book — Experimental/FX | 9 |
+| 260–279 | The Uncharted 20 (novel one-per-idea patches) | 20 |
+| 280–288 | Expansion III overflow (FX/Experimental/Brass/Winds/Keys/Pluck) | 9 |
+| 289–292 | Format-v2 route proofs — Tremolo Keys, Auto-Pan Pad, FM E-Piano II, Vapor Morph | 4 |
+
+Everything sustained is level-matched to within ±4 dB of the bank median by its
+`patch_trim`; percussive/one-shot and FX/Experimental patches are matched by feel, not RMS.
 
 Patches can also carry **modulation routes** (see "Modulation routes in a patch" below), so a
 sound's movement — an LFO morphing the wavetable vowel, an envelope opening a filter beyond its

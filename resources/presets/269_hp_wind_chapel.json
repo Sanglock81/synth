@@ -1,0 +1,30 @@
+{
+  "name": "HP Wind Chapel",
+  "category": "Pad",
+  "params": {
+    "osc1_wave": 3,
+    "osc1_octave": 1,
+    "osc1_level": 0.15,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "noise_level": 0.8,
+    "filter_type": 1,
+    "filter_cutoff": 1800,
+    "filter_reso": 0.5,
+    "vel_to_amp": 0.7,
+    "amp_attack": 2.0,
+    "amp_decay": 0.5,
+    "amp_sustain": 0.9,
+    "amp_release": 3.0,
+    "lfo_rate": 0.09,
+    "lfo_depth": 0.4,
+    "lfo_shape": 0,
+    "lfo_dest": 2,
+    "fx_reverb_on": 1,
+    "reverb_size": 0.9,
+    "reverb_damp": 0.3,
+    "reverb_mix": 0.5,
+    "reverb_motion": 0.6,
+    "patch_trim": 1.7
+  }
+}

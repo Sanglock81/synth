@@ -1,0 +1,31 @@
+{
+  "name": "Slope Morph Lead",
+  "category": "Lead",
+  "params": {
+    "osc1_wave": 2,
+    "osc1_pw": 0.5,
+    "osc1_level": 0.85,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 1000,
+    "filter_reso": 0.35,
+    "filter_drive": 0.3,
+    "vel_to_cutoff": 0.65,
+    "vel_to_amp": 0.7,
+    "amp_attack": 0.01,
+    "amp_decay": 0.3,
+    "amp_sustain": 0.8,
+    "amp_release": 0.3,
+    "lfo_rate": 2.0,
+    "lfo_depth": 1.0,
+    "lfo_shape": 0,
+    "lfo_dest": 3,
+    "lfo_sync": 1,
+    "lfo_div": 2,
+    "poly_mode": 1,
+    "glide_time": 0.03,
+    "patch_trim": 1.2
+  },
+  "routes": [ { "src": "LFO 1", "dest": "Pulse Width", "depth": 0.85 } ]
+}

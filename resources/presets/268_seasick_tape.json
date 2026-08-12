@@ -1,0 +1,30 @@
+{
+  "name": "Seasick Tape",
+  "category": "Keys",
+  "params": {
+    "osc1_wave": 2,
+    "osc1_level": 0.6,
+    "osc1_phase": 2,
+    "osc2_on": 1,
+    "osc2_wave": 3,
+    "osc2_octave": 1,
+    "osc2_level": 0.35,
+    "osc2_phase": 2,
+    "osc3_on": 0,
+    "analog": 1.0,
+    "filter_type": 0,
+    "filter_cutoff": 1800,
+    "filter_reso": 0.15,
+    "vel_to_amp": 0.7,
+    "amp_attack": 0.3,
+    "amp_decay": 0.8,
+    "amp_sustain": 0.6,
+    "amp_release": 1.2,
+    "fx_chorus_on": 1,
+    "chorus_voices": 2,
+    "chorus_rate": 0.15,
+    "chorus_depth": 0.5,
+    "chorus_mix": 0.3,
+    "patch_trim": 1.8
+  }
+}

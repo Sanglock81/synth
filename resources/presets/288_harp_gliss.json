@@ -1,0 +1,32 @@
+{
+  "name": "Harp Gliss",
+  "category": "Pluck",
+  "params": {
+    "osc1_wave": 2,
+    "osc1_level": 0.8,
+    "osc2_on": 1,
+    "osc2_wave": 2,
+    "osc2_octave": 1,
+    "osc2_level": 0.3,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 3000,
+    "filter_reso": 0.2,
+    "filter_env_amt": 0.4,
+    "flt_attack": 0.001,
+    "flt_decay": 0.3,
+    "flt_sustain": 0.0,
+    "flt_release": 0.2,
+    "vel_to_amp": 0.8,
+    "amp_attack": 0.001,
+    "amp_decay": 0.5,
+    "amp_sustain": 0.0,
+    "amp_release": 0.3,
+    "fx_reverb_on": 1,
+    "reverb_size": 0.5,
+    "reverb_damp": 0.4,
+    "reverb_mix": 0.25,
+    "reverb_motion": 0.3,
+    "patch_trim": 1.2
+  }
+}

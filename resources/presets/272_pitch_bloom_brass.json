@@ -1,0 +1,31 @@
+{
+  "name": "Pitch Bloom Brass",
+  "category": "Brass",
+  "params": {
+    "osc1_wave": 0,
+    "osc1_semi": -3,
+    "osc1_level": 0.8,
+    "osc2_on": 1,
+    "osc2_wave": 0,
+    "osc2_semi": -3,
+    "osc2_detune": 10,
+    "osc2_level": 0.6,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 1300,
+    "filter_reso": 0.2,
+    "filter_env_amt": 0.4,
+    "filter_drive": 0.3,
+    "fltenv_to_pitch": 3,
+    "flt_attack": 0.4,
+    "flt_decay": 0.001,
+    "flt_sustain": 1.0,
+    "flt_release": 0.3,
+    "vel_to_amp": 0.7,
+    "amp_attack": 0.25,
+    "amp_decay": 0.3,
+    "amp_sustain": 0.85,
+    "amp_release": 0.5,
+    "patch_trim": 1.0
+  }
+}

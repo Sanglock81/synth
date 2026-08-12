@@ -1,0 +1,31 @@
+{
+  "name": "Sheet Storm",
+  "category": "FX",
+  "params": {
+    "osc1_wave": 3,
+    "osc1_level": 0.05,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "noise_level": 0.5,
+    "filter_type": 2,
+    "filter_cutoff": 1300,
+    "filter_reso": 0.985,
+    "filter_keytrack": 1.0,
+    "filter_drive": 0.4,
+    "vel_to_amp": 0.7,
+    "amp_attack": 0.5,
+    "amp_decay": 0.3,
+    "amp_sustain": 0.95,
+    "amp_release": 1.5,
+    "lfo_rate": 0.2,
+    "lfo_depth": 0.1,
+    "lfo_shape": 1,
+    "lfo_dest": 2,
+    "fx_reverb_on": 1,
+    "reverb_size": 0.8,
+    "reverb_damp": 0.5,
+    "reverb_mix": 0.4,
+    "reverb_motion": 0.5,
+    "patch_trim": 0.9
+  }
+}

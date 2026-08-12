@@ -1,0 +1,31 @@
+{
+  "name": "Reverse Wah Pluck",
+  "category": "Pluck",
+  "params": {
+    "osc1_wave": 1,
+    "osc1_pw": 0.45,
+    "osc1_level": 0.8,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 2600,
+    "filter_reso": 0.5,
+    "filter_env_amt": -0.7,
+    "filter_keytrack": 0.5,
+    "flt_attack": 0.001,
+    "flt_decay": 0.5,
+    "flt_sustain": 0.0,
+    "flt_release": 0.4,
+    "vel_to_amp": 0.7,
+    "amp_attack": 0.002,
+    "amp_decay": 0.6,
+    "amp_sustain": 0.0,
+    "amp_release": 0.4,
+    "fx_delay_on": 1,
+    "delay_time": 320,
+    "delay_feedback": 0.35,
+    "delay_spread": 0.6,
+    "delay_mix": 0.25,
+    "patch_trim": 1.2
+  }
+}

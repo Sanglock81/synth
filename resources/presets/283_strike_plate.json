@@ -1,0 +1,33 @@
+{
+  "name": "Strike Plate",
+  "category": "Pluck",
+  "params": {
+    "osc1_wave": 4,
+    "osc1_wt_kind": 3,
+    "osc1_wt_seed": 51777,
+    "osc1_wt_pos": 0.3,
+    "osc1_level": 0.8,
+    "osc1_phase": 1,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 2500,
+    "filter_reso": 0.4,
+    "filter_env_amt": 0.5,
+    "flt_attack": 0.001,
+    "flt_decay": 0.25,
+    "flt_sustain": 0.0,
+    "flt_release": 0.2,
+    "vel_to_amp": 0.8,
+    "vel_to_cutoff": 0.3,
+    "amp_attack": 0.001,
+    "amp_decay": 0.5,
+    "amp_sustain": 0.0,
+    "amp_release": 0.3,
+    "fx_reverb_on": 1,
+    "reverb_size": 0.5,
+    "reverb_damp": 0.4,
+    "reverb_mix": 0.25,
+    "patch_trim": 1.2
+  }
+}

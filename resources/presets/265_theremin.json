@@ -1,0 +1,31 @@
+{
+  "name": "Theremin",
+  "category": "Lead",
+  "params": {
+    "osc1_wave": 3,
+    "osc1_level": 0.1,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "filter_type": 0,
+    "filter_cutoff": 800,
+    "filter_reso": 1.0,
+    "filter_keytrack": 1.0,
+    "filter_drive": 0.3,
+    "vel_to_amp": 0.4,
+    "amp_attack": 0.15,
+    "amp_decay": 0.001,
+    "amp_sustain": 1.0,
+    "amp_release": 0.5,
+    "lfo_rate": 5.0,
+    "lfo_depth": 0.04,
+    "lfo_shape": 1,
+    "lfo_dest": 1,
+    "poly_mode": 2,
+    "glide_time": 0.35,
+    "fx_reverb_on": 1,
+    "reverb_size": 0.7,
+    "reverb_damp": 0.4,
+    "reverb_mix": 0.35,
+    "patch_trim": 1.1
+  }
+}
