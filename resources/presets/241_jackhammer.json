@@ -1,0 +1,33 @@
+{
+  "name": "Jackhammer",
+  "category": "Pluck",
+  "params": {
+    "osc1_wave": 1,
+    "osc1_octave": -1,
+    "osc1_pw": 0.5,
+    "osc1_level": 0.9,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "noise_level": 0.3,
+    "filter_type": 0,
+    "filter_cutoff": 3000,
+    "filter_reso": 0.4,
+    "filter_env_amt": 0.9,
+    "filter_drive": 0.75,
+    "fltenv_to_pitch": -22,
+    "flt_attack": 0.001,
+    "flt_decay": 0.06,
+    "flt_sustain": 0.0,
+    "flt_release": 0.06,
+    "vel_to_amp": 0.9,
+    "amp_attack": 0.001,
+    "amp_decay": 0.16,
+    "amp_sustain": 0.0,
+    "amp_release": 0.1,
+    "fx_width_on": 1,
+    "stereo_width": 1.0,
+    "fx_sat": 0.5,
+    "poly_mode": 1,
+    "patch_trim": 1.2
+  }
+}
