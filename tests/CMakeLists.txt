@@ -172,6 +172,22 @@ target_compile_definitions(plugin_tests PRIVATE
 
 catch_discover_tests(plugin_tests)
 
+# --- preset_dedup: rerunnable render-similarity tool. EXCLUDE_FROM_ALL -> NOT part of the gate/CI
+# build; run on demand via scripts/preset-dedup.sh. Renders every factory preset offline through the
+# real processor with one fixed phrase and writes docs/preset-similarity.md (top-30 most-similar
+# pairs). Its own main() (no Catch2), links the plugin shared code like plugin_tests.
+add_executable(preset_dedup EXCLUDE_FROM_ALL tools/preset_dedup.cpp)
+target_include_directories(preset_dedup PRIVATE ${CMAKE_SOURCE_DIR}/Source)
+target_link_libraries(preset_dedup PRIVATE
+    VASynth
+    juce::juce_audio_utils
+    juce::juce_dsp
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags)
+target_compile_definitions(preset_dedup PRIVATE
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+    VASYNTH_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs")
+
 # --- soak: memory stability under a MIDI storm (built with the sanitizers) ---
 add_executable(soak soak/soak_main.cpp)
 target_include_directories(soak PRIVATE ${CMAKE_SOURCE_DIR}/Source)
