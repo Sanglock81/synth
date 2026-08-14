@@ -97,6 +97,47 @@ TEST_CASE ("looper: a recorded chord drives the arp on playback, then stops clea
     REQUIRE (r.p.arpDisplayStep() == -1);                              // arp idled
 }
 
+TEST_CASE ("looper: playback stays bounded over many loops (no accumulating triggers, #138)", "[plugin][looper][stuck]")
+{
+    // #138 regression. A recorded MIDI loop, played for many cycles, must NOT accumulate voices:
+    // every recorded note-on has a matching note-off (closeDangling pairs one for a note held
+    // across the one-shot record stop), so playback re-fires a BALANCED clip each pass and the
+    // active-voice count stays bounded by the clip's own polyphony (plus short release tails) —
+    // it must never climb toward the voice cap. If the accumulating-trigger bug returns, maxV
+    // grows every loop and trips these ceilings.
+    auto maxVoicesOverLoops = [] (std::function<void(Rig&)> perform, int ceiling)
+    {
+        Rig r; setVal (r.p, ParamID::tempo, 240.0f); setVal (r.p, ParamID::ampRelease, 0.05f);
+        s01 (r.p, ParamID::loopRec, 1.0f); s01 (r.p, ParamID::loopPlay, 1.0f);
+        r.pump (2);                                                   // record engages at the downbeat
+        perform (r);
+        int rec = 0; while (r.p.loopRecDisplayState (0) == 2 && rec < 3000) { r.pump (1); ++rec; }   // finish one pass -> plays
+        REQUIRE (r.p.loopLaneHasContent (0));
+        int maxV = 0;
+        for (int b = 0; b < 8000; ++b)                               // ~20 loops @ 240 BPM, 1 bar
+        { r.buf.clear(); r.p.processBlock (r.buf, r.m); maxV = std::max (maxV, r.p.activeVoicesForPart (0)); }
+        INFO ("maxVoicesOverPlayback=" << maxV << " ceiling=" << ceiling);
+        REQUIRE (maxV <= ceiling);
+    };
+
+    SECTION ("released phrase (two notes, each released inside the loop)")
+        maxVoicesOverLoops ([] (Rig& r) {
+            r.p.routeNoteOn (60, 0.9f, 0); r.pump (30); r.p.routeNoteOff (60, 0); r.pump (10);
+            r.p.routeNoteOn (67, 0.9f, 0); r.pump (30); r.p.routeNoteOff (67, 0);
+        }, 4);
+
+    SECTION ("chord (three notes struck together, released inside the loop)")
+        maxVoicesOverLoops ([] (Rig& r) {
+            r.p.routeNoteOn (60, 0.9f, 0); r.p.routeNoteOn (64, 0.9f, 0); r.p.routeNoteOn (67, 0.9f, 0);
+            r.pump (40); r.p.routeNoteOff (60, 0); r.p.routeNoteOff (64, 0); r.p.routeNoteOff (67, 0);
+        }, 6);
+
+    SECTION ("note held across the one-shot record stop (closeDangling path)")
+        maxVoicesOverLoops ([] (Rig& r) {
+            r.p.routeNoteOn (55, 0.9f, 0); r.pump (600); r.p.routeNoteOff (55, 0);   // released only after record auto-stops
+        }, 3);
+}
+
 TEST_CASE ("no hang: switching loop MIDI->AUDIO then stopping releases the MIDI note", "[plugin][looper][stuck]")
 {
     // Flip to AUDIO (the MIDI lane stops -> its held note must be released), then stop all
