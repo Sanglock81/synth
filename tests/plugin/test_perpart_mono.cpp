@@ -33,7 +33,7 @@ namespace
 TEST_CASE ("per-part mono: a held MONO note on part 1 survives the sequencer on part 4", "[plugin][voices][isolation][mono]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
-    p.setPartPreset (1, "Reese Bass");     // a MONO patch (poly_mode:1), baked onto part 1
+    p.setPartPreset (1, "Pocket Round");     // a MONO patch (poly_mode:1), baked onto part 1
     startSeqOnKit (p);
     run (p, 20);
 

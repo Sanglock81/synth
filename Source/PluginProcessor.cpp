@@ -381,7 +381,7 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 void VASynthProcessor::applyDefaultScene()
 {
     setPartKit (3, factoryKit ("808"));             // P4: sequencer's drum kit
-    setPartPreset (2, "Reese Bass");              // P3: dedicated bass voice
+    setPartPreset (2, "Pocket Round");            // P3: dedicated bass voice (was "Reese Bass", dropped in the audition)
     // P2 (part 1) intentionally left at Init — a free spare part.
 }
 

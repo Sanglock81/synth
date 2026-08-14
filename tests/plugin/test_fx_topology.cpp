@@ -88,7 +88,7 @@ TEST_CASE ("stereo width>1 widens a dry MONO part (allpass decorrelation)", "[pl
 TEST_CASE ("width edited on a FOCUSED LOCKED part reaches that part's audio", "[plugin][fx][topology]")
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 512);
-    p.setPartPreset (1, "Reese Bass");     // a locked synth part
+    p.setPartPreset (1, "Pocket Round");     // a locked synth part
     p.setEditFocus (1);                      // focus it -> panel edits + notes route to part 1
     set01 (p, ParamID::fxChorusOn, 1.0f);    // stereo source
     set01 (p, ParamID::fxWidthOn, 1.0f);

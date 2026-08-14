@@ -1,6 +1,6 @@
 # Presets
 
-synth ships with **284** read-only **factory presets** (including the classic-machine kit voices) plus **Init**, and you can
+synth ships with **269** read-only **factory presets** (including the classic-machine kit voices) plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
@@ -22,19 +22,19 @@ same grouping; **Load drum kit** lists **Classic Machines** / **Originals** / **
 
 ## Factory presets
 
-**284 factory presets.** New across this content cycle, by numeric-prefix batch:
+**269 factory presets.** New across this content cycle, by numeric-prefix batch:
 `227–237` Bass Rework (11) · `238–243` Industrial/Heavy (6) · `244–250` Ambient (7) ·
 `251–259` Experimental (9) · `260–279` the Uncharted 20 · `280–288` Expansion III overflow (9) ·
-`289–292` Format-v2 route proofs (Tremolo Keys, Auto-Pan Pad, FM E-Piano II, Vapor Morph).
+`289–292` Format-v2 route proofs (Tremolo Keys, Auto-Pan Pad, Vapor Morph).
 Numeric prefixes drive load/BinaryData order only — the **Load menu groups by category, alphabetical
 within**, so new names slot in wherever they sort.
 
 | Category | Presets |
 |---|---|
-| Bass    | Deep Sub, Reese Bass, Acid Bass, WT Growl Bass, Sub + Click, Reese Redux, Power Grind, Velvet Bass, Stab Bass, Cavern Bass, Power Grind 5th, Reese Sub, Knuckle Bass, Rubber Band, Prowler, Bite Sub, FM Slap, Tar Pit, Hoover Bass, Gutter Saw, Pocket Round, Trapdoor, Metal Strider |
-| Lead    | Bright Lead, Foundry Lead, Dream Chime, PWM Anthem, Chip Lead, Fifth Stack, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo, Bright Lead 5th, Foundry 5th, Screamer 5th |
+| Bass    | Acid Bass, Power Grind, Velvet Bass, Stab Bass, Cavern Bass, Power Grind 5th, Knuckle Bass, Rubber Band, Prowler, Bite Sub, FM Slap, Tar Pit, Hoover Bass, Gutter Saw, Pocket Round, Trapdoor, Metal Strider |
+| Lead    | Bright Lead, Foundry Lead, Dream Chime, Chip Lead, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo, Bright Lead 5th, Foundry 5th, Screamer 5th |
 | Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite, Velvet Poly, Tape Keys, Toy Piano, Glass Harmonica |
-| Pad     | Aurora Pad, Boreal, Choir Ahh, Submerged, Prairie Ensemble, Floating Poly, Anvil Choir, Warm Pad, Glass Pad, WT Vowel Pad, Motion Pad, WT Drift Pad, Dark Hollow, Anvil 5ths, Dark Hollow Sus, Warm Sus4 |
+| Pad     | Aurora Pad, Boreal, Choir Ahh, Submerged, Anvil Choir, Warm Pad, Glass Pad, WT Vowel Pad, Dark Hollow, Dark Hollow Sus, Warm Sus4 |
 | Pluck   | Synth Pluck, Nylon Pluck, Music Box, Kalimba, Raindrop, Foundry Stomp, Ice Pluck, WT Marimba, Rubber Pluck |
 | Brass   | Analog Brass, Dawn Brass, Ska Stab |
 | Strings | String Machine, Strings Redux |
@@ -50,7 +50,7 @@ they read as production tools, an ambient bed and a riser, rather than play-to-d
 
 ### Bank map (file prefixes)
 
-**284 factory patches.** The newest content, by numeric file prefix in `resources/presets/`:
+**269 factory patches.** The newest content, by numeric file prefix in `resources/presets/`:
 
 | Prefix range | Batch | Count |
 |---|---|--:|
@@ -60,7 +60,7 @@ they read as production tools, an ambient bed and a riser, rather than play-to-d
 | 251–259 | Recipe Book — Experimental/FX | 9 |
 | 260–279 | The Uncharted 20 (novel one-per-idea patches) | 20 |
 | 280–288 | Expansion III overflow (FX/Experimental/Brass/Winds/Keys/Pluck) | 9 |
-| 289–292 | Format-v2 route proofs — Tremolo Keys, Auto-Pan Pad, FM E-Piano II, Vapor Morph | 4 |
+| 289–292 | Format-v2 route proofs — Tremolo Keys, Auto-Pan Pad, Vapor Morph | 3 |
 
 Everything sustained is level-matched to within ±4 dB of the bank median by its
 `patch_trim`; percussive/one-shot and FX/Experimental patches are matched by feel, not RMS.

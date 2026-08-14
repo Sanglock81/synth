@@ -89,7 +89,7 @@ TEST_CASE ("a non-pad device is never split (routeDeviceMessage == routeSurfaceM
 TEST_CASE ("pad-surface routing round-trips through a MULTI", "[plugin][pads][multi]")
 {
     VASynthProcessor src; src.prepareToPlay (kSR, 256);
-    src.setPartPreset (1, "Reese Bass");          // give part 1 a real sound so routing survives
+    src.setPartPreset (1, "Pocket Round");          // give part 1 a real sound so routing survives
     src.setSurfaceRouting (kLK,     1);             // keys -> the bass part
     src.setSurfaceRouting (kLKPads, 3);             // pads -> P4 (the default-scene 808 kit)
     auto multi = src.captureMultiState();
