@@ -405,6 +405,55 @@ TEST_CASE ("torture: scene launches under a playing loop stay click-free (J3)", 
     REQUIRE (pm.s.maxJump < kClick);
 }
 
+// ---- Mono note-change declick (Tar Pit "bass note-change click") ----------------------
+// A MONO voice retriggers on the SAME sounding voice, so noteOn updates `velocity` mid-note.
+// The velocity->amp gain is otherwise a per-chunk constant, so a velocity CHANGE stepped it at
+// the retrigger seam -> a broadband click. It is loudest on a QUICK change (amp env still near
+// sustain) and needs the velocity to actually differ: a real MIDI keyboard (Launchkey) trips it
+// every time; QWERTY's fixed 0.8 velocity never does. Legato keeps velocity; poly uses a fresh
+// voice; both were already clean. The fix glides the gain with a ~5 ms one-pole on retrigger
+// (fresh notes snap). Tar Pit is a dark sub-bass (peak ~0.09), so the absolute jump is small and
+// the shared kClick ceiling can't see it — instead this compares the CLICK gesture (varying
+// velocity, "Launchkey") against the SAME gesture at constant velocity ("QWERTY"), which has no
+// gain step and is the honest floor. Pre-fix the varying run was ~7x the floor; post-fix ~1x.
+TEST_CASE ("torture: mono note-change on Tar Pit stays click-free (bass note-change click)", "[plugin][click][mono][retrig]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+
+    // Quick mono note-changes (release + immediate re-hit) on Tar Pit; `vary` picks real
+    // (Launchkey-like) vs fixed 0.8 (QWERTY-like) velocity. Returns the worst sample-to-sample
+    // jump across the whole run.
+    auto worstJump = [] (bool vary) -> float
+    {
+        VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+        p.loadFactoryPreset ("Tar Pit");
+        Pumper pm (p, 128);
+        pm.pump (10);
+        const int   notes[] = { 36, 43, 36, 41, 36, 48, 36, 45 };
+        const float vels[]  = { 0.95f, 0.55f, 0.90f, 0.30f, 0.85f, 0.45f, 0.95f, 0.35f };
+        int prev = -1;
+        for (int k = 0; k < 8; ++k)
+        {
+            if (prev >= 0) { p.routeNoteOff (prev, 0); pm.pump (2); }   // quick change: tiny gap, env still high
+            p.routeNoteOn (notes[k], vary ? vels[k] : 0.8f, 0);
+            prev = notes[k];
+            pm.pump (40);
+        }
+        REQUIRE (pm.s.finite);
+        REQUIRE (pm.s.peak <= 1.0f);
+        return pm.s.maxJump;
+    };
+
+    const float floorJump = worstJump (false);   // QWERTY: constant velocity -> no gain step (the floor)
+    const float variedJump = worstJump (true);    // Launchkey: real velocity -> the click gesture
+    INFO ("floor(constant-vel)=" << floorJump << " varied(real-vel)=" << variedJump
+          << " ratio=" << (variedJump / std::max (1.0e-6f, floorJump)));
+    // Post-fix the seam glides, so the varied run sits at the constant-velocity floor. A small
+    // margin (2.5x) leaves headroom for the glide's residual while still catching the pre-fix
+    // step, which was ~7x the floor.
+    REQUIRE (variedJump < floorJump * 2.5f);
+}
+
 TEST_CASE ("torture: HOLD chord-replacement churn", "[plugin][click][arp][hold]")
 {
     juce::ScopedJuceInitialiser_GUI init;
