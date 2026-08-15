@@ -24,9 +24,11 @@ namespace
     constexpr double kSR       = 48000.0;
     constexpr int    kBlock    = 128;
     constexpr double kBudgetMs = kBlock / kSR * 1000.0;     // 2.667 ms
-    // Conservative derating: this dev machine is ~3.5x faster single-
-    // thread than the 2015-class dual-core target. Scale measured times up by this.
-    constexpr double kTargetDerate = 3.5;
+    // No dev->target derate: this bench runs ON the reference target (Intel i7-8650U ThinkPad),
+    // so the measured p99 at the PERFORMANCE governor IS the target figure. The old assumed x3.5
+    // (from wrongly believing the target was a separate, slower "2015 dual-core" machine) inflated
+    // target-native numbers ~3.5x; corrected to x1.0. Governor still matters — measure at performance.
+    constexpr double kTargetDerate = 1.0;
 
     struct Stat { double medMs, p99Ms, maxMs; };
 
@@ -363,8 +365,8 @@ int main()
 {
     std::printf ("VA Synth block benchmark @ 48 kHz, 128-sample block "
                  "(budget %.3f ms)\n", kBudgetMs);
-    std::printf ("Worst-case = saw+saw, per-sample filter-env cutoff mod. "
-                 "target~ = measured x%.1f.\n\n", kTargetDerate);
+    std::printf ("Worst-case = saw+saw, per-sample filter-env cutoff mod. Runs ON the reference "
+                 "target (i7-8650U); target~ = measured x%.1f (no dev->target derate).\n\n", kTargetDerate);
 
     struct Qc { const char* name; PolyBlepOscillator::Quality q; };
     const Qc modes[] {
