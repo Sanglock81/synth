@@ -537,3 +537,27 @@ TEST_CASE ("LFO Link armed-state screenshot", "[plugin][lfolink][screenshot]")
     juce::PNGImageFormat png; REQUIRE (png.writeImageToStream (img, os));
     p.commitLfoLinkMode();
 }
+
+// ---- LFO Link slide-to-bounds (#148 inc3) --------------------------------------------------
+TEST_CASE ("LFO Link bounds: setModLinkBounds routes at the half-range depth (sticky only)", "[plugin][lfolink][bounds]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+
+    REQUIRE (! p.setModLinkBounds (ModMatrix::Cutoff, 0.15f));   // not armed -> no-op
+
+    p.beginLfoLinkMode (0);
+    REQUIRE (p.setModLinkBounds (ModMatrix::Cutoff, 0.15f));     // a 10-40% slide -> half-range 0.15
+    bool found = false;
+    for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
+    { auto s = p.getModSlot (-1, i);
+      if (s.source == ModMatrix::LFO1 && s.dest == ModMatrix::Cutoff) { REQUIRE (s.depth == Catch::Approx (0.15f)); found = true; } }
+    REQUIRE (found);
+    // Negative half-range (slide downward) inverts.
+    REQUIRE (p.setModLinkBounds (ModMatrix::Resonance, -0.30f));
+    for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
+    { auto s = p.getModSlot (-1, i);
+      if (s.source == ModMatrix::LFO1 && s.dest == ModMatrix::Resonance) REQUIRE (s.depth == Catch::Approx (-0.30f)); }
+    p.commitLfoLinkMode();
+}

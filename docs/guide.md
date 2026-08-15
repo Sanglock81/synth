@@ -69,9 +69,9 @@ Two ADSR envelopes. The AMP tab shapes loudness over the note; the MOD tab is a 
 
 ## LFOs
 
-Three low-frequency oscillators per part for cyclic motion. Each picks a destination + shape and runs free (RATE in Hz) or locked to the tempo (SYNC -> DIV). Markers show LFO 1.
+Three low-frequency oscillators per part for cyclic motion. Each picks a destination + shape and runs free (RATE in Hz) or locked to the tempo (SYNC -> DIV). Each LFO has an identity colour (LFO 1 amber, 2 teal, 3 violet) shown on every control it modulates.
 
-1. **DEST** - Where this LFO's motion goes (off / pitch / cutoff / PW / ...). _Cutoff for a wobble, pitch for vibrato, PW for shimmer; more targets via the mod matrix._
+1. **DEST** - Where this LFO's motion goes (off / pitch / cutoff / PW / ...). _LONG-PRESS to LINK this LFO: it holds still + its existing links glow its colour; tap any knob to add a route (tap again to remove), or slide a knob to set the sweep bounds (its low..high). Long-press again to commit; a short-press or Esc cancels. DEPTH scales the links._
 2. **RATE** - Free-run speed in Hz (when SYNC is off). _Slow for evolving pads; fast (audio-rate) toward a buzzy, ring-mod-ish tone._
 3. **DIV** - The tempo division when SYNC is on (replaces RATE). _Lock the wobble to the beat: 1/8, 1/16, triplet or dotted._
 4. **DEPTH** - How far the LFO moves its destination. _Subtle for movement, extreme for special effects; 0 = off._

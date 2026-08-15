@@ -156,6 +156,31 @@ public:
     }
     void endLinkGesture() { linkDepthActive = false; linkTime = juce::Time::getMillisecondCounter(); }
 
+    // #148 Inc 3 — slide-to-bounds. In sticky LFO-Link mode a press+drag on a CONTINUOUS target
+    // sweeps the knob to define its modulation bounds [lo,hi]; release parks the value at the
+    // midpoint and creates the route at the signed half-range depth. A pure tap = full-scale route.
+    bool armedForBounds() const { return modLink != nullptr && modDest > 0 && modLink->armedLfo() >= 0; }
+    bool beginBoundsCapture (float norm, bool continuous)
+    {
+        if (! armedForBounds() || ! continuous) return false;
+        boundsCapturing = true; boundsStart = boundsMin = boundsMax = juce::jlimit (0.0f, 1.0f, norm); return true;
+    }
+    bool inBoundsCapture() const { return boundsCapturing; }
+    void updateBounds (float norm)
+    { norm = juce::jlimit (0.0f, 1.0f, norm); boundsMin = std::min (boundsMin, norm); boundsMax = std::max (boundsMax, norm); repaint(); }
+    // Ends the capture. Returns the midpoint (0..1) to park the knob at, or -1 for a tap (full-scale).
+    float endBoundsCapture (bool dragged, float releaseNorm)
+    {
+        boundsCapturing = false; repaint();
+        if (! dragged || boundsMax - boundsMin < 0.01f) { if (modLink) modLink->completeModLink (modDest); return -1.0f; }
+        const float mid = 0.5f * (boundsMin + boundsMax), half = 0.5f * (boundsMax - boundsMin);
+        const float sign = (juce::jlimit (0.0f, 1.0f, releaseNorm) >= boundsStart) ? 1.0f : -1.0f;
+        if (modLink) modLink->setModLinkBounds (modDest, sign * half);
+        return mid;
+    }
+    float boundsLo() const { return boundsMin; }
+    float boundsHi() const { return boundsMax; }
+
     // Cyan connect-ring — every armable target draws it (call from paint()).
     void paintModRing (juce::Graphics& g)
     {
@@ -233,6 +258,8 @@ protected:
     bool  linkDepthActive = false;
     float linkDownDepth = 0.0f;
     juce::uint32 linkTime = 0;
+    bool  boundsCapturing = false;                    // #148 Inc 3: slide-to-bounds capture in progress
+    float boundsStart = 0.0f, boundsMin = 0.0f, boundsMax = 0.0f;
     juce::uint32 armStart = 0;          // #139: when learn was armed, for the stuck-highlight auto-timeout
     std::function<float()> modAnimFn;
     std::vector<std::pair<juce::String, std::function<void()>>> extraMenuItems;
@@ -320,9 +347,30 @@ private:
 struct ModSlider : juce::Slider
 {
     explicit ModSlider (LearnableComponent& o) : owner (o) {}
-    void mouseDown (const juce::MouseEvent& e) override { if (! owner.beginLinkGesture (e)) juce::Slider::mouseDown (e); }
-    void mouseDrag (const juce::MouseEvent& e) override { if (owner.inLinkDrag()) owner.dragLinkDepth (e); else juce::Slider::mouseDrag (e); }
-    void mouseUp   (const juce::MouseEvent& e) override { if (owner.inLinkDrag()) owner.endLinkGesture(); else juce::Slider::mouseUp (e); }
+    bool continuousRange() const { return getNormalisableRange().interval <= 0.0; }   // stepped -> tap-only (no bounds drag)
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        // #148 Inc 3: sticky LFO-Link mode -> drag the knob to set its modulation bounds (continuous only).
+        if (owner.beginBoundsCapture ((float) valueToProportionOfLength (getValue()), continuousRange()))
+        { juce::Slider::mouseDown (e); return; }                                       // let the knob follow the pointer
+        if (! owner.beginLinkGesture (e)) juce::Slider::mouseDown (e);
+    }
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (owner.inBoundsCapture()) { juce::Slider::mouseDrag (e); owner.updateBounds ((float) valueToProportionOfLength (getValue())); return; }
+        if (owner.inLinkDrag()) owner.dragLinkDepth (e); else juce::Slider::mouseDrag (e);
+    }
+    void mouseUp   (const juce::MouseEvent& e) override
+    {
+        if (owner.inBoundsCapture())
+        {
+            juce::Slider::mouseUp (e);
+            const float mid = owner.endBoundsCapture (e.mouseWasDraggedSinceMouseDown(), (float) valueToProportionOfLength (getValue()));
+            if (mid >= 0.0f) setValue (proportionOfLengthToValue (mid), juce::sendNotificationSync);   // park at the midpoint
+            return;
+        }
+        if (owner.inLinkDrag()) owner.endLinkGesture(); else juce::Slider::mouseUp (e);
+    }
     LearnableComponent& owner;
 };
 
@@ -475,24 +523,39 @@ private:
     {
         FaderModOverlay (juce::Slider& sl, LearnableComponent& o) : s (sl), owner (o) { setInterceptsMouseClicks (false, false); }
         void begin() { startTimerHz (modanim::kTimerHz); }
-        void timerCallback() override { if (st.tick (owner.modAnim(), juce::Time::getMillisecondCounter())) repaint(); }
+        void timerCallback() override
+        {
+            const int armed = owner.modArmedLfo();
+            const bool moved = st.tick (owner.modAnim(), juce::Time::getMillisecondCounter());
+            if (moved || armed != lastArmed) { lastArmed = armed; repaint(); }
+        }
         void paint (juce::Graphics& g) override
         {
-            if (! st.visible()) return;                                 // motion-gated: nothing at rest
-            const float a = st.alpha();
+            const int armedLfo = owner.modArmedLfo(), lfoIdx = owner.modLfoIdx();
+            const juce::Colour col = owner.modColour();
+            auto b = getLocalBounds().toFloat();
+            // #148 armed "editable picture": a static colour marker at the value marks membership.
+            if (armedLfo >= 0 && lfoIdx >= 0)
+            {
+                const float y = b.getBottom() - (float) s.valueToProportionOfLength (s.getValue()) * b.getHeight();
+                const bool mine = lfoIdx == armedLfo;
+                g.setColour (VASynthLookAndFeel::lfoColour (lfoIdx).withAlpha (mine ? 0.95f : 0.28f));
+                g.fillRoundedRectangle (b.getX() - 3.0f, y - (mine ? 2.5f : 1.5f), b.getWidth() + 6.0f, mine ? 5.0f : 3.0f, 2.0f);
+            }
+            if (! st.visible()) return;                                 // motion-gated
+            float a = st.alpha();
+            if (armedLfo >= 0 && lfoIdx != armedLfo) a *= 0.22f;
             const float base = (float) s.valueToProportionOfLength (s.getValue());
             const float curP = juce::jlimit (0.0f, 1.0f, base + st.cur);
             const float lagP = juce::jlimit (0.0f, 1.0f, base + st.lag);
-            auto b = getLocalBounds().toFloat();
             const float yCur = b.getBottom() - curP * b.getHeight();    // vertical fader: value up
             const float yLag = b.getBottom() - lagP * b.getHeight();
-            // Trail from the echo toward the current position, then the ghost thumb at current.
-            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.35f * a));
+            g.setColour (col.withAlpha (0.35f * a));
             g.fillRect (b.getX() - 1.0f, juce::jmin (yCur, yLag), b.getWidth() + 2.0f, std::abs (yCur - yLag));
-            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.9f * a));
+            g.setColour (col.withAlpha (0.9f * a));
             g.fillRoundedRectangle (b.getX() - 3.0f, yCur - 2.0f, b.getWidth() + 6.0f, 4.0f, 2.0f);
         }
-        juce::Slider& s; LearnableComponent& owner; modanim::State st;
+        juce::Slider& s; LearnableComponent& owner; modanim::State st; int lastArmed = -1;
     };
 
     juce::String name;
@@ -767,6 +830,7 @@ protected:
         overlay->colourFn = [this] { return modColour(); };     // arc tinted by the driving LFO
         overlay->lfoIdxFn = [this] { return modLfoIdx(); };     // for the per-LFO dash (colour-blind cue)
         overlay->armedFn  = [this] { return modArmedLfo(); };   // arm-mode "editable picture"
+        overlay->boundsFn = [this] { return inBoundsCapture() ? juce::Point<float> (boundsLo(), boundsHi()) : juce::Point<float> (-1.0f, -1.0f); };
         overlay->begin();
         resized();
     }
@@ -822,6 +886,23 @@ private:
                             VASynthLookAndFeel::lfoColour (lfoIdx).withAlpha (mine ? 0.95f : 0.28f), lfoIdx);
             }
 
+            // Inc 3 live bounds readout: while sliding to set bounds, draw the [lo,hi] arc + the %s,
+            // since the knob rests at the midpoint after release (the drag is otherwise invisible).
+            const juce::Point<float> bnd = boundsFn ? boundsFn() : juce::Point<float> (-1.0f, -1.0f);
+            if (bnd.x >= 0.0f)
+            {
+                const auto rp2 = s.getRotaryParameters();
+                const auto a2 = [&] (float p) { return rp2.startAngleRadians + p * (rp2.endAngleRadians - rp2.startAngleRadians); };
+                const juce::Colour bc = (armedLfo >= 0 ? VASynthLookAndFeel::lfoColour (armedLfo) : col);
+                juce::Path span; span.addCentredArc (cx, cy, arcR, arcR, 0.0f, a2 (bnd.x), a2 (bnd.y), true);
+                g.setColour (bc.withAlpha (0.9f));
+                g.strokePath (span, juce::PathStrokeType (lineW * 1.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                g.setFont (juce::Font (juce::FontOptions (10.0f, juce::Font::bold)));
+                g.drawText (juce::String (juce::roundToInt (bnd.x * 100)) + "-" + juce::String (juce::roundToInt (bnd.y * 100)) + "%",
+                            getLocalBounds(), juce::Justification::centred, false);
+                return;   // during the drag, show only the bounds
+            }
+
             if (! modFn || ! st.visible()) return;             // motion-gated animated arc
             float a = st.alpha();
             if (armedLfo >= 0 && lfoIdx != armedLfo) a *= 0.22f;   // dim non-armed-LFO motion while arming
@@ -841,6 +922,7 @@ private:
         std::function<float()> modFn;
         std::function<juce::Colour()> colourFn;
         std::function<int()> lfoIdxFn, armedFn;
+        std::function<juce::Point<float>()> boundsFn;   // (lo,hi) while sliding to bounds, else (-1,-1)
         int lastArmed = -1;
         modanim::State st;
     };
