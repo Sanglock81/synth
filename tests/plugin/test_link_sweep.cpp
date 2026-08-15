@@ -428,3 +428,57 @@ TEST_CASE ("route editing through the real overlay handlers takes effect immedia
     p.clearModSlot (-1, 0);
     REQUIRE (settle (ModMatrix::ReverbMix, reverbMx) < 0.02f);
 }
+
+// ---- LFO Link mode (#148): sticky multi-target arm, tap-toggle, commit vs cancel -----------
+TEST_CASE ("LFO Link mode: sticky arm, multi-target, tap-remove, commit vs cancel", "[plugin][link][lfolink]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+
+    auto has = [&] (int src, int dst) {
+        for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
+        { auto s = p.getModSlot (-1, i); if (s.source == src && s.dest == dst) return true; }
+        return false; };
+    auto count = [&] {
+        int n = 0; for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
+        { auto s = p.getModSlot (-1, i); if (s.source != ModMatrix::SrcNone && s.dest != ModMatrix::DstNone) ++n; }
+        return n; };
+    const int base = count();
+
+    // Arm LFO 1 as a sticky link source.
+    p.beginLfoLinkMode (0);
+    REQUIRE (p.lfoLinkModeActive());
+    REQUIRE (p.lfoLinkModeLfo() == 0);
+    REQUIRE (p.linkArmed());
+
+    // Two taps add two full-scale routes; the source stays armed (sticky).
+    p.completeModLink (ModMatrix::Cutoff);
+    p.completeModLink (ModMatrix::Resonance);
+    REQUIRE (p.lfoLinkModeActive());
+    REQUIRE (has (ModMatrix::LFO1, ModMatrix::Cutoff));
+    REQUIRE (has (ModMatrix::LFO1, ModMatrix::Resonance));
+    REQUIRE (count() == base + 2);
+    // Tap = full-scale route.
+    for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
+    { auto s = p.getModSlot (-1, i); if (s.source == ModMatrix::LFO1 && s.dest == ModMatrix::Resonance) REQUIRE (s.depth == Catch::Approx (1.0f)); }
+
+    // Tapping an already-linked target removes it (toggle).
+    p.completeModLink (ModMatrix::Cutoff);
+    REQUIRE (! has (ModMatrix::LFO1, ModMatrix::Cutoff));
+    REQUIRE (count() == base + 1);
+
+    // Cancel restores the arm-time matrix and disarms.
+    p.cancelLfoLinkMode();
+    REQUIRE (! p.lfoLinkModeActive());
+    REQUIRE (! p.linkArmed());
+    REQUIRE (count() == base);
+    REQUIRE (! has (ModMatrix::LFO1, ModMatrix::Resonance));
+
+    // Re-arm a different LFO, add, COMMIT -> the route is kept.
+    p.beginLfoLinkMode (1);
+    p.completeModLink (ModMatrix::WavePos);
+    p.commitLfoLinkMode();
+    REQUIRE (! p.lfoLinkModeActive());
+    REQUIRE (has (ModMatrix::LFO2, ModMatrix::WavePos));
+}

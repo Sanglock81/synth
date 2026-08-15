@@ -392,7 +392,10 @@ public:
     bool  linkArmed() const override { return modLinkSource.load (std::memory_order_acquire) >= 0; }
     int   completeModLink (int dest) override
     {
-        const int src = modLinkSource.exchange (-1, std::memory_order_acq_rel);
+        // Sticky LFO-Link mode keeps the source armed (multi-target + tap-to-remove); the classic
+        // single-shot LINK button disarms after one bind.
+        const int src = modLinkSticky_ ? modLinkSource.load (std::memory_order_acquire)
+                                       : modLinkSource.exchange (-1, std::memory_order_acq_rel);
         if (src < 0) return -1;
         // #13a: an LFO only emits as a matrix SOURCE when its own DEST is not "Off" (the engine
         // zeroes an Off LFO's published source). So LINK-ing an LFO whose DEST is still Off would
@@ -407,8 +410,40 @@ public:
                 if ((int) std::lround (dp->convertFrom0to1 (dp->getValue())) == 0)   // currently Off
                     dp->setValueNotifyingHost (dp->convertTo0to1 (3.0f));            // -> On (live source)
         }
+        if (modLinkSticky_)
+        {
+            const int p = editFocus();
+            for (int i = 0; i < kModSlots; ++i)   // tapping an already-linked target removes that route (toggle)
+            {
+                const auto& s = partMatrix[(std::size_t) p].slots[(std::size_t) i];
+                if (s.source == src && s.dest == dest) { clearModSlot (p, i); return i; }
+            }
+            return linkModRoute (-1, src, dest, 1.0f);   // tap = full-scale route (DEPTH knob scales it later)
+        }
         return linkModRoute (-1, src, dest);   // -1 = focused part
     }
+
+    // -- LFO Link mode (sticky, multi-target touch-to-route; UAT rework) -------------------
+    // Long-press an LFO's DEST arms this; tap a target adds a full-scale route (tap again removes),
+    // slide sets bounds; commit keeps the routes + the LFO resumes; short-press/Esc cancels and
+    // restores the arm-time matrix. The armed LFO is held still (engine) so params rest at midpoint.
+    void beginLfoLinkMode (int lfoIdx)
+    {
+        if (lfoIdx < 0 || lfoIdx > 2) return;
+        linkSnapshot_ = partMatrix[(std::size_t) editFocus()];        // cancel = full undo of the session
+        modLinkSticky_ = true;
+        armModLink (ModMatrix::LFO1 + lfoIdx);                        // linkArmed(): dest knobs route to this LFO
+        lfoLinkHeldLfo_.store (lfoIdx, std::memory_order_release);    // engine holds it still until commit
+    }
+    bool lfoLinkModeActive() const { return modLinkSticky_; }
+    int  lfoLinkModeLfo()   const { return lfoLinkHeldLfo_.load (std::memory_order_acquire); }
+    void commitLfoLinkMode() { endLfoLinkMode(); }                    // keep the routes; the LFO resumes moving
+    void cancelLfoLinkMode()                                          // discard the whole arm session
+    {
+        if (modLinkSticky_) partMatrix[(std::size_t) editFocus()] = linkSnapshot_;
+        endLfoLinkMode();
+    }
+
     void  setModRouteDepth (int slot, float depth) override { setModDepth (-1, slot, depth); }
     float modRouteDepth (int slot) const override { return getModSlot (-1, slot).depth; }
 
@@ -802,6 +837,10 @@ private:
     void writeModMatrixProperty();
     void applyModMatrixProperty();
     std::atomic<int> modLinkSource { -1 };   // LINK gesture: armed source (-1 = disarmed)
+    bool modLinkSticky_ = false;             // LFO Link mode: keep armed for multi-target routing
+    std::atomic<int> lfoLinkHeldLfo_ { -1 }; // focused-part LFO index held still while arming (-1 = none)
+    ModMatrix linkSnapshot_;                  // focused matrix at arm time (cancel restores it)
+    void endLfoLinkMode() { modLinkSticky_ = false; disarmModLink(); lfoLinkHeldLfo_.store (-1, std::memory_order_release); }
 
     // Performance-controller intake counters (G6 diagnostic): bumped whenever a pitch-bend or a
     // CC1 (mod wheel) message reaches handleControlMessage, so the F12 overlay can prove arrival.
