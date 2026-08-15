@@ -480,7 +480,7 @@ private:
 class LfoSection : public juce::Component
 {
 public:
-    explicit LfoSection (VASynthProcessor& p)
+    explicit LfoSection (VASynthProcessor& p) : procPtr_ (&p)
     {
         namespace ID = ParamID;
         const char* destIds[]  { ID::lfoDest,  ID::lfo2Dest,  ID::lfo3Dest  };
@@ -536,7 +536,16 @@ public:
     void paint (juce::Graphics& g) override
     {
         chrome::section (g, getLocalBounds(), "LFO", sectiontint::lfo());
-        for (auto& b : boxRects()) chrome::subBox (g, b, sectiontint::lfo());
+        auto boxes = boxRects();
+        for (int i = 0; i < (int) boxes.size(); ++i)
+        {
+            chrome::subBox (g, boxes[(size_t) i], sectiontint::lfo());
+            // #148 per-LFO identity colour bar (amber/teal/violet), brightened while that LFO is armed.
+            const bool armed = procPtr_ && procPtr_->lfoLinkModeActive() && procPtr_->lfoLinkModeLfo() == i;
+            auto bar = boxes[(size_t) i].reduced (6).removeFromTop (3).removeFromLeft (30);
+            g.setColour (VASynthLookAndFeel::lfoColour (i).withAlpha (armed ? 1.0f : 0.5f));
+            g.fillRoundedRectangle (bar.toFloat(), 1.5f);
+        }
     }
 
     void resized() override
@@ -584,6 +593,7 @@ private:
         std::unique_ptr<juce::ParameterAttachment> syncAtt;
     };
     std::array<Lfo, 3> lfos;
+    VASynthProcessor* procPtr_ = nullptr;   // #148: for the per-LFO colour bar + armed state in paint()
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LfoSection)
 };

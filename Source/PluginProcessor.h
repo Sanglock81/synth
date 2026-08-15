@@ -867,10 +867,16 @@ private:
     void autoEnableLinkedLfo (int src)
     {
         if (src < ModMatrix::LFO1 || src > ModMatrix::LFO3) return;
-        const char* destIds[3] { ParamID::lfoDest, ParamID::lfo2Dest, ParamID::lfo3Dest };
-        if (auto* dp = apvts.getParameter (destIds[(std::size_t) (src - ModMatrix::LFO1)]))
+        const std::size_t i = (std::size_t) (src - ModMatrix::LFO1);
+        const char* destIds[3]  { ParamID::lfoDest,  ParamID::lfo2Dest,  ParamID::lfo3Dest  };
+        const char* depthIds[3] { ParamID::lfoDepth, ParamID::lfo2Depth, ParamID::lfo3Depth };
+        if (auto* dp = apvts.getParameter (destIds[i]))
             if ((int) std::lround (dp->convertFrom0to1 (dp->getValue())) == 0)
                 dp->setValueNotifyingHost (dp->convertTo0to1 (3.0f));
+        // #148: DEPTH now scales matrix routes, so a linked LFO parked at depth 0 would be silent.
+        // Give it a working amount on link (only when at 0); the DEPTH knob scales from there.
+        if (auto* ep = apvts.getParameter (depthIds[i]))
+            if (ep->getValue() <= 1.0e-4f) ep->setValueNotifyingHost (1.0f);
     }
 
     // Performance-controller intake counters (G6 diagnostic): bumped whenever a pitch-bend or a

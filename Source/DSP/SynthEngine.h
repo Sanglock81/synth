@@ -733,7 +733,11 @@ public:
                     // referencing it costs nothing: partSrc is built only for parts with a live matrix
                     // (see below) and ps.lfo[k] is read only by a route that names LFO k.
                     if (c.held) raw = 0.0f;   // LFO Link arming: hold this LFO's output at centre (phase keeps running underneath)
-                    lfoRaw[(std::size_t) p][(std::size_t) k] = raw;
+                    // #148: the LFO DEPTH knob scales its MATRIX routes too (route depth carries the
+                    // bounds; DEPTH is the master amount) — so DEPTH 50% halves a linked sweep. Was raw
+                    // (matrix ignored DEPTH); factory LFO-route presets set depth=1.0 so they are
+                    // unchanged, except Sideband Growl (bumped to 1.0) + Rust Choir/Bell Tide (intended).
+                    lfoRaw[(std::size_t) p][(std::size_t) k] = raw * c.depth;
                     const float v = raw * c.depth;
                     switch (c.dest)
                     {

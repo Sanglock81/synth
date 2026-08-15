@@ -282,6 +282,8 @@ public:
             { proc.requestAllNotesOff(); proc.postToast ("PANIC"); return true; }
         if (key == juce::KeyPress::F11Key && isStandalone()) { toggleFullscreen(); return true; }
         if (key.getTextCharacter() == '?') { toggleHelp(); return true; }
+        if (key == juce::KeyPress::escapeKey && proc.lfoLinkModeActive())      // #148 escape hatch: cancel LFO Link arm
+            { proc.cancelLfoLinkMode(); repaint(); return true; }
         if (key == juce::KeyPress::escapeKey && (helpOverlay.isVisible() || guideOverlay.isVisible())) { hideHelp(); return true; }
         return false;
     }

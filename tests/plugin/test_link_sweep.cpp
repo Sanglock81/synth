@@ -160,8 +160,10 @@ TEST_CASE ("sweep: LFO sources produce a time-varying offset (#H4)", "[plugin][m
         const int rateId = lfo - ModMatrix::LFO1;
         const char* rate[] { ParamID::lfoRate, ParamID::lfo2Rate, ParamID::lfo3Rate };
         const char* dest[] { ParamID::lfoDest, ParamID::lfo2Dest, ParamID::lfo3Dest };
+        const char* depth[] { ParamID::lfoDepth, ParamID::lfo2Depth, ParamID::lfo3Depth };
         p.apvts.getParameter (rate[rateId])->setValueNotifyingHost (0.7f);   // brisk
         p.apvts.getParameter (dest[rateId])->setValueNotifyingHost (1.0f);   // dest = On: enable as a LINK source
+        p.apvts.getParameter (depth[rateId])->setValueNotifyingHost (1.0f);  // #148: DEPTH scales matrix routes
         p.linkModRoute (-1, lfo, ModMatrix::ReverbMix, 1.0f);
         p.prepareToPlay (48000.0, 128);
         float lo = 1.0e9f, hi = -1.0e9f;
@@ -195,6 +197,7 @@ TEST_CASE ("sweep: an LFO route modulates from ANY fixed-DEST + SYNC state, incl
     const char* destIds[] { ParamID::lfoDest, ParamID::lfo2Dest, ParamID::lfo3Dest };
     const char* syncIds[] { ParamID::lfoSync, ParamID::lfo2Sync, ParamID::lfo3Sync };
     const char* divIds[]  { ParamID::lfoDiv,  ParamID::lfo2Div,  ParamID::lfo3Div };
+    const char* depthIds[] { ParamID::lfoDepth, ParamID::lfo2Depth, ParamID::lfo3Depth };
 
     // Peak-to-peak of the destination's modulated offset (modAnimNorm works for BOTH voice-tier
     // dests like Cutoff and block-tier dests like ReverbMix — the metric the steady sweep validated).
@@ -225,6 +228,7 @@ TEST_CASE ("sweep: an LFO route modulates from ANY fixed-DEST + SYNC state, incl
                     setChoice (destIds[li], (float) ds);                                // fixed DEST state under test
                     p.apvts.getParameter (syncIds[li])->setValueNotifyingHost (sync ? 1.0f : 0.0f);
                     setChoice (divIds[li], 5.0f);                                       // ~1/8 for the synced case
+                    p.apvts.getParameter (depthIds[li])->setValueNotifyingHost (1.0f);  // #148: DEPTH scales matrix routes
                     p.linkModRoute (-1, ModMatrix::LFO1 + li, d.dest, 1.0f);            // the non-auto-enable path
                     const float range = rangeOf (p, d.dest, paramFor (p, d.dest));
                     INFO ("LFO" << (li + 1) << "  entry=linkModRoute  DEST=" << stateName[ds]
