@@ -293,6 +293,15 @@ private:
         // The "focused part level" macro (#55) resolves live to the edit-focused part's level.
         if (id == VASynthProcessor::kFocusLevelTarget)
             id = "part" + juce::String (juce::jlimit (0, 3, proc.editFocus())) + "_level";
+        // J1: a SYNC'd LFO ignores its Hz RATE (it follows the stepped note-division), so a macro
+        // aimed at that LFO's rate would look dead. Retarget it to the LFO's DIV — a choice param,
+        // so setValueNotifyingHost bins the 0..1 macro value onto the nearest division automatically.
+        {
+            auto on = [this] (const char* pid) { auto* a = proc.apvts.getRawParameterValue (pid); return a && a->load() > 0.5f; };
+            if      (id == ParamID::lfoRate  && on (ParamID::lfoSync))  id = ParamID::lfoDiv;
+            else if (id == ParamID::lfo2Rate && on (ParamID::lfo2Sync)) id = ParamID::lfo2Div;
+            else if (id == ParamID::lfo3Rate && on (ParamID::lfo3Sync)) id = ParamID::lfo3Div;
+        }
         if (auto* target = proc.apvts.getParameter (id))
             if (! juce::approximatelyEqual (target->getValue(), value))
                 target->setValueNotifyingHost (value);
