@@ -482,3 +482,27 @@ TEST_CASE ("LFO Link mode: sticky arm, multi-target, tap-remove, commit vs cance
     REQUIRE (! p.lfoLinkModeActive());
     REQUIRE (has (ModMatrix::LFO2, ModMatrix::WavePos));
 }
+
+// ---- Per-LFO colour source (#148 inc2/6): which LFO drives a dest (for the arc/list colour) -----
+TEST_CASE ("lfoSourceForDest: reports the driving LFO per dest (colour basis)", "[plugin][link][lfolink][colour]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+
+    REQUIRE (p.lfoSourceForDest (ModMatrix::Cutoff) == -1);      // nothing routed yet
+
+    p.linkModRoute (-1, ModMatrix::LFO2, ModMatrix::Cutoff, 0.8f);
+    p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::Resonance, 0.5f);
+    REQUIRE (p.lfoSourceForDest (ModMatrix::Cutoff)    == 1);     // LFO 2 -> teal
+    REQUIRE (p.lfoSourceForDest (ModMatrix::Resonance) == 0);     // LFO 1 -> amber
+
+    // A non-LFO source doesn't claim the colour.
+    p.linkModRoute (-1, ModMatrix::Velocity, ModMatrix::WavePos, 0.5f);
+    REQUIRE (p.lfoSourceForDest (ModMatrix::WavePos) == -1);
+
+    // Largest |depth| wins when two LFOs share a dest.
+    p.linkModRoute (-1, ModMatrix::LFO3, ModMatrix::PulseWidth, 0.3f);
+    p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::PulseWidth, 0.9f);
+    REQUIRE (p.lfoSourceForDest (ModMatrix::PulseWidth) == 0);    // LFO 1 (0.9) over LFO 3 (0.3)
+}

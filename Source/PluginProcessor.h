@@ -500,6 +500,22 @@ public:
         return (i >= 0 && i < ModMatrix::kNumBlockDests) ? blockOffsetPub[(std::size_t) i].load (std::memory_order_relaxed) : 0.0f;
     }
 
+    // Which LFO (0..2) drives this dest on the focused part, or -1. The mod-anim arc + the MOD
+    // overlay's links list pick the LFO's identity colour (amber/teal/violet) from this; if several
+    // LFOs target one dest, the largest |depth| wins.
+    int lfoSourceForDest (int dest) const
+    {
+        const auto& m = partMatrix[(std::size_t) juce::jlimit (0, SynthEngine::maxParts - 1, editFocus())];
+        int best = -1; float bestDepth = -1.0f;
+        for (int i = 0; i < kModSlots; ++i)
+        {
+            const auto& s = m.slots[(std::size_t) i];
+            if (s.dest == dest && s.source >= ModMatrix::LFO1 && s.source <= ModMatrix::LFO3
+                && std::abs (s.depth) > bestDepth) { bestDepth = std::abs (s.depth); best = s.source - ModMatrix::LFO1; }
+        }
+        return best;
+    }
+
     // The live modulation on a destination as a NORMALIZED param-space offset — the single source
     // the animation indicator (knob arc / fader ghost) reads for ANY registry control. Block dests
     // return their published offset directly; voice dests combine the legacy per-part LFO routing

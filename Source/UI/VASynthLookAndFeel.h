@@ -18,6 +18,14 @@ public:
     static juce::Colour dim()        { return juce::Colour (0xff9aa0a8); }
     static juce::Colour accent()     { return juce::Colour (0xff46c9b0); }   // teal
     static juce::Colour accentWarm() { return juce::Colour (0xfff0a04b); }   // amber (learn)
+    // Per-LFO identity colour, used everywhere an LFO appears (panel header, ring, mod-anim arc,
+    // MOD-overlay links list): LFO 1 amber, LFO 2 teal, LFO 3 violet. So a colour means "LFO N".
+    static juce::Colour lfoColour (int idx)
+    {
+        switch (idx) { case 1: return juce::Colour (0xff46c9b0);   // teal   (greenish-blue)
+                       case 2: return juce::Colour (0xffb07cff);   // violet (purple)
+                       default: return juce::Colour (0xfff0a04b); }// amber  (LFO 1 / default)
+    }
     static juce::Colour track()      { return juce::Colour (0xff10131a); }
 
     VASynthLookAndFeel()
