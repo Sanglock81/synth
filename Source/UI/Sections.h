@@ -495,6 +495,24 @@ public:
         {
             auto& l = lfos[(size_t) i];
             l.dest  = std::make_unique<HSelector> (p.apvts, destIds[i], p.getMidiLearn(), destLabels);
+            // #148 LFO Link mode: long-press this DEST arms/commits the link; a quick tap while armed
+            // cancels. (Discoverability lives in the guide — the tooltip stays the param name.)
+            l.dest->onLongPressOverride = [this, procPtr = &p, i]
+            {
+                if (procPtr->lfoLinkModeActive())
+                { if (procPtr->lfoLinkModeLfo() != i) return false;   // a different LFO is armed
+                  procPtr->commitLfoLinkMode(); }
+                else procPtr->beginLfoLinkMode (i);
+                if (auto* top = getTopLevelComponent()) top->repaint();
+                return true;
+            };
+            l.dest->onShortPressOverride = [this, procPtr = &p]
+            {
+                if (! procPtr->lfoLinkModeActive()) return false;
+                procPtr->cancelLfoLinkMode();
+                if (auto* top = getTopLevelComponent()) top->repaint();
+                return true;
+            };
             l.rate  = std::make_unique<RotaryKnob> (p.apvts, rateIds[i],  "RATE",  p.getMidiLearn());
             l.div   = std::make_unique<RotaryKnob> (p.apvts, divIds[i],   "DIV",   p.getMidiLearn());
             l.div->setHelp ("Note division of the LFO when SYNC is on (1/4, 1/8, ...)");

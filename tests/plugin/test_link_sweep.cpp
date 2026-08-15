@@ -506,3 +506,30 @@ TEST_CASE ("lfoSourceForDest: reports the driving LFO per dest (colour basis)", 
     p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::PulseWidth, 0.9f);
     REQUIRE (p.lfoSourceForDest (ModMatrix::PulseWidth) == 0);    // LFO 1 (0.9) over LFO 3 (0.3)
 }
+
+// ---- LFO Link armed-state SCREENSHOT (#148 inc2/6) ------------------------------------------
+TEST_CASE ("LFO Link armed-state screenshot", "[plugin][lfolink][screenshot]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+    // A small routing picture across visible knobs: LFO 1 -> Cutoff + Resonance (its own links,
+    // shown BOLD amber while armed); LFO 2 -> Reverb Mix (faint teal); LFO 3 -> Delay Mix (faint violet).
+    p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::Cutoff,    1.0f);
+    p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::Resonance, 1.0f);
+    p.linkModRoute (-1, ModMatrix::LFO2, ModMatrix::ReverbMix, 0.8f);
+    p.linkModRoute (-1, ModMatrix::LFO3, ModMatrix::DelayMix,  0.8f);
+
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+    ed->resized();
+    p.beginLfoLinkMode (0);   // arm LFO 1: Cutoff/Reso glow amber (static); Wave Pos shows faint teal
+
+    auto img = ed->createComponentSnapshot (ed->getLocalBounds(), false, 1.0f);
+    REQUIRE (img.isValid());
+    juce::File out (juce::String (VASYNTH_DOCS_DIR) + "/smoke/lfo-link-armed.png");
+    out.getParentDirectory().createDirectory(); out.deleteFile();
+    juce::FileOutputStream os (out); REQUIRE (os.openedOk());
+    juce::PNGImageFormat png; REQUIRE (png.writeImageToStream (img, os));
+    p.commitLfoLinkMode();
+}
