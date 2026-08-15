@@ -1,3 +1,7 @@
+> **CORRECTION (Aug 2026): this bundle runs ON the reference target (Intel i7-8650U).**
+> The old assumed **x3.5** dev->target derate was spurious (there is no separate machine); the
+> corrected derate is **x1.0** — measured p99 at the performance governor IS the target figure.
+
 # Minimum-spec target validation package
 
 Self-contained CPU/timing validation for the **live target** — a 2015-class dual-core

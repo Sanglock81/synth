@@ -1,5 +1,13 @@
 # Performance target record
 
+> **CORRECTION (Aug 2026): the "dev box" IS the reference target.** The bench has run on this
+> machine (Intel **i7-8650U** ThinkPad) all along — there is no separate slower laptop, and no files
+> ever needed copying. So the **assumed ×3.5 dev→target derate was spurious**: it inflated
+> target-native numbers ~3.5×. The corrected derate is **×1.0** (`kTargetDerate = 1.0`). Every
+> "Target~ @×3.5" figure below is therefore ~3.5× too high; the real figures are just the measured
+> p99 at the **performance** governor. The authoritative 1.0 record is **`docs/target-report.txt`**
+> (from `tools/target-validate/validate.sh` run on this machine); this file is the superseded "before".
+
 The 1.0 CPU/timing record for the **minimum-spec reference target** — a 2015-class dual-core
 laptop (Linux). The validation package lives in [`tools/target-validate/`](../tools/target-validate/);
 run it on the target, paste the report back, and this doc gets the measured numbers appended and
