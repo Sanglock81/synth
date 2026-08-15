@@ -132,6 +132,8 @@ public:
         if (uosc.empty()) uosc.resize ((std::size_t) (kMaxUnison - 1));
         for (auto& mem : uosc) for (auto& o : mem) { o.setQuality (oscQual); o.prepare (newSampleRate); }
         filterR.prepare (newSampleRate);
+        // ~5 ms one-pole for the velocity->amp gain glide (mono-retrigger declick). -60 dB in 5 ms.
+        ampScaleCoef_ = 1.0f - std::exp ((float) (-6.9077552789821368 / (0.005 * sampleRate)));
     }
 
     void noteOn (int note, float vel, std::uint64_t stamp, int partIndex = 0, int slot = 0, bool gen = false,
@@ -172,6 +174,7 @@ public:
         }
         ampEnv.noteOn();
         fltEnv.noteOn();
+        ampScaleSnap_ = wasIdle;   // fresh -> snap the vel->amp gain (amp is 0); retrigger -> ramp it (no click)
         rndState ^= rndState << 13; rndState ^= rndState >> 17; rndState ^= rndState << 5;   // fresh S&H per note
         voiceRandom = (float) (std::int32_t) rndState / 2147483648.0f;
         active = true;
@@ -268,9 +271,13 @@ public:
         // velocity steps give equal loudness (dB) steps below unity; a gentle LINEAR boost handles
         // >1.0 accents (an exponential there would explode). velToAmp scales the depth (0 = inert),
         // velocity 1.0 = unity. std::pow once per render chunk is cheap.
-        const float ampScale = std::max (kVelAmpFloor, (velocity <= 1.0f)
+        const float ampScaleTarget = std::max (kVelAmpFloor, (velocity <= 1.0f)
             ? std::pow (10.0f, p.velToAmp * (velocity - 1.0f) * (kVelAmpMaxDb / 20.0f))
             : 1.0f + p.velToAmp * (velocity - 1.0f) * kVelAccentGain);
+        // Mono-retrigger declick: glide the vel->amp gain toward its target (a fresh note snaps).
+        // Within a note the target is constant, so the smoother settles and is a no-op.
+        if (ampScaleSnap_) { ampScaleCur_ = ampScaleTarget; ampScaleSnap_ = false; }
+        const float ampScaleCoef = ampScaleCoef_;
         const float ampMul   = std::clamp (1.0f + mm.amp, 0.0f, 2.0f);       // matrix -> amp
 
         // Effective per-source levels, folding in any matrix osc-level modulation. Used for
@@ -301,6 +308,7 @@ public:
 
         for (int i = 0; i < numSamples; ++i)
         {
+            ampScaleCur_ += ampScaleCoef * (ampScaleTarget - ampScaleCur_);   // one-pole gain glide (declick)
             const float ampLevel = ampEnv.nextSample();
             const float fltLevel = fltEnv.nextSample();
 
@@ -333,7 +341,7 @@ public:
             if (useNoise) s += noise() * nl;
 
             s = filter.process (s);
-            out[i] += s * ampLevel * ampScale * ampMul * p.gain;   // p.gain == 1.0 for non-kit voices
+            out[i] += s * ampLevel * ampScaleCur_ * ampMul * p.gain;   // p.gain == 1.0 for non-kit voices
         }
     }
 
@@ -382,9 +390,11 @@ public:
 
         const float trackOct = p.keytrack * (midiNote - 60) / 12.0f;
         const float velOct   = p.velToCutoff * velocity * 3.0f;
-        const float ampScale = std::max (kVelAmpFloor, (velocity <= 1.0f)
+        const float ampScaleTarget = std::max (kVelAmpFloor, (velocity <= 1.0f)
             ? std::pow (10.0f, p.velToAmp * (velocity - 1.0f) * (kVelAmpMaxDb / 20.0f))
             : 1.0f + p.velToAmp * (velocity - 1.0f) * kVelAccentGain);
+        if (ampScaleSnap_) { ampScaleCur_ = ampScaleTarget; ampScaleSnap_ = false; }   // fresh -> snap; retrigger -> glide
+        const float ampScaleCoef = ampScaleCoef_;
         const float ampMul   = std::clamp (1.0f + mm.amp, 0.0f, 2.0f);
 
         const float l1 = std::clamp (p.osc1Level + mm.osc1Level, 0.0f, 1.0f);
@@ -403,6 +413,7 @@ public:
 
         for (int i = 0; i < numSamples; ++i)
         {
+            ampScaleCur_ += ampScaleCoef * (ampScaleTarget - ampScaleCur_);   // one-pole gain glide (declick)
             const float ampLevel = ampEnv.nextSample();
             const float fltLevel = fltEnv.nextSample();
             if (! ampEnv.isActive()) { active = false; break; }
@@ -442,7 +453,7 @@ public:
             }
             accL = filter.process (accL);
             accR = filterR.process (accR);
-            const float g = ampLevel * ampScale * ampMul * p.gain * uGain;
+            const float g = ampLevel * ampScaleCur_ * ampMul * p.gain * uGain;
             outL[i] += accL * g;
             outR[i] += accR * g;
         }
@@ -583,6 +594,17 @@ private:
     int   midiNote  = 60;          // target note
     float glideNote = 60.0f;       // current (glide-slewed) note, fractional
     float velocity  = 0.0f;
+    // Anti-click (mono retrigger): the velocity->amp gain is otherwise a per-chunk constant. A mono
+    // retrigger updates `velocity` mid-note on the SAME voice, so the gain would STEP -> a broadband
+    // click, loudest when the amp envelope is still near sustain (i.e. QUICK note changes) and the
+    // velocity actually changed (a MIDI keyboard with real velocity; QWERTY's fixed velocity never
+    // trips it). Legato keeps velocity; poly uses a fresh voice; both are click-free without this.
+    // Fix: glide the gain toward its target with a fixed-time one-pole (persists across blocks, so a
+    // sample-accurate mid-block retrigger near a block edge still declicks). A FRESH note SNAPS (amp
+    // is 0 -> inaudible), so single notes / poly stay bit-identical.
+    float ampScaleCur_  = 1.0f;    // smoothed velocity->amp gain (one-pole state, persists across blocks)
+    bool  ampScaleSnap_ = true;    // fresh note -> snap to target (no glide); retrigger -> glide (declick)
+    float ampScaleCoef_ = 1.0f;    // one-pole coefficient (~5 ms), set in prepare()
     bool  active    = false;
     bool  generator = false;       // note came from a generator (seq/arp/loop) -> steal-first
     int   part      = 0;           // part index (7C): selects which params to render with

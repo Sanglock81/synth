@@ -381,7 +381,7 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 void VASynthProcessor::applyDefaultScene()
 {
     setPartKit (3, factoryKit ("808"));             // P4: sequencer's drum kit
-    setPartPreset (2, "Reese Bass");              // P3: dedicated bass voice
+    setPartPreset (2, "Pocket Round");            // P3: dedicated bass voice (was "Reese Bass", dropped in the audition)
     // P2 (part 1) intentionally left at Init — a free spare part.
 }
 
@@ -2898,6 +2898,10 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
     live0Lfo.lfo[0] = { rp (apvts, ID::lfoRate),  rp (apvts, ID::lfoDepth),  (int) rp (apvts, ID::lfoShape),  (int) rp (apvts, ID::lfoDest),  rp (apvts, ID::lfoSync)  > 0.5f, (int) rp (apvts, ID::lfoDiv) };
     live0Lfo.lfo[1] = { rp (apvts, ID::lfo2Rate), rp (apvts, ID::lfo2Depth), (int) rp (apvts, ID::lfo2Shape), (int) rp (apvts, ID::lfo2Dest), rp (apvts, ID::lfo2Sync) > 0.5f, (int) rp (apvts, ID::lfo2Div) };
     live0Lfo.lfo[2] = { rp (apvts, ID::lfo3Rate), rp (apvts, ID::lfo3Depth), (int) rp (apvts, ID::lfo3Shape), (int) rp (apvts, ID::lfo3Dest), rp (apvts, ID::lfo3Sync) > 0.5f, (int) rp (apvts, ID::lfo3Div) };
+    // LFO Link mode: hold the arming LFO still (publish 0) so its linked params rest at their
+    // midpoint while the user sets bounds; it resumes on commit.
+    if (const int heldLfo = lfoLinkHeldLfo_.load (std::memory_order_acquire); heldLfo >= 0 && heldLfo < 3)
+        live0Lfo.lfo[(std::size_t) heldLfo].held = true;
 
     // --- chord engine (7B): one played note -> a diatonic chord -------------
     const bool chordOn = rp (apvts, ID::chordEnabled) > 0.5f;

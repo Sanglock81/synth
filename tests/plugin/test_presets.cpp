@@ -182,7 +182,7 @@ TEST_CASE ("master_gain is a performance control excluded from preset load/save"
     auto setMaster = [&] (float v) { mg->setValueNotifyingHost (v); };
 
     setMaster (0.42f);                                   // player dials in a level
-    p.loadFactoryPreset ("Reese Bass");
+    p.loadFactoryPreset ("Pocket Round");
     REQUIRE (mg->getValue() == Catch::Approx (0.42f).margin (1e-4));   // factory load keeps it
     p.loadInitPreset();
     REQUIRE (mg->getValue() == Catch::Approx (0.42f).margin (1e-4));   // Init keeps it
@@ -219,8 +219,6 @@ TEST_CASE ("patches carry + apply their mod-matrix routes (factory + user round-
     REQUIRE (s0.depth  == Catch::Approx (0.45f).margin (0.02));
 
     // Increment-B showcase routes must resolve (a mistyped src/dest name would silently drop).
-    p.loadFactoryPreset ("Motion Pad");                    // LFO 1 -> Cutoff (the "motion" is a filter sweep)
-    { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::Cutoff); }
     p.loadFactoryPreset ("String Machine");                // LFO 1 -> Cutoff (ensemble shimmer)
     { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::Cutoff); }
     p.loadFactoryPreset ("Bell Keys");                     // Velocity -> Wave Pos (harder = brighter bell)
@@ -261,7 +259,7 @@ TEST_CASE ("patches carry + apply their mod-matrix routes (factory + user round-
     { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::PulseWidth); }
 
     // Increment-H deepening patches with routes.
-    p.loadFactoryPreset ("PWM Anthem");                    // LFO1 -> Pulse Width (the classic PWM lead)
+    p.loadFactoryPreset ("Sputter");                       // LFO1 -> Pulse Width (PWM showcase)
     { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::PulseWidth); }
     p.loadFactoryPreset ("Boreal");                        // S&H LFO1 -> Cutoff (shallow sparkle)
     { auto s = p.getModSlot (-1, 0); REQUIRE (s.source == ModMatrix::LFO1); REQUIRE (s.dest == ModMatrix::Cutoff); }

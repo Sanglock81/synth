@@ -30,7 +30,9 @@
 // Per-part LFO configuration (Sub-phase 2). Three LFOs per part; each routes to a
 // single destination (0 off / 1 pitch / 2 cutoff / 3 PW). Depth 0 or dest 0 = inert.
 struct LfoConfig { float rate = 2.0f, depth = 0.0f; int shape = 0, dest = 0;
-                   bool synced = false; int division = 5; };   // J1: sync + note-division index
+                   bool synced = false; int division = 5;       // J1: sync + note-division index
+                   bool held = false; };   // LFO Link mode: while arming, hold the LFO still (publish 0) so
+                                           // linked params rest at their midpoint; it starts moving on commit.
 struct PartLfos  { LfoConfig lfo[3]; };
 
 // J1: LFO note divisions -> cycle length in BEATS (4/4). Index order matches the lfo_div param
@@ -730,7 +732,12 @@ public:
                     // auto-flip DEST to On. Phase advances regardless. An Off LFO with NO matrix route
                     // referencing it costs nothing: partSrc is built only for parts with a live matrix
                     // (see below) and ps.lfo[k] is read only by a route that names LFO k.
-                    lfoRaw[(std::size_t) p][(std::size_t) k] = raw;
+                    if (c.held) raw = 0.0f;   // LFO Link arming: hold this LFO's output at centre (phase keeps running underneath)
+                    // #148: the LFO DEPTH knob scales its MATRIX routes too (route depth carries the
+                    // bounds; DEPTH is the master amount) — so DEPTH 50% halves a linked sweep. Was raw
+                    // (matrix ignored DEPTH); factory LFO-route presets set depth=1.0 so they are
+                    // unchanged, except Sideband Growl (bumped to 1.0) + Rust Choir/Bell Tide (intended).
+                    lfoRaw[(std::size_t) p][(std::size_t) k] = raw * c.depth;
                     const float v = raw * c.depth;
                     switch (c.dest)
                     {

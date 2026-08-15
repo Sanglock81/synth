@@ -140,10 +140,20 @@ public:
             auto& r = rows[(std::size_t) i];
             const auto s = proc.getModSlot (-1, i);
             const bool live = s.source != ModMatrix::SrcNone && s.dest != ModMatrix::DstNone;
+            // #148: an LFO-sourced route carries the LFO's identity colour (amber/teal/violet).
+            const bool isLfo = s.source >= ModMatrix::LFO1 && s.source <= ModMatrix::LFO3;
+            const juce::Colour rowCol = isLfo ? VASynthLookAndFeel::lfoColour (s.source - ModMatrix::LFO1)
+                                              : VASynthLookAndFeel::accent();
+            if (live && isLfo)   // a colour chip at the row's left edge
+            {
+                const auto sb0 = r.src->getBounds();
+                g.setColour (rowCol.withAlpha (0.9f));
+                g.fillRoundedRectangle ((float) (sb0.getX() - 7), (float) (sb0.getY() + 3), 3.0f, (float) (sb0.getHeight() - 6), 1.5f);
+            }
 
             // Arrow between the dropdowns.
             const auto sb = r.src->getBounds();
-            g.setColour (live ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::dim().withAlpha (0.5f));
+            g.setColour (live ? rowCol : VASynthLookAndFeel::dim().withAlpha (0.5f));
             g.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
             g.drawText (uitext::u8 ("\xe2\x86\x92"), juce::Rectangle<int> (sb.getRight(), sb.getY(), 22, sb.getHeight()),
                         juce::Justification::centred, false);

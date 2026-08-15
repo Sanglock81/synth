@@ -160,8 +160,10 @@ TEST_CASE ("sweep: LFO sources produce a time-varying offset (#H4)", "[plugin][m
         const int rateId = lfo - ModMatrix::LFO1;
         const char* rate[] { ParamID::lfoRate, ParamID::lfo2Rate, ParamID::lfo3Rate };
         const char* dest[] { ParamID::lfoDest, ParamID::lfo2Dest, ParamID::lfo3Dest };
+        const char* depth[] { ParamID::lfoDepth, ParamID::lfo2Depth, ParamID::lfo3Depth };
         p.apvts.getParameter (rate[rateId])->setValueNotifyingHost (0.7f);   // brisk
         p.apvts.getParameter (dest[rateId])->setValueNotifyingHost (1.0f);   // dest = On: enable as a LINK source
+        p.apvts.getParameter (depth[rateId])->setValueNotifyingHost (1.0f);  // #148: DEPTH scales matrix routes
         p.linkModRoute (-1, lfo, ModMatrix::ReverbMix, 1.0f);
         p.prepareToPlay (48000.0, 128);
         float lo = 1.0e9f, hi = -1.0e9f;
@@ -195,6 +197,7 @@ TEST_CASE ("sweep: an LFO route modulates from ANY fixed-DEST + SYNC state, incl
     const char* destIds[] { ParamID::lfoDest, ParamID::lfo2Dest, ParamID::lfo3Dest };
     const char* syncIds[] { ParamID::lfoSync, ParamID::lfo2Sync, ParamID::lfo3Sync };
     const char* divIds[]  { ParamID::lfoDiv,  ParamID::lfo2Div,  ParamID::lfo3Div };
+    const char* depthIds[] { ParamID::lfoDepth, ParamID::lfo2Depth, ParamID::lfo3Depth };
 
     // Peak-to-peak of the destination's modulated offset (modAnimNorm works for BOTH voice-tier
     // dests like Cutoff and block-tier dests like ReverbMix — the metric the steady sweep validated).
@@ -225,6 +228,7 @@ TEST_CASE ("sweep: an LFO route modulates from ANY fixed-DEST + SYNC state, incl
                     setChoice (destIds[li], (float) ds);                                // fixed DEST state under test
                     p.apvts.getParameter (syncIds[li])->setValueNotifyingHost (sync ? 1.0f : 0.0f);
                     setChoice (divIds[li], 5.0f);                                       // ~1/8 for the synced case
+                    p.apvts.getParameter (depthIds[li])->setValueNotifyingHost (1.0f);  // #148: DEPTH scales matrix routes
                     p.linkModRoute (-1, ModMatrix::LFO1 + li, d.dest, 1.0f);            // the non-auto-enable path
                     const float range = rangeOf (p, d.dest, paramFor (p, d.dest));
                     INFO ("LFO" << (li + 1) << "  entry=linkModRoute  DEST=" << stateName[ds]
@@ -427,4 +431,133 @@ TEST_CASE ("route editing through the real overlay handlers takes effect immedia
     // DELETE via the row's clear: offset returns to base.
     p.clearModSlot (-1, 0);
     REQUIRE (settle (ModMatrix::ReverbMix, reverbMx) < 0.02f);
+}
+
+// ---- LFO Link mode (#148): sticky multi-target arm, tap-toggle, commit vs cancel -----------
+TEST_CASE ("LFO Link mode: sticky arm, multi-target, tap-remove, commit vs cancel", "[plugin][link][lfolink]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+
+    auto has = [&] (int src, int dst) {
+        for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
+        { auto s = p.getModSlot (-1, i); if (s.source == src && s.dest == dst) return true; }
+        return false; };
+    auto count = [&] {
+        int n = 0; for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
+        { auto s = p.getModSlot (-1, i); if (s.source != ModMatrix::SrcNone && s.dest != ModMatrix::DstNone) ++n; }
+        return n; };
+    const int base = count();
+
+    // Arm LFO 1 as a sticky link source.
+    p.beginLfoLinkMode (0);
+    REQUIRE (p.lfoLinkModeActive());
+    REQUIRE (p.lfoLinkModeLfo() == 0);
+    REQUIRE (p.linkArmed());
+
+    // Two taps add two full-scale routes; the source stays armed (sticky).
+    p.completeModLink (ModMatrix::Cutoff);
+    p.completeModLink (ModMatrix::Resonance);
+    REQUIRE (p.lfoLinkModeActive());
+    REQUIRE (has (ModMatrix::LFO1, ModMatrix::Cutoff));
+    REQUIRE (has (ModMatrix::LFO1, ModMatrix::Resonance));
+    REQUIRE (count() == base + 2);
+    // Tap = full-scale route.
+    for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
+    { auto s = p.getModSlot (-1, i); if (s.source == ModMatrix::LFO1 && s.dest == ModMatrix::Resonance) REQUIRE (s.depth == Catch::Approx (1.0f)); }
+
+    // Tapping an already-linked target removes it (toggle).
+    p.completeModLink (ModMatrix::Cutoff);
+    REQUIRE (! has (ModMatrix::LFO1, ModMatrix::Cutoff));
+    REQUIRE (count() == base + 1);
+
+    // Cancel restores the arm-time matrix and disarms.
+    p.cancelLfoLinkMode();
+    REQUIRE (! p.lfoLinkModeActive());
+    REQUIRE (! p.linkArmed());
+    REQUIRE (count() == base);
+    REQUIRE (! has (ModMatrix::LFO1, ModMatrix::Resonance));
+
+    // Re-arm a different LFO, add, COMMIT -> the route is kept.
+    p.beginLfoLinkMode (1);
+    p.completeModLink (ModMatrix::WavePos);
+    p.commitLfoLinkMode();
+    REQUIRE (! p.lfoLinkModeActive());
+    REQUIRE (has (ModMatrix::LFO2, ModMatrix::WavePos));
+}
+
+// ---- Per-LFO colour source (#148 inc2/6): which LFO drives a dest (for the arc/list colour) -----
+TEST_CASE ("lfoSourceForDest: reports the driving LFO per dest (colour basis)", "[plugin][link][lfolink][colour]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+
+    REQUIRE (p.lfoSourceForDest (ModMatrix::Cutoff) == -1);      // nothing routed yet
+
+    p.linkModRoute (-1, ModMatrix::LFO2, ModMatrix::Cutoff, 0.8f);
+    p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::Resonance, 0.5f);
+    REQUIRE (p.lfoSourceForDest (ModMatrix::Cutoff)    == 1);     // LFO 2 -> teal
+    REQUIRE (p.lfoSourceForDest (ModMatrix::Resonance) == 0);     // LFO 1 -> amber
+
+    // A non-LFO source doesn't claim the colour.
+    p.linkModRoute (-1, ModMatrix::Velocity, ModMatrix::WavePos, 0.5f);
+    REQUIRE (p.lfoSourceForDest (ModMatrix::WavePos) == -1);
+
+    // Largest |depth| wins when two LFOs share a dest.
+    p.linkModRoute (-1, ModMatrix::LFO3, ModMatrix::PulseWidth, 0.3f);
+    p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::PulseWidth, 0.9f);
+    REQUIRE (p.lfoSourceForDest (ModMatrix::PulseWidth) == 0);    // LFO 1 (0.9) over LFO 3 (0.3)
+}
+
+// ---- LFO Link armed-state SCREENSHOT (#148 inc2/6) ------------------------------------------
+TEST_CASE ("LFO Link armed-state screenshot", "[plugin][lfolink][screenshot]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+    // A small routing picture across visible knobs: LFO 1 -> Cutoff + Resonance (its own links,
+    // shown BOLD amber while armed); LFO 2 -> Reverb Mix (faint teal); LFO 3 -> Delay Mix (faint violet).
+    p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::Cutoff,    1.0f);
+    p.linkModRoute (-1, ModMatrix::LFO1, ModMatrix::Resonance, 1.0f);
+    p.linkModRoute (-1, ModMatrix::LFO2, ModMatrix::ReverbMix, 0.8f);
+    p.linkModRoute (-1, ModMatrix::LFO3, ModMatrix::DelayMix,  0.8f);
+
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (1760, 1000);
+    ed->resized();
+    p.beginLfoLinkMode (0);   // arm LFO 1: Cutoff/Reso glow amber (static); Wave Pos shows faint teal
+
+    auto img = ed->createComponentSnapshot (ed->getLocalBounds(), false, 1.0f);
+    REQUIRE (img.isValid());
+    juce::File out (juce::String (VASYNTH_DOCS_DIR) + "/smoke/lfo-link-armed.png");
+    out.getParentDirectory().createDirectory(); out.deleteFile();
+    juce::FileOutputStream os (out); REQUIRE (os.openedOk());
+    juce::PNGImageFormat png; REQUIRE (png.writeImageToStream (img, os));
+    p.commitLfoLinkMode();
+}
+
+// ---- LFO Link slide-to-bounds (#148 inc3) --------------------------------------------------
+TEST_CASE ("LFO Link bounds: setModLinkBounds routes at the half-range depth (sticky only)", "[plugin][lfolink][bounds]")
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    VASynthProcessor p; p.prepareToPlay (48000.0, 128);
+    p.loadInitPreset();
+
+    REQUIRE (! p.setModLinkBounds (ModMatrix::Cutoff, 0.15f));   // not armed -> no-op
+
+    p.beginLfoLinkMode (0);
+    REQUIRE (p.setModLinkBounds (ModMatrix::Cutoff, 0.15f));     // a 10-40% slide -> half-range 0.15
+    bool found = false;
+    for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
+    { auto s = p.getModSlot (-1, i);
+      if (s.source == ModMatrix::LFO1 && s.dest == ModMatrix::Cutoff) { REQUIRE (s.depth == Catch::Approx (0.15f)); found = true; } }
+    REQUIRE (found);
+    // Negative half-range (slide downward) inverts.
+    REQUIRE (p.setModLinkBounds (ModMatrix::Resonance, -0.30f));
+    for (int i = 0; i < VASynthProcessor::kModSlots; ++i)
+    { auto s = p.getModSlot (-1, i);
+      if (s.source == ModMatrix::LFO1 && s.dest == ModMatrix::Resonance) REQUIRE (s.depth == Catch::Approx (-0.30f)); }
+    p.commitLfoLinkMode();
 }

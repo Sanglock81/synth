@@ -107,6 +107,10 @@ public:
     void mouseUp (const juce::MouseEvent& e) override
     {
         if (e.eventComponent == this && linkDepthActive) { endLinkGesture(); return; }
+        // #148: a quick tap (released before the long-press fired) on the armed LFO DEST cancels
+        // arm mode — the "short-press ON cancels" escape hatch.
+        if (longPressArmed && ! e.mouseWasDraggedSinceMouseDown()
+            && onShortPressOverride && onShortPressOverride()) { longPressArmed = false; stopTimer(); repaint(); return; }
         longPressArmed = false;
     }
 
@@ -119,7 +123,16 @@ public:
     bool isModTarget()   const { return modLink != nullptr && modDest > 0; }
     bool isLinkArmable() const { return isModTarget() && modLink->linkArmed(); }
     float modAnim()      const { return modAnimFn ? modAnimFn() : 0.0f; }   // normalized offset for the indicator
+    // Per-LFO colour + armed context for the mod-anim indicator (#148). lfoIdx: which LFO (0..2)
+    // colours this dest, or -1. armedLfo: the LFO armed for link, or -1 (arm-mode "editable picture").
+    int   modLfoIdx()    const { return modLink ? modLink->lfoDrivingDest (modDest) : -1; }
+    int   modArmedLfo()  const { return modLink ? modLink->armedLfo() : -1; }
+    juce::Colour modColour() const
+    { const int i = modLfoIdx(); return i >= 0 ? VASynthLookAndFeel::lfoColour (i) : VASynthLookAndFeel::accentWarm(); }
     bool  inLinkDrag()   const { return linkDepthActive; }
+    // #148 LFO Link: the LFO DEST selector overrides its long-press (arm/commit) and a quick tap
+    // while armed (cancel) — instead of MIDI-learn / value-cycle. Each returns true if it handled it.
+    std::function<bool()> onLongPressOverride, onShortPressOverride;
 
     bool beginLinkGesture (const juce::MouseEvent& e)
     {
@@ -142,6 +155,31 @@ public:
         modLink->setModRouteDepth (linkSlot, d); repaint();
     }
     void endLinkGesture() { linkDepthActive = false; linkTime = juce::Time::getMillisecondCounter(); }
+
+    // #148 Inc 3 — slide-to-bounds. In sticky LFO-Link mode a press+drag on a CONTINUOUS target
+    // sweeps the knob to define its modulation bounds [lo,hi]; release parks the value at the
+    // midpoint and creates the route at the signed half-range depth. A pure tap = full-scale route.
+    bool armedForBounds() const { return modLink != nullptr && modDest > 0 && modLink->armedLfo() >= 0; }
+    bool beginBoundsCapture (float norm, bool continuous)
+    {
+        if (! armedForBounds() || ! continuous) return false;
+        boundsCapturing = true; boundsStart = boundsMin = boundsMax = juce::jlimit (0.0f, 1.0f, norm); return true;
+    }
+    bool inBoundsCapture() const { return boundsCapturing; }
+    void updateBounds (float norm)
+    { norm = juce::jlimit (0.0f, 1.0f, norm); boundsMin = std::min (boundsMin, norm); boundsMax = std::max (boundsMax, norm); repaint(); }
+    // Ends the capture. Returns the midpoint (0..1) to park the knob at, or -1 for a tap (full-scale).
+    float endBoundsCapture (bool dragged, float releaseNorm)
+    {
+        boundsCapturing = false; repaint();
+        if (! dragged || boundsMax - boundsMin < 0.01f) { if (modLink) modLink->completeModLink (modDest); return -1.0f; }
+        const float mid = 0.5f * (boundsMin + boundsMax), half = 0.5f * (boundsMax - boundsMin);
+        const float sign = (juce::jlimit (0.0f, 1.0f, releaseNorm) >= boundsStart) ? 1.0f : -1.0f;
+        if (modLink) modLink->setModLinkBounds (modDest, sign * half);
+        return mid;
+    }
+    float boundsLo() const { return boundsMin; }
+    float boundsHi() const { return boundsMax; }
 
     // Cyan connect-ring — every armable target draws it (call from paint()).
     void paintModRing (juce::Graphics& g)
@@ -220,6 +258,8 @@ protected:
     bool  linkDepthActive = false;
     float linkDownDepth = 0.0f;
     juce::uint32 linkTime = 0;
+    bool  boundsCapturing = false;                    // #148 Inc 3: slide-to-bounds capture in progress
+    float boundsStart = 0.0f, boundsMin = 0.0f, boundsMax = 0.0f;
     juce::uint32 armStart = 0;          // #139: when learn was armed, for the stuck-highlight auto-timeout
     std::function<float()> modAnimFn;
     std::vector<std::pair<juce::String, std::function<void()>>> extraMenuItems;
@@ -247,6 +287,7 @@ private:
         if (longPressArmed && juce::Time::getMillisecondCounter() - pressStart > 500)
         {
             longPressArmed = false;
+            if (onLongPressOverride && onLongPressOverride()) { stopTimer(); repaint(); return; }   // #148: LFO dest arms link, not learn
             armLearn();
         }
         if (learn.isLearningParam (paramID))
@@ -306,9 +347,30 @@ private:
 struct ModSlider : juce::Slider
 {
     explicit ModSlider (LearnableComponent& o) : owner (o) {}
-    void mouseDown (const juce::MouseEvent& e) override { if (! owner.beginLinkGesture (e)) juce::Slider::mouseDown (e); }
-    void mouseDrag (const juce::MouseEvent& e) override { if (owner.inLinkDrag()) owner.dragLinkDepth (e); else juce::Slider::mouseDrag (e); }
-    void mouseUp   (const juce::MouseEvent& e) override { if (owner.inLinkDrag()) owner.endLinkGesture(); else juce::Slider::mouseUp (e); }
+    bool continuousRange() const { return getNormalisableRange().interval <= 0.0; }   // stepped -> tap-only (no bounds drag)
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        // #148 Inc 3: sticky LFO-Link mode -> drag the knob to set its modulation bounds (continuous only).
+        if (owner.beginBoundsCapture ((float) valueToProportionOfLength (getValue()), continuousRange()))
+        { juce::Slider::mouseDown (e); return; }                                       // let the knob follow the pointer
+        if (! owner.beginLinkGesture (e)) juce::Slider::mouseDown (e);
+    }
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (owner.inBoundsCapture()) { juce::Slider::mouseDrag (e); owner.updateBounds ((float) valueToProportionOfLength (getValue())); return; }
+        if (owner.inLinkDrag()) owner.dragLinkDepth (e); else juce::Slider::mouseDrag (e);
+    }
+    void mouseUp   (const juce::MouseEvent& e) override
+    {
+        if (owner.inBoundsCapture())
+        {
+            juce::Slider::mouseUp (e);
+            const float mid = owner.endBoundsCapture (e.mouseWasDraggedSinceMouseDown(), (float) valueToProportionOfLength (getValue()));
+            if (mid >= 0.0f) setValue (proportionOfLengthToValue (mid), juce::sendNotificationSync);   // park at the midpoint
+            return;
+        }
+        if (owner.inLinkDrag()) owner.endLinkGesture(); else juce::Slider::mouseUp (e);
+    }
     LearnableComponent& owner;
 };
 
@@ -461,24 +523,39 @@ private:
     {
         FaderModOverlay (juce::Slider& sl, LearnableComponent& o) : s (sl), owner (o) { setInterceptsMouseClicks (false, false); }
         void begin() { startTimerHz (modanim::kTimerHz); }
-        void timerCallback() override { if (st.tick (owner.modAnim(), juce::Time::getMillisecondCounter())) repaint(); }
+        void timerCallback() override
+        {
+            const int armed = owner.modArmedLfo();
+            const bool moved = st.tick (owner.modAnim(), juce::Time::getMillisecondCounter());
+            if (moved || armed != lastArmed) { lastArmed = armed; repaint(); }
+        }
         void paint (juce::Graphics& g) override
         {
-            if (! st.visible()) return;                                 // motion-gated: nothing at rest
-            const float a = st.alpha();
+            const int armedLfo = owner.modArmedLfo(), lfoIdx = owner.modLfoIdx();
+            const juce::Colour col = owner.modColour();
+            auto b = getLocalBounds().toFloat();
+            // #148 armed "editable picture": a static colour marker at the value marks membership.
+            if (armedLfo >= 0 && lfoIdx >= 0)
+            {
+                const float y = b.getBottom() - (float) s.valueToProportionOfLength (s.getValue()) * b.getHeight();
+                const bool mine = lfoIdx == armedLfo;
+                g.setColour (VASynthLookAndFeel::lfoColour (lfoIdx).withAlpha (mine ? 0.95f : 0.28f));
+                g.fillRoundedRectangle (b.getX() - 3.0f, y - (mine ? 2.5f : 1.5f), b.getWidth() + 6.0f, mine ? 5.0f : 3.0f, 2.0f);
+            }
+            if (! st.visible()) return;                                 // motion-gated
+            float a = st.alpha();
+            if (armedLfo >= 0 && lfoIdx != armedLfo) a *= 0.22f;
             const float base = (float) s.valueToProportionOfLength (s.getValue());
             const float curP = juce::jlimit (0.0f, 1.0f, base + st.cur);
             const float lagP = juce::jlimit (0.0f, 1.0f, base + st.lag);
-            auto b = getLocalBounds().toFloat();
             const float yCur = b.getBottom() - curP * b.getHeight();    // vertical fader: value up
             const float yLag = b.getBottom() - lagP * b.getHeight();
-            // Trail from the echo toward the current position, then the ghost thumb at current.
-            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.35f * a));
+            g.setColour (col.withAlpha (0.35f * a));
             g.fillRect (b.getX() - 1.0f, juce::jmin (yCur, yLag), b.getWidth() + 2.0f, std::abs (yCur - yLag));
-            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.9f * a));
+            g.setColour (col.withAlpha (0.9f * a));
             g.fillRoundedRectangle (b.getX() - 3.0f, yCur - 2.0f, b.getWidth() + 6.0f, 4.0f, 2.0f);
         }
-        juce::Slider& s; LearnableComponent& owner; modanim::State st;
+        juce::Slider& s; LearnableComponent& owner; modanim::State st; int lastArmed = -1;
     };
 
     juce::String name;
@@ -749,7 +826,11 @@ protected:
     void modTargetAttached() override
     {
         if (overlay == nullptr) { overlay = std::make_unique<ModOverlay> (slider); addAndMakeVisible (*overlay); }
-        overlay->modFn = [this] { return modAnim(); };
+        overlay->modFn    = [this] { return modAnim(); };
+        overlay->colourFn = [this] { return modColour(); };     // arc tinted by the driving LFO
+        overlay->lfoIdxFn = [this] { return modLfoIdx(); };     // for the per-LFO dash (colour-blind cue)
+        overlay->armedFn  = [this] { return modArmedLfo(); };   // arm-mode "editable picture"
+        overlay->boundsFn = [this] { return inBoundsCapture() ? juce::Point<float> (boundsLo(), boundsHi()) : juce::Point<float> (-1.0f, -1.0f); };
         overlay->begin();
         resized();
     }
@@ -765,32 +846,84 @@ private:
     {
         explicit ModOverlay (juce::Slider& sl) : s (sl) { setInterceptsMouseClicks (false, false); }
         void begin() { startTimerHz (modanim::kTimerHz); }
-        void timerCallback() override { if (modFn && st.tick (modFn(), juce::Time::getMillisecondCounter())) repaint(); }
+        void timerCallback() override
+        {
+            const int armed = armedFn ? armedFn() : -1;      // arm-mode changes must repaint even at rest
+            const bool moved = modFn && st.tick (modFn(), juce::Time::getMillisecondCounter());
+            if (moved || armed != lastArmed) { lastArmed = armed; repaint(); }
+        }
+        // Per-LFO colour-blind cue: LFO1 solid, LFO2 dashed, LFO3 dotted.
+        void strokeCued (juce::Graphics& g, const juce::Path& p, float w, juce::Colour c, int lfoIdx)
+        {
+            g.setColour (c);
+            juce::PathStrokeType st2 (w, juce::PathStrokeType::curved, juce::PathStrokeType::rounded);
+            if (lfoIdx == 1 || lfoIdx == 2)
+            {
+                const float dash1[] { w * 2.4f, w * 1.6f };   // LFO2: dashed
+                const float dash2[] { w * 0.9f, w * 1.6f };   // LFO3: dotted
+                juce::Path dp; st2.createDashedStroke (dp, p, lfoIdx == 1 ? dash1 : dash2, 2);
+                g.fillPath (dp);
+            }
+            else g.strokePath (p, st2);
+        }
         void paint (juce::Graphics& g) override
         {
-            if (! modFn || ! st.visible()) return;                        // motion-gated: nothing at rest
-            const float a = st.alpha();
-            const auto rp = s.getRotaryParameters();
-            const float base = (float) s.valueToProportionOfLength (s.getValue());
-            const float cur  = juce::jlimit (0.0f, 1.0f, base + st.cur);  // leading edge (current value)
-            const float lag  = juce::jlimit (0.0f, 1.0f, base + st.lag);  // trailing echo
+            const int armedLfo = armedFn  ? armedFn()  : -1;   // LFO armed for link (else -1)
+            const int lfoIdx   = lfoIdxFn ? lfoIdxFn() : -1;   // LFO colouring this dest (else -1)
+            const juce::Colour col = colourFn ? colourFn() : VASynthLookAndFeel::accentWarm();
             auto b = getLocalBounds().toFloat().reduced (3.0f);
             const float radius = juce::jmin (b.getWidth(), b.getHeight()) * 0.5f;
             const float cx = b.getCentreX(), cy = b.getCentreY();
             const float lineW = juce::jmax (2.5f, radius * 0.16f);
             const float arcR = radius - lineW * 0.5f;
+
+            // Arm mode = "editable picture": a STATIC ring marks this dest's link membership.
+            if (armedLfo >= 0 && lfoIdx >= 0)
+            {
+                juce::Path ring; ring.addCentredArc (cx, cy, arcR, arcR, 0.0f, 0.0f, juce::MathConstants<float>::twoPi, true);
+                const bool mine = lfoIdx == armedLfo;          // linked to the armed LFO -> bold; other LFO -> faint
+                strokeCued (g, ring, mine ? lineW : lineW * 0.7f,
+                            VASynthLookAndFeel::lfoColour (lfoIdx).withAlpha (mine ? 0.95f : 0.28f), lfoIdx);
+            }
+
+            // Inc 3 live bounds readout: while sliding to set bounds, draw the [lo,hi] arc + the %s,
+            // since the knob rests at the midpoint after release (the drag is otherwise invisible).
+            const juce::Point<float> bnd = boundsFn ? boundsFn() : juce::Point<float> (-1.0f, -1.0f);
+            if (bnd.x >= 0.0f)
+            {
+                const auto rp2 = s.getRotaryParameters();
+                const auto a2 = [&] (float p) { return rp2.startAngleRadians + p * (rp2.endAngleRadians - rp2.startAngleRadians); };
+                const juce::Colour bc = (armedLfo >= 0 ? VASynthLookAndFeel::lfoColour (armedLfo) : col);
+                juce::Path span; span.addCentredArc (cx, cy, arcR, arcR, 0.0f, a2 (bnd.x), a2 (bnd.y), true);
+                g.setColour (bc.withAlpha (0.9f));
+                g.strokePath (span, juce::PathStrokeType (lineW * 1.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+                g.setFont (juce::Font (juce::FontOptions (10.0f, juce::Font::bold)));
+                g.drawText (juce::String (juce::roundToInt (bnd.x * 100)) + "-" + juce::String (juce::roundToInt (bnd.y * 100)) + "%",
+                            getLocalBounds(), juce::Justification::centred, false);
+                return;   // during the drag, show only the bounds
+            }
+
+            if (! modFn || ! st.visible()) return;             // motion-gated animated arc
+            float a = st.alpha();
+            if (armedLfo >= 0 && lfoIdx != armedLfo) a *= 0.22f;   // dim non-armed-LFO motion while arming
+            const auto rp = s.getRotaryParameters();
+            const float base = (float) s.valueToProportionOfLength (s.getValue());
+            const float cur  = juce::jlimit (0.0f, 1.0f, base + st.cur);
+            const float lag  = juce::jlimit (0.0f, 1.0f, base + st.lag);
             const auto ang = [&] (float p) { return rp.startAngleRadians + p * (rp.endAngleRadians - rp.startAngleRadians); };
-            // Trail: an arc from the echo (recent) toward the current value; collapses when static.
             juce::Path trail; trail.addCentredArc (cx, cy, arcR, arcR, 0.0f, ang (lag), ang (cur), true);
-            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (0.45f * a));
-            g.strokePath (trail, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            strokeCued (g, trail, lineW, col.withAlpha (0.45f * a), lfoIdx);
             const float a1 = ang (cur);
             const juce::Point<float> pt (cx + std::sin (a1) * arcR, cy - std::cos (a1) * arcR);
-            g.setColour (VASynthLookAndFeel::accentWarm().withAlpha (a));
+            g.setColour (col.withAlpha (a));
             g.fillEllipse (pt.x - 3.0f, pt.y - 3.0f, 6.0f, 6.0f);
         }
         juce::Slider& s;
         std::function<float()> modFn;
+        std::function<juce::Colour()> colourFn;
+        std::function<int()> lfoIdxFn, armedFn;
+        std::function<juce::Point<float>()> boundsFn;   // (lo,hi) while sliding to bounds, else (-1,-1)
+        int lastArmed = -1;
         modanim::State st;
     };
 

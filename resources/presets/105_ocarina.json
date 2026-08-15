@@ -1,6 +1,30 @@
-{ "name":"Ocarina","category":"Winds","params":{
-  "osc1_wave":2,"osc1_level":0.9,"osc2_on":0,"osc3_on":0,"noise_level":0.1,
-  "filter_type":0,"filter_cutoff":2000,"filter_reso":0.08,"filter_keytrack":0.5,
-  "amp_attack":0.04,"amp_decay":0.15,"amp_sustain":0.85,"amp_release":0.15,"vel_to_amp":0.4,
-  "lfo_rate":5.0,"lfo_depth":0.06,"lfo_shape":1,"lfo_dest":1,"poly_mode":2,"glide_time":0.03,
-  "fx_reverb_on":1,"reverb_mix":0.2,"reverb_size":0.55,"patch_trim":0.7 } }
+{
+  "name": "Ocarina",
+  "category": "Winds",
+  "params": {
+    "osc1_wave": 2,
+    "osc1_level": 0.9,
+    "osc2_on": 0,
+    "osc3_on": 0,
+    "noise_level": 0.05,
+    "filter_type": 0,
+    "filter_cutoff": 2000,
+    "filter_reso": 0.08,
+    "filter_keytrack": 0.5,
+    "amp_attack": 0.04,
+    "amp_decay": 0.15,
+    "amp_sustain": 0.85,
+    "amp_release": 0.15,
+    "vel_to_amp": 0.4,
+    "lfo_rate": 5.0,
+    "lfo_depth": 0.06,
+    "lfo_shape": 1,
+    "lfo_dest": 1,
+    "poly_mode": 2,
+    "glide_time": 0.03,
+    "fx_reverb_on": 1,
+    "reverb_mix": 0.2,
+    "reverb_size": 0.55,
+    "patch_trim": 0.7
+  }
+}

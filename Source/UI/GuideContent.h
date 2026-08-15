@@ -166,11 +166,14 @@ namespace guide
             // ---- LFOs ------------------------------------------------------------------------
             { "lfo", "LFOs",
               "Three low-frequency oscillators per part for cyclic motion. Each picks a destination + "
-              "shape and runs free (RATE in Hz) or locked to the tempo (SYNC -> DIV). Markers show LFO 1.",
+              "shape and runs free (RATE in Hz) or locked to the tempo (SYNC -> DIV). Each LFO has an "
+              "identity colour (LFO 1 amber, 2 teal, 3 violet) shown on every control it modulates.",
               true,
               {
                 { "lfo_dest",  "DEST",  "Where this LFO's motion goes (off / pitch / cutoff / PW / ...).",
-                  "Cutoff for a wobble, pitch for vibrato, PW for shimmer; more targets via the mod matrix." },
+                  "LONG-PRESS to LINK this LFO: it holds still + its existing links glow its colour; tap any "
+                  "knob to add a route (tap again to remove), or slide a knob to set the sweep bounds (its "
+                  "low..high). Long-press again to commit; a short-press or Esc cancels. DEPTH scales the links." },
                 { "lfo_rate",  "RATE",  "Free-run speed in Hz (when SYNC is off).",
                   "Slow for evolving pads; fast (audio-rate) toward a buzzy, ring-mod-ish tone." },
                 { "lfo_div",   "DIV",   "The tempo division when SYNC is on (replaces RATE).",

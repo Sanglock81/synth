@@ -148,7 +148,7 @@ TEST_CASE ("no hang: changing the patch under a held note then releasing falls s
     Rig r;
     r.p.routeNoteOn (60, 0.9f, 0);             // hold a note
     r.pump (50);
-    r.p.loadFactoryPreset ("Reese Bass");    // swap the sound out from under it
+    r.p.loadFactoryPreset ("Pocket Round");    // swap the sound out from under it
     r.pump (50);
     r.p.routeNoteOff (60, 0);                  // release
     r.silenceAllTriggers();

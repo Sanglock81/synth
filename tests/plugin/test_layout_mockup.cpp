@@ -147,7 +147,7 @@ namespace
             auto preset = takeL (tb, 210);
             g.setColour (track()); g.fillRoundedRectangle (preset.removeFromTop (34).toFloat(), 5.0f);
             g.setColour (ink()); g.setFont (juce::Font (juce::FontOptions (14.0f, juce::Font::bold)));
-            g.drawText ("  synth   -   Reese Bass", preset.translated (0, -23), juce::Justification::centredLeft, false);
+            g.drawText ("  synth   -   Pocket Round", preset.translated (0, -23), juce::Justification::centredLeft, false);
             g.setColour (dim()); g.setFont (juce::Font (juce::FontOptions (11.0f)));
             g.drawText ("  CPU 12%   MIDI ok   CLK 120 int   SCOPE [on]", preset, juce::Justification::centredLeft, false);
             // right cluster: help, master (bigger), rec
@@ -208,7 +208,7 @@ namespace
             auto rail = takeL (area, 176);
             {
                 auto rl = section (g, rail, "Parts", tParts);
-                const char* pn[]  { "P1  LIVE", "P2  (spare)", "P3  Reese Bass", "P4  808" };
+                const char* pn[]  { "P1  LIVE", "P2  (spare)", "P3  Pocket Round", "P4  808" };
                 const char* sub[] { "Bright Lead", "tap to add", "bass", "kit  -  6 pads" };
                 const int cellH = (rl.getHeight() - 3 * 5) / 4;      // ONE height -> even cells
                 for (int i = 0; i < 4; ++i)

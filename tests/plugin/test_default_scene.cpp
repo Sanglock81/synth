@@ -29,7 +29,7 @@ TEST_CASE ("default scene: P4 is the 808 kit (the sequencer's target), P3 is a b
 
     // P3 (part 2) is a plain bass voice; P2 (part 1) is a free spare (not a kit).
     REQUIRE_FALSE (p.isPartKit (2));
-    REQUIRE (p.getPartPreset (2) == "Reese Bass");
+    REQUIRE (p.getPartPreset (2) == "Pocket Round");
     REQUIRE_FALSE (p.isPartKit (1));
 }
 

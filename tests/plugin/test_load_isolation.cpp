@@ -54,7 +54,7 @@ TEST_CASE ("load isolation: loading a factory preset leaves the sequencer + glob
     const int    cellB   = p.getSeqCell (3, 6);
     const float  cutoff0 = raw (p, ID::filterCutoff);
 
-    p.loadFactoryPreset ("Reese Bass");
+    p.loadFactoryPreset ("Pocket Round");
 
     // Every global is exactly where it was.
     REQUIRE (raw (p, ID::seqOn)     == seqOn0);
@@ -90,7 +90,7 @@ TEST_CASE ("load isolation: loading a preset on the live part keeps another part
 {
     VASynthProcessor p; p.prepareToPlay (48000.0, 128);
     // Part 1 (P2) gets a sound and is left ringing.
-    p.setPartPreset (1, "Reese Bass");
+    p.setPartPreset (1, "Pocket Round");
     for (int n : { 48, 55 }) p.routeNoteOn (n, 0.9f, 1);
     (void) partEnergy (p, 4);
     const int voicesBefore = p.activeVoicesForPart (1);
@@ -98,7 +98,7 @@ TEST_CASE ("load isolation: loading a preset on the live part keeps another part
 
     // Load a different sound onto the focused LIVE part (part 0). Part 1's baked voices
     // must be untouched — the load doesn't reset or steal them.
-    p.loadFactoryPreset ("Reese Bass");
+    p.loadFactoryPreset ("Pocket Round");
 
     REQUIRE (p.activeVoicesForPart (1) == voicesBefore);       // other part's notes survive
     REQUIRE (partEnergy (p, 4) > 0.0);                          // ...and still make sound

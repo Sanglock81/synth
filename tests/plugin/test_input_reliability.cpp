@@ -121,7 +121,7 @@ TEST_CASE ("Bug B: switching presets leaves the play path intact", "[plugin][bug
     };
 
     // Cycle Init -> a factory preset -> Init, and after each, a played note sounds.
-    for (const char* preset : { "Init", "Reese Bass", "Init" })
+    for (const char* preset : { "Init", "Pocket Round", "Init" })
     {
         if (juce::String (preset) == "Init") p.loadInitPreset();
         else                                 p.loadFactoryPreset (preset);
