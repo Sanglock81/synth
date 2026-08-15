@@ -72,6 +72,26 @@ public:
     // process()/swing/gate logic is untouched — this is a phase reset the owner drives.
     void realign() { started = false; }
 
+    // #145: PHASE-ONLY bar-boundary re-anchor. The owner calls this every bar with the transport's
+    // grid position (step + fractional samples into it). It bounds the per-bar float/swing drift
+    // WITHOUT emitting — unlike realign()'s force-fire of step 0, which double-triggered the
+    // downbeat whenever a bar boundary fell mid-block (the natural clock had already fired step 0 in
+    // the prior block), a heavier hit recurring with a block-size-dependent period. We only correct
+    // the fractional phase when the seq and transport agree on the current step; if they are within
+    // a step of the boundary we leave the clock so the natural crossing fires it exactly once.
+    void realignPhase (int transportStep, double transportInto)
+    {
+        if (! started) return;
+        const int g = ((transportStep % kSteps) + kSteps) % kSteps;
+        if (stepIndex == g)                                        // already fired step g: snap the phase only
+            sampleInStep = std::clamp (transportInto, 0.0, cfg.samplesPerStep);
+        else                                                       // step g not fired yet (due, or off after a
+        {                                                          // tempo change): re-anchor to fire it ONCE now
+            stepIndex = (g - 1 + kSteps) % kSteps;
+            sampleInStep = cfg.samplesPerStep * ((stepIndex % 2 == 0) ? (1.0 + cfg.swing) : (1.0 - cfg.swing));
+        }
+    }
+
     // Start the pattern ALREADY LOCKED to the shared grid, instead of firing step 0 at the
     // instant of enabling. `g` = the bar's current 16th-step index (looper.position()/step),
     // `intoStep` = samples elapsed into it. Enabling mid-bar therefore picks up at the beat the

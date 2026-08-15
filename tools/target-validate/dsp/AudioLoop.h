@@ -2,6 +2,7 @@
 #include <vector>
 #include <cstddef>
 #include <algorithm>
+#include "LoopSeam.h"
 
 // ============================================================================
 // Stereo AUDIO loop — JUCE-free, RT-safe on the audio thread (no alloc/lock there).
@@ -77,11 +78,27 @@ public:
     void playBlock (float* outL, float* outR, int n) const
     {
         if (! play || ! content || cap == 0) return;
+        // #146 Bug A (audio lane): declick the loop seam. Over the last `seam` samples the tail is
+        // ramped toward the head's first sample, so the wrap (buf[len-1] -> buf[0]) is CONTINUOUS
+        // with no step. Loop length is preserved exactly (tempo stays locked), and the ramp is
+        // transparent on sustained/steady material (it approaches a real sample value, not silence,
+        // so there is no audible dip) — inaudible on a pad, but it kills the click on any content
+        // whose start and end don't match. Same seam length as the MIDI-lane note-off nudge.
+        const int seam = std::min (loopseam::kSeamSamples, loopLen / 4);
         for (int i = 0; i < n; ++i)
         {
             const int idx = (pos + i) % loopLen;
-            outL[i] += bufL[(std::size_t) idx];
-            outR[i] += bufR[(std::size_t) idx];
+            float l = bufL[(std::size_t) idx], r = bufR[(std::size_t) idx];
+            if (seam > 0 && idx >= loopLen - seam)
+            {
+                const int   k = idx - (loopLen - seam);          // 0..seam-1 into the seam
+                const float t = (float) (k + 1) / (float) seam;  // (0,1]
+                const float s = t * t * (3.0f - 2.0f * t);       // smoothstep: C1, no derivative jump
+                l = l * (1.0f - s) + bufL[0] * s;                // ramp tail -> head[0] (buf[0])
+                r = r * (1.0f - s) + bufR[0] * s;
+            }
+            outL[i] += l;
+            outR[i] += r;
         }
     }
 

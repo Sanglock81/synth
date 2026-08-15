@@ -4,6 +4,7 @@
 #include "Kit.h"
 #include "LFO.h"
 #include "FXChain.h"
+#include "../Observability/MidiTracer.h"
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -29,7 +30,9 @@
 // Per-part LFO configuration (Sub-phase 2). Three LFOs per part; each routes to a
 // single destination (0 off / 1 pitch / 2 cutoff / 3 PW). Depth 0 or dest 0 = inert.
 struct LfoConfig { float rate = 2.0f, depth = 0.0f; int shape = 0, dest = 0;
-                   bool synced = false; int division = 5; };   // J1: sync + note-division index
+                   bool synced = false; int division = 5;       // J1: sync + note-division index
+                   bool held = false; };   // LFO Link mode: while arming, hold the LFO still (publish 0) so
+                                           // linked params rest at their midpoint; it starts moving on commit.
 struct PartLfos  { LfoConfig lfo[3]; };
 
 // J1: LFO note divisions -> cycle length in BEATS (4/4). Index order matches the lfo_div param
@@ -176,40 +179,55 @@ public:
                 sustained[i] = false;
                 if (percussive) { voices[i].steal(); continue; }   // fade tail, fall through to a fresh voice
                 voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3, un);
+                mtrace::emit (mtrace::Ev::NoteRetrig, note, (int) (velocity * 127.0f), part, (int) i);
                 return;
             }
 
         // Otherwise find a free voice...
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
             if (! voices[i].isActive())
-                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3, un); return; }
+                { sustained[i] = false; voices[i].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3, un);
+                  mtrace::emit (generator ? mtrace::Ev::NoteOnGen : mtrace::Ev::NoteOnLive, note, (int) (velocity * 127.0f), part, (int) i);
+                  return; }
 
         // ...or steal a voice. PER-PART ISOLATION, in priority order:
         //   1. the oldest GENERATOR voice (seq / arp / looper) — generators ALWAYS yield to
         //      live playing, so a running sequencer can never cut a note you play.
-        //   2. else the oldest voice OF THIS part (live-vs-live stealing stays inside the part).
-        //   3. else the global oldest (last resort: the pool is exhausted by other live parts).
+        //   2. else the oldest RELEASING voice of this part — a key-up note fading out is the
+        //      cheapest to take (#141: a HELD chord tone must not be dropped while a note whose
+        //      key you already let go is still ringing).
+        //   3. else the oldest HELD voice of this part (live-vs-live stealing stays inside the part).
+        //   4. else the oldest RELEASING voice anywhere, then the global oldest (pool exhausted
+        //      by other live parts). Held-anywhere yields last.
         // The stolen voice keeps its oscillator/filter state and retriggers the amp env from
         // its current level, so the steal is click-free.
-        int oldestGen = -1, oldestOwn = -1;
+        int oldestGen = -1, oldestOwnRel = -1, oldestOwnHeld = -1, oldestAnyRel = -1;
         std::size_t oldestAny = 0;
+        auto older = [this] (int cur, std::size_t i)
+        { return cur < 0 || voices[i].getTimestamp() < voices[(std::size_t) cur].getTimestamp(); };
         for (std::size_t i = 0; i < activeVoiceLimit; ++i)
         {
-            if (voices[i].isGenerator()
-                && (oldestGen < 0 || voices[i].getTimestamp() < voices[(std::size_t) oldestGen].getTimestamp()))
-                oldestGen = (int) i;
-            if (voices[i].getPart() == part
-                && (oldestOwn < 0 || voices[i].getTimestamp() < voices[(std::size_t) oldestOwn].getTimestamp()))
-                oldestOwn = (int) i;
-            if (voices[i].getTimestamp() < voices[oldestAny].getTimestamp())
-                oldestAny = i;
+            const bool rel = voices[i].isReleasing();
+            if (voices[i].isGenerator() && older (oldestGen, i)) oldestGen = (int) i;
+            if (voices[i].getPart() == part)
+            {
+                if (rel) { if (older (oldestOwnRel,  i)) oldestOwnRel  = (int) i; }
+                else     { if (older (oldestOwnHeld, i)) oldestOwnHeld = (int) i; }
+            }
+            if (rel && older (oldestAnyRel, i)) oldestAnyRel = (int) i;
+            if (voices[i].getTimestamp() < voices[oldestAny].getTimestamp()) oldestAny = i;
         }
-        const std::size_t steal = (oldestGen >= 0) ? (std::size_t) oldestGen
-                                : (oldestOwn >= 0) ? (std::size_t) oldestOwn : oldestAny;
+        const std::size_t steal = (oldestGen     >= 0) ? (std::size_t) oldestGen
+                                : (oldestOwnRel  >= 0) ? (std::size_t) oldestOwnRel
+                                : (oldestOwnHeld >= 0) ? (std::size_t) oldestOwnHeld
+                                : (oldestAnyRel  >= 0) ? (std::size_t) oldestAnyRel : oldestAny;
 
         sustained[steal] = false;
         ++stealCounter;
+        // Trace the victim BEFORE it is overwritten: names exactly which held note a steal drops (#141).
+        mtrace::emit (mtrace::Ev::VoiceSteal, note, part, (int) steal, voices[steal].getNote());
         voices[steal].noteOn (note, velocity, ++eventCounter, part, soundSlot, generator, pm1, pm2, pm3, un);
+        mtrace::emit (generator ? mtrace::Ev::NoteOnGen : mtrace::Ev::NoteOnLive, note, (int) (velocity * 127.0f), part, (int) steal);
     }
 
     // ---- observability accessors (const; for the processor's telemetry) ----
@@ -225,6 +243,16 @@ public:
         for (auto& v : voices) if (v.isActive() && v.getPart() == part) ++c;
         return c;
     }
+    // Break the live voice count out by ORIGIN so a leak's source is visible: LIVE (played) vs
+    // GEN (arp/seq/looper generator voices) in the synth pool, plus SMP (the separate sample-pad
+    // pool, which activeVoiceCount() does NOT include). Counts ALL sounding voices across parts.
+    void activeVoiceBreakdown (int& live, int& gen, int& smp) const
+    {
+        live = gen = smp = 0;
+        for (auto& v : voices)
+            if (v.isActive()) { if (v.isGenerator()) ++gen; else ++live; }
+        for (auto& sv : sampleVoices) if (sv.isActive()) ++smp;
+    }
     std::uint64_t stealCount() const { return stealCounter; }
 
     void noteOff (int note, int part = 0)
@@ -235,12 +263,13 @@ public:
             if (voices[i].isActive() && voices[i].getNote() == note && voices[i].getPart() == part)
             {
                 if (sustainPedal) sustained[i] = true;   // held by damper
-                else              voices[i].noteOff();
+                else            { voices[i].noteOff(); mtrace::emit (mtrace::Ev::NoteOff, note, part, (int) i); }
             }
     }
 
     void allNotesOff()
     {
+        mtrace::emit (mtrace::Ev::AllNotesOff);
         for (std::size_t i = 0; i < (std::size_t) maxVoices; ++i) { voices[i].noteOff(); sustained[i] = false; }
         for (auto& sv : sampleVoices) sv.steal();               // I2: fade out any playing samples (click-free)
         sustainPedal = false;
@@ -279,7 +308,7 @@ public:
     void setTransport (double beats, double spb) { transportBeats_ = beats; samplesPerBeat_ = spb > 0.0 ? spb : 1.0; }
 
     // Sustain pedal (CC64). While down, note-offs are deferred; on release the
-    // held notes are let go. A MIDI keyboard's damper is the primary expression.
+    // held notes are let go. A sustain-pedal (CC64) damper is the primary expression.
     void setSustainPedal (bool on)
     {
         if (sustainPedal && ! on)                        // pedal released
@@ -561,6 +590,45 @@ public:
             else                { partFxUse[(std::size_t) pt] = cur.fx;          partLfoUse[(std::size_t) pt] = cur.lfo; }
             partMatrixUse[(std::size_t) pt] = cur.mtx;   // baked per-part matrix (empty until a part bakes one)
         }
+
+        // Increment B: apply each NON-focus part's OWN baked block-tier routes (FX/EQ/LFO-rate/env/tune/
+        // glide) to its base FX/LFO/params — ONCE here, on the base (no accumulation). The focus part is
+        // untouched (the processor still mods it, bit-identically). LFO sources are 1-block latent
+        // (partLfoRawPrev_), matching how the focus part reads focusLfoRawOut. Zero effect for a part with
+        // no such route (blockOffsets returns 0). This is what makes a background part's baked FX/EQ/LFO
+        // route modulate while you edit another part.
+        for (int pt = 0; pt < maxParts; ++pt)
+        {
+            if (pt == focus || ! partMatrixUse[(std::size_t) pt].active()) continue;
+            ModSources ps;
+            ps.lfo[0] = partLfoRawPrev_[(std::size_t) pt][0]; ps.lfo[1] = partLfoRawPrev_[(std::size_t) pt][1]; ps.lfo[2] = partLfoRawPrev_[(std::size_t) pt][2];
+            ps.modWheel  = modWheel[(std::size_t) pt];
+            ps.pitchBend = pitchBendSemis[(std::size_t) pt] / 12.0f;
+            for (int mi = 0; mi < 8; ++mi) ps.macro[(std::size_t) mi] = macroVals[(std::size_t) mi];
+            float bo[ModMatrix::kNumBlockDests];
+            partMatrixUse[(std::size_t) pt].blockOffsets (ps, bo, ModMatrix::kNumBlockDests);
+            auto& fx = partFxUse[(std::size_t) pt]; auto& lf = partLfoUse[(std::size_t) pt]; auto& vp = partParams[(std::size_t) pt];
+            auto bm = [&] (int dest, float& field)
+            {
+                const int i = dest - ModMatrix::kFirstBlockDest;
+                if (i < 0 || i >= ModMatrix::kNumBlockDests || bo[(std::size_t) i] == 0.0f) return;
+                const BlockRange& r = blockRanges_[(std::size_t) i];
+                field = brVal (r, br01 (r, field) + bo[(std::size_t) i]);
+            };
+            bm (ModMatrix::ChorusRate, fx.chorusRate);   bm (ModMatrix::ChorusDepth, fx.chorusDepth); bm (ModMatrix::ChorusMix, fx.chorusMix);
+            bm (ModMatrix::DelayTime, fx.delayTimeMs);   bm (ModMatrix::DelayFeedback, fx.delayFeedback); bm (ModMatrix::DelayMix, fx.delayMix); bm (ModMatrix::DelaySpread, fx.delaySpread);
+            bm (ModMatrix::ReverbSize, fx.reverbSize);   bm (ModMatrix::ReverbDamp, fx.reverbDamp); bm (ModMatrix::ReverbWidth, fx.reverbWidth); bm (ModMatrix::ReverbMix, fx.reverbMix); bm (ModMatrix::ReverbMotion, fx.reverbMotion);
+            bm (ModMatrix::StereoWidth, fx.width);        bm (ModMatrix::Saturation, fx.sat);
+            bm (ModMatrix::EqB1Gain, fx.eqBand1.gainDb);  bm (ModMatrix::EqB2Gain, fx.eqBand2.gainDb); bm (ModMatrix::EqB3Gain, fx.eqBand3.gainDb); bm (ModMatrix::EqB4Gain, fx.eqBand4.gainDb); bm (ModMatrix::EqB5Gain, fx.eqBand5.gainDb);
+            bm (ModMatrix::Lfo1Rate, lf.lfo[0].rate);     bm (ModMatrix::Lfo1Depth, lf.lfo[0].depth);
+            bm (ModMatrix::Lfo2Rate, lf.lfo[1].rate);     bm (ModMatrix::Lfo2Depth, lf.lfo[1].depth);
+            bm (ModMatrix::Lfo3Rate, lf.lfo[2].rate);     bm (ModMatrix::Lfo3Depth, lf.lfo[2].depth);
+            bm (ModMatrix::AmpAttack, vp.ampA);  bm (ModMatrix::AmpDecay, vp.ampD);  bm (ModMatrix::AmpSustain, vp.ampS);  bm (ModMatrix::AmpRelease, vp.ampR);
+            bm (ModMatrix::FltAttack, vp.fltA);  bm (ModMatrix::FltDecay, vp.fltD);  bm (ModMatrix::FltSustain, vp.fltS);  bm (ModMatrix::FltRelease, vp.fltR);
+            bm (ModMatrix::FilterEnvAmt, vp.filterEnvAmt); bm (ModMatrix::FilterKeytrack, vp.keytrack); bm (ModMatrix::VelToCutoff, vp.velToCutoff); bm (ModMatrix::VelToAmp, vp.velToAmp); bm (ModMatrix::FltEnvToPitch, vp.fltEnvToPitch);
+            bm (ModMatrix::Osc1Octave, vp.osc1Octave); bm (ModMatrix::Osc1Detune, vp.osc1Detune); bm (ModMatrix::Osc2Octave, vp.osc2Octave); bm (ModMatrix::Osc2Detune, vp.osc2Detune); bm (ModMatrix::Osc3Octave, vp.osc3Octave); bm (ModMatrix::Osc3Detune, vp.osc3Detune);
+            bm (ModMatrix::GlideTime, vp.glideTime);
+        }
         if (! smoothPrimed)
         {
             smCutoff = liveParams.cutoffHz; smReso = liveParams.resonance;
@@ -657,10 +725,19 @@ public:
                         l.setRate (c.rate);
                         raw = l.advance (chunk);
                     }
-                    // dest: 0 Off (inert — not even a matrix source), 1 Pitch, 2 Cutoff, 3 On (a live
-                    // LINK source with NO fixed route). Phase is advanced regardless (kept coherent),
-                    // but Off zeroes the published source so "Off" genuinely turns the LFO off.
-                    lfoRaw[(std::size_t) p][(std::size_t) k] = (c.dest == 0) ? 0.0f : raw;
+                    // dest: 0 Off, 1 Pitch, 2 Cutoff, 3 On — this is the LFO's FIXED (legacy) route
+                    // ONLY. The matrix source is DECOUPLED from it (LINK P0): the LFO always publishes
+                    // its raw value as a matrix source, so an LFO route created by ANY path (LINK tap,
+                    // MOD overlay, a preset, RANDOM) modulates — not just the one gesture that used to
+                    // auto-flip DEST to On. Phase advances regardless. An Off LFO with NO matrix route
+                    // referencing it costs nothing: partSrc is built only for parts with a live matrix
+                    // (see below) and ps.lfo[k] is read only by a route that names LFO k.
+                    if (c.held) raw = 0.0f;   // LFO Link arming: hold this LFO's output at centre (phase keeps running underneath)
+                    // #148: the LFO DEPTH knob scales its MATRIX routes too (route depth carries the
+                    // bounds; DEPTH is the master amount) — so DEPTH 50% halves a linked sweep. Was raw
+                    // (matrix ignored DEPTH); factory LFO-route presets set depth=1.0 so they are
+                    // unchanged, except Sideband Growl (bumped to 1.0) + Rust Choir/Bell Tide (intended).
+                    lfoRaw[(std::size_t) p][(std::size_t) k] = raw * c.depth;
                     const float v = raw * c.depth;
                     switch (c.dest)
                     {
@@ -679,6 +756,11 @@ public:
             // LFO 1-3 as block-tier mod sources (one-block latency, fine at control rate).
             for (int k = 0; k < 3; ++k)
                 focusLfoRaw[(std::size_t) k].store (lfoRaw[(std::size_t) liveIndex][(std::size_t) k], std::memory_order_relaxed);
+            // Increment B: carry every part's LFO raw to next block's beginMasterBlock (1-block latent,
+            // like the focus part) so a non-focus part's baked LFO->block-dest route can be applied there.
+            for (int p = 0; p < maxParts; ++p)
+                for (int k = 0; k < 3; ++k)
+                    partLfoRawPrev_[(std::size_t) p][(std::size_t) k] = lfoRaw[(std::size_t) p][(std::size_t) k];
 
             // Per-part performance mods (bend + mod-wheel vibrato). The vibrato LFO advances
             // once per chunk (shared phase); its depth + the bend are per part.
@@ -695,6 +777,20 @@ public:
                 ps.modWheel  = modWheel[(std::size_t) p];
                 ps.pitchBend = pitchBendSemis[(std::size_t) p] / 12.0f;     // approximate normalized bend for the matrix
                 for (int mi = 0; mi < 8; ++mi) ps.macro[(std::size_t) mi] = macroVals[(std::size_t) mi];
+            }
+
+            // Mixer-tier mods PER PART (LINK P0 per-part): each part's OWN matrix drives its
+            // PartLevel/PartPan from its own sources, regardless of edit focus — so a background
+            // part's tremolo/auto-pan route keeps modulating while you edit another part. (FX/EQ/
+            // LFO-rate block dests remain focus-scoped pending the range-mapped rework; PartLevel/
+            // PartPan need no range mapping — the offset is the multiplier/pan delta directly.)
+            for (int p = 0; p < maxParts; ++p)
+            {
+                if (! partMatrixUse[(std::size_t) p].active()) { partLevelMod[(std::size_t) p] = 0.0f; partPanMod[(std::size_t) p] = 0.0f; continue; }
+                float bo[ModMatrix::kNumBlockDests];
+                partMatrixUse[(std::size_t) p].blockOffsets (partSrc[(std::size_t) p], bo, ModMatrix::kNumBlockDests);
+                partLevelMod[(std::size_t) p] = bo[ModMatrix::PartLevel - ModMatrix::kFirstBlockDest];
+                partPanMod  [(std::size_t) p] = bo[ModMatrix::PartPan   - ModMatrix::kFirstBlockDest];
             }
 
             const int off = startSample + done;
@@ -993,8 +1089,62 @@ private:
     // smoothed L/R gain as level/pan — post-FX, click-safe, riding the existing ramp so a stepped
     // trim (automation / preset load) never zippers. Unity trim (1.0) leaves the gain bit-identical,
     // so goldens are unchanged.
-    float targetLg (int p) const { const float pan = partPanUse[(std::size_t) p]; return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * (pan <= 0.0f ? 1.0f : 1.0f - pan); }
-    float targetRg (int p) const { const float pan = partPanUse[(std::size_t) p]; return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * (pan >= 0.0f ? 1.0f : 1.0f + pan); }
+    // Mixer-tier matrix mods (LINK P0): PartLevel + PartPan are matrix destinations applied HERE,
+    // riding the existing per-block gain ramp (prevLg->targetLg) so they are click-safe for free.
+    // FOCUS-SCOPED for now: the processor sets these for the edit-focus part only (block-tier mods
+    // are focus-scoped; voice-tier mods are already per-part). A per-part block-mod rework — REQUIRED
+    // before route-carrying presets ship — will make a background part's tremolo/auto-pan sound.
+    //  - PartLevel: multiplies the part level, floored at kPartLevelModFloor (-12 dB) so full-depth
+    //    tremolo stays musical, never gating to silence. Range [-12 dB .. 0 dB]; no boost (loudness-sane).
+    //  - PartPan: DUAL-LAW. The base pan stays LINEAR (unchanged -> existing patches/goldens bit-
+    //    identical; converting the base to equal-power would drop every centre-panned patch 3 dB and
+    //    force a bank re-trim, which the freeze forbids). The MOD layers a constant-power auto-pan
+    //    factor that is UNITY at mod=0, so only the moving sweep is equal-power (constant perceived
+    //    loudness L<->R; the extreme channel rides to +3 dB under the master safety clipper).
+    //    1.1 roadmap: unify pan to equal-power + re-trim the bank, retiring this dual-law layering.
+    static constexpr float kPartLevelModFloor = 0.25f;             // -12 dB: full-depth tremolo floor (never silence)
+    static constexpr float kAutoPanUnity      = 1.41421356237f;    // sqrt(2): the auto-pan factor is unity at centre
+public:
+    void  setPartLevelMod (int p, float m) { if (p >= 0 && p < maxParts) partLevelMod[(std::size_t) p] = m; }
+    void  setPartPanMod   (int p, float m) { if (p >= 0 && p < maxParts) partPanMod  [(std::size_t) p] = m; }
+    void  resetMixerMods  () { partLevelMod.fill (0.0f); partPanMod.fill (0.0f); }   // each block, before the focus part is set
+    // Processor fills this at prepare from the real APVTS range of each block dest's param (Increment B).
+    void  setBlockRange (int blockIdx, float lo, float hi, float skew)
+    { if (blockIdx >= 0 && blockIdx < ModMatrix::kNumBlockDests) blockRanges_[(std::size_t) blockIdx] = { lo, hi, skew }; }
+private:
+    static constexpr float kHalfPi = 1.57079632679f;   // pi/2 (engine is JUCE-free; no juce::MathConstants)
+    float levelModMul (int p) const { return std::clamp (1.0f + partLevelMod[(std::size_t) p], kPartLevelModFloor, 1.0f); }
+    void  autoPanGains (int p, float& gl, float& gr) const
+    {
+        const float m  = std::clamp (partPanMod[(std::size_t) p], -1.0f, 1.0f);
+        const float th = (m + 1.0f) * 0.5f * kHalfPi;   // 0..pi/2, centre at pi/4 -> unity
+        gl = kAutoPanUnity * std::cos (th); gr = kAutoPanUnity * std::sin (th);
+    }
+    std::array<float, maxParts> partLevelMod {}, partPanMod {};    // mixer-tier matrix offsets (0 = no mod)
+
+    // Increment B — per-part BLOCK-tier mods (FX/EQ/LFO-rate/env/tune/glide) for NON-focus parts.
+    // The focus part's block mods stay on the processor path (bit-identical); locked/background parts
+    // gain their own baked routes here. A JUCE-free {start,end,skew} descriptor per block dest is filled
+    // by the processor at prepare (from the real APVTS ranges) so the engine reproduces the exact skew
+    // transform without depending on JUCE. Matches juce::NormalisableRange (non-symmetric, step ignored):
+    //   to01(v)  = ((v-lo)/(hi-lo)) ^ (1/skew)     from01(p) = lo + (hi-lo) * p^skew.
+    struct BlockRange { float lo = 0.0f, hi = 1.0f, skew = 1.0f; };
+    static float br01 (const BlockRange& r, float v)
+    {
+        const float span = r.hi - r.lo; if (span <= 0.0f) return 0.0f;
+        float p = (v - r.lo) / span; p = std::clamp (p, 0.0f, 1.0f);
+        return (r.skew == 1.0f || p <= 0.0f) ? p : std::pow (p, 1.0f / r.skew);
+    }
+    static float brVal (const BlockRange& r, float p)
+    {
+        p = std::clamp (p, 0.0f, 1.0f);
+        const float q = (r.skew == 1.0f || p <= 0.0f) ? p : std::pow (p, r.skew);
+        return r.lo + (r.hi - r.lo) * q;
+    }
+    std::array<BlockRange, ModMatrix::kNumBlockDests> blockRanges_ {};
+    std::array<std::array<float, 3>, maxParts> partLfoRawPrev_ {};   // last block's per-part LFO raw (1-block latent, for beginMasterBlock)
+    float targetLg (int p) const { const float pan = partPanUse[(std::size_t) p]; float gl, gr; autoPanGains (p, gl, gr); return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * levelModMul (p) * (pan <= 0.0f ? 1.0f : 1.0f - pan) * gl; }
+    float targetRg (int p) const { const float pan = partPanUse[(std::size_t) p]; float gl, gr; autoPanGains (p, gl, gr); return partFxUse[(std::size_t) p].trim * partLevelUse[(std::size_t) p] * levelModMul (p) * (pan >= 0.0f ? 1.0f : 1.0f + pan) * gr; }
 
     // Kit parts: per-part double-buffered KitData (pads + baked params). Published on
     // the message thread; the audio thread reads buf[kitReadIdx[part]] (sampled once

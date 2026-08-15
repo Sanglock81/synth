@@ -298,6 +298,56 @@ namespace
         return { times[(std::size_t) (blocks / 2)], times[(std::size_t) (int) (blocks * 0.99)], times.back() };
     }
 
+    // Per-part MOD MATRIX / block-mod load: every active part carries a full 8-slot matrix mixing
+    // voice-tier (cutoff/reso), block-tier (FX/EQ) and mixer-tier (PartLevel/PartPan) routes — the
+    // path added by the LINK P0 / PartLevel / per-part block-mod work this cycle. Measures its cost
+    // on top of a 4-part, all-FX, 3-LFO render (compare against the live-set row, which carries none).
+    Stat measureMatrixLoad (int blocks)
+    {
+        SynthEngine engine;
+        engine.setOscQuality (PolyBlepOscillator::Quality::Efficient);
+        engine.setMaxVoices (24);
+        engine.prepare (kSR, kBlock);
+
+        ModMatrix mtx;
+        mtx.slots[0] = { ModMatrix::LFO1, ModMatrix::Cutoff,    0.6f };
+        mtx.slots[1] = { ModMatrix::LFO1, ModMatrix::Resonance, 0.4f };
+        mtx.slots[2] = { ModMatrix::LFO2, ModMatrix::ReverbMix, 0.5f };
+        mtx.slots[3] = { ModMatrix::LFO2, ModMatrix::ChorusMix, 0.5f };
+        mtx.slots[4] = { ModMatrix::LFO3, ModMatrix::DelayMix,  0.4f };
+        mtx.slots[5] = { ModMatrix::LFO3, ModMatrix::EqB3Gain,  0.5f };
+        mtx.slots[6] = { ModMatrix::LFO1, ModMatrix::PartLevel, 0.5f };   // mixer-tier tremolo
+        mtx.slots[7] = { ModMatrix::LFO2, ModMatrix::PartPan,   0.5f };   // mixer-tier auto-pan
+
+        VoiceParams vp;
+        vp.osc1Level = 0.8f; vp.osc2Level = 0.8f; vp.osc3Level = 0.6f;
+        vp.cutoffHz = 2000.0f; vp.resonance = 0.4f; vp.filterEnvAmt = 0.5f; vp.ampS = 0.9f;
+
+        std::array<FXParams, SynthEngine::maxParts> fx {};
+        std::array<PartLfos, SynthEngine::maxParts> lfo {};
+        engine.setLiveModMatrix (mtx);                                    // part 0 (live/focused)
+        for (int p = 0; p < SynthEngine::maxParts; ++p)
+        {
+            for (int f = 0; f < FXChain::kNumFX; ++f) fx[(std::size_t) p].enabled[(std::size_t) f] = true;
+            for (int k = 0; k < 3; ++k) lfo[(std::size_t) p].lfo[k] = { 3.0f + (float) k, 0.5f, 0, 2 };   // all 3 LFOs live
+            if (p >= 1) engine.setLockedPartParams (p, vp, fx[(std::size_t) p], lfo[(std::size_t) p], mtx);
+            for (int v = 0; v < 4; ++v) engine.noteOn (36 + p * 12 + v, 0.7f, p);
+        }
+
+        std::vector<float> L (kBlock, 0.0f), R (kBlock, 0.0f);
+        for (int i = 0; i < 200; ++i) engine.renderMaster (L.data(), R.data(), kBlock, vp, lfo.data(), fx.data());
+        std::vector<double> times ((std::size_t) blocks);
+        for (int b = 0; b < blocks; ++b)
+        {
+            const auto t0 = clk::now();
+            engine.renderMaster (L.data(), R.data(), kBlock, vp, lfo.data(), fx.data());
+            const auto t1 = clk::now();
+            times[(std::size_t) b] = std::chrono::duration<double, std::milli> (t1 - t0).count();
+        }
+        std::sort (times.begin(), times.end());
+        return { times[(std::size_t) (blocks / 2)], times[(std::size_t) (int) (blocks * 0.99)], times.back() };
+    }
+
     void row (const std::string& label, Stat s)
     {
         const double tpP99 = s.p99Ms * kTargetDerate;      // robust worst-case, derated
@@ -422,6 +472,9 @@ int main()
     // per-part FX + synced LFOs + looper-density notes). If THIS is clean, we ship as configured.
     std::printf ("\nRealistic live set (lead + unison pad + FM/driven bass + sequenced kit, all FX + LFOs):\n");
     row ("live set (4 parts)", measureLiveSet (4000));
+
+    std::printf ("\nPer-part mod matrix + block-mods (4 parts, full 8-slot matrix: LFO->cutoff/reso, FX/EQ, PartLevel/PartPan, all FX + 3 LFOs):\n");
+    row ("matrix load (4 parts)", measureMatrixLoad (4000));
 
     std::printf ("\nBudget = 2.667 ms/block. Target: worst-case target < 30%% "
                  "leaves headroom for GUI, other tracks, and OS jitter.\n");
