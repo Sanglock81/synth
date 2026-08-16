@@ -1,0 +1,268 @@
+synth minimum-spec target validation report
+generated: 2026-08-16T00:39:19Z (UTC)
+MODE: FULL   (build + bench + 600s soak @128 and @256 + PipeWire)
+bundle:
+  assembled_at_utc=2026-08-16T00:39:19Z
+  git_commit=717462c
+  git_describe=717462c-dirty
+WARNING: governor is NOT 'performance' -- bench/soak numbers are INVALID (see bench-governor note). Re-run with governor set.
+
+======== CPU / CLOCK / GOVERNOR CONTEXT ========
+governor (cpu0): powersave
+-- per-core scaling_cur_freq (kHz):
+   cpu: 2100338
+   cpu: 2100058
+   cpu: 2105722
+   cpu: 2099984
+   cpu: 2189742
+   cpu: 2100966
+   cpu: 2100000
+   cpu: 2100375
+-- freq limits (cpu0, kHz): min=400000 max=4200000
+-- turbo (intel no_turbo, 1=disabled): 0
+-- lscpu:
+   Architecture:                         x86_64
+   CPU op-mode(s):                       32-bit, 64-bit
+   Address sizes:                        39 bits physical, 48 bits virtual
+   Byte Order:                           Little Endian
+   CPU(s):                               8
+   On-line CPU(s) list:                  0-7
+   Vendor ID:                            GenuineIntel
+   Model name:                           Intel(R) Core(TM) i7-8650U CPU @ 1.90GHz
+   CPU family:                           6
+   Model:                                142
+   Thread(s) per core:                   2
+   Core(s) per socket:                   4
+   Socket(s):                            1
+   Stepping:                             10
+   CPU(s) scaling MHz:                   50%
+   CPU max MHz:                          4200.0000
+   CPU min MHz:                          400.0000
+   BogoMIPS:                             4199.88
+   Flags:                                fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb pti ssbd ibrs ibpb stibp fsgsbase tsc_adjust sgx bmi1 avx2 smep bmi2 erms invpcid mpx rdseed adx smap clflushopt intel_pt xsaveopt xsavec xgetbv1 xsaves dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp md_clear flush_l1d arch_capabilities
+   L1d cache:                            128 KiB (4 instances)
+   L1i cache:                            128 KiB (4 instances)
+   L2 cache:                             1 MiB (4 instances)
+   L3 cache:                             8 MiB (1 instance)
+   NUMA node(s):                         1
+   NUMA node0 CPU(s):                    0-7
+   Vulnerability Gather data sampling:   Mitigation; Microcode
+   Vulnerability Itlb multihit:          KVM: Mitigation: VMX unsupported
+   Vulnerability L1tf:                   Mitigation; PTE Inversion
+   Vulnerability Mds:                    Mitigation; Clear CPU buffers; SMT vulnerable
+   Vulnerability Meltdown:               Mitigation; PTI
+   Vulnerability Mmio stale data:        Mitigation; Clear CPU buffers; SMT vulnerable
+   Vulnerability Reg file data sampling: Not affected
+   Vulnerability Retbleed:               Mitigation; IBRS
+   Vulnerability Spec rstack overflow:   Not affected
+   Vulnerability Spec store bypass:      Mitigation; Speculative Store Bypass disabled via prctl
+   Vulnerability Spectre v1:             Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+   Vulnerability Spectre v2:             Mitigation; IBRS; IBPB conditional; STIBP conditional; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected
+   Vulnerability Srbds:                  Mitigation; Microcode
+   Vulnerability Tsx async abort:        Mitigation; TSX disabled
+-- cpupower frequency-info:
+   analyzing CPU 0:
+     driver: intel_pstate
+     CPUs which run at the same hardware frequency: 0
+     CPUs which need to have their frequency coordinated by software: 0
+     maximum transition latency:  Cannot determine or is not supported.
+     hardware limits: 400 MHz - 4.20 GHz
+     available cpufreq governors: performance powersave
+     current policy: frequency should be within 400 MHz and 4.20 GHz.
+                     The governor "powersave" may decide which speed to use
+                     within this range.
+     current CPU frequency: Unable to call hardware
+     current CPU frequency: 2.01 GHz (asserted by call to kernel)
+     boost state support:
+       Supported: yes
+       Active: yes
+-- thermal zones (millidegC):
+   /sys/class/thermal/thermal_zone0/temp: 36000
+   /sys/class/thermal/thermal_zone1/temp: 30050
+   /sys/class/thermal/thermal_zone2/temp: 20000
+   /sys/class/thermal/thermal_zone3/temp: 30050
+   /sys/class/thermal/thermal_zone4/temp: 29050
+   /sys/class/thermal/thermal_zone5/temp: 29050
+   /sys/class/thermal/thermal_zone6/temp: 36050
+   /sys/class/thermal/thermal_zone7/temp: 33500
+   /sys/class/thermal/thermal_zone8/temp: 41000
+   /sys/class/thermal/thermal_zone9/temp: 30000
+-- kernel: Linux Think 6.8.0-58-generic #60-Ubuntu SMP PREEMPT_DYNAMIC Fri Mar 14 18:29:48 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
+
+======== BUILD (bare compiler, no JUCE/cmake) ========
+compiler: g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+flags   : -O3 -march=native -std=c++17
+built: dsp_bench
+built: soak
+
+======== DSP BENCH (measured on THIS machine -- the real derate source) ========
+VA Synth block benchmark @ 48 kHz, 128-sample block (budget 2.667 ms)
+Worst-case = saw+saw, per-sample filter-env cutoff mod. Runs ON the reference target (i7-8650U); target~ = measured x1.0 (no dev->target derate).
+
+16 voices (full pool):
+  (a) None 1x (raw)       p50  0.116  p99  0.283  max  0.434 ms  | target~ p99  0.283 ms ( 10.6% budget)  OK<30%
+  (b) Efficient 4x        p50  0.505  p99  0.769  max  0.886 ms  | target~ p99  0.769 ms ( 28.8% budget)  OK<30%
+  (c) HQ 4x/320           p50  2.445  p99  2.994  max  3.361 ms  | target~ p99  2.994 ms (112.3% budget)  OVERRUN
+
+12 voices (comparison; live cap is now 16 for split voicing):
+  (a) None 1x (raw)       p50  0.088  p99  0.199  max  0.704 ms  | target~ p99  0.199 ms (  7.5% budget)  OK<30%
+  (b) Efficient 4x        p50  0.381  p99  0.533  max  0.694 ms  | target~ p99  0.533 ms ( 20.0% budget)  OK<30%
+  (c) HQ 4x/320           p50  1.835  p99  2.276  max  2.697 ms  | target~ p99  2.276 ms ( 85.4% budget)  runs
+
+1 voice:
+  (a) None 1x (raw)       p50  0.008  p99  0.017  max  0.041 ms  | target~ p99  0.017 ms (  0.6% budget)  OK<30%
+  (b) Efficient 4x        p50  0.031  p99  0.049  max  0.062 ms  | target~ p99  0.049 ms (  1.9% budget)  OK<30%
+  (c) HQ 4x/320           p50  0.147  p99  0.167  max  0.192 ms  | target~ p99  0.167 ms (  6.3% budget)  OK<30%
+
+6A osc-count (12 voices, Efficient, full-level saws):
+  1 osc on                p50  0.206  p99  0.262  max  0.354 ms  | target~ p99  0.262 ms (  9.8% budget)  OK<30%
+  2 osc on                p50  0.361  p99  0.394  max  0.703 ms  | target~ p99  0.394 ms ( 14.8% budget)  OK<30%
+  3 osc on                p50  0.510  p99  0.583  max  0.734 ms  | target~ p99  0.583 ms ( 21.9% budget)  OK<30%
+
+6B full path (12 voices, 3 osc, Efficient + FX):
+  engine only             p50  0.510  p99  0.541  max  1.114 ms  | target~ p99  0.541 ms ( 20.3% budget)  OK<30%
+  + chorus                p50  0.514  p99  0.701  max  0.816 ms  | target~ p99  0.701 ms ( 26.3% budget)  OK<30%
+  + chorus (2 voices)     p50  0.518  p99  0.650  max  1.129 ms  | target~ p99  0.650 ms ( 24.4% budget)  OK<30%
+  + delay                 p50  0.511  p99  0.529  max  0.695 ms  | target~ p99  0.529 ms ( 19.8% budget)  OK<30%
+  + reverb                p50  0.518  p99  0.586  max  0.833 ms  | target~ p99  0.586 ms ( 22.0% budget)  OK<30%
+  + reverb (motion)       p50  0.523  p99  0.560  max  0.837 ms  | target~ p99  0.560 ms ( 21.0% budget)  OK<30%
+  + width                 p50  0.512  p99  0.541  max  0.651 ms  | target~ p99  0.541 ms ( 20.3% budget)  OK<30%
+  + width (SAT)           p50  0.522  p99  0.646  max  1.402 ms  | target~ p99  0.646 ms ( 24.2% budget)  OK<30%
+  + ALL FX                p50  0.527  p99  0.586  max  0.860 ms  | target~ p99  0.586 ms ( 22.0% budget)  OK<30%
+
+6B full path (16 voices, 3 osc, Efficient + FX):
+  16v engine only         p50  0.680  p99  0.760  max  0.998 ms  | target~ p99  0.760 ms ( 28.5% budget)  OK<30%
+  16v + ALL FX            p50  0.696  p99  0.791  max  0.987 ms  | target~ p99  0.791 ms ( 29.7% budget)  OK<30%
+
+24-voice pool (raised for multitimbral, 3 osc, Efficient + FX):
+  24v engine only         p50  1.025  p99  1.224  max  1.622 ms  | target~ p99  1.224 ms ( 45.9% budget)  runs
+  24v + ALL FX            p50  1.035  p99  1.160  max  1.995 ms  | target~ p99  1.160 ms ( 43.5% budget)  runs
+
+6B realistic pad (6 voices, 3 osc, chorus+reverb):
+  6 voice + cho+rev       p50  0.266  p99  0.293  max  0.802 ms  | target~ p99  0.293 ms ( 11.0% budget)  OK<30%
+
+2C driven filter (2x oversampled path, 3 osc):
+  16v clean (drive 0)     p50  0.679  p99  0.754  max  1.214 ms  | target~ p99  0.754 ms ( 28.3% budget)  OK<30%
+  16v driven (drive 1)    p50  0.776  p99  0.816  max  1.318 ms  | target~ p99  0.816 ms ( 30.6% budget)  runs
+  24v driven (drive 1)    p50  1.167  p99  1.559  max  1.807 ms  | target~ p99  1.559 ms ( 58.5% budget)  runs
+
+Sub-phase 1 kit (4 live + 12 kit pads = 16 voices, Efficient):
+  kit engine only         p50  0.484  p99  0.617  max  1.006 ms  | target~ p99  0.617 ms ( 23.2% budget)  OK<30%
+  kit + ALL FX            p50  0.501  p99  0.606  max  0.892 ms  | target~ p99  0.606 ms ( 22.7% budget)  OK<30%
+
+Sub-phase 2 multitimbral (Efficient, per-part FX):
+  4 parts x4v + 4x ALL FX  p50  0.766  p99  0.886  max  1.290 ms  | target~ p99  0.886 ms ( 33.2% budget)  runs
+  2 parts x8v + 1x ALL FX  p50  0.708  p99  0.997  max  1.202 ms  | target~ p99  0.997 ms ( 37.4% budget)  runs
+  1 part 16v + ALL FX     p50  0.708  p99  1.053  max  1.254 ms  | target~ p99  1.053 ms ( 39.5% budget)  runs
+
+#96 unison (renderMaster, + ALL FX):
+  Eff x3 (live cap) 12 notes  p50  0.563  p99  1.016  max  1.076 ms  | target~ p99  1.016 ms ( 38.1% budget)  runs
+  HQ  x7 (contingency) 8 notes  p50  1.840  p99  2.289  max  2.636 ms  | target~ p99  2.289 ms ( 85.8% budget)  runs
+
+#132 FM under polyphony (both depths, sine carriers, + ALL FX):
+  16 notes FM             p50  0.298  p99  0.500  max  0.720 ms  | target~ p99  0.500 ms ( 18.8% budget)  OK<30%
+  24 notes FM             p50  0.433  p99  0.627  max  0.887 ms  | target~ p99  0.627 ms ( 23.5% budget)  OK<30%
+
+2C driven + self-oscillating (drive 1, reso ~self-osc, sustained, + ALL FX):
+  16 notes driven+selfosc  p50  0.821  p99  1.157  max  1.401 ms  | target~ p99  1.157 ms ( 43.4% budget)  runs
+  24 notes driven+selfosc  p50  1.217  p99  1.525  max  1.948 ms  | target~ p99  1.525 ms ( 57.2% budget)  runs
+
+Realistic live set (lead + unison pad + FM/driven bass + sequenced kit, all FX + LFOs):
+  live set (4 parts)      p50  0.821  p99  1.525  max  1.657 ms  | target~ p99  1.525 ms ( 57.2% budget)  runs
+
+Per-part mod matrix + block-mods (4 parts, full 8-slot matrix: LFO->cutoff/reso, FX/EQ, PartLevel/PartPan, all FX + 3 LFOs):
+  matrix load (4 parts)   p50  0.779  p99  1.242  max  1.494 ms  | target~ p99  1.242 ms ( 46.6% budget)  runs
+
+Budget = 2.667 ms/block. Target: worst-case target < 30% leaves headroom for GUI, other tracks, and OS jitter.
+
+======== 600s SOAK @ block=128 (compute-overrun proxy + thermal stress, ALL FX) ========
+duration: 600s at block=128 (progress on stderr every 30s)
+  soak   30/600s  blocks=58623  overruns=0  max=1.444ms
+  soak   60/600s  blocks=117034  overruns=0  max=1.444ms
+  soak   90/600s  blocks=176259  overruns=0  max=1.444ms
+  soak  120/600s  blocks=234734  overruns=0  max=1.444ms
+  soak  150/600s  blocks=293354  overruns=10  max=5.363ms
+  soak  180/600s  blocks=349015  overruns=10  max=5.363ms
+  soak  210/600s  blocks=403853  overruns=10  max=5.363ms
+  soak  240/600s  blocks=463046  overruns=11  max=5.363ms
+  soak  270/600s  blocks=522447  overruns=11  max=5.363ms
+  soak  300/600s  blocks=574914  overruns=11  max=5.363ms
+  soak  330/600s  blocks=630293  overruns=11  max=5.363ms
+  soak  360/600s  blocks=687782  overruns=11  max=5.363ms
+  soak  390/600s  blocks=744984  overruns=11  max=5.363ms
+  soak  420/600s  blocks=803862  overruns=11  max=5.363ms
+  soak  450/600s  blocks=854466  overruns=11  max=5.363ms
+  soak  480/600s  blocks=901763  overruns=11  max=5.363ms
+  soak  510/600s  blocks=955718  overruns=11  max=5.363ms
+  soak  540/600s  blocks=1009534  overruns=11  max=5.363ms
+  soak  570/600s  blocks=1062502  overruns=11  max=5.363ms
+soak: 600 s wall, block=128 (2.667 ms budget)
+  blocks rendered : 1116056  (49.6 min of audio, 5.0x real-time flat-out)
+  compute/block   : mean 0.5375  p50 0.5203  p99 0.8919  max 5.3635 ms
+  COMPUTE OVERRUNS: 11  (blocks over the 2.667 ms budget = 0.0010%)
+  verdict         : OVERRUNS PRESENT — inspect max/p99 and thermal context above
+
+======== 600s SOAK @ block=256 (compute-overrun proxy + thermal stress, ALL FX) ========
+duration: 600s at block=256 (progress on stderr every 30s)
+  soak   30/600s  blocks=28782  overruns=0  max=2.164ms
+  soak   60/600s  blocks=56869  overruns=0  max=2.391ms
+  soak   90/600s  blocks=85189  overruns=0  max=2.391ms
+  soak  120/600s  blocks=111552  overruns=0  max=2.518ms
+  soak  150/600s  blocks=140373  overruns=0  max=2.611ms
+  soak  180/600s  blocks=169907  overruns=0  max=3.525ms
+  soak  210/600s  blocks=199520  overruns=0  max=3.525ms
+  soak  240/600s  blocks=229282  overruns=0  max=3.525ms
+  soak  270/600s  blocks=259257  overruns=0  max=3.525ms
+  soak  300/600s  blocks=289375  overruns=0  max=3.525ms
+  soak  330/600s  blocks=320568  overruns=0  max=3.525ms
+  soak  360/600s  blocks=349133  overruns=0  max=3.525ms
+  soak  390/600s  blocks=378614  overruns=0  max=3.525ms
+  soak  420/600s  blocks=405843  overruns=0  max=3.525ms
+  soak  450/600s  blocks=432489  overruns=0  max=3.525ms
+  soak  480/600s  blocks=463626  overruns=0  max=3.525ms
+  soak  510/600s  blocks=494927  overruns=0  max=3.525ms
+  soak  540/600s  blocks=525616  overruns=0  max=3.525ms
+  soak  570/600s  blocks=556247  overruns=0  max=3.525ms
+soak: 600 s wall, block=256 (5.333 ms budget)
+  blocks rendered : 585981  (52.1 min of audio, 5.2x real-time flat-out)
+  compute/block   : mean 1.0238  p50 0.9774  p99 1.6632  max 3.5251 ms
+  COMPUTE OVERRUNS: 0  (blocks over the 5.333 ms budget = 0.0000%)
+  verdict         : PASS (no block exceeded budget in the whole soak)
+
+======== PIPEWIRE / AUDIO CONFIG (quantum + rate at 128 and 256) ========
+-- current settings:
+   update: id:0 key:'clock.rate' value:'48000' type:''
+   update: id:0 key:'clock.quantum' value:'1024' type:''
+   update: id:0 key:'clock.force-quantum' value:'0' type:''
+   update: id:0 key:'clock.force-rate' value:'0' type:''
+-- forced quantum=128:
+   update: id:0 key:'clock.rate' value:'48000' type:''
+   update: id:0 key:'clock.quantum' value:'1024' type:''
+   update: id:0 key:'clock.force-quantum' value:'128' type:''
+   update: id:0 key:'clock.force-rate' value:'0' type:''
+-- forced quantum=256:
+   update: id:0 key:'clock.rate' value:'48000' type:''
+   update: id:0 key:'clock.quantum' value:'1024' type:''
+   update: id:0 key:'clock.force-quantum' value:'256' type:''
+   update: id:0 key:'clock.force-rate' value:'0' type:''
+(restored clock.force-quantum=0)
+-- pw-top snapshot:
+   S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME 
+   C   29      0      0    ---     ---   ---   ---     0                  Dummy-Driver
+   C   30      0      0    ---     ---   ---   ---     0                  Freewheel-Driver
+   C   47      0      0    ---     ---   ---   ---     0                  Midi-Bridge
+   C   64      0      0    ---     ---   ---   ---     0                  v4l2_input.pci-0000_00_14.0-usb-0_5_1.0
+   C   66      0      0    ---     ---   ---   ---     0                  v4l2_input.pci-0000_00_14.0-usb-0_8_1.0
+   C   68      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_00_1f.3.analog-stereo
+   C   69      0      0    ---     ---   ---   ---     0                  alsa_input.pci-0000_00_1f.3.analog-stereo
+   S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT           NAME 
+   S   29      0      0    ---     ---   ---   ---     0                  Dummy-Driver
+   S   30      0      0    ---     ---   ---   ---     0                  Freewheel-Driver
+   S   47      0      0    ---     ---   ---   ---     0                  Midi-Bridge
+   S   64      0      0    ---     ---   ---   ---     0                  v4l2_input.pci-0000_00_14.0-usb-0_5_1.0
+   S   66      0      0    ---     ---   ---   ---     0                  v4l2_input.pci-0000_00_14.0-usb-0_8_1.0
+   S   68      0      0    ---     ---   ---   ---     0                  alsa_output.pci-0000_00_1f.3.analog-stereo
+   S   69      0      0    ---     ---   ---   ---     0                  alsa_input.pci-0000_00_1f.3.analog-stereo
+
+======== DONE ========
+DONE -- paste target-report.txt back

@@ -646,7 +646,8 @@ test-first behind a full gate (`run-all-checks.sh` + `--sanitize` + bench).
 
 ### Known limitations
 - On-target round-trip latency + voice-cap validation under PipeWire is the final pre-deploy
-  check (`tools/target-validate/`); the dev-box ×3.5 derate flags the 24-voice pathological
+  check (`tools/target-validate/`); NOTE: the ×3.5 dev-box derate cited here was later retired — the
+  bench runs ON the reference target, so the measured derate is ×1.0 (see docs/target-report.txt)
   worst case, so the measured target number is the arbiter for the voice cap.
 - Host time-signature other than 4/4 is treated as 4/4 for the bar math.
 
