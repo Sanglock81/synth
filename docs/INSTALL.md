@@ -122,6 +122,23 @@ log — lives in the data folder above and is **never touched** by install/unins
 The window shows a **version + git-hash banner** — handy for confirming you're running the
 build you think you are.
 
+### Low-latency live use on Linux — set the CPU governor to `performance`
+
+For glitch-free live playing at small buffers, set the CPU frequency governor to `performance`:
+
+```sh
+sudo cpupower frequency-set -g performance      # (pkg: linux-tools / linux-cpupower)
+# restore the battery-friendly default afterwards:
+sudo cpupower frequency-set -g powersave
+```
+
+This is standard Linux pro-audio practice, and it is **empirically justified for this synth**: in
+the 1.0 target validation, a 10-minute @128 soak logged a handful of compute-overruns at the
+`powersave` governor that **did not occur** in the matched @256 soak, while the DSP's own p99 sat
+near a third of the block budget — i.e. the overruns were governor/scheduling jitter, not the
+synth. `powersave` lets the CPU idle down between audio callbacks and re-clock late; `performance`
+holds the clock up. See [`performance-target.md`](performance-target.md) for the data.
+
 ## Updating
 
 ```bash

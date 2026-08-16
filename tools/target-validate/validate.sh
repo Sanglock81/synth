@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Minimum-spec target validation — run ON the target (2015-class dual-core, Linux).
+# Minimum-spec target validation — run ON the reference target (the i7-8650U ThinkPad, Linux).
 # Self-contained: needs only a C++17 compiler (g++/clang++). No JUCE, no cmake.
 #
 #   ./validate.sh                 # FULL gate: build, bench, 10-min soak @128 & @256, PipeWire
 #   ./validate.sh --quick         # QUICK: build + bench only (no soak) — for iteration, NOT the gate
 #   SOAK_SECS=60 ./validate.sh    # shorter soak (smoke test)
+#   ./validate.sh --allow-nonperf-governor   # opt in to a DELIBERATE non-performance run
+#                                            # (numbers marked INVALID/conservative; never the gate)
+#
+# The governor is a HARD validity precondition: unless it is 'performance', the bench/soak
+# numbers are inflated and meaningless as a gate. This script sets 'performance' via sudo and
+# restores on exit; if it CANNOT (e.g. no passwordless sudo, or run with no TTY so sudo can't
+# prompt), it ABORTS before wasting ~22 minutes producing invalid numbers, and tells you the one
+# command to run first. Use --allow-nonperf-governor only for an intentional conservative probe.
 #
 # Writes ONE report next to this script: target-report.txt. Paste it back to the
 # dev box — its MEASURED numbers replace the assumed x3.5 derate and settle every
@@ -19,10 +27,12 @@ CXX="${CXX:-g++}"
 CXXFLAGS="-O3 -march=native -std=c++17"
 
 QUICK=0
+ALLOW_NONPERF="${ALLOW_NONPERF_GOVERNOR:-0}"
 for arg in "$@"; do case "$arg" in
   --quick) QUICK=1 ;;
+  --allow-nonperf-governor) ALLOW_NONPERF=1 ;;
   -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-  *) echo "unknown arg: $arg (use --quick or -h)"; exit 2 ;;
+  *) echo "unknown arg: $arg (use --quick, --allow-nonperf-governor, or -h)"; exit 2 ;;
 esac; done
 
 # ---- governor: set performance, restore on ANY exit (incl. Ctrl-C) ---------
@@ -146,5 +156,24 @@ run_all() {
 
 echo "== synth minimum-spec target validation =="
 set_performance && GOV_OK=1 || GOV_OK=0
+# Validity gate: the governor MUST be 'performance' or the numbers are meaningless. Refuse to run
+# the (expensive) bench/soak at the wrong governor unless the caller explicitly opted in. This is
+# the fix for the harness silently spending ~22 min stamping "INVALID" numbers.
+if [ "$GOV_OK" -ne 1 ] && [ "$ALLOW_NONPERF" -ne 1 ]; then
+  cur="$(cat "${GOV_PATHS[0]}" 2>/dev/null || echo unknown)"
+  cat >&2 <<EOF
+
+ABORTING before the bench/soak: CPU governor is '$cur', not 'performance', and this script could
+not set it (sudo needs a password and there may be no TTY to enter it — e.g. a background run).
+Bench/soak numbers at '$cur' are INVALID for the gate, so nothing is measured.
+
+Do ONE of these, then re-run ./validate.sh:
+  1) sudo cpupower frequency-set -g performance      # then run this script in the same session
+  2) run this script from an interactive terminal so its own 'sudo' can prompt for your password
+  3) ./validate.sh --allow-nonperf-governor          # ONLY for a deliberate conservative probe
+                                                      # (numbers stay marked INVALID; never the gate)
+EOF
+  exit 3
+fi
 run_all 2>&1 | tee "$REPORT"
 # governor restored by the EXIT trap

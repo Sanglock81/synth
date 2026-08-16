@@ -28,6 +28,10 @@ Packaged releases begin at **v1.0.0**; until then, download the latest CI build 
 3. Run the standalone directly: `./Synth`
 4. In your DAW, rescan plugins; **Synth** appears in the instrument list.
 
+> **Live on Linux?** For glitch-free low-latency playing, set the CPU governor to performance:
+> `sudo cpupower frequency-set -g performance` (restore with `-g powersave`). Standard pro-audio
+> practice, and validated for this synth — see [`docs/INSTALL.md`](docs/INSTALL.md#low-latency-live-use-on-linux--set-the-cpu-governor-to-performance).
+
 **Windows**
 1. Unzip the archive.
 2. Copy the `Synth.vst3` folder into `%COMMONPROGRAMFILES%\VST3\` (usually
