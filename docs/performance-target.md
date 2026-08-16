@@ -77,65 +77,60 @@ When the target report comes back, on the dev box we:
   call** (lower the default active-part count · a shared-reverb mode · a lower voice cap ·
   Efficient-only unison) — the decision is the user's, never absorbed here.
 
-## Measured run — 2026-08-15 (the authoritative 1.0 record)
+## Measured run — 2026-08-16 (the authoritative 1.0 record, `performance` governor)
 
-Full run of `tools/target-validate/validate.sh` **on the reference target itself** (commit `717462c`).
-Raw report: [`target-report.txt`](target-report.txt).
+Full run of `tools/target-validate/validate.sh` **on the reference target itself** (commit `0d1d1a7`),
+at the **`performance`** governor. Raw report: [`target-report.txt`](target-report.txt).
 
 - **Machine:** Intel **i7-8650U** (4c/8t) — *this* machine, the one the bench has always run on.
-- **Governor:** `powersave` (not `performance`). **This makes every number below CONSERVATIVE**: the
-  CPU ran ~2× slower than at `performance`, so the true target figures are roughly **half** of what
-  is shown. Powersave numbers can't produce a false *pass* — a pass here is a pass with margin.
+- **Governor:** `performance` — the valid measurement condition ([[vasynth-bench-governor]]). A prior
+  `powersave` pass (conservative, ~2× slower) was also run as a cross-check; see the note below.
 - **Measured derate: ×1.0.** The bench runs ON the target, so measured p99 *is* the target figure.
   The old assumed **×3.5 is retired** (bench `kTargetDerate`, this doc, the bundle README, CHANGELOG).
 
-### Headline: old ×3.5 projection vs measured (×1.0, powersave — halve again for `performance`)
+### Headline: old ×3.5 projection vs measured (×1.0, `performance`)
 
-| scenario | old "Target~ @×3.5" | measured p99 (powersave, %budget) | verdict |
+| scenario | old "Target~ @×3.5" | measured p99 (%budget) | verdict |
 |---|---|---|---|
-| Realistic live set (4 parts + FX + LFOs) | 145 % | **1.525 ms · 57 %** | runs |
-| Per-part block-mod matrix (full 8-slot ×4) | — | 1.242 ms · 47 % | runs |
-| 24-voice + ALL FX | 186 % | 1.160 ms · 44 % | runs |
-| 24-voice driven + self-osc | 193 % | 1.525 ms · 57 % | runs |
-| Unison HQ ×7 (contingency probe) | 265 % | 2.289 ms · 86 % | runs |
-| FM, 24 notes | 87 % | 0.627 ms · 24 % | OK<30 % |
+| Realistic live set (4 parts + FX + LFOs) | 145 % | **0.565 ms · 21 %** | OK<30 % |
+| Per-part block-mod matrix (full 8-slot ×4) | — | 0.534 ms · 20 % | OK<30 % |
+| 4-part ×4v + 4× ALL FX | 143 % | 0.531 ms · 20 % | OK<30 % |
+| 24-voice + ALL FX | 186 % | 0.713 ms · 27 % | OK<30 % |
+| 24-voice driven + self-osc | 193 % | 0.839 ms · 32 % | runs |
+| Unison HQ ×7 (contingency probe) | 265 % | 1.132 ms · 42 % | runs |
 
-Every scenario that the ×3.5 assumption projected *over budget* is comfortably **under** it. The only
-`OVERRUN` in the whole bench is **HQ 4× oversampling at 16 voices (112 %)** — a synthetic headroom
-probe (nobody plays 16 voices of 4× HQ oversampling), not a live configuration or a gate.
+Every scenario the ×3.5 assumption projected *over budget* lands comfortably **under** it; every live
+configuration is `OK<30 %`. The only `OVERRUN` anywhere in the bench is the synthetic **HQ 4×
+oversampling at 16 voices** probe — not a live config and not a gate.
 
-### Provisional CPU decisions — settled against measured numbers
+### Provisional CPU decisions — settled against measured numbers (all CONFIRMED)
 
-| decision | measured (powersave p99, % budget) | verdict |
+| decision | measured (p99, % budget) | verdict |
 |---|---|---|
-| **24-voice pool cap** | 24v+ALL FX 44 %; 24v driven 58 %; 24v driven+self-osc 57 % — all *runs* | **CONFIRMED** |
-| **Per-part FX** | 4-part ×4v + 4× ALL FX = 33 % | **CONFIRMED** |
-| **Always-oversample-when-driven** | 16v driven 31 %, 24v driven 58 % | **CONFIRMED** |
-| **Unison live cap (Eff ×3, HQ ×7)** | Eff ×3 38 %; HQ ×7 86 % (contingency, not a gate) | **CONFIRMED** |
-| **FM cost (both depths, poly)** | 16-note 19 %, 24-note 24 % | **CONFIRMED** |
-| **Per-part block-mod matrix cost** (6th row) | full 8-slot ×4 parts = 47 % | **CONFIRMED** |
+| **24-voice pool cap** | 24v+ALL FX 27 %; 24v driven+self-osc 32 % | **CONFIRMED** |
+| **Per-part FX** | 4-part ×4v + 4× ALL FX = 20 % | **CONFIRMED** |
+| **Always-oversample-when-driven** | 24v driven+self-osc 32 % | **CONFIRMED** |
+| **Unison live cap (Eff ×3, HQ ×7)** | HQ ×7 42 % (contingency, not a gate) | **CONFIRMED** |
+| **FM cost (both depths, poly)** | 24-note FM well under 30 % | **CONFIRMED** |
+| **Per-part block-mod matrix cost** (6th row) | full 8-slot ×4 parts = 20 % | **CONFIRMED** |
 
-### Soak (compute-overrun proxy, ALL FX, 600 s each)
+### Soak (compute-overrun proxy, ALL FX, 600 s each) — both PASS, zero overruns
 
 | block | budget | blocks | overruns | mean / p99 / max | verdict |
 |---|---|---|---|---|---|
-| **256** | 5.333 ms | 585,981 | **0** | 0.54 / 0.89 / 3.53 ms | **PASS** |
-| **128** | 2.667 ms | 1,116,056 | **11** (0.0010 %) | 0.54 / 0.89 / **5.36 ms** | overruns present |
+| **128** | 2.667 ms | 1,862,260 | **0** | 0.32 / 0.39 / 0.96 ms | **PASS** |
+| **256** | 5.333 ms | 956,543 | **0** | 0.63 / 0.82 / 1.79 ms | **PASS** |
 
-### Ship-rule status — the user's call (not absorbed here)
+### Ship-rule status — the bright line is MET; the ship call is the user's
 
-The pre-agreed rule requires **zero** xruns in the realistic set **and both** soaks. The realistic-set
-bench and the @256 soak are clean, but the **@128 soak logged 11 overruns**, so the bright line is
-**not** met and this is **not** an automatic ship. The evidence *characterising* those 11 (for the
-decision, not to wave them away):
-- They arrived in a **burst** — 0 through the first 120 s, then +10 in one ~30 s window, +1 later, then
-  **none for the final ~6 minutes**. That is a transient scheduling/frequency event, not sustained load.
-- **max 5.36 ms while mean is 0.54 ms and p99 is 0.89 ms** (33 % of budget) — the DSP is nowhere near
-  budget; a lone 10× spike is OS jitter.
-- The **@256 soak on the same DSP was perfectly clean** (max 3.53 ms = 66 % of its budget).
-- All of this is at **powersave**, which both inflates cost ~2× and is more jitter-prone.
+The pre-agreed rule requires **zero** xruns in the realistic set **and both** soaks. At `performance`:
+realistic-set bench 21 % `OK<30 %`, **@128 soak 0 overruns, @256 soak 0 overruns** — over ~2.8M blocks
+(2.8 hours of flat-out audio). **Clause A of the ship rule is satisfied.** Per the standing agreement the
+tag itself still fires only on the user's explicit call (after UAT + signature); this record establishes
+that performance is not a blocker.
 
-The single clean way to convert this to a valid zero is a **`performance`-governor re-run** (needs sudo,
-declined this pass). Absent that, the pre-agreed mitigation menu is the user's to pick from: lower the
-default active-part count · a shared-reverb mode · a lower voice cap · Efficient-only unison. **Decision
-pending the user; the tag does not fire until they make it.**
+**Cross-check — the earlier `powersave` run (superseded, kept for the record).** Before the governor was
+set, a `powersave` pass logged **11 @128 overruns (0.0010 %)** in a jitter burst (max 5.36 ms vs 0.54 ms
+mean; @256 clean). The `performance` re-run proves that was governor jitter, not DSP cost: the same @128
+soak's **max block fell from 5.36 ms to 0.96 ms** (a third of budget) with **zero** overruns. This is the
+empirical basis for documenting the `performance` governor as a low-latency-live requirement (INSTALL/README).
