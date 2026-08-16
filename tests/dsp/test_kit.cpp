@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Kit-part engine tests (Sub-phase 1). Per-pad param selection through the
 // paramsFor(part, slot) seam, unmapped-trigger silence, sounding-note decoupling,

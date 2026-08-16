@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // ADSR envelope tests, written to the Phase 2 spec. Two of these intentionally
 // fail against the skeleton's timing calibration (release-to--80dB and

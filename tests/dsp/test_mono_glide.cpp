@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Mono / legato note priority + glide (portamento). Engine-level, JUCE-free.
 // ============================================================================

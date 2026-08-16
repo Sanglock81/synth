@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // Ported from tests/dsp_smoke_test.cpp: render a C-major chord through the
 // full engine and check the output is non-silent, finite, and bounded.
 #include <catch2/catch_test_macros.hpp>

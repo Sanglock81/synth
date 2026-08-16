@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // I2 — stereo, pitch-tracked, one-shot SampleVoice (kit sample pads). JUCE-free.
 // Proves playback, pitch ratio, stereo preservation, choke fade, anti-click ends,

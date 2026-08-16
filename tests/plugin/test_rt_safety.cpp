@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Processor-layer real-time safety: VASynthProcessor::processBlock must not
 // allocate on the audio thread. Covers the monoScratch preallocation fix.

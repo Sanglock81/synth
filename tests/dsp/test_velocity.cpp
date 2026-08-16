@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Velocity connection (#54): the per-step velocity emitted by the sequencer/arp must
 // actually reach the voice and shape the sound. In a synth, velocity drives the VCA

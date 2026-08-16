@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Pitch bend, mod-wheel vibrato, and sustain pedal — driven with synthetic MIDI
 // through processBlock. These arrive from the Launchkey touch strips (bend/mod)

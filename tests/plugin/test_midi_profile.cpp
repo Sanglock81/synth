@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // [6c] MIDI device profile parsing, device matching, and factory/user resolution.
 // (The precedence-on-apply behaviour is tested against MidiLearnManager in

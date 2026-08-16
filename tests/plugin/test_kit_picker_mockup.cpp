@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // #134 Kit-picker screenshot for the report/docs. The real picker is a JUCE PopupMenu
 // (a separate top-level component the headless harness can't capture), so -- following the

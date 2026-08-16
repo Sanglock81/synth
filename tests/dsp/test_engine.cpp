@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Voice/Engine tests: determinism, note lifecycle, silence, and 17-on-16
 // oldest-note stealing without an audible click.

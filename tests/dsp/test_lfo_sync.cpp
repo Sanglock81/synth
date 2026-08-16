@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // J1.2 — tempo-synced LFOs. A synced LFO's rate is derived from the transport tempo +
 // note division, and its phase is transport-position-derived (bar-locked, continuous).

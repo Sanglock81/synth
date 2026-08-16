@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Click/pop torture for the note-generating features (arp / looper / chord-morph).
 // STANDING RULE (R3): every change that generates notes or touches the audio path

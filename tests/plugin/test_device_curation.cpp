@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Bug 1: audio-output device-list curation. Pure StringArray policy — no device
 // is opened — so a realistic PipeWire+ALSA "wall" can be exercised headlessly.

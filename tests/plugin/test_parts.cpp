@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // 7C parts / multitimbral — processor integration. Locked-part bake equivalence,
 // the multi-surface contract (independent parts play simultaneously with their own

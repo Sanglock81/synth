@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 #include "PluginProcessor.h"
 #include "ModDestRegistry.h"
 #include "PresetManager.h"     // randomizeExclusions() (shared policy for H5 RANDOM)

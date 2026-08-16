@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // SeqPanel UI interaction (#54): the step-sequencer cells share ONE grammar with the
 // arp — a single tap TOGGLES a cell (dark->on, lit->off); touch-and-hold + vertical drag

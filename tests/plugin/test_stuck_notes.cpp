@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Stuck-note regression: transitions between the note GENERATORS (arp / sequencer /
 // looper) and their mode/enable switches must never strand a voice. The invariant:

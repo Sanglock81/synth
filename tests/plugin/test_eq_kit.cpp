@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // The per-part EQ must shape a KIT part too (part-bus EQ). Regression for the v1
 // "kits are dry" gap where the whole FX chain — including the consolidated EQ — was

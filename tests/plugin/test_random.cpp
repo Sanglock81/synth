@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // RANDOM (one algorithm, no modes) + VARY. Seeded-deterministic; the exclusion list never moves
 // (200x hammer); every generated patch is non-silent AND passes the broken-patch invariants; the

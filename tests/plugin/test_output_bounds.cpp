@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Bug 4 invariant: the processor's final output must NEVER exceed +/-1.0, for
 // any patch and any polyphony. This bug shipped because the golden WAVs are

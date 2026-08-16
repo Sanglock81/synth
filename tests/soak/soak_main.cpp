@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Memory soak: a synthetic MIDI storm through the full processBlock path, run
 // for a configurable number of audio-seconds. Samples RSS at intervals and

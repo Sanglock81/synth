@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // G6 — pitch-bend + mod-wheel (CC1) intake through the SURFACE path (the 7C per-input
 // capture route). The user reported the Launchkey's pitch/mod strips are "dead

@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Plugin-layer: MIDI-learn behaviour, driven end-to-end through processBlock.
 //   * a mapped CC moves its target parameter,

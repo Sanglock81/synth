@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Regression: the 808 kick is ENGINE-CLEAN. A hands-on report of an HF click/pop was
 // investigated at length; measured through the real processor, the kick has no meaningful

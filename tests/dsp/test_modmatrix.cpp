@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Mod matrix (#56) — the JUCE-free routing engine in isolation: inert by default
 // (bit-identical guarantee), correct per-destination scaling, source selection,

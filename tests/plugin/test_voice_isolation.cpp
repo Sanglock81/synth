@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Per-part voice isolation: a generator (sequencer/arp) on one part must never cut
 // or starve live playing on another part. Generator voices yield to live-played

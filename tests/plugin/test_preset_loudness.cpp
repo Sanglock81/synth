@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Equal-loudness bank check (Inc 2). The SUSTAINED, full-spectrum factory patches must
 // sit within +/-4 dB of the bank median so switching patches during a set doesn't jump

@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // LFO tests: shape boundedness, S&H one-change-per-cycle, rate accuracy.
 // ============================================================================

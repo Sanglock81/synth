@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // [6b] Hand-rolled stereo FX: chorus, delay, reverb, width, and the reorderable
 // FXChain (with its click-free crossfade). JUCE-free and deterministic — these

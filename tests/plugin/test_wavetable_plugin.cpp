@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // #95 Wavetable (3b-plugin) — WT is a real 5th wave option wired to the factory
 // bank. Covers: the normalized-value PIN (appending "WT" must not silently retarget

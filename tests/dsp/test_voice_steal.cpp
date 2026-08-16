@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Voice-steal priority (per-part isolation): a generator (seq/arp/looper) voice is
 // always stolen before a live-played voice, so a running sequencer can never cut a

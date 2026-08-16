@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Regression: a sequencer whose target part holds a drum KIT drives that kit — assigning
 // a kit to the seq's target part does NOT "kill" the sequencer. (User reported "switching

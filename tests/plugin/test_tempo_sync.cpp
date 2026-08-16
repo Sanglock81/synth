@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // J1.1 — master tempo host-follow. In a DAW the host's BPM + play position drive the
 // transport (arp/seq/looper + the synced-LFO beat clock); standalone uses the Tempo knob.

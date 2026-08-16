@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // #98 Session export — the offline DAW-handoff bounce. A seq pattern on P1 is
 // rendered offline to master.wav + a per-part stem + manifest.json; the stems sum

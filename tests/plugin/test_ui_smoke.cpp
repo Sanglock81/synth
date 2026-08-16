@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // HEADLESS UI SMOKE HARNESS (Part 0 process fix — see the ui-smoke-harness memory).
 //

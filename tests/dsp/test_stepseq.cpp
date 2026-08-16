@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Multi-row step sequencer: rows fire their notes on their on-steps, mute silences
 // a row, accent raises velocity, gate releases before the next step, and independent

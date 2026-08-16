@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Custom editor: open/close, layout, state round-trip with the editor live
 // (attachments), MIDI-learn badge query, and a committed layout screenshot.

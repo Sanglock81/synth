@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Looper is decoupled from edit focus (task #47). Each lane N == part N has its own
 // transport and captures part N regardless of the edit/play focus. Recording on lane 2 and

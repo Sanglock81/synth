@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // Emits a uniquely-greppable build stamp into every VASynth binary (VST3 + Standalone) so the
 // gate (run-all-checks.sh) can PROVE the artefact on disk was built from the gated commit.
 // "Gate green" then means "the binaries ARE the gated code", not merely "an artefact exists".

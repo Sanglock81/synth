@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Shared-transport clock alignment (task #53). The processor re-locks the sequencer and
 // arpeggiator to the looper's bar downbeat at every bar boundary (realign), so seq step-1 and

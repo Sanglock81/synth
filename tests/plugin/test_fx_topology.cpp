@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // PROBE (temporary): do the master EQ and per-part width actually affect the processor's
 // output in the real topology? Answers "do they work / did they ever" empirically.
 #include <catch2/catch_test_macros.hpp>

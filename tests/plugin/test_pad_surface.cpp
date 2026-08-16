@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // I1 — the drum PADS of a controller (a profile-declared MIDI channel + note range)
 // split off into their OWN routable input surface ("<device> Pads"), so the pads can

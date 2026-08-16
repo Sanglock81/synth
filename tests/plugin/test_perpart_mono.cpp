@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Per-part Poly/Mono/Legato (task #57). Mono/Legato used to be a single GLOBAL mode that
 // shared one voice across all parts, so a mono lead on part 1 was cut by the sequencer on

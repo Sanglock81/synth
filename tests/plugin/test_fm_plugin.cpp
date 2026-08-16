@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // #132 Osc FM chain — processor-level behaviour: the headline velocity -> FM depth
 // route brightens harder notes; a mid-note FM-depth sweep is click-free (the depth is

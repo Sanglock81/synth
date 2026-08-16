@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // AudioLoop (Group 3): stereo tape loop. Preallocated ring; overdub-by-sum record,
 // add-on-play, wrap-safe indexing, length clamp. JUCE-free (Catch2 only).

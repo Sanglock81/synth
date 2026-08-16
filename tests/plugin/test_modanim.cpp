@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // H1 — mod-indicator MOTION model: the animation is an ECHO of a value in motion, not a
 // "route exists" light. A static routed offset shows nothing at rest; a moving one stays

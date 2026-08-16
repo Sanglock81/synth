@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // #134 Classic-machine drum kits — verification + tour renders.
 //   * legacy kit-name migration (old MULTI/.kit loads its successor);

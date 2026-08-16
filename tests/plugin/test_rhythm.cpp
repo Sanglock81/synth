@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Arpeggiator through the processor: enabling the arp and holding a note produces
 // stepped output; disabling it leaves the note-dispatch path bit-identical (a held

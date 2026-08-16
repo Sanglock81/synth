@@ -10,6 +10,7 @@ defect is fixed + re-gated. This runbook makes the actual cut a clean, one-pass 
 - [ ] **UAT** signed off; all BLOCKER defects fixed, re-gated, and CI green on **both** platforms.
 - [ ] Known-issues (KNOWN-ISSUE from UAT + the pluginval teardown flake) captured in the CHANGELOG.
 - [ ] `./run-all-checks.sh` **and** `./run-all-checks.sh --sanitize` green locally on the commit you'll tag.
+- [ ] Register copyright with the US Copyright Office (eCO → Literary Work, ~$45; deposit PDF in docs/) before wide sharing.
 
 ## Step 1 — confirm the version
 The version string is `1.0.0` in `CMakeLists.txt` (`project(VASynth VERSION 1.0.0)`); the on-screen

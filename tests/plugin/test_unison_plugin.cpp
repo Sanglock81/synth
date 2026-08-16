@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // #96 Unison (plugin) — the osc_unison param flows through buildVoiceParams, the
 // engine dispatches unison voices to the stereo bus, and the output widens. Count 1

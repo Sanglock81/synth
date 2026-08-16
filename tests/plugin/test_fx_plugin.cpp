@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // [6b] Plugin-layer FX: the chain order state-tree property (validation +
 // persistence) and the stereo FX path through processBlock.

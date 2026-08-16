@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 #pragma once
 // GENERATED each build by cmake/gen_version.cmake — always the currently-built commit
 // ("+" suffix = uncommitted changes present). Do not edit; edit VersionInfo.h.in instead.

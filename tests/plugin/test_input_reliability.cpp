@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Bug B (step zero for Phase 7): the standalone's ability to PLAY must survive
 // the app lifecycle — startup, Audio/MIDI settings open/close, preset switch, and

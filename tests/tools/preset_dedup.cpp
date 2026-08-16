@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Render-similarity dedup tool (rerunnable; NOT an audition-WAV renderer).
 //

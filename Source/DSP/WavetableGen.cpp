@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // FP CONTRACTION OFF for the whole translation unit: no compiler may fuse a mul-add
 // into an FMA here, so every +,-,*,/ is strict IEEE and the generated table bytes are
 // bit-identical on GCC (Linux) and MSVC (Windows). See WavetableGen.h.

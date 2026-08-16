@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Load isolation: loading a patch (factory / user / Init) into the focused part must
 // change ONLY that part's sound. All global performance state — the sequencer pattern +

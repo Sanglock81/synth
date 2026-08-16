@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Real-time safety: SynthEngine::render must not touch the heap. Renders 1000
 // blocks (with active voices, note-ons that trigger stealing, and note-offs)

@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // 6A state migration: loading a pre-level-model patch (has osc_mix, no
 // osc1_level) derives the per-source levels from the legacy crossfade so old

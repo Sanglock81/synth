@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Mod matrix (#56) at the plugin layer: per-part routes persist with the patch, the
 // LINK helper fills/reuses/limits slots, and a live route audibly modulates through

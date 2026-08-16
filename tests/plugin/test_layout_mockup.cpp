@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // R2 layout MOCKUP (non-functional) - revision 4, per detailed sign-off notes:
 //  - Parts rail: even-height cells (fixed a shrinking-row bug).

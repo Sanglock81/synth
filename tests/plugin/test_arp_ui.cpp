@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // ArpBar UI interaction (#54): the arp's 16 step boxes use ONE grammar (shared with
 // the step sequencer) — a single tap TOGGLES a box (dark->on, lit->off); touch-and-hold

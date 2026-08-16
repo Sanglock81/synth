@@ -98,6 +98,8 @@ Issues and pull requests welcome. Build from source (Tier 2) and run the checks 
 
 ## License
 
+**Copyright © 2026 John L Farmer.**
+
 **GNU AGPL v3** — see [LICENSE](LICENSE). The **source for every release is this repository**
 (<https://github.com/Sanglock81/synth>); the AGPL's source-availability obligation is met
 by that public repo.

@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // [6d] Factory preset library: all presets present, categorised, each loads and
 // actually makes sound, and Init resets to defaults.

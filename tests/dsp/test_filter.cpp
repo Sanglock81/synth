@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Filter tests: stability under sustained noise across the full parameter grid,
 // frequency-response sanity, and behaviour under a full-range cutoff sweep.

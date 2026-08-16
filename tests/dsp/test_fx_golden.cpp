@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // [6b] FX golden renders. A fixed synthetic input (enveloped 220 Hz sine with a
 // sharp onset for the delay/reverb to grab) is run through the FXChain in three

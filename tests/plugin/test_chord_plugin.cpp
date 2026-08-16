@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // 7B chord engine — processor integration. The pure grammar is exhaustively
 // covered by dsp/test_chord.cpp; here we verify the wiring: expansion in the

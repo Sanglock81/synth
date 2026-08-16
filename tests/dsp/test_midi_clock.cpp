@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // MIDI clock generator: 24-ppq ticks at sample-accurate offsets (low jitter — pedal loopers are
 // unforgiving), plus Start/Stop edges and jump re-alignment. JUCE-free (DSP-only).

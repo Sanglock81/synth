@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // #95 Wavetable (3a — engine). The mip-mapped band-limited table and its
 // oscillator integration: alias-free high notes, click-free position morph, and

@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Audio device flexibility + fallback (Item A). What's testable headlessly:
 //   * ALSA/JACK device types are compiled in -> the standalone's Audio/MIDI

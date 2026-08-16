@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Master-gain smoothing (zipper). Master gain multiplies the whole output, so a
 // hard step is a genuine click. Test-first: step the gain param hard every block

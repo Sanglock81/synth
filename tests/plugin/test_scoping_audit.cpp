@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // FX/filter scoping audit (task #50). Reasserts that ALL per-sound processing belongs to a
 // PART and is set via edit focus: two parts given deliberately different sound-design

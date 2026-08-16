@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Master parametric EQ: flat = bit-transparent, band gains land on target dB, and
 // a boosted band actually raises a tone at its centre. JUCE-free (DSP-only).

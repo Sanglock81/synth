@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Sequencer multitimbral separation: the seq plays ONLY its target part (with that
 // part's own sound), and changing the target mid-sequence must not hang a note on the

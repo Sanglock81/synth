@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Oscillator tests — "the project's soul". A naive oscillator must fail the
 // aliasing test.

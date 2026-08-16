@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // [6c] Processor-level plug-and-play MIDI behaviour the standalone hot-plug
 // watcher drives: applying a device profile (incl. a user override), panic

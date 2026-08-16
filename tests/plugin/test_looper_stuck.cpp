@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Looper stuck-note regression. The MIDI loop can hold a note-on with no matching
 // note-off (a note recorded held THROUGH the loop, or playback stopped mid-note); it

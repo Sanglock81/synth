@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // #95 Wavetable (3b) — the DETERMINISTIC content generator. Two pins:
 //  (1) equal-loudness normalization is ONE shared step for factory + randomizer;

@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // J3 scenes. Eight arrangement snapshots (loop clips + drum pattern + per-lane transport).
 // The ACTIVE scene IS the live state (direct-edit, no store): recording/pattern edits write into

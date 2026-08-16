@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // J2 — per-part looper loop lengths. Each lane's loop_bars param drives ITS OWN length
 // (a shorter lane's playhead advances proportionally faster), and the append-only enum

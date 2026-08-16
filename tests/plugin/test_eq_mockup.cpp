@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // K1 sign-off MOCKUP (non-functional): the proposed consolidated per-part EQ section —
 // vertical GAIN sliders, one per band, at the size the right-column section actually gets.

@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Diatonic chord engine (7B): grammar tables, modifiers, latest-wins, the note-off
 // ledger under modifier churn, enable-toggle, and passthrough. Pure + JUCE-free.

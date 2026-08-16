@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // RT-safe SPSC ring logger tests. JUCE-free. The producer (audio thread) must
 // never block and never allocate; on a full ring it drops and counts.

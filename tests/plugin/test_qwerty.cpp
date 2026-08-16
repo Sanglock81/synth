@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // QWERTY computer-keyboard mapping + edge detection (JUCE-free logic).
 // ============================================================================

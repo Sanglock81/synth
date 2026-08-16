@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Golden-render regression. Renders a fixed 2 s sequence (C-major chord +
 // exponential filter sweep) through the engine and compares against a committed

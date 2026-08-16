@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // #96 Unison — the stereo stack voice. Count 1 is the mono path (covered bit-exact
 // by the goldens); here we exercise count > 1: real stereo width, level held by the

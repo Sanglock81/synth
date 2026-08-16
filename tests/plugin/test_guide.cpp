@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Section guide (#133) coverage — institutionalizes the noise_level lesson: every
 // param-attached control in a COVERED section must have a guide entry, and every

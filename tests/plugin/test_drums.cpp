@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // 7A drum presets: character checks (load + sound + bounds are covered for ALL
 // presets by test_presets_factory; here we verify the DRUM character specifically).

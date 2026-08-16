@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // G1.2 — MIDI/voice/looper trace. Verifies the env-gated tracer captures the right
 // events (and NOTHING when disabled). Deterministic: uses the synchronous drain() +

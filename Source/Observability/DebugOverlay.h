@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "AudioHealthLogger.h"

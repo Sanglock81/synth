@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // 6A engine: OSC3 parity, per-source level model, kill-switch (silent + cheaper),
 // velocity->amp / velocity->cutoff, click-free toggling. Engine-level, JUCE-free.

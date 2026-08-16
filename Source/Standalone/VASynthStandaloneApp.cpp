@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Custom standalone app (compiled ONLY into the Standalone target, which sets
 // JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP). It mirrors JUCE's default

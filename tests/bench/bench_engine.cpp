@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // DSP performance benchmark (JUCE-free). Measures worst-case 128-sample block
 // render time at 48 kHz for the full engine, across oscillator quality modes,

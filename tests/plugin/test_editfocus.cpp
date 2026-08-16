@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Edit focus (1.3): tapping a part swaps the panel to THAT part's sound; edits
 // stick per part; global/performance params stay put; focus 0 is the default.

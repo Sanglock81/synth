@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Factory-preset velocity brightness (#54, category-aware vel->cutoff): every factory
 // patch that routes velocity to the filter must get BRIGHTER on a harder hit, and the

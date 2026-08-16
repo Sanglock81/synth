@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Kit per-pad voice editing (Group 4 increment A): a pad can carry its own edited
 // voice state, which setPartKit bakes instead of the source preset, and which

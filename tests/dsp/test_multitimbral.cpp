@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Sub-phase 2 — per-part FX isolation + silent-part skip (engine level).
 // Each part runs its OWN FX chain: a delay on one part must not colour another,

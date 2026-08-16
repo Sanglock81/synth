@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // AudioHealthLogger: the background drain formats POD events into log lines, and
 // exposes a message-thread snapshot for the debug overlay. Driven synchronously

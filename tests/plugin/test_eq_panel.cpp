@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // K1 — the consolidated per-part EQ section (EQPanel), wired to a real processor.
 //   * screenshot sign-off render of the actual section (docs/smoke/eq-section-wired.png)

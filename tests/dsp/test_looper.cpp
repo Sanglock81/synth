@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Per-part MIDI looper: a recorded note is NOT double-triggered on the recording
 // pass, plays back on the next loop cycle, respects PLAY, and CLEAR wipes it.

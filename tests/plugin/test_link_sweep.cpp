@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // H4 — EXHAUSTIVE link sweep. The enforcement tool that ends "modifying links is buggy":
 //   (1) every source x every registry destination creates a valid route (full product);

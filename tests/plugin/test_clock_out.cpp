@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // #85 MIDI clock OUT (processor level). The synth transmits 24-ppq clock + start/stop on its MIDI
 // output: standalone follows the internal Tempo knob; in a DAW it relays the host tempo + play

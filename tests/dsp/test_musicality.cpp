@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Musicality Pass — Tier 1 (analog life for the oscillators).
 // 1a start-phase policy: RESET (bit-exact, deterministic), RANDOM (each note a fresh phase),

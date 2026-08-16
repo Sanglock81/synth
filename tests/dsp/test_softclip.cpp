@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Output safety clipper (Bug 4). The clipper is the last stage before the DAC;
 // its whole job is to (a) never let the output exceed +/-1.0 and (b) be a

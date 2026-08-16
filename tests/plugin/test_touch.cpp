@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // R2 touch: GRAB-mode controls. A first touch on a fader/knob must ACQUIRE the
 // control with ZERO value change; the value moves only on drag, relative to the

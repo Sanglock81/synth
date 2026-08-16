@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // Default startup scene: out of the box the parts are pre-populated so each surface is
 // audibly distinct and the sequencer has a dedicated drum kit (fixing "the sequencer

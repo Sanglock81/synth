@@ -1,3 +1,4 @@
+// Synth — Copyright © 2026 John L Farmer. Licensed under AGPLv3; see LICENSE.
 // ============================================================================
 // I2 (persistence) — importing a WAV into a kit pad, playing it, deduping by content,
 // and round-tripping the reference through a .kit tree + a MULTI. The managed sample
