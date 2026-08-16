@@ -123,6 +123,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.ref_name }}" \
+            ${{ contains(github.ref_name, '-rc') && '--prerelease' || '' }} \
             --title "synth ${{ github.ref_name }}" \
             --notes "Downloadable VST3 + Standalone builds for Linux and Windows. See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for the full feature list.
 

@@ -16,11 +16,14 @@
 /.deps/
 
 # Fetched tooling (pluginval prebuilt) — run-all-checks.sh / CI re-fetch it.
-# Ignore everything under tools/ EXCEPT the committed target-validation package
-# and the install-vst3 helper (a tracked source script, not a downloaded binary).
+# Ignore everything under tools/ EXCEPT the committed sources: the target-validation
+# package, the install-vst3 helper, and the drum-kit preset generator
+# (gen_drumkits.py — the voicing source for the factory kits). These are tracked
+# source, not downloaded binaries.
 /tools/*
 !/tools/target-validate/
 !/tools/install-vst3.sh
+!/tools/gen_drumkits.py
 
 # Audition renders — regenerated on demand by the [.audition] test
 # (tests/plugin/test_bass_auditions.cpp); large throwaway WAVs, never committed.
@@ -29,10 +32,6 @@
 # Local app data that must never be committed
 *.settings
 *.log
-
-# Stale import/session artifacts
-/vasynth-skeleton.zip
-/VASynth-README.md
 
 # Editor / OS cruft
 .DS_Store

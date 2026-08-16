@@ -115,8 +115,10 @@ log — lives in the data folder above and is **never touched** by install/unins
   it follows your system default sink, so setting your audio interface as the default
   routes it there. Pick a specific device in **Options → Audio/MIDI Settings** (buffer
   128–256 @ 48 kHz to start). MIDI controllers auto-connect on plug-in.
-- **Standalone (Windows):** uses WASAPI by default. For lowest latency into your audio
-  interface, load the **VST3 in a DAW on the ASIO driver** rather than the standalone.
+- **Standalone (Windows):** uses WASAPI by default (there is no ASIO in this build — see
+  [Low-latency live use on Windows](#low-latency-live-use-on-windows--wasapi-exclusive-mode-there-is-no-asio)).
+  For lowest latency into your audio interface, use **WASAPI Exclusive Mode**, or load the
+  **VST3 in a DAW on the ASIO driver** rather than the standalone.
 - **VST3:** rescan/refresh plugins in your DAW; it appears as **synth** (instrument).
 
 The window shows a **version + git-hash banner** — handy for confirming you're running the
@@ -138,6 +140,26 @@ the 1.0 target validation, a 10-minute @128 soak logged a handful of compute-ove
 near a third of the block budget — i.e. the overruns were governor/scheduling jitter, not the
 synth. `powersave` lets the CPU idle down between audio callbacks and re-clock late; `performance`
 holds the clock up. See [`performance-target.md`](performance-target.md) for the data.
+
+### Low-latency live use on Windows — WASAPI Exclusive Mode (there is no ASIO)
+
+**ASIO is deliberately excluded from every build** (`JUCE_ASIO=0`). The Steinberg ASIO SDK is
+proprietary, and this project ships no proprietary dependencies — that is an AGPLv3 compliance
+decision, not an oversight or a missing feature.
+
+Windows audio therefore runs through **WASAPI** (with DirectSound as a fallback). For the lowest
+latency the standalone can give you:
+
+1. Open **Options → Audio/MIDI Settings** and pick the **WASAPI Exclusive Mode** device type
+   (exclusive mode hands the device to synth alone and bypasses the Windows mixer).
+2. Select your interface, then reduce the buffer size step by step until you hear clicks or
+   dropouts, and go back one step. That is your glitch-free minimum.
+
+**If you use a USB interface** (e.g. a Focusrite Scarlett), expect a somewhat higher minimum
+latency here than the vendor's ASIO driver would give you in another host. That is the intentional
+trade-off of shipping no proprietary code — **it is not a defect**. When you need the vendor ASIO
+path, load the **VST3 in a DAW** that supplies its own ASIO driver; the plugin then runs at
+whatever latency the host negotiates.
 
 ## Updating
 

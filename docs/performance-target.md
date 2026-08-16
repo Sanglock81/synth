@@ -100,8 +100,28 @@ at the **`performance`** governor. Raw report: [`target-report.txt`](target-repo
 | Unison HQ ×7 (contingency probe) | 265 % | 1.132 ms · 42 % | runs |
 
 Every scenario the ×3.5 assumption projected *over budget* lands comfortably **under** it; every live
-configuration is `OK<30 %`. The only `OVERRUN` anywhere in the bench is the synthetic **HQ 4×
-oversampling at 16 voices** probe — not a live config and not a gate.
+configuration is `OK<30 %`. No bench row overruns the block budget at the `performance` governor; the
+heaviest rows are the synthetic probes — **HQ 4× oversampling** and unison HQ ×7 — which run, but sit
+well outside the 30 % live-headroom line.
+
+### HQ 4×/320 is a studio/render configuration — **not validated for live use**
+
+The oversampling-quality rows from the bench (`docs/target-report.txt`, at the `performance` governor,
+128-sample block, 2.667 ms budget):
+
+| voices | quality | p99 (ms) | % budget | verdict |
+|---|---|---|---|---|
+| 16 | None 1× (raw) | 0.149 | 5.6 % | `OK<30 %` |
+| 16 | Efficient 4× | 0.420 | 15.8 % | `OK<30 %` |
+| **16** | **HQ 4×/320** | **1.672** | **62.7 %** | runs |
+| 12 | Efficient 4× | 0.306 | 11.5 % | `OK<30 %` |
+| **12** | **HQ 4×/320** | **1.444** | **54.1 %** | runs |
+
+**HQ 4×/320 is a studio/render configuration.** It completes without overruns on the reference
+target, but it sits **well above the 30 % live-headroom line** (p99 ≈ **54–63 % of budget** at 12–16
+voices) — it is **NOT validated for live use** on dual-core-class hardware, where the same work has
+no margin left for the GUI, other tracks and OS jitter. **Live sets should use `None` or `Efficient`
+quality**; reserve HQ for offline renders and bounces, where a late block costs nothing.
 
 ### Provisional CPU decisions — settled against measured numbers (all CONFIRMED)
 
