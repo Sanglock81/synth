@@ -1,6 +1,6 @@
 # Presets
 
-synth ships with **279** read-only **factory presets** (including the classic-machine kit voices) plus **Init**, and you can
+synth ships with **323** read-only **factory presets** (including the classic-machine kit voices) plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
@@ -22,7 +22,7 @@ same grouping; **Load drum kit** lists **Classic Machines** / **Originals** / **
 
 ## Factory presets
 
-**279 factory presets.** New across this content cycle, by numeric-prefix batch:
+**323 factory presets.** New across this content cycle, by numeric-prefix batch:
 `227–237` Bass Rework (11) · `238–243` Industrial/Heavy (6) · `244–250` Ambient (7) ·
 `251–259` Experimental (9) · `260–279` the Uncharted 20 · `280–288` Expansion III overflow (9) ·
 `289–292` Format-v2 route proofs (Tremolo Keys, Auto-Pan Pad, Vapor Morph).
@@ -50,7 +50,7 @@ they read as production tools, an ambient bed and a riser, rather than play-to-d
 
 ### Bank map (file prefixes)
 
-**279 factory patches.** The newest content, by numeric file prefix in `resources/presets/`:
+**323 factory patches.** The newest content, by numeric file prefix in `resources/presets/`:
 
 | Prefix range | Batch | Count |
 |---|---|--:|
@@ -224,6 +224,27 @@ inventing a tom family would rewrite the kit rather than harmonize it.
 (group 0) so it washes over the groove. ³ the two hats share choke group 1. Every pad responds to
 velocity. The step sequencer's 8 default rows map to the **foundational eight** — kick · snare · rim ·
 closed-hat · open-hat · crash · ride · low-tom — on exactly these notes.
+
+### The three 1.0 kits — Foundry / Circuit / Hearth
+
+Three house-designed kits joining *Industrial* and *Studio* under **Originals**. All three follow
+the shared trigger map above, so a pattern moves between them (and between them and the classic
+machines) intact.
+
+| Kit | Character | What it is built from |
+|-----|-----------|------------------------|
+| **Foundry** | Industrial / rock — a struck-metal workshop | Mechanical kicks with hard in-loop drive; metal that **clangs** rather than chimes (inharmonic FM ratios, modulators at level 0 so each hit reads as one struck object); oil-drum toms with an FM skin partial; machine colour — a gated chain rattle, a hydraulic press, a powerdown. Anvil and Pipe are a **second choke pair** beside the hats, so alternating them reads as one object. |
+| **Circuit** | Modern electronic — clean, tight, punchy | Deliberately **not** another classic-machine homage: nothing here is a 606/808/909 voicing with the knobs moved. Wavetables carry the tone sources; the **NOISE XY field** carries everything hissy, so the hats are a *focused band* rather than high-passed hiss — which is what makes them read as sample-clean. The Zap is a hard, fast focus sweep at near-ring Q: a sound the engine could not make before 1.0. |
+| **Hearth** | Warm, folk-adjacent — the hardest of the three | Everything has to sound **struck and wooden** rather than switched on, so drive stays at zero throughout — the warmth is in *where the energy sits*, not in saturation — and every noise bed is **pink-tilted**, because a white bed is exactly what makes a synthetic kit sound synthetic. The toms are tuned to root / fifth / octave (F2–C3–F3) so a fill can be a melody. The gentlest hats in the library. |
+
+**Where they deviate from the map, and why.** *Foundry* has two oil drums, not three, so trigger 45
+carries its machine tick instead of a mid tom — a machine kit would rather have the tick. *Hearth*'s
+crash row is a small **splash**, which is what a kit that size would really have. Everything else
+lands where the shared map says it should.
+
+**Not yet built** (candidates for tuning, not defects): Circuit's tuned chord-stab pad, impact hit,
+downward noise sweep and reverse hit, and Foundry's separate cross-stick, all lost the last few
+slots to the 16-pad cap once the shared map's rim/crash/tom rows were reserved.
 
 **Migration.** A MULTI or `.kit` that stored a retired kit loads its successor: *808 Basics* → **808**,
 *House Basics* → **909**, *Stab Board* → **808** (the chord-pad *feature* stays — build one in the Kit

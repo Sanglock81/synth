@@ -321,15 +321,249 @@ PRESETS3 = {
                                noise=tilt_noise(0.6, 0.5)),
 }
 
+# ==================== FOUNDRY (Phase C, C1) — industrial / rock ====================
+# A struck-metal workshop: driven mechanical kicks, metal that CLANGS rather than chimes
+# (the FM chain's inharmonic ratios), oil-drum toms, and machine noises for colour.
+# Renders DRY like every kit here -- all the grit is filter_drive inside the voice, never
+# an FX block, so a Foundry pad sounds the same wherever it is dropped.
+FOUNDRY = {
+  # --- kicks: mechanical, not round. A fast pitch drop plus hard in-loop drive is the
+  # difference between a kick and a machine STAMPING.
+  "Foundry Stamp":    kick(cut=900, sweep=26, fdec=0.018, adec=0.20, oct=-1, drive=0.75,
+                           noise=0.22, vel=0.45),
+  "Foundry Boom":     kick(cut=520, sweep=18, fdec=0.05, adec=0.52, oct=-1, drive=0.55,
+                           vel=0.5),
+
+  # --- snare: a tone stab under a noise burst, with the noise FOCUSED into a crack band
+  # rather than left as broadband hiss -- that band is what reads as "hit metal sheet".
+  "Foundry Blast":    dict(snare(tone=0.5, noise=0.85, cut=2300, adec=0.18, reso=0.35,
+                                 drive=0.6, o2=+7, sweep=8, vel=0.55),
+                           **focus_noise(0.85, 2400, 0.42)),
+  "Foundry Tick":     fm_clang(oct=2, ratio2=11, ratio3=17, fm1=0.55, fm2=0.35, cut=3600,
+                               adec=0.05, drive=0.3, vel=0.5),
+
+  # --- the metal pair. Anvil rings BRIGHT and medium; Pipe is the same instrument struck
+  # low and hollow. They choke each other, so a fast alternation reads as one object.
+  "Foundry Anvil":    fm_clang(oct=2, ratio2=6, ratio3=13, fm1=0.85, fm2=0.6, cut=6000,
+                               adec=0.55, drive=0.35, vel=0.55,
+                               noise=tilt_noise(0.18, 0.8)),
+  "Foundry Pipe":     fm_clang(oct=0, ratio2=8, ratio3=15, fm1=0.9, fm2=0.7, cut=1800,
+                               adec=0.75, reso=0.3, drive=0.4, vel=0.55,
+                               noise=focus_noise(0.22, 320, 0.5)),
+
+  # --- oil-drum toms: a real pitched body with an inharmonic SKIN partial on top, driven.
+  # The sounding note carries the pitch, so these stay playable as intervals.
+  "Foundry Drum Lo":  membrane_tom(oct=-1, sweep=10, adec=0.42, cut=900, skin=0.45,
+                                   skin_ratio=17, drive=0.45, vel=0.6,
+                                   noise=tilt_noise(0.15, 0.15)),
+  "Foundry Drum Hi":  membrane_tom(oct=0, sweep=9, adec=0.3, cut=1400, skin=0.5,
+                                   skin_ratio=19, drive=0.45, vel=0.6,
+                                   noise=tilt_noise(0.15, 0.2)),
+
+  # --- hats: a metal SHARD rather than a hat -- short FM metal with a focused noise edge;
+  # the open one is driven noise so the pair still behaves like hats under a groove.
+  "Foundry Shard":    fm_clang(oct=2, ratio2=10, ratio3=18, fm1=0.7, fm2=0.5, cut=9000,
+                               adec=0.05, drive=0.3, vel=0.45,
+                               noise=focus_noise(0.35, 8000, 0.3)),
+  "Foundry Hiss":     d(osc1_on=0, osc1_level=0, filter_type=1, filter_cutoff=8000,
+                        filter_reso=0.2, flt_decay=0.04, amp_decay=0.4, filter_drive=0.45,
+                        vel_to_amp=0.45, **tilt_noise(0.9, 0.78)),
+
+  # --- cymbals, from deliberately chosen partials so crash and ride are audibly the same
+  # metal struck differently: the crash spreads wide and washes, the ride keeps a sizzle
+  # bed focused around its ping.
+  "Foundry Crash":    chord_cymbal((0, 6, 13), cut=7400, adec=3.2, drive=0.3,
+                                   levels=(0.24, 0.22, 0.2), noise=tilt_noise(0.7, 0.85)),
+  "Foundry Ride Sizzle": chord_cymbal((0, 7, 16), cut=8600, adec=1.3, drive=0.25,
+                                   levels=(0.22, 0.18, 0.15), noise=focus_noise(0.5, 7000, 0.35)),
+
+  # --- machine colour. Chain is a gated rattle: a very short amp with a hard-focused
+  # noise band, so repeated hits read as links rather than a wash. (One voice cannot fire
+  # several transients from one trigger, so the rattle lives in the band, not in a
+  # multi-hit envelope -- see the kit note in docs/presets.md.)
+  "Foundry Chain":    d(osc1_on=0, osc1_level=0, filter_type=1, filter_cutoff=6000,
+                        filter_reso=0.4, flt_decay=0.02, amp_attack=0.001, amp_decay=0.14,
+                        amp_release=0.05, filter_drive=0.5, vel_to_amp=0.55,
+                        **focus_noise(0.95, 5200, 0.62)),
+  # Hydraulic press: a low thud with a descending focused whoosh riding on top of it.
+  "Foundry Press":    d(osc1_wave=3, osc1_octave=-1, osc1_level=0.7, fltenv_to_pitch=-14,
+                        filter_type=0, filter_cutoff=700, filter_reso=0.3,
+                        flt_attack=0.002, flt_decay=0.5, flt_sustain=0.0,
+                        amp_decay=0.55, amp_release=0.2, filter_drive=0.5, vel_to_amp=0.5,
+                        **focus_noise(0.7, 900, 0.55)),
+  # A very short mid machine tick -- the workshop's metronome.
+  "Foundry Cycle":    fm_clang(oct=1, ratio2=9, ratio3=14, fm1=0.6, fm2=0.45, cut=2600,
+                               adec=0.07, drive=0.35, vel=0.5),
+  # Powerdown: the FM chain falling off a cliff, with the noise band sinking after it.
+  "Foundry Powerdown": d(osc1_wave=3, osc1_octave=1, osc1_level=0.8,
+                         osc2_on=1, osc2_wave=3, osc2_octave=1, osc2_semi=13, osc2_level=0.0,
+                         osc3_on=1, osc3_wave=3, osc3_octave=1, osc3_semi=7, osc3_level=0.0,
+                         osc1_fm=0.8, osc2_fm=0.5, fltenv_to_pitch=-30,
+                         filter_type=0, filter_cutoff=3000, filter_reso=0.35,
+                         flt_attack=0.002, flt_decay=0.8, flt_sustain=0.0,
+                         amp_decay=0.9, amp_release=0.3, filter_drive=0.4, vel_to_amp=0.5,
+                         **focus_noise(0.5, 2000, 0.5)),
+}
+
+# Wavetable choice indices (Parameters.h wtKindNames). Kits resolve the FACTORY table, so a
+# kit pad may use WT without owning a random seed.
+WT_ANALOG, WT_SWEEP, WT_VOWEL, WT_DIGITAL = 0, 1, 2, 3
+WT_WAVE = 4   # PolyBlepOscillator::Wave::Wavetable
+
+# ==================== CIRCUIT (Phase C, C2) — modern electronic ====================
+# The brief this kit is answering: do NOT sound like another classic-machine homage. So
+# nothing here is a 606/808/909 voicing with the knobs moved. Its language is instead the
+# newest things the engine can do -- wavetables for the tone sources and the Phase B noise
+# FIELD for everything hissy, which is what a filtered-noise hat cannot give you: a hat
+# whose colour is a FOCUSED BAND rather than a high-passed wash reads as sample-clean.
+CIRCUIT = {
+  # --- kicks: tight and modern. A short, hard sine sweep with almost no tail, and a
+  # sub-drop sibling that trades the click for weight.
+  "Circuit Kick":     kick(cut=1600, sweep=30, fdec=0.012, adec=0.24, oct=-1, drive=0.18,
+                           noise=0.06, vel=0.35),
+  "Circuit Sub":      kick(cut=420, sweep=16, fdec=0.03, adec=0.62, oct=-2, drive=0.1, vel=0.4),
+
+  # --- snares + clap. The clap is WIDE (a long-ish focused burst rather than a tight tick);
+  # the roll is the same snare cut to a stutter length for fills.
+  "Circuit Snare":    dict(snare(tone=0.5, noise=0.9, cut=2900, adec=0.12, reso=0.3,
+                                 drive=0.12, o2=+7, sweep=8, vel=0.55),
+                           **focus_noise(0.9, 3000, 0.3)),
+  "Circuit Roll":     dict(snare(tone=0.4, noise=0.85, cut=3200, adec=0.05, reso=0.35,
+                                 sweep=9, vel=0.6),
+                           **focus_noise(0.85, 3400, 0.35)),
+  "Circuit Clap":     d(osc1_on=0, osc1_level=0, filter_type=2, filter_cutoff=1700,
+                        filter_reso=0.35, flt_decay=0.11, amp_attack=0.004, amp_decay=0.17,
+                        amp_release=0.08, vel_to_amp=0.5, **focus_noise(0.95, 1800, 0.28)),
+  # A clean electronic click rather than a wooden rim -- the kit had no rim; this is the
+  # convention's pad in Circuit's own language.
+  "Circuit Rim":      d(osc1_wave=3, osc1_octave=2, osc1_level=0.5, fltenv_to_pitch=10,
+                        filter_type=1, filter_cutoff=3200, filter_reso=0.2, flt_decay=0.012,
+                        amp_decay=0.035, vel_to_amp=0.5, **focus_noise(0.35, 4200, 0.4)),
+
+  # --- hats: focused-noise, not high-passed hiss. Bright, tight, and audibly NOT an 808.
+  "Circuit Hat Cl":   d(osc1_on=0, osc1_level=0, filter_type=1, filter_cutoff=11000,
+                        filter_reso=0.15, flt_decay=0.02, amp_decay=0.03, vel_to_amp=0.45,
+                        **focus_noise(0.9, 9500, 0.45)),
+  "Circuit Hat Op":   d(osc1_on=0, osc1_level=0, filter_type=1, filter_cutoff=11000,
+                        filter_reso=0.15, flt_decay=0.04, amp_decay=0.32, vel_to_amp=0.45,
+                        **focus_noise(0.9, 9000, 0.38)),
+
+  # --- pitched wavetable perc. This is Circuit's tom family: a real pitch, so the three
+  # tom rows are playable as intervals, but a digital blip rather than a drum skin.
+  "Circuit Blip":     d(osc1_wave=WT_WAVE, osc1_wt_kind=WT_DIGITAL, osc1_wt_pos=0.35,
+                        osc1_octave=0, osc1_level=0.85, fltenv_to_pitch=12,
+                        filter_type=0, filter_cutoff=3800, filter_reso=0.25,
+                        flt_decay=0.05, amp_decay=0.22, amp_release=0.06, vel_to_amp=0.6),
+
+  # --- cymbals: wavetable partials over a bright tilted bed, so they read as synthetic
+  # rather than as a sampled cymbal.
+  "Circuit Ride":     chord_cymbal((0, 7, 14), cut=9500, adec=1.1, levels=(0.2, 0.16, 0.13),
+                                   waves=(WT_WAVE, 1, 1), noise=tilt_noise(0.5, 0.9)),
+  "Circuit Crash":    chord_cymbal((0, 6, 13), cut=8800, adec=2.9, levels=(0.22, 0.2, 0.18),
+                                   waves=(WT_WAVE, 1, 1), noise=tilt_noise(0.7, 0.92)),
+
+  # --- colour. Shaker: a high, tight focused band. Zap: the field's focus swept hard and
+  # fast at near-ring Q -- a sound this engine simply could not make before Phase B.
+  "Circuit Shaker":   d(osc1_on=0, osc1_level=0, filter_type=1, filter_cutoff=9000,
+                        filter_reso=0.2, flt_decay=0.02, amp_attack=0.002, amp_decay=0.05,
+                        vel_to_amp=0.5, **focus_noise(0.85, 8500, 0.5)),
+  "Circuit Zap":      d(osc1_on=0, osc1_level=0, filter_type=0, filter_cutoff=9000,
+                        filter_reso=0.1, filter_env_amt=-0.9, flt_attack=0.001, flt_decay=0.09,
+                        flt_sustain=0.0, amp_decay=0.11, amp_release=0.04, vel_to_amp=0.5,
+                        **focus_noise(0.95, 5000, 0.92)),
+  # Riser: a slow swell whose focused band climbs -- the filter envelope opens upward while
+  # the amp fades in, so it lifts into a downbeat instead of just getting louder.
+  "Circuit Riser":    d(osc1_on=0, osc1_level=0, filter_type=1, filter_cutoff=800,
+                        filter_reso=0.35, filter_env_amt=0.95,
+                        flt_attack=0.9, flt_decay=0.3, flt_sustain=1.0, flt_release=0.2,
+                        amp_attack=0.85, amp_decay=0.5, amp_sustain=0.0, amp_release=0.12,
+                        vel_to_amp=0.4, **focus_noise(0.9, 1200, 0.6)),
+}
+
+# ==================== HEARTH (Phase C, C3) — warm, folk-adjacent ====================
+# The hardest of the three: everything here has to sound STRUCK and WOODEN rather than
+# switched on. Two ideas carry it. First, drive stays at (or near) zero throughout -- the
+# warmth comes from where the energy sits, not from saturation. Second, the noise the kit
+# is full of is PINK-TILTED rather than white: brushes, shakers and skins have their energy
+# down low, and a white-noise bed is exactly what makes a synthetic kit sound synthetic.
+# The toms are real pitches so they can be played as a melody, which is a stated goal.
+HEARTH = {
+  # --- felt kick: round, long-ish, no click and no drive at all.
+  "Hearth Kick":      dict(kick(cut=380, sweep=12, fdec=0.06, adec=0.42, oct=-1, drive=0.0,
+                                vel=0.55),
+                           **tilt_noise(0.08, 0.12)),
+  # Cajon slap: a body thump with a focused mid CRACK on top -- the two halves of hitting
+  # a wooden box, one at the centre and one at the corner.
+  "Hearth Cajon":     d(osc1_wave=2, osc1_octave=-1, osc1_level=0.7, fltenv_to_pitch=9,
+                        filter_type=0, filter_cutoff=700, filter_reso=0.2, flt_decay=0.03,
+                        amp_decay=0.22, amp_release=0.07, vel_to_amp=0.65,
+                        **focus_noise(0.55, 1500, 0.4)),
+
+  # --- brushes. The bed is pink so it reads as wire on a head rather than hiss; the swell
+  # is the same brush taken with a slow attack, for the pull across the drum.
+  "Hearth Brush":     dict(snare(tone=0.28, noise=0.7, cut=1400, adec=0.15, reso=0.18,
+                                 sweep=4, vel=0.6),
+                           **tilt_noise(0.7, 0.25)),
+  "Hearth Swell":     d(osc1_wave=3, osc1_octave=0, osc1_level=0.18, filter_type=2,
+                        filter_cutoff=1500, filter_reso=0.15, flt_decay=0.2,
+                        amp_attack=0.14, amp_decay=0.35, amp_sustain=0.0, amp_release=0.14,
+                        vel_to_amp=0.6, **tilt_noise(0.75, 0.22)),
+  # Rim click: wood on a rim, short and dry.
+  "Hearth Rim":       d(osc1_wave=2, osc1_octave=1, osc1_level=0.6, filter_type=2,
+                        filter_cutoff=2100, filter_reso=0.28, fltenv_to_pitch=7,
+                        flt_decay=0.015, amp_decay=0.04, vel_to_amp=0.55,
+                        **tilt_noise(0.18, 0.35)),
+  # Hand clap: looser and softer than Circuit's -- a wider, lower band and a gentler edge.
+  "Hearth Clap":      d(osc1_on=0, osc1_level=0, filter_type=2, filter_cutoff=1300,
+                        filter_reso=0.3, flt_decay=0.1, amp_attack=0.005, amp_decay=0.15,
+                        amp_release=0.08, vel_to_amp=0.55, **focus_noise(0.8, 1400, 0.2)),
+
+  # --- the gentlest hats in the library. Pink-tilted and quiet, so they sit under a
+  # fingerpicked part instead of on top of it.
+  "Hearth Hat Cl":    d(osc1_on=0, osc1_level=0, filter_type=1, filter_cutoff=6500,
+                        filter_reso=0.1, flt_decay=0.018, amp_decay=0.032, vel_to_amp=0.55,
+                        **tilt_noise(0.6, 0.45)),
+  "Hearth Hat Op":    d(osc1_on=0, osc1_level=0, filter_type=1, filter_cutoff=6200,
+                        filter_reso=0.1, flt_decay=0.035, amp_decay=0.26, vel_to_amp=0.55,
+                        **tilt_noise(0.6, 0.42)),
+
+  # --- tuned toms: a real pitched body with a soft FM skin partial. Melodic use is the
+  # point, so the sweep is gentle and the decay long enough to hear the note.
+  "Hearth Tom":       membrane_tom(oct=0, sweep=6, adec=0.45, cut=1100, skin=0.22,
+                                   skin_ratio=15, drive=0.0, vel=0.6, wave=2,
+                                   noise=tilt_noise(0.12, 0.2)),
+
+  # --- cymbals, consonant-leaning: the partials are a fifth and an octave-ish rather than
+  # the deliberately sour intervals Foundry uses, so they wash warmly instead of clanging.
+  "Hearth Ride":      chord_cymbal((0, 7, 12), cut=6000, adec=1.6, levels=(0.16, 0.14, 0.12),
+                                   noise=tilt_noise(0.5, 0.6)),
+  "Hearth Splash":    chord_cymbal((0, 7, 12), cut=6800, adec=1.1, levels=(0.18, 0.15, 0.13),
+                                   noise=tilt_noise(0.55, 0.65)),
+
+  # --- hand percussion.
+  "Hearth Tamb":      fm_clang(oct=2, ratio2=12, ratio3=19, fm1=0.5, fm2=0.3, cut=7000,
+                               adec=0.16, reso=0.15, drive=0.0, vel=0.55,
+                               noise=focus_noise(0.5, 7500, 0.3)),
+  "Hearth Shaker":    d(osc1_on=0, osc1_level=0, filter_type=1, filter_cutoff=7000,
+                        filter_reso=0.15, flt_decay=0.015, amp_attack=0.003, amp_decay=0.05,
+                        vel_to_amp=0.55, **focus_noise(0.75, 6000, 0.35)),
+  "Hearth Block":     d(osc1_wave=2, osc1_octave=2, osc1_level=0.75, filter_type=2,
+                        filter_cutoff=2600, filter_reso=0.35, fltenv_to_pitch=4,
+                        flt_decay=0.02, amp_decay=0.07, vel_to_amp=0.55,
+                        **tilt_noise(0.1, 0.3)),
+}
+
 def slugify(n): return re.sub(r'[^a-z0-9]+', '_', n.lower()).strip('_')
 
 def existing_names():
+    """name -> (filename, category) for every preset already in the bank."""
     names = {}
     for f in os.listdir(OUT):
         if f.endswith(".json"):
             try:
-                nm = json.load(open(os.path.join(OUT, f))).get("name")
-                if nm: names[nm] = f
+                o = json.load(open(os.path.join(OUT, f)))
+                nm = o.get("name")
+                if nm: names[nm] = (f, o.get("category"))
             except Exception: pass
     return names
 
@@ -342,11 +576,20 @@ def main():
     nums = [int(m.group(1)) for f in os.listdir(OUT) if (m:=re.match(r'(\d+)_', f))]
     nxt = max(nums) + 1
     wrote = 0
-    allp = dict(PRESETS); allp.update(PRESETS2); allp.update(PRESETS3)   # increment 1 + 2 + 3
+    allp = dict(PRESETS)
+    for extra in (PRESETS2, PRESETS3, FOUNDRY, CIRCUIT, HEARTH):   # inc 1-3 + the three 1.0 kits
+        allp.update(extra)
     for name, params in allp.items():
         obj = {"name": name, "category": "Drums", "params": params}
         if name in have:
-            fn = have[name]                       # overwrite in place (keeps the number stable)
+            fn, cat = have[name]
+            # A drum name that collides with a patch from ANOTHER category would overwrite it
+            # in place and quietly move it out of its own bank -- which is exactly what
+            # "Foundry Stomp" (a Pluck patch) did on the first run of the Foundry kit. Refuse.
+            if cat != "Drums":
+                raise SystemExit(f"gen_drumkits: '{name}' already exists as a {cat} preset "
+                                 f"({fn}) -- pick a different name rather than overwriting it")
+            # same category: overwrite in place (keeps the number stable)
         else:
             fn = f"{nxt}_{slugify(name)}.json"; nxt += 1
         json.dump(obj, open(os.path.join(OUT, fn), "w"), indent=2)

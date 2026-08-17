@@ -29,6 +29,24 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the focus axis, so an LFO can be routed at focus alone. Modulated coordinates glide between control
   chunks — stepping Q on a ringing filter would tick, and does not.
 
+- **Three new drum kits — FOUNDRY, CIRCUIT and HEARTH.** House-designed kits joining *Industrial*
+  and *Studio* under **Originals**, all three on the shared trigger map so a pattern moves between
+  them (and the classic machines) intact. **Foundry** is a struck-metal workshop: mechanical kicks
+  with hard in-loop drive, metal that *clangs* rather than chimes (inharmonic FM ratios with the
+  modulators at level 0, so each hit reads as one struck object), oil-drum toms with an FM skin
+  partial, and machine colour — a gated chain rattle, a hydraulic press, a powerdown. Its Anvil and
+  Pipe form a **second choke pair** beside the hats. **Circuit** is modern electronic and
+  deliberately *not* another classic-machine homage — wavetables carry the tone sources and the new
+  NOISE XY field carries everything hissy, so its hats are a focused band rather than high-passed
+  hiss; its Zap is a hard focus sweep at near-ring Q, a sound the engine could not make before this
+  release. **Hearth** is the warm, folk-adjacent one and the hardest: drive stays at zero throughout
+  (the warmth is in where the energy sits, not in saturation), every noise bed is pink-tilted, and
+  the toms are tuned to root/fifth/octave so a fill can be a melody. 44 new drum presets back them
+  (279 → 323). Verified by the same gates as the rest of the library — 16 non-silent, internally
+  balanced pads per kit, hat choke, and the dense reference-bar torture — plus a new **cross-kit**
+  level gate, because a kit can be internally tidy and still arrive several dB under the library.
+  *Deviations, deliberate:* Foundry's trigger 45 carries a machine tick rather than a mid tom (it has
+  two oil drums, not three), and Hearth's crash row is a small splash.
 - **Kit library harmonized onto one trigger map.** Ride is now **47** and crash **48** in every
   factory kit. They had been scattered across 47–51 (ride: 47 in four kits, 49/50/51 in three,
   **absent from six**; crash: 48 in four, 47 in three, 49 in two, absent from three), which meant a

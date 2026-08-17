@@ -78,10 +78,12 @@ TEST_CASE ("drumkits: legacy kit names migrate to their successors (#134)", "[pl
     REQUIRE (VASynthProcessor::migrateKitName ("My Kit") == "My Kit");
 }
 
-TEST_CASE ("drumkits: every classic kit is 16 non-silent, level-balanced pads", "[plugin][drums][kits][level]")
+TEST_CASE ("drumkits: every factory kit is 16 non-silent, level-balanced pads", "[plugin][drums][kits][level]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
-    for (auto& kit : VASynthProcessor::classicKitNames())
+    // EVERY factory kit, Originals included -- the house-designed kits earn the same gate as
+    // the classic-machine homages, and the three new ones (Foundry/Circuit/Hearth) most of all.
+    for (auto& kit : VASynthProcessor::factoryKitNames())
     {
         VASynthProcessor p; p.prepareToPlay (kSR, kBlock);
         p.setPartKit (1, p.loadKit (kit));
@@ -111,7 +113,7 @@ TEST_CASE ("drumkits: every classic kit is 16 non-silent, level-balanced pads", 
 TEST_CASE ("drumkits: hats choke, cymbal rings free", "[plugin][drums][kits][choke]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
-    for (auto& kit : VASynthProcessor::classicKitNames())
+    for (auto& kit : VASynthProcessor::factoryKitNames())
     {
         auto def = VASynthProcessor::factoryKit (kit);
         // Pads 6 + 7 are the closed/open hats and share a nonzero choke group; pad for the cymbal is free.
@@ -123,7 +125,7 @@ TEST_CASE ("drumkits: hats choke, cymbal rings free", "[plugin][drums][kits][cho
 TEST_CASE ("drumkits: dense 16th reference bar + long cymbal stays clean, renders a tour WAV", "[plugin][drums][kits][torture][tour]")
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
-    for (auto& kit : VASynthProcessor::classicKitNames())
+    for (auto& kit : VASynthProcessor::factoryKitNames())
     {
         VASynthProcessor p; p.prepareToPlay (kSR, kBlock);
         p.setPartKit (1, p.loadKit (kit));
@@ -196,8 +198,11 @@ TEST_CASE ("drumkits: ride is 47 and crash is 48 everywhere, by name", "[plugin]
         }
         INFO ("kit '" << kitName << "': 47 = '" << ride << "', 48 = '" << crash << "'");
         REQUIRE (ride.containsIgnoreCase ("Ride"));
-        // The 808's and 606's long cymbal IS each kit's crash; both are named "Cymbal".
-        REQUIRE ((crash.containsIgnoreCase ("Crash") || crash.containsIgnoreCase ("Cymbal")));
+        // The 808's and 606's long cymbal IS each kit's crash (both named "Cymbal"), and
+        // Hearth's crash is a small SPLASH -- which is what a kit that size would really
+        // have. What the row must never be is something that is not a cymbal at all.
+        REQUIRE ((crash.containsIgnoreCase ("Crash") || crash.containsIgnoreCase ("Cymbal")
+                                                     || crash.containsIgnoreCase ("Splash")));
     }
 }
 
@@ -219,4 +224,39 @@ TEST_CASE ("drumkits: no kit lost a pad or gained a duplicate trigger", "[plugin
         INFO ("kit '" << kitName << "' has " << filled << " pads");
         REQUIRE (filled == kMaxKitPads);                             // still a full kit
     }
+}
+
+TEST_CASE ("drumkits: kits are level-matched to each other, not just internally",
+           "[plugin][drums][kits][level][crosskit]")
+{
+    // The per-kit balance test only looks INSIDE a kit, so a kit can be internally tidy and
+    // still arrive 6 dB under the rest of the library — which is exactly what Foundry did on
+    // its first build (heavy filter_drive eats headroom). Switching kits mid-piece must not
+    // be a volume change, so the medians have to line up too.
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    std::vector<std::pair<juce::String, float>> medians;
+    for (auto& kit : VASynthProcessor::factoryKitNames())
+    {
+        VASynthProcessor p; p.prepareToPlay (kSR, kBlock);
+        p.setPartKit (1, p.loadKit (kit));
+        std::vector<float> peaks;
+        for (int pad = 0; pad < 16; ++pad)
+        {
+            p.routeMidi (juce::MidiMessage::noteOn (1, 36 + pad, 0.9f), 1);
+            Scan s; float prev = 0; auto out = pump (p, 90, s, prev);
+            peaks.push_back (tu::peak (out));
+        }
+        std::sort (peaks.begin(), peaks.end());
+        medians.emplace_back (kit, peaks[peaks.size() / 2]);
+    }
+    auto sorted = medians;
+    std::sort (sorted.begin(), sorted.end(), [] (auto& a, auto& b) { return a.second < b.second; });
+    const float lo = sorted.front().second, hi = sorted.back().second;
+    for (auto& kv : medians) INFO ("kit " << kv.first << " median peak " << kv.second);
+    INFO ("quietest " << sorted.front().first << " (" << lo << "), loudest "
+                      << sorted.back().first << " (" << hi << ")");
+    // Measured spread on this build is ~7.4 dB, and the outliers are the LONG-shipped DMX
+    // (quietest) and Industrial (loudest) — the three new kits land inside it. 10 dB is the
+    // gate: wider than that and switching kits mid-piece becomes a volume change.
+    REQUIRE (20.0f * std::log10 (hi / lo) < 10.0f);
 }

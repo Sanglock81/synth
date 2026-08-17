@@ -85,7 +85,7 @@ TEST_CASE ("kit picker screenshot: Classic Machines / Originals / User grouping 
 
     // Every classic + original kit is represented, each 16 pads.
     REQUIRE (p.classicKitNames().size() == 10);
-    REQUIRE (p.originalKitNames().size() == 2);
+    REQUIRE (p.originalKitNames().size() == 5);   // + Foundry / Circuit / Hearth (1.0 content)
     for (auto& n : p.classicKitNames())  REQUIRE (padCount (n) == 16);
 
     int h = 26 + 6 + (int) m.rows.size() * 24 + 20;

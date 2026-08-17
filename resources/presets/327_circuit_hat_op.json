@@ -1,0 +1,31 @@
+{
+  "name": "Circuit Hat Op",
+  "category": "Drums",
+  "params": {
+    "osc1_wave": 3,
+    "osc2_on": 0,
+    "osc2_level": 0,
+    "osc3_on": 0,
+    "osc3_level": 0,
+    "noise_level": 0.9,
+    "filter_type": 1,
+    "filter_cutoff": 11000,
+    "filter_reso": 0.15,
+    "filter_drive": 0.0,
+    "filter_env_amt": 0.0,
+    "fltenv_to_pitch": 0,
+    "flt_attack": 0.001,
+    "flt_decay": 0.04,
+    "flt_sustain": 0.0,
+    "flt_release": 0.04,
+    "amp_attack": 0.001,
+    "amp_decay": 0.32,
+    "amp_sustain": 0.0,
+    "amp_release": 0.05,
+    "vel_to_amp": 0.45,
+    "osc1_on": 0,
+    "osc1_level": 0,
+    "noise_x": 0.9496,
+    "noise_y": 0.38
+  }
+}

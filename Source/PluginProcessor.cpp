@@ -1246,8 +1246,10 @@ VASynthProcessor::KitDefinition VASynthProcessor::kitFromTree (const juce::Value
 // good first (model shorthand used descriptively; no manufacturer affiliation). Increment 1 = the
 // analog-heritage four; the PCM-homage six land in increment 2.
 juce::StringArray VASynthProcessor::classicKitNames() { return { "808", "909", "606", "78", "707", "LM1", "DMX", "RX5", "R50", "MP60" }; }
-// "Originals": the house-designed kits (kept unchanged).
-juce::StringArray VASynthProcessor::originalKitNames() { return { "Industrial", "Studio" }; }
+// "Originals": the house-designed kits — not homages to anything, just kits built for a job.
+// FOUNDRY (industrial/rock), CIRCUIT (modern electronic) and HEARTH (warm/acoustic-leaning)
+// join the two that shipped first; all five follow the shared trigger map.
+juce::StringArray VASynthProcessor::originalKitNames() { return { "Foundry", "Circuit", "Hearth", "Industrial", "Studio" }; }
 juce::StringArray VASynthProcessor::factoryKitNames()
 {
     juce::StringArray a = classicKitNames();
@@ -1499,6 +1501,80 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[13] = tuned (49, "MP60 Conga", 0, 43);
         def.pads[14] = tuned (50, "MP60 Conga", 0, 50);
         def.pads[15] = tuned (51, "MP60 Clap",  0, 44);
+    }
+    else if (name == "Foundry")
+    {
+        // C1 — a struck-metal workshop. Mechanical kicks, metal that CLANGS (inharmonic FM
+        // ratios, not chimes), oil-drum toms, machine noises for colour. Two choke pairs: the
+        // hats (group 1) and the Anvil/Pipe metal pair (group 2), so a fast alternation on
+        // either reads as ONE object being struck rather than two ringing on top of each other.
+        // 45 carries the machine tick instead of a mid tom -- Foundry has two oil drums, not
+        // three, and a machine kit would rather have the tick (noted in docs/presets.md).
+        def.pads[0]  = drum  (36, "Foundry Stamp",     0);
+        def.pads[1]  = drum  (37, "Foundry Boom",      0);
+        def.pads[2]  = drum  (38, "Foundry Blast",     0);
+        def.pads[3]  = drum  (39, "Foundry Tick",      0);
+        def.pads[4]  = drum  (40, "Foundry Anvil",     2);
+        def.pads[5]  = drum  (41, "Foundry Pipe",      2);
+        def.pads[6]  = drum  (42, "Foundry Shard",     1);
+        def.pads[7]  = drum  (43, "Foundry Hiss",      1);
+        def.pads[8]  = tuned (44, "Foundry Drum Lo",   0, 38);
+        def.pads[9]  = drum  (45, "Foundry Cycle",     0);
+        def.pads[10] = tuned (46, "Foundry Drum Hi",   0, 50);
+        def.pads[11] = drum  (47, "Foundry Ride Sizzle", 0);
+        def.pads[12] = drum  (48, "Foundry Crash",     0);
+        def.pads[13] = drum  (49, "Foundry Chain",     0);
+        def.pads[14] = drum  (50, "Foundry Press",     0);
+        def.pads[15] = drum  (51, "Foundry Powerdown", 0);
+    }
+    else if (name == "Circuit")
+    {
+        // C2 — modern electronic, deliberately NOT another classic-machine homage. Its
+        // colour comes from wavetables and the noise FIELD (focused bands, not high-passed
+        // hiss), which is why its hats do not read as an 808's or a 909's. The blip is the
+        // tom family: a real pitch, so the three tom rows stay playable as intervals.
+        def.pads[0]  = drum  (36, "Circuit Kick",   0);
+        def.pads[1]  = drum  (37, "Circuit Sub",    0);
+        def.pads[2]  = drum  (38, "Circuit Snare",  0);
+        def.pads[3]  = drum  (39, "Circuit Rim",    0);
+        def.pads[4]  = drum  (40, "Circuit Clap",   0);
+        def.pads[5]  = drum  (41, "Circuit Roll",   0);
+        def.pads[6]  = drum  (42, "Circuit Hat Cl", 1);
+        def.pads[7]  = drum  (43, "Circuit Hat Op", 1);
+        def.pads[8]  = tuned (44, "Circuit Blip",   0, 43);
+        def.pads[9]  = tuned (45, "Circuit Blip",   0, 50);
+        def.pads[10] = tuned (46, "Circuit Blip",   0, 57);
+        def.pads[11] = drum  (47, "Circuit Ride",   0);
+        def.pads[12] = drum  (48, "Circuit Crash",  0);
+        def.pads[13] = drum  (49, "Circuit Shaker", 0);
+        def.pads[14] = drum  (50, "Circuit Zap",    0);
+        def.pads[15] = drum  (51, "Circuit Riser",  0);
+    }
+    else if (name == "Hearth")
+    {
+        // C3 — warm and folk-adjacent, the hardest of the three: everything has to sound
+        // STRUCK and wooden rather than switched on. Drive stays at zero throughout (the
+        // warmth is in where the energy sits, not in saturation) and the noise beds are
+        // PINK-tilted, because a white bed is what makes a synthetic kit sound synthetic.
+        // The toms are tuned to root / fifth / octave (F2 - C3 - F3) so a fill can be a
+        // melody; the splash stands in for the crash, which is what a kit this size would
+        // actually have.
+        def.pads[0]  = drum  (36, "Hearth Kick",    0);
+        def.pads[1]  = drum  (37, "Hearth Cajon",   0);
+        def.pads[2]  = drum  (38, "Hearth Brush",   0);
+        def.pads[3]  = drum  (39, "Hearth Rim",     0);
+        def.pads[4]  = drum  (40, "Hearth Clap",    0);
+        def.pads[5]  = drum  (41, "Hearth Swell",   0);
+        def.pads[6]  = drum  (42, "Hearth Hat Cl",  1);
+        def.pads[7]  = drum  (43, "Hearth Hat Op",  1);
+        def.pads[8]  = tuned (44, "Hearth Tom",     0, 41);   // F2
+        def.pads[9]  = tuned (45, "Hearth Tom",     0, 48);   // C3
+        def.pads[10] = tuned (46, "Hearth Tom",     0, 53);   // F3
+        def.pads[11] = drum  (47, "Hearth Ride",    0);
+        def.pads[12] = drum  (48, "Hearth Splash",  0);       // this kit's crash
+        def.pads[13] = drum  (49, "Hearth Tamb",    0);
+        def.pads[14] = drum  (50, "Hearth Shaker",  0);
+        def.pads[15] = drum  (51, "Hearth Block",   0);
     }
     else if (name == "Industrial")
     {
