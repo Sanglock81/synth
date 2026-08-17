@@ -1291,9 +1291,12 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[8]  = tuned (44, "808 Tom",        0, 40);   // low / mid / high tom
         def.pads[9]  = tuned (45, "808 Tom",        0, 46);
         def.pads[10] = tuned (46, "808 Tom",        0, 52);
-        def.pads[11] = tuned (47, "808 Conga",      0, 43);   // low / high conga
-        def.pads[12] = tuned (48, "808 Conga",      0, 50);
-        def.pads[13] = drum  (49, "808 Cymbal",     0);
+        // C0.5: ride 47 / crash 48 like every other kit. The 808's long "Cymbal" IS its
+        // crash; the ride is the same oscillator-bank recipe held tighter. The second conga
+        // TUNING yields the slot (the conga itself stays) — no distinct sound is lost.
+        def.pads[11] = drum  (47, "808 Ride",       0);
+        def.pads[12] = drum  (48, "808 Cymbal",     0);       // the kit's crash
+        def.pads[13] = tuned (49, "808 Conga",      0, 43);
         def.pads[14] = drum  (50, "808 Clave",      0);
         def.pads[15] = drum  (51, "808 Maraca",     0);
     }
@@ -1325,19 +1328,21 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[0]  = drum  (36, "606 Kick",   0);
         def.pads[1]  = tuned (37, "606 Kick",   0, 39);       // kick, higher
         def.pads[2]  = drum  (38, "606 Snare",  0);
-        def.pads[3]  = tuned (39, "606 Snare",  0, 44);       // snare, higher
+        def.pads[3]  = drum  (39, "606 Rim",    0);           // C0.5: the rim the 606 never had
         def.pads[4]  = tuned (40, "606 Snare",  0, 33);       // snare, lower
-        def.pads[5]  = tuned (41, "606 Kick",   0, 45);       // clicky mid perc
+        def.pads[5]  = tuned (41, "606 Snare",  0, 44);       // snare, higher
         def.pads[6]  = drum  (42, "606 Hat Cl", 1);
         def.pads[7]  = drum  (43, "606 Hat Op", 1);
         def.pads[8]  = tuned (44, "606 Tom",    0, 40);       // low / mid / high tom
         def.pads[9]  = tuned (45, "606 Tom",    0, 46);
         def.pads[10] = tuned (46, "606 Tom",    0, 52);
-        def.pads[11] = drum  (47, "606 Cymbal", 0);
-        def.pads[12] = tuned (48, "606 Cymbal", 0, 55);       // cymbal, higher
+        // C0.5: a thin metallic PING for the ride (the 606 is clicks, not washes); its
+        // cymbal becomes the crash. Two tuned fillers yield the slots.
+        def.pads[11] = drum  (47, "606 Ride",   0);
+        def.pads[12] = drum  (48, "606 Cymbal", 0);
         def.pads[13] = tuned (49, "606 Hat Cl", 1, 48);       // extra tight hat (choke)
         def.pads[14] = tuned (50, "606 Tom",    0, 57);       // top tom / tick
-        def.pads[15] = tuned (51, "606 Snare",  0, 50);       // snare, top
+        def.pads[15] = tuned (51, "606 Cymbal", 0, 55);       // cymbal, higher
     }
     else if (name == "78")
     {
@@ -1346,17 +1351,21 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[0]  = drum  (36, "78 Kick",    0);
         def.pads[1]  = tuned (37, "78 Kick",    0, 33);       // kick, softer/lower
         def.pads[2]  = drum  (38, "78 Snare",   0);
-        def.pads[3]  = tuned (39, "78 Snare",   0, 45);       // brush, higher
+        def.pads[3]  = drum  (39, "78 Rim",     0);           // C0.5: woody rim, matching the blocks
         def.pads[4]  = drum  (40, "78 Beat",    0);           // metallic beat
         def.pads[5]  = drum  (41, "78 Cowbell", 0);
         def.pads[6]  = drum  (42, "78 Hat",     1);
         def.pads[7]  = tuned (43, "78 Hat",     1, 55);       // open-ish hat (choke)
+        // 44-46 stay guiro / blocks: the CR-78 has no toms and inventing a tom family would
+        // rewrite the kit rather than harmonize it. Noted as a deliberate gap in docs/presets.md.
         def.pads[8]  = drum  (44, "78 Guiro",   0);
         def.pads[9]  = drum  (45, "78 Block",   0);           // bossa woodblock
         def.pads[10] = tuned (46, "78 Block",   0, 45);       // low block
-        def.pads[11] = drum  (47, "78 Maraca",  0);
-        def.pads[12] = tuned (48, "78 Beat",    0, 55);       // high metallic tick
-        def.pads[13] = tuned (49, "78 Cowbell", 0, 55);       // high cowbell
+        // C0.5: a dark brushy TICK for the ride and a soft warm swell for the crash — the
+        // kit's own language, not a modern cymbal. Three tuned fillers yield the slots.
+        def.pads[11] = drum  (47, "78 Ride",    0);
+        def.pads[12] = drum  (48, "78 Crash",   0);
+        def.pads[13] = drum  (49, "78 Maraca",  0);
         def.pads[14] = tuned (50, "78 Block",   0, 57);       // high block / claves
         def.pads[15] = tuned (51, "78 Guiro",   0, 60);       // short guiro tick
     }
@@ -1395,11 +1404,15 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[8]  = tuned (44, "LM1 Tom",    0, 40);
         def.pads[9]  = tuned (45, "LM1 Tom",    0, 46);
         def.pads[10] = tuned (46, "LM1 Tom",    0, 52);
-        def.pads[11] = tuned (47, "LM1 Conga",  0, 43);
-        def.pads[12] = tuned (48, "LM1 Conga",  0, 50);
-        def.pads[13] = drum  (49, "LM1 Tamb",   0);
-        def.pads[14] = tuned (50, "LM1 Clap",   0, 44);
-        def.pads[15] = tuned (51, "LM1 Tamb",   0, 55);
+        // C0.5: the original had no cymbals at all. John's brief for the backfill: "the ride
+        // Linn couldn't afford" — deliberately band-limited, dull and short, so it reads as a
+        // sample that ran out of bits rather than a modern cymbal. Crash to match. Two tuned
+        // fillers yield the slots; the congas keep theirs.
+        def.pads[11] = drum  (47, "LM1 Ride",   0);
+        def.pads[12] = drum  (48, "LM1 Crash",  0);
+        def.pads[13] = tuned (49, "LM1 Conga",  0, 43);
+        def.pads[14] = tuned (50, "LM1 Conga",  0, 50);
+        def.pads[15] = drum  (51, "LM1 Tamb",   0);
     }
     else if (name == "DMX")
     {
@@ -1415,11 +1428,13 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[8]  = tuned (44, "DMX Tom",    0, 40);
         def.pads[9]  = tuned (45, "DMX Tom",    0, 46);
         def.pads[10] = tuned (46, "DMX Tom",    0, 52);
-        def.pads[11] = drum  (47, "DMX Crash",  0);
-        def.pads[12] = drum  (48, "DMX Cowbell",0);
-        def.pads[13] = tuned (49, "DMX Clap",   0, 44);
-        def.pads[14] = tuned (50, "DMX Rim",    0, 48);
-        def.pads[15] = tuned (51, "DMX Tom",    0, 57);
+        // C0.5: crash moves 47 -> 48 and a brighter, crunchier early-sample ride takes 47;
+        // the cowbell rehomes to 49. One tuned tom yields the slot.
+        def.pads[11] = drum  (47, "DMX Ride",   0);
+        def.pads[12] = drum  (48, "DMX Crash",  0);
+        def.pads[13] = drum  (49, "DMX Cowbell",0);
+        def.pads[14] = tuned (50, "DMX Clap",   0, 44);
+        def.pads[15] = tuned (51, "DMX Rim",    0, 48);
     }
     else if (name == "RX5")
     {
@@ -1476,11 +1491,14 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[8]  = tuned (44, "MP60 Tom",   0, 40);
         def.pads[9]  = tuned (45, "MP60 Tom",   0, 46);
         def.pads[10] = tuned (46, "MP60 Tom",   0, 52);
-        def.pads[11] = tuned (47, "MP60 Conga", 0, 43);
-        def.pads[12] = tuned (48, "MP60 Conga", 0, 50);
-        def.pads[13] = drum  (49, "MP60 Ride",  0);
-        def.pads[14] = tuned (50, "MP60 Clap",  0, 44);
-        def.pads[15] = tuned (51, "MP60 Rim",   0, 48);
+        // C0.5: the dark ride moves 49 -> 47 and gains a crash in kind (dusty, rolled off,
+        // driven — it sits UNDER a loop rather than on top of it). Congas rehome to 49/50;
+        // one tuned rim yields the slot.
+        def.pads[11] = drum  (47, "MP60 Ride",  0);
+        def.pads[12] = drum  (48, "MP60 Crash", 0);
+        def.pads[13] = tuned (49, "MP60 Conga", 0, 43);
+        def.pads[14] = tuned (50, "MP60 Conga", 0, 50);
+        def.pads[15] = tuned (51, "MP60 Clap",  0, 44);
     }
     else if (name == "Industrial")
     {
@@ -1496,11 +1514,12 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[8]  = tuned (44, "Metal Hit",       0, 40);   // three tuned metal toms
         def.pads[9]  = tuned (45, "Metal Hit",       0, 47);
         def.pads[10] = tuned (46, "Metal Hit",       0, 55);
-        def.pads[11] = drum  (47, "Splash",          0);
-        def.pads[12] = drum  (48, "Cowbell",         0);
-        def.pads[13] = drum  (49, "Crash",           0);
+        // C0.5: a pure permutation onto ride 47 / crash 48 — every pad keeps its sound.
+        def.pads[11] = drum  (47, "Ride",            0);
+        def.pads[12] = drum  (48, "Crash",           0);
+        def.pads[13] = drum  (49, "Splash",          0);
         def.pads[14] = drum  (50, "Clave",           0);
-        def.pads[15] = drum  (51, "Ride",            0);
+        def.pads[15] = drum  (51, "Cowbell",         0);
     }
     else if (name == "Studio")
     {
@@ -1519,10 +1538,11 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[8]  = tuned (44, "Tom Studio",      0, 40);   // low / mid / high — warm, longer
         def.pads[9]  = tuned (45, "Tom Studio",      0, 46);
         def.pads[10] = tuned (46, "Tom Studio",      0, 52);
-        def.pads[11] = drum  (47, "Shaker",          0);
-        def.pads[12] = drum  (48, "Tambourine",      0);
-        def.pads[13] = drum  (49, "Crash Dark",      0);
-        def.pads[14] = drum  (50, "Ride Soft",       0);
+        // C0.5: a pure permutation onto ride 47 / crash 48 — every pad keeps its sound.
+        def.pads[11] = drum  (47, "Ride Soft",       0);
+        def.pads[12] = drum  (48, "Crash Dark",      0);
+        def.pads[13] = drum  (49, "Shaker",          0);
+        def.pads[14] = drum  (50, "Tambourine",      0);
         def.pads[15] = drum  (51, "Cowbell Low",     0);
     }
     else if (name == "Stab Board")

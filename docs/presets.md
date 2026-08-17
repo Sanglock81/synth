@@ -1,6 +1,6 @@
 # Presets
 
-synth ships with **269** read-only **factory presets** (including the classic-machine kit voices) plus **Init**, and you can
+synth ships with **279** read-only **factory presets** (including the classic-machine kit voices) plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
@@ -22,7 +22,7 @@ same grouping; **Load drum kit** lists **Classic Machines** / **Originals** / **
 
 ## Factory presets
 
-**269 factory presets.** New across this content cycle, by numeric-prefix batch:
+**279 factory presets.** New across this content cycle, by numeric-prefix batch:
 `227–237` Bass Rework (11) · `238–243` Industrial/Heavy (6) · `244–250` Ambient (7) ·
 `251–259` Experimental (9) · `260–279` the Uncharted 20 · `280–288` Expansion III overflow (9) ·
 `289–292` Format-v2 route proofs (Tremolo Keys, Auto-Pan Pad, Vapor Morph).
@@ -50,7 +50,7 @@ they read as production tools, an ambient bed and a riser, rather than play-to-d
 
 ### Bank map (file prefixes)
 
-**269 factory patches.** The newest content, by numeric file prefix in `resources/presets/`:
+**279 factory patches.** The newest content, by numeric file prefix in `resources/presets/`:
 
 | Prefix range | Batch | Count |
 |---|---|--:|
@@ -189,19 +189,41 @@ noise snare, clanging metal-hit toms) and **Studio** (synthesized general-purpos
 songwriter/pop/rock demos). *Fully-acoustic realism is the 1.1 sampled-kit pass; you can also load
 your own samples onto any pad today.*
 
-*808* pad map (pad = trigger − 36; the other kits follow the same kick/snare/hat conventions):
+**The shared trigger map.** Every factory kit lays its pads out the same way, so a pattern written
+on one kit stays meaningful on the next — that is what makes switching kits mid-piece useful rather
+than a reshuffle:
+
+| Trig | Role | Trig | Role | Trig | Role | Trig | Role |
+|------|------|------|------|------|------|------|------|
+| 36 | Kick | 40 | Clap | 44 | Low Tom | 48 | **Crash** |
+| 37 | Kick 2 | 41 | Snare 2 / kit colour | 45 | Mid Tom | 49 | kit colour |
+| 38 | Snare | 42 | Hat Closed³ | 46 | High Tom | 50 | kit colour |
+| 39 | Rim | 43 | Hat Open³ | 47 | **Ride** | 51 | kit colour |
+
+**Ride 47 / crash 48** were harmonized across the whole library (they had been scattered over 47–51,
+and six kits had no ride at all). Kits that were missing a foundational pad gained one **voiced in
+their own language** rather than a generic cymbal dropped into twelve kits: the 808's ride is its own
+cymbal recipe held tighter; the 606's is a thin metallic ping; the CR-78's is a dark brushy tick with
+a soft warm crash beside it; the LM1's is deliberately band-limited — the ride Linn couldn't afford;
+the DMX's is a brighter early-sample crunch; the MP60 gained a dusty, driven crash that sits *under* a
+loop. Nothing was deleted from the bank: where a full kit had to free a slot, the pad that yielded was
+a re-**tuning** of a preset the kit still carries, and every one of those presets is still loadable
+onto any pad in the Kit Editor. *Known gap:* the CR-78 has no toms — 44–46 stay guiro/blocks, because
+inventing a tom family would rewrite the kit rather than harmonize it.
+
+*808* pad map (pad = trigger − 36):
 
 | Trig | Pad | Trig | Pad | Trig | Pad | Trig | Pad |
 |------|-----|------|-----|------|-----|------|-----|
-| 36 | Kick (≈45 Hz, ~0.55 s boom) | 40 | Clap | 44 | Low Tom¹ | 48 | Hi Conga¹ |
-| 37 | Kick Tight | 41 | Cowbell | 45 | Mid Tom¹ | 49 | Cymbal² |
+| 36 | Kick (≈45 Hz, ~0.55 s boom) | 40 | Clap | 44 | Low Tom¹ | 48 | Cymbal² (its crash) |
+| 37 | Kick Tight | 41 | Cowbell | 45 | Mid Tom¹ | 49 | Conga¹ |
 | 38 | Snare (two-tone + noise) | 42 | Hat Closed³ | 46 | High Tom¹ | 50 | Clave |
-| 39 | Rim | 43 | Hat Open³ | 47 | Low Conga¹ | 51 | Maraca |
+| 39 | Rim | 43 | Hat Open³ | 47 | Ride | 51 | Maraca |
 
 ¹ one preset re-tuned via the pad's sound-note (no extra preset). ² the cymbal is **not** choked
 (group 0) so it washes over the groove. ³ the two hats share choke group 1. Every pad responds to
-velocity. The step sequencer's 8 default rows map to kick · snare · clap · closed-hat · open-hat ·
-low-tom · cymbal · cowbell.
+velocity. The step sequencer's 8 default rows map to the **foundational eight** — kick · snare · rim ·
+closed-hat · open-hat · crash · ride · low-tom — on exactly these notes.
 
 **Migration.** A MULTI or `.kit` that stored a retired kit loads its successor: *808 Basics* → **808**,
 *House Basics* → **909**, *Stab Board* → **808** (the chord-pad *feature* stays — build one in the Kit

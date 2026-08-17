@@ -29,6 +29,25 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the focus axis, so an LFO can be routed at focus alone. Modulated coordinates glide between control
   chunks — stepping Q on a ringing filter would tick, and does not.
 
+- **Kit library harmonized onto one trigger map.** Ride is now **47** and crash **48** in every
+  factory kit. They had been scattered across 47–51 (ride: 47 in four kits, 49/50/51 in three,
+  **absent from six**; crash: 48 in four, 47 in three, 49 in two, absent from three), which meant a
+  pattern written on one kit turned to nonsense on the next — the opposite of what a shared pad map
+  is for. Kits that were missing a foundational pad gained one **voiced in their own ingredient
+  language**, not a generic cymbal dropped into twelve kits: the **808** ride is its own cymbal
+  recipe held tighter and shorter (its long Cymbal becomes the crash); the **606** gains a thin
+  metallic ping and the rim it never had; the **CR-78** gains a dark brushy tick, a soft warm crash
+  and a woody rim; the **LM1** — which shipped with no cymbals at all — gains a deliberately
+  band-limited ride and crash, *the ride Linn couldn't afford*; the **DMX** gains a brighter,
+  crunchier early-sample ride; the **MP60** gains a dusty, driven crash that sits under a loop rather
+  than on top of it. *Industrial* and *Studio* needed only a permutation and lost nothing at all.
+  10 new drum presets back this (269 → 279).
+  **Nothing was deleted from the bank.** Where a full 16-pad kit had to free a slot, the pad that
+  yielded was a re-*tuning* of a preset the kit still carries, and every one of those presets remains
+  loadable onto any pad in the Kit Editor. *Known gap, deliberate:* the CR-78 still has no toms
+  (44–46 stay guiro/blocks) — inventing a tom family would rewrite the kit rather than harmonize it.
+  This remaps kits that were already published; the maintainer's call, quoted: *"I think the ride
+  should be remapped where applicable, and substituted otherwise?"*
 - **Sequencer default rows are the foundational eight.** The drum grid now ships with kick, snare,
   rim, closed hat, open hat, crash, ride and low tom instead of the old 808-flavoured row set, on
   **this project's own kit trigger notes** (36 / 38 / 39 / 42 / 43 / 48 / 47 / 44) rather than GM's —

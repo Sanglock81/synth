@@ -6,7 +6,7 @@ Character over accuracy: documented tunings are the starting point; voiced to so
 Emits resources/presets/<NNN>_<slug>.json. Run from repo root: python3 tools/gen_drumkits.py
 Idempotent by preset NAME; re-run after editing the spec. Increment 1 = 808 / 909 / 606 / 78.
 """
-import json, os, re
+import json, os, re, math
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "resources", "presets")
 
@@ -192,6 +192,135 @@ PRESETS2 = {
   "MP60 Ride":    cymbal(cut=6500, adec=0.85, drive=0.15, noise=0.45),                          # dark ride
 }
 
+# ============================ Shared builders (Phase C C0) ============================
+# New voicing languages the three 1.0 kits (and the harmonization pass) are built from.
+# All of them are PYTHON ONLY -- they emit parameter values the engine already supports;
+# nothing here needs an engine change.
+
+def _params_header():
+    return open(os.path.join(os.path.dirname(__file__), "..", "Source", "Parameters.h")).read()
+
+def assert_params_exist(*ids):
+    """Fail loudly if a parameter this generator emits is not registered.
+
+    Without this a renamed id would produce presets full of keys the plugin silently
+    ignores -- the pad would load, sound wrong, and nothing would say why."""
+    src = _params_header()
+    missing = [i for i in ids if f'"{i}"' not in src]
+    if missing:
+        raise SystemExit(f"gen_drumkits: parameters not in Source/Parameters.h: {missing}")
+
+# ---- the NOISE XY field (Phase B) --------------------------------------------------
+# The field's defaults (0.5, 0.0) ARE its bypass, so only emit these keys on pads that
+# actually shape their noise; an untouched pad stays byte-for-byte as it was.
+NOISE_MIN_HZ, NOISE_MAX_HZ = 40.0, 12000.0
+
+def tilt_noise(level, x):
+    """Noise at a spectral tilt. x: 0 brown, 0.25 pink, 0.5 white, 1 bright."""
+    return dict(noise_level=round(level, 4), noise_x=round(min(max(x, 0.0), 1.0), 4), noise_y=0.0)
+
+def focus_noise(level, hz, focus):
+    """Noise squeezed into a band centred on `hz` (40 Hz..12 kHz). focus 0..1 = how
+       tight (1 rings into pitched noise). The Hz->axis map mirrors NoiseShaper::focusHz."""
+    x = math.log(min(max(hz, NOISE_MIN_HZ), NOISE_MAX_HZ) / NOISE_MIN_HZ) / math.log(NOISE_MAX_HZ / NOISE_MIN_HZ)
+    return dict(noise_level=round(level, 4), noise_x=round(x, 4), noise_y=round(min(max(focus, 0.0), 1.0), 4))
+
+# ---- FM metal -----------------------------------------------------------------------
+def fm_clang(oct=1, ratio2=7, ratio3=13, fm1=0.8, fm2=0.5, cut=4000, adec=0.3,
+             reso=0.2, drive=0.0, vel=0.5, det=0.0, noise=None):
+    """Inharmonic metal from the osc3 -> osc2 -> osc1 phase-mod chain.
+
+    Sine carriers (the only waves the engine will phase-modulate -- saw/square rely on
+    PolyBLEP edge corrections that a phase offset invalidates). The modulators sit at
+    LEVEL 0: they are heard only through the carrier's phase, which is what makes the
+    result read as one struck metal object rather than three stacked tones. Non-integer
+    SEMI ratios are what make it clang instead of chime."""
+    p = d(osc1_wave=3, osc1_octave=oct, osc1_level=0.9,
+          osc2_on=1, osc2_wave=3, osc2_octave=oct, osc2_semi=ratio2, osc2_level=0.0, osc2_detune=det,
+          osc3_on=1, osc3_wave=3, osc3_octave=oct, osc3_semi=ratio3, osc3_level=0.0,
+          osc1_fm=fm1, osc2_fm=fm2,
+          filter_type=1, filter_cutoff=cut, filter_reso=reso,
+          flt_decay=min(0.05, adec), amp_decay=adec, amp_release=adec * 0.4,
+          filter_drive=drive, vel_to_amp=vel)
+    if noise: p.update(noise)
+    return p
+
+# ---- cymbals from explicit partials --------------------------------------------------
+def chord_cymbal(notes, cut=7000, adec=2.5, reso=0.12, drive=0.0, vel=0.5,
+                 levels=(0.22, 0.2, 0.18), noise=None, waves=(1, 1, 1)):
+    """A cymbal voiced as 2-3 DELIBERATELY chosen inharmonic partials plus a noise bed.
+
+    `notes` are semitone offsets for osc1/2/3 -- picking them by ear (rather than the
+    fixed detune spread the classic-machine cymbal() uses) is what lets a ride and a
+    crash from the same kit share a family resemblance while ringing differently."""
+    n = list(notes) + [0] * (3 - len(notes))
+    p = d(osc1_wave=waves[0], osc1_octave=2, osc1_semi=n[0], osc1_level=levels[0],
+          osc2_on=1, osc2_wave=waves[1], osc2_octave=2, osc2_semi=n[1], osc2_level=levels[1],
+          osc3_on=1, osc3_wave=waves[2], osc3_octave=2, osc3_semi=n[2], osc3_level=levels[2],
+          filter_type=1, filter_cutoff=cut, filter_reso=reso,
+          flt_decay=0.1, flt_sustain=1.0, flt_release=0.1,
+          amp_decay=adec, amp_release=adec * 0.4, filter_drive=drive, vel_to_amp=vel)
+    p.update(noise if noise else tilt_noise(0.55, 0.8))
+    return p
+
+# ---- pitched drum body ----------------------------------------------------------------
+def membrane_tom(oct=0, semi=0, sweep=8, adec=0.3, cut=1200, skin=0.0, skin_ratio=19,
+                 drive=0.0, vel=0.55, wave=2, noise=None):
+    """A drum with a real PITCH: a sine/triangle body dropped fast by the mod envelope,
+       with an optional inharmonic 'skin' partial via FM. The sounding note carries the
+       musical pitch, so a kit can hand its toms out as playable intervals."""
+    p = d(osc1_wave=wave, osc1_octave=oct, osc1_semi=semi, osc1_level=0.9,
+          fltenv_to_pitch=sweep, flt_decay=0.07, amp_decay=adec,
+          filter_cutoff=cut, filter_drive=drive, vel_to_amp=vel)
+    if skin > 0.0:
+        p.update(osc2_on=1, osc2_wave=3, osc2_octave=oct, osc2_semi=skin_ratio,
+                 osc2_level=0.0, osc1_fm=skin)
+    if noise: p.update(noise)
+    return p
+
+# ============ Increment 3: kit-library harmonization (Phase C, C0.5) ============
+# Every kit gets the foundational eight, on the notes the sequencer's default rows use.
+# The pads below are the ones the library was MISSING; they are voiced in each kit's own
+# ingredient language rather than a generic ride/crash dropped into twelve kits.
+PRESETS3 = {
+  # 808 -- its "Cymbal" becomes the crash; the ride is the same oscillator-bank recipe
+  # held tighter and shorter, so the two read as one instrument struck two ways.
+  "808 Ride":     chord_cymbal((0, 6, 11), cut=7200, adec=0.95, noise=tilt_noise(0.45, 0.82)),
+
+  # 606 -- thin, sharp, clicky. A metallic PING rather than a wash, and the rim the kit
+  # never had (the 606 has no rimshot; this is the kit's click language on a short body).
+  "606 Ride":     chord_cymbal((0, 7, 13), cut=9000, adec=0.7, levels=(0.2, 0.16, 0.14),
+                               noise=tilt_noise(0.4, 0.9)),
+  "606 Rim":      rim(cut=3400, adec=0.035, noise=0.3),
+
+  # CR-78 -- dark and brushy. The ride is a TICK with a tail, not a wash; the crash is a
+  # soft warm swell; the rim is woody rather than metallic, matching the kit's bossa blocks.
+  "78 Ride":      chord_cymbal((0, 5, 10), cut=5200, adec=0.8, levels=(0.18, 0.15, 0.13),
+                               noise=tilt_noise(0.5, 0.55)),
+  "78 Crash":     chord_cymbal((0, 6, 11), cut=5600, adec=2.2, levels=(0.18, 0.16, 0.14),
+                               noise=tilt_noise(0.6, 0.6)),
+  "78 Rim":       d(osc1_wave=2, osc1_octave=1, osc1_level=0.55, filter_type=2,
+                    filter_cutoff=1900, filter_reso=0.25, fltenv_to_pitch=6, flt_decay=0.02,
+                    amp_decay=0.045, vel_to_amp=0.5, **tilt_noise(0.2, 0.3)),
+
+  # LM1 -- gated real drums, warm-dark top, no cymbals in the original. John's brief: the
+  # ride Linn couldn't afford -- deliberately BAND-LIMITED, dull and short, so it sounds
+  # like a sample that ran out of bits rather than a modern cymbal.
+  "LM1 Ride":     chord_cymbal((0, 6, 11), cut=5000, adec=0.75, levels=(0.2, 0.17, 0.15),
+                               drive=0.12, noise=focus_noise(0.45, 6000, 0.22)),
+  "LM1 Crash":    chord_cymbal((0, 5, 10), cut=5200, adec=2.0, levels=(0.2, 0.18, 0.16),
+                               drive=0.12, noise=focus_noise(0.55, 5200, 0.2)),
+
+  # DMX -- brighter, crunchier early-sample character; SAT-forward like the rest of the kit.
+  "DMX Ride":     chord_cymbal((0, 7, 14), cut=8200, adec=0.85, drive=0.22,
+                               noise=tilt_noise(0.5, 0.85)),
+
+  # MP60 -- boom-bap. It ships a dark ride and no crash; this is a crash in kind: dusty,
+  # rolled off, driven, so it sits under a loop instead of on top of it.
+  "MP60 Crash":   chord_cymbal((0, 6, 11), cut=6200, adec=2.6, drive=0.2,
+                               noise=tilt_noise(0.6, 0.5)),
+}
+
 def slugify(n): return re.sub(r'[^a-z0-9]+', '_', n.lower()).strip('_')
 
 def existing_names():
@@ -205,11 +334,15 @@ def existing_names():
     return names
 
 def main():
+    # Anything the builders emit must be a real parameter, or the pads would carry keys
+    # the plugin silently drops. Checked before a single file is written.
+    assert_params_exist("noise_level", "noise_x", "noise_y", "osc1_fm", "osc2_fm",
+                        "osc1_semi", "osc2_semi", "osc3_semi", "fltenv_to_pitch", "filter_drive")
     have = existing_names()
     nums = [int(m.group(1)) for f in os.listdir(OUT) if (m:=re.match(r'(\d+)_', f))]
     nxt = max(nums) + 1
     wrote = 0
-    allp = dict(PRESETS); allp.update(PRESETS2)     # increment 1 + 2
+    allp = dict(PRESETS); allp.update(PRESETS2); allp.update(PRESETS3)   # increment 1 + 2 + 3
     for name, params in allp.items():
         obj = {"name": name, "category": "Drums", "params": params}
         if name in have:

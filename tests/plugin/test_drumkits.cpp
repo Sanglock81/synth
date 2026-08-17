@@ -12,6 +12,7 @@
 #include "test_util.h"
 #include <vector>
 #include <cmath>
+#include <set>
 
 namespace
 {
@@ -40,7 +41,7 @@ namespace
     }
 
     // A fixed reference bar: dense 16th closed-hats + kick/snare/clap + a long cymbal ringing on 1.
-    // Trigger notes are the shared kit layout (36 kick, 38 snare, 40 clap, 42/43 hats, 49 cymbal).
+    // Trigger notes are the shared kit layout (36 kick, 38 snare, 40 clap, 42/43 hats, 48 crash).
     struct Hit { int step; int note; float vel; };
     const std::vector<Hit>& refPattern()
     {
@@ -51,7 +52,7 @@ namespace
             for (int s : { 4, 12 })    v.push_back ({ s, 38, 0.9f });                        // snare
             v.push_back ({ 12, 40, 0.85f });                                                 // clap
             v.push_back ({ 14, 43, 0.8f });                                                  // open hat (chokes the closed)
-            v.push_back ({ 0, 49, 1.0f });                                                   // long cymbal, rings free
+            v.push_back ({ 0, 48, 1.0f });                                                   // crash (48 after C0.5), rings free
             return v;
         }();
         return pat;
@@ -150,5 +151,72 @@ TEST_CASE ("drumkits: dense 16th reference bar + long cymbal stays clean, render
         dir.createDirectory();
         tu::writeWavF32 ((dir.getChildFile (kit + ".wav").getFullPathName()).toStdString(), song, (int) kSR);
        #endif
+    }
+}
+
+// ---------------------------------------------------------------------------
+// C0.5 — kit library harmonization. Cross-kit consistency is the whole point of a
+// shared trigger map: a pattern written on one kit has to stay meaningful on the next.
+// The sequencer's default rows encode that map, so these two must never disagree.
+// ---------------------------------------------------------------------------
+
+TEST_CASE ("drumkits: every factory kit puts the foundational eight on the same notes",
+           "[plugin][drums][kits][harmonization]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    // Kick / snare / rim / closed hat / open hat / crash / ride / low tom — the rows the
+    // sequencer ships with. THE SAME ARRAY, read from the sequencer, so the two cannot drift.
+    const auto rows = StepSequencer::defaultNotes();
+    for (auto& kitName : VASynthProcessor::factoryKitNames())
+    {
+        const auto def = VASynthProcessor::factoryKit (kitName);
+        for (int note : rows)
+        {
+            INFO ("kit '" << kitName << "' has no pad on the sequencer's row note " << note);
+            bool found = false;
+            for (auto& pd : def.pads) if (pd.triggerNote == note) { found = true; break; }
+            REQUIRE (found);
+        }
+    }
+}
+
+TEST_CASE ("drumkits: ride is 47 and crash is 48 everywhere, by name", "[plugin][drums][kits][harmonization]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    // The mapping is only worth anything if the pad on 47 really IS a ride. Checked by the
+    // source preset's name, which is what a reader of factoryKit() is trusting.
+    for (auto& kitName : VASynthProcessor::factoryKitNames())
+    {
+        const auto def = VASynthProcessor::factoryKit (kitName);
+        juce::String ride, crash;
+        for (auto& pd : def.pads)
+        {
+            if (pd.triggerNote == 47) ride  = pd.source;
+            if (pd.triggerNote == 48) crash = pd.source;
+        }
+        INFO ("kit '" << kitName << "': 47 = '" << ride << "', 48 = '" << crash << "'");
+        REQUIRE (ride.containsIgnoreCase ("Ride"));
+        // The 808's and 606's long cymbal IS each kit's crash; both are named "Cymbal".
+        REQUIRE ((crash.containsIgnoreCase ("Crash") || crash.containsIgnoreCase ("Cymbal")));
+    }
+}
+
+TEST_CASE ("drumkits: no kit lost a pad or gained a duplicate trigger", "[plugin][drums][kits][harmonization]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    for (auto& kitName : VASynthProcessor::factoryKitNames())
+    {
+        const auto def = VASynthProcessor::factoryKit (kitName);
+        std::set<int> triggers;
+        int filled = 0;
+        for (auto& pd : def.pads)
+            if (pd.triggerNote >= 0)
+            {
+                ++filled;
+                INFO ("kit '" << kitName << "' has two pads on trigger " << pd.triggerNote);
+                REQUIRE (triggers.insert (pd.triggerNote).second);   // a duplicate would shadow a pad
+            }
+        INFO ("kit '" << kitName << "' has " << filled << " pads");
+        REQUIRE (filled == kMaxKitPads);                             // still a full kit
     }
 }
