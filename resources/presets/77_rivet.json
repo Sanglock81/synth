@@ -1,5 +1,5 @@
 {
-  "name": "Foundry Stomp",
+  "name": "Rivet",
   "category": "Pluck",
   "params": {
     "osc1_wave": 1, "osc1_pw": 0.4, "osc2_on": 1, "osc2_wave": 0, "osc2_octave": -1, "osc2_level": 0.6, "noise_level": 0.1,

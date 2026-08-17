@@ -356,6 +356,9 @@ FOUNDRY = {
   "Foundry Drum Lo":  membrane_tom(oct=-1, sweep=10, adec=0.42, cut=900, skin=0.45,
                                    skin_ratio=17, drive=0.45, vel=0.6,
                                    noise=tilt_noise(0.15, 0.15)),
+  "Foundry Drum Mid": membrane_tom(oct=0, semi=-5, sweep=9, adec=0.36, cut=1150, skin=0.48,
+                                   skin_ratio=18, drive=0.45, vel=0.6,
+                                   noise=tilt_noise(0.15, 0.18)),
   "Foundry Drum Hi":  membrane_tom(oct=0, sweep=9, adec=0.3, cut=1400, skin=0.5,
                                    skin_ratio=19, drive=0.45, vel=0.6,
                                    noise=tilt_noise(0.15, 0.2)),
@@ -537,6 +540,11 @@ HEARTH = {
   # the deliberately sour intervals Foundry uses, so they wash warmly instead of clanging.
   "Hearth Ride":      chord_cymbal((0, 7, 12), cut=6000, adec=1.6, levels=(0.16, 0.14, 0.12),
                                    noise=tilt_noise(0.5, 0.6)),
+  # A real crash for the crash row: light and warm like the rest of the kit, but FULLER and
+  # longer than the splash -- more bed under it, a slightly darker top, and enough tail to
+  # mark a section rather than just accent a beat.
+  "Hearth Crash":     chord_cymbal((0, 7, 12), cut=6200, adec=2.6, levels=(0.21, 0.19, 0.17),
+                                   noise=tilt_noise(0.68, 0.58)),
   "Hearth Splash":    chord_cymbal((0, 7, 12), cut=6800, adec=1.1, levels=(0.18, 0.15, 0.13),
                                    noise=tilt_noise(0.55, 0.65)),
 
@@ -584,8 +592,9 @@ def main():
         if name in have:
             fn, cat = have[name]
             # A drum name that collides with a patch from ANOTHER category would overwrite it
-            # in place and quietly move it out of its own bank -- which is exactly what
-            # "Foundry Stomp" (a Pluck patch) did on the first run of the Foundry kit. Refuse.
+            # in place and quietly move it out of its own bank -- which is exactly what the
+            # Foundry kick did to a Pluck patch on its first run (that patch is now "Rivet",
+            # and the kick is "Foundry Stamp"). Refuse.
             if cat != "Drums":
                 raise SystemExit(f"gen_drumkits: '{name}' already exists as a {cat} preset "
                                  f"({fn}) -- pick a different name rather than overwriting it")

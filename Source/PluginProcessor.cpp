@@ -1508,8 +1508,14 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         // ratios, not chimes), oil-drum toms, machine noises for colour. Two choke pairs: the
         // hats (group 1) and the Anvil/Pipe metal pair (group 2), so a fast alternation on
         // either reads as ONE object being struck rather than two ringing on top of each other.
-        // 45 carries the machine tick instead of a mid tom -- Foundry has two oil drums, not
-        // three, and a machine kit would rather have the tick (noted in docs/presets.md).
+        //
+        // 45 carries a MID oil drum, so the cross-kit tom row is complete (a tom fill written
+        // on another kit lands on drums here, not on a machine tick). The tick it displaced,
+        // "Foundry Cycle", could not simply move: a factory kit pad must sit on trigger
+        // 36 + its pad index so the kit maps onto a 16-pad controller grid (asserted in
+        // test_drums.cpp), so there is no free trigger to re-slot it to — only 16 pads and
+        // 16 notes, both full. Cycle stays in the bank, loadable onto any pad in the Kit
+        // Editor, and is listed as a candidate in docs/presets.md.
         def.pads[0]  = drum  (36, "Foundry Stamp",     0);
         def.pads[1]  = drum  (37, "Foundry Boom",      0);
         def.pads[2]  = drum  (38, "Foundry Blast",     0);
@@ -1519,7 +1525,7 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[6]  = drum  (42, "Foundry Shard",     1);
         def.pads[7]  = drum  (43, "Foundry Hiss",      1);
         def.pads[8]  = tuned (44, "Foundry Drum Lo",   0, 38);
-        def.pads[9]  = drum  (45, "Foundry Cycle",     0);
+        def.pads[9]  = tuned (45, "Foundry Drum Mid",  0, 44);
         def.pads[10] = tuned (46, "Foundry Drum Hi",   0, 50);
         def.pads[11] = drum  (47, "Foundry Ride Sizzle", 0);
         def.pads[12] = drum  (48, "Foundry Crash",     0);
@@ -1557,8 +1563,10 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         // warmth is in where the energy sits, not in saturation) and the noise beds are
         // PINK-tilted, because a white bed is what makes a synthetic kit sound synthetic.
         // The toms are tuned to root / fifth / octave (F2 - C3 - F3) so a fill can be a
-        // melody; the splash stands in for the crash, which is what a kit this size would
-        // actually have.
+        // melody. The crash row carries a REAL crash -- light and warm like the rest of the
+        // kit, but fuller and longer than the splash that first stood in for it (a splash is
+        // not a crash, and the row should not pretend otherwise). "Hearth Splash" stays in
+        // the bank as a candidate; the 16-pad cap leaves no spare slot for it.
         def.pads[0]  = drum  (36, "Hearth Kick",    0);
         def.pads[1]  = drum  (37, "Hearth Cajon",   0);
         def.pads[2]  = drum  (38, "Hearth Brush",   0);
@@ -1571,7 +1579,7 @@ VASynthProcessor::KitDefinition VASynthProcessor::factoryKit (const juce::String
         def.pads[9]  = tuned (45, "Hearth Tom",     0, 48);   // C3
         def.pads[10] = tuned (46, "Hearth Tom",     0, 53);   // F3
         def.pads[11] = drum  (47, "Hearth Ride",    0);
-        def.pads[12] = drum  (48, "Hearth Splash",  0);       // this kit's crash
+        def.pads[12] = drum  (48, "Hearth Crash",   0);
         def.pads[13] = drum  (49, "Hearth Tamb",    0);
         def.pads[14] = drum  (50, "Hearth Shaker",  0);
         def.pads[15] = drum  (51, "Hearth Block",   0);

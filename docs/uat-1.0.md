@@ -83,6 +83,12 @@ One uninterrupted live set (20+ min) on the ThinkPad at the live buffer size, us
 rhythm stack, scene changes, and at least one of the new kits — ending in a
 bounce/recording. No overrun, no stuck note, no manual rescue = pass.
 
+**This section is the project's absolute performance gate.** The pre-tag check in
+[RELEASING.md](RELEASING.md) is arithmetic — a measured delta added to the `#100` baseline —
+because ad-hoc bench percentages swing 20–50% with ordinary background load. What proves the
+synth gigs is this: played on the real machine, under the conditions it will actually run in,
+with other services up. Run it with the noise field engaged on at least one patch.
+
 ## Sign-off
 
 UAT is complete when A–C are done on their designated machines and zero BLOCKERs remain.

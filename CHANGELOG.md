@@ -29,6 +29,17 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the focus axis, so an LFO can be routed at focus alone. Modulated coordinates glide between control
   chunks — stepping Q on a ringing filter would tick, and does not.
 
+- **Foundry and Hearth complete the shared map.** Foundry gains a **mid oil drum** on trigger 45,
+  so its tom row is a full trio and a tom fill written on another kit lands on drums rather than on
+  a machine tick. Hearth's crash row gains a **real crash** — light and warm like the rest of the
+  kit, but fuller and longer than the splash that first stood in for it. Both displaced pads
+  (Foundry's *Cycle*, Hearth's *Splash*) stay in the bank and remain loadable onto any pad in the
+  Kit Editor; they could not simply move, because a factory kit is capped at 16 pads *and* each pad
+  must sit on trigger `36 + pad index` to map onto a 16-pad controller grid — so there is no free
+  pad and no free trigger. They join the documented candidate list in `docs/presets.md`.
+- **Renamed the Pluck patch *Foundry Stomp* → *Rivet*.** It predates the Foundry kit and had nothing
+  to do with it; sharing the name invited exactly the collision that overwrote it once during
+  development. Same sound, clearer name.
 - **Three new drum kits — FOUNDRY, CIRCUIT and HEARTH.** House-designed kits joining *Industrial*
   and *Studio* under **Originals**, all three on the shared trigger map so a pattern moves between
   them (and the classic machines) intact. **Foundry** is a struck-metal workshop: mechanical kicks
@@ -192,7 +203,7 @@ test-first behind a full gate (`run-all-checks.sh` + `--sanitize` + bench).
   Ensemble** & **Floating Poly** (wide unison-stacked pads), **Tape Keys** (worn tape-aged synth keys),
   **Dawn Brass** (a slow poly brass swell); *Industrial* — **Power Grind** (a saturated metal rhythm
   bass, velocity drives the grind), **Anvil Choir** (a metallic high-resonance pad), **Sheet Metal
-  Riser** (a resonant screaming riser), **Foundry Stomp** (a melodic industrial percussion voice);
+  Riser** (a resonant screaming riser), **Rivet** (a melodic industrial percussion voice; named *Foundry Stomp* before the Foundry kit arrived);
   *Folk/organic* — **Harmonium Reed** (a breathy pump-organ), **Music Box**, **Tin Whistle** (chiffy
   folk whistle with vibrato), **Nylon Pluck** (a woody classical-guitar pluck); *Melodic* — **Dream
   Chime** (an airy dream-pop lead whose LFO morphs the vowel table); *Experimental* — **Pendulum** (a

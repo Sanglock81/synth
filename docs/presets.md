@@ -1,6 +1,6 @@
 # Presets
 
-synth ships with **323** read-only **factory presets** (including the classic-machine kit voices) plus **Init**, and you can
+synth ships with **325** read-only **factory presets** (including the classic-machine kit voices) plus **Init**, and you can
 save your own. The Load menu (in the Global panel) groups everything by category.
 
 ## Loading
@@ -22,7 +22,7 @@ same grouping; **Load drum kit** lists **Classic Machines** / **Originals** / **
 
 ## Factory presets
 
-**323 factory presets.** New across this content cycle, by numeric-prefix batch:
+**325 factory presets.** New across this content cycle, by numeric-prefix batch:
 `227–237` Bass Rework (11) · `238–243` Industrial/Heavy (6) · `244–250` Ambient (7) ·
 `251–259` Experimental (9) · `260–279` the Uncharted 20 · `280–288` Expansion III overflow (9) ·
 `289–292` Format-v2 route proofs (Tremolo Keys, Auto-Pan Pad, Vapor Morph).
@@ -35,7 +35,7 @@ within**, so new names slot in wherever they sort.
 | Lead    | Bright Lead, Foundry Lead, Dream Chime, Chip Lead, Supersaw, Screamer, Vowel Talk Lead, Glass Whistle, Soft Solo, Bright Lead 5th, Foundry 5th, Screamer 5th |
 | Keys    | E-Piano, Digital Bell, EP Bark, Soft EP, Bell Keys, Clav Bite, Velvet Poly, Tape Keys, Toy Piano, Glass Harmonica |
 | Pad     | Aurora Pad, Boreal, Choir Ahh, Submerged, Anvil Choir, Warm Pad, Glass Pad, WT Vowel Pad, Dark Hollow, Dark Hollow Sus, Warm Sus4 |
-| Pluck   | Synth Pluck, Nylon Pluck, Music Box, Kalimba, Raindrop, Foundry Stomp, Ice Pluck, WT Marimba, Rubber Pluck |
+| Pluck   | Synth Pluck, Nylon Pluck, Music Box, Kalimba, Raindrop, Rivet, Ice Pluck, WT Marimba, Rubber Pluck |
 | Brass   | Analog Brass, Dawn Brass, Ska Stab |
 | Strings | String Machine, Strings Redux |
 | Winds   | Soft Flute, Breath Flute, Tin Whistle, Ocarina |
@@ -50,7 +50,7 @@ they read as production tools, an ambient bed and a riser, rather than play-to-d
 
 ### Bank map (file prefixes)
 
-**323 factory patches.** The newest content, by numeric file prefix in `resources/presets/`:
+**325 factory patches.** The newest content, by numeric file prefix in `resources/presets/`:
 
 | Prefix range | Batch | Count |
 |---|---|--:|
@@ -237,14 +237,17 @@ machines) intact.
 | **Circuit** | Modern electronic — clean, tight, punchy | Deliberately **not** another classic-machine homage: nothing here is a 606/808/909 voicing with the knobs moved. Wavetables carry the tone sources; the **NOISE XY field** carries everything hissy, so the hats are a *focused band* rather than high-passed hiss — which is what makes them read as sample-clean. The Zap is a hard, fast focus sweep at near-ring Q: a sound the engine could not make before 1.0. |
 | **Hearth** | Warm, folk-adjacent — the hardest of the three | Everything has to sound **struck and wooden** rather than switched on, so drive stays at zero throughout — the warmth is in *where the energy sits*, not in saturation — and every noise bed is **pink-tilted**, because a white bed is exactly what makes a synthetic kit sound synthetic. The toms are tuned to root / fifth / octave (F2–C3–F3) so a fill can be a melody. The gentlest hats in the library. |
 
-**Where they deviate from the map, and why.** *Foundry* has two oil drums, not three, so trigger 45
-carries its machine tick instead of a mid tom — a machine kit would rather have the tick. *Hearth*'s
-crash row is a small **splash**, which is what a kit that size would really have. Everything else
-lands where the shared map says it should.
+**All three now fill the shared map completely** — every one of the foundational eight, and a full
+tom trio. Foundry's mid oil drum took the slot its machine tick had been holding, and Hearth's crash
+row carries a real crash (light and warm like the rest of the kit, but fuller and longer than the
+splash that first stood in for it).
 
-**Not yet built** (candidates for tuning, not defects): Circuit's tuned chord-stab pad, impact hit,
-downward noise sweep and reverse hit, and Foundry's separate cross-stick, all lost the last few
-slots to the 16-pad cap once the shared map's rim/crash/tom rows were reserved.
+**Candidates, not defects.** A factory kit is capped at **16 pads**, each of which must sit on
+trigger `36 + pad index` so the kit maps onto a 16-pad controller grid — so once the shared map's
+rows are reserved, there is no free pad *and* no free trigger. These presets are all in the bank and
+loadable onto any pad in the Kit Editor; they simply do not occupy a factory slot: Circuit's tuned
+chord-stab pad, impact hit, downward noise sweep and reverse hit; Foundry's **Cycle** machine tick
+and its separate cross-stick; and Hearth's **Splash**.
 
 **Migration.** A MULTI or `.kit` that stored a retired kit loads its successor: *808 Basics* → **808**,
 *House Basics* → **909**, *Stab Board* → **808** (the chord-pad *feature* stays — build one in the Kit

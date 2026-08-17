@@ -86,14 +86,20 @@ TEST_CASE ("drumkits: every factory kit is 16 non-silent, level-balanced pads", 
     for (auto& kit : VASynthProcessor::factoryKitNames())
     {
         VASynthProcessor p; p.prepareToPlay (kSR, kBlock);
-        p.setPartKit (1, p.loadKit (kit));
+        const auto def = p.loadKit (kit);
+        p.setPartKit (1, def);
         std::vector<float> peaks;
+        // Drive each pad by its OWN trigger note. A kit is not obliged to lay its pads out as
+        // 36 + index (Foundry parks its machine tick on 35), and assuming so would silently
+        // test a note nothing is mapped to.
         for (int pad = 0; pad < 16; ++pad)
         {
-            p.routeMidi (juce::MidiMessage::noteOn (1, 36 + pad, 0.9f), 1);
+            const int note = def.pads[(std::size_t) pad].triggerNote;
+            REQUIRE (note >= 0);
+            p.routeMidi (juce::MidiMessage::noteOn (1, note, 0.9f), 1);
             Scan s; float prev = 0; auto out = pump (p, 90, s, prev);   // ~0.24 s
             const float pk = tu::peak (out);
-            INFO ("kit " << kit << " pad " << pad << " (note " << (36 + pad) << ") peak=" << pk);
+            INFO ("kit " << kit << " pad " << pad << " (note " << note << ") peak=" << pk);
             REQUIRE (pk > 1.0e-3f);            // every pad audible
             REQUIRE (s.finite);
             peaks.push_back (pk);
@@ -116,9 +122,18 @@ TEST_CASE ("drumkits: hats choke, cymbal rings free", "[plugin][drums][kits][cho
     for (auto& kit : VASynthProcessor::factoryKitNames())
     {
         auto def = VASynthProcessor::factoryKit (kit);
-        // Pads 6 + 7 are the closed/open hats and share a nonzero choke group; pad for the cymbal is free.
-        REQUIRE (def.pads[6].chokeGroup != 0);
-        REQUIRE (def.pads[7].chokeGroup == def.pads[6].chokeGroup);
+        // Find the hats by their TRIGGER (42 closed / 43 open — the shared map), not by pad
+        // index: pad order is a kit's own business and Foundry's is offset by its 35 pad.
+        int closed = -1, open = -1;
+        for (int i = 0; i < kMaxKitPads; ++i)
+        {
+            if (def.pads[(std::size_t) i].triggerNote == 42) closed = i;
+            if (def.pads[(std::size_t) i].triggerNote == 43) open   = i;
+        }
+        INFO ("kit " << kit << " closed-hat pad " << closed << ", open-hat pad " << open);
+        REQUIRE (closed >= 0); REQUIRE (open >= 0);
+        REQUIRE (def.pads[(std::size_t) closed].chokeGroup != 0);
+        REQUIRE (def.pads[(std::size_t) open].chokeGroup == def.pads[(std::size_t) closed].chokeGroup);
     }
 }
 
@@ -239,10 +254,11 @@ TEST_CASE ("drumkits: kits are level-matched to each other, not just internally"
     {
         VASynthProcessor p; p.prepareToPlay (kSR, kBlock);
         p.setPartKit (1, p.loadKit (kit));
+        const auto def = VASynthProcessor::factoryKit (kit);
         std::vector<float> peaks;
         for (int pad = 0; pad < 16; ++pad)
         {
-            p.routeMidi (juce::MidiMessage::noteOn (1, 36 + pad, 0.9f), 1);
+            p.routeMidi (juce::MidiMessage::noteOn (1, def.pads[(std::size_t) pad].triggerNote, 0.9f), 1);
             Scan s; float prev = 0; auto out = pump (p, 90, s, prev);
             peaks.push_back (tu::peak (out));
         }

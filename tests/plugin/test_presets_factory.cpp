@@ -38,7 +38,7 @@ TEST_CASE ("factory library has the expected presets spanning the categories", "
     VASynthProcessor p;
     const auto& lib = p.factoryPresetLibrary();
 
-    REQUIRE (lib.size() == 323);       // + 55 PCM-homage drum presets (#134 Inc2); + 11 Bass Rework (Expansion III A);
+    REQUIRE (lib.size() == 325);       // + 55 PCM-homage drum presets (#134 Inc2); + 11 Bass Rework (Expansion III A);
                                        // + 10 kit-harmonization pads (C0.5); + 44 pads for the Foundry / Circuit / Hearth kits (C1-C3);
                                        // + Recipe Book Industrial/Heavy 6, Ambient 7, Experimental 9; Uncharted 20; Expansion III overflow 9; v2 route presets 4
     for (auto& fp : lib.all())
