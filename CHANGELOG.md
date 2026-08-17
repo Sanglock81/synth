@@ -6,6 +6,38 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **NOISE XY — a shaping field for the noise source.** The noise strip's reserved slot becomes a 2D
+  drag pad over the fourth sound source. Along the **bottom edge** it sweeps spectral **tilt** through
+  the classic noise colours — brown, pink, white, bright; **dragging upward** narrows the noise into a
+  **focused band** centred on that point (40 Hz – 12 kHz, log), and at the **top** the band is tight
+  enough to ring into pitched noise. The two regions crossfade, so the surface is one continuous field
+  with no seam to hear. A live readout names the colour in the tilt region and shows centre + focus in
+  the focus region; **double-click** (or the context menu) returns it to white. Character over accuracy
+  — the tilt is a 3-stage shelf cascade voiced to sound like the colour it is named after, not a
+  calibrated reference generator, and its coefficients are computed from the sample rate so the colour
+  does not slide at 96/192 kHz. Two **new** APVTS parameters, `noise_x` and `noise_y` (additive only —
+  no existing id moved), default `0.5` / `0.0`. **Those defaults are an exact bypass**: with the field
+  untouched and no route to it, the shaping filter is not in the signal path at all, so every existing
+  patch renders sample-for-sample as before — pinned by a new committed render golden across 35 factory
+  presets (`tests/golden/preset_render_hashes.txt`), generated from the tree without the feature.
+  Presets saved before the field existed load at the bypass point.
+- **Noise field mod destinations.** `Noise Tilt` and `Noise Focus` join the destination registry, so
+  LINK, the LFO-Link gesture, the mod overlay and MIDI-learn all reach both axes through the one shared
+  path. The pad is the target for the tilt/centre axis; a slim **FOC** rail beside it is the target for
+  the focus axis, so an LFO can be routed at focus alone. Modulated coordinates glide between control
+  chunks — stepping Q on a ringing filter would tick, and does not.
+
+### Fixed
+
+- **RANDOM could roll a silent patch through a wide-open high-pass.** The audibility repair pass floored
+  the filter cutoff so a low-pass could not be fully shut, but a **high-pass or band-pass** parked at the
+  TOP of the range is the same failure mirrored — it passes only air, and the patch reads as silence. Those
+  two types are now capped by natural value so the fundamental still gets through (low-pass and notch are
+  untouched). Found when adding the noise field shifted the random stream and the 200-roll hammer landed on
+  a 16.9 kHz high-pass.
+
 ## [1.0.0] — 2026-07-13
 
 First public release: a JUCE 8 / C++17 virtual-analog polysynth (VST3 + Standalone,

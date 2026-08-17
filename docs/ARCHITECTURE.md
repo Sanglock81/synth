@@ -20,7 +20,9 @@ Designed for: a MIDI keyboard (primary) + Novation Launchkey Mini
                     │   ▼                                        │
                     │ SynthEngine (16 voices, global LFO)        │
                     │   voice: OSC1+OSC2+noise → SVF → VCA       │
-                    │          (PolyBLEP)     (TPT)  (2× ADSR)   │
+                    │          (PolyBLEP)  │  (TPT)  (2× ADSR)   │
+                    │            NOISE XY ─┘ (bypassed unless    │
+                    │            tilt/focus  the field is moved) │
                     │   ▼                                        │
                     │ mono → stereo → master gain → out          │
                     └────────────────────────────────────────────┘

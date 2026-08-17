@@ -5,6 +5,7 @@
 #include "ModLink.h"
 #include "ModAnim.h"
 #include "../MidiLearnManager.h"
+#include "../DSP/NoiseShaper.h"   // the noise field's own mappings — the readout must not re-derive them
 
 // ============================================================================
 // Touch-first, MIDI-learnable UI widgets bound to APVTS parameters. The APVTS
@@ -656,6 +657,327 @@ private:
     std::unique_ptr<juce::SliderParameterAttachment> attachment;
     std::unique_ptr<HBarModOverlay> ghost;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HBarControl)
+};
+
+// ---------------------------------------------------------------------------
+// VERTICAL fill-bar control — the upright twin of HBarControl, for an axis that reads
+// bottom-to-top. Same contract: learnable, a registry mod target with its own motion
+// indicator, numeric entry on double-click. Used for the NOISE field's FOCUS axis, which
+// needs to be a LINK/learn target in its own right (you must be able to route an LFO at
+// focus alone) while the pad beside it drives both axes at once.
+class VBarControl : public LearnableComponent
+{
+public:
+    VBarControl (juce::AudioProcessorValueTreeState& apvts, const juce::String& pid,
+                 juce::String displayName, MidiLearnManager& learnMgr)
+        : LearnableComponent (learnMgr, pid), name (std::move (displayName))
+    {
+        slider.setSliderStyle (juce::Slider::LinearBarVertical);
+        slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        slider.setSliderSnapsToMousePosition (true);
+        slider.setColour (juce::Slider::trackColourId,      VASynthLookAndFeel::accent());
+        slider.setColour (juce::Slider::backgroundColourId, VASynthLookAndFeel::track());
+        slider.setWantsKeyboardFocus (false);
+        addAndMakeVisible (slider);
+        attachment = std::make_unique<juce::SliderParameterAttachment> (*apvts.getParameter (pid), slider);
+        param = apvts.getParameter (pid);
+        enableNumericEntry (param);
+        listenForLearnGestures (slider);
+        setTooltipFromParam (apvts, &slider);
+    }
+
+    void setHelp (const juce::String& text) { LearnableComponent::setHelp (text, &slider); }
+
+    void paint (juce::Graphics& g) override
+    {
+        // The bar paints its own fill; the name rides the bottom edge so the column reads
+        // at a glance without a separate label row eating the (already short) height.
+        g.setColour (VASynthLookAndFeel::ink().withAlpha (0.85f));
+        g.setFont (juce::Font (juce::FontOptions (9.0f, juce::Font::bold)));
+        g.drawText (name, getLocalBounds().removeFromBottom (11), juce::Justification::centred, false);
+        paintLearnDecorations (g);
+        paintModRing (g);
+    }
+
+    void resized() override
+    {
+        slider.setBounds (getLocalBounds().withTrimmedBottom (12));
+        if (ghost) { ghost->setBounds (slider.getBounds()); ghost->toFront (false); }
+    }
+
+    bool hasModIndicator() const override { return ghost != nullptr; }
+
+protected:
+    void modTargetAttached() override
+    {
+        if (ghost == nullptr) { ghost = std::make_unique<VBarModOverlay> (slider, *this); addAndMakeVisible (*ghost); }
+        ghost->begin();
+        resized();
+    }
+
+private:
+    // Mouse-transparent ghost marker at the modulated position (vertical: value runs upward).
+    struct VBarModOverlay : juce::Component, private juce::Timer
+    {
+        VBarModOverlay (juce::Slider& sl, LearnableComponent& o) : s (sl), owner (o) { setInterceptsMouseClicks (false, false); }
+        void begin() { startTimerHz (modanim::kTimerHz); }
+        void timerCallback() override { if (st.tick (owner.modAnim(), juce::Time::getMillisecondCounter())) repaint(); }
+        void paint (juce::Graphics& g) override
+        {
+            if (! st.visible()) return;                                 // motion-gated: nothing at rest
+            const float a = st.alpha();
+            const float base = (float) s.valueToProportionOfLength (s.getValue());
+            const float curP = juce::jlimit (0.0f, 1.0f, base + st.cur);
+            const float lagP = juce::jlimit (0.0f, 1.0f, base + st.lag);
+            auto b = getLocalBounds().toFloat();
+            const float yCur = b.getBottom() - curP * b.getHeight();
+            const float yLag = b.getBottom() - lagP * b.getHeight();
+            g.setColour (owner.modColour().withAlpha (0.35f * a));      // trail echo -> current
+            g.fillRect (b.getX() - 1.0f, juce::jmin (yCur, yLag), b.getWidth() + 2.0f, std::abs (yCur - yLag));
+            g.setColour (owner.modColour().withAlpha (0.9f * a));       // ghost marker at current
+            g.fillRoundedRectangle (b.getX() - 2.0f, yCur - 2.0f, b.getWidth() + 4.0f, 4.0f, 2.0f);
+        }
+        juce::Slider& s; LearnableComponent& owner; modanim::State st;
+    };
+
+    juce::String name;
+    ModSlider slider { *this };
+    juce::RangedAudioParameter* param = nullptr;
+    std::unique_ptr<juce::SliderParameterAttachment> attachment;
+    std::unique_ptr<VBarModOverlay> ghost;
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VBarControl)
+};
+
+// ---------------------------------------------------------------------------
+// NOISE XY — a 2D touch surface over the noise source's shaping field. One drag sets
+// BOTH coordinates, which is the whole point: the field is a continuous surface, not a
+// pair of knobs that happen to sit next to each other.
+//
+//   bottom edge   the classic noise colours, left to right: BROWN PINK WHITE BRIGHT
+//   rising        the noise narrows into a focused band around the x position
+//   top           a tight, pitched band -- noise with a note in it
+//
+// The pad is the registry mod target for the X axis (so LINK, the LFO-Link bounds drag
+// and the motion indicator all work on it through the ONE shared path in the editor,
+// with no per-control wiring). The Y axis has its own slim FOCUS rail beside the pad,
+// for the same reasons -- a 2D surface cannot answer "which axis did you mean?" when a
+// LINK tap lands on it, and guessing would be worse than an honest second target.
+//
+// Double-click (or the context menu) returns the field to WHITE -- the exact bypass
+// point, where the shaping filter leaves the signal path entirely.
+class NoiseXYPad : public LearnableComponent
+{
+public:
+    NoiseXYPad (juce::AudioProcessorValueTreeState& apvts, const juce::String& xId,
+                const juce::String& yId, MidiLearnManager& learnMgr)
+        : LearnableComponent (learnMgr, xId)
+    {
+        xParam = apvts.getParameter (xId);
+        yParam = apvts.getParameter (yId);
+        // Repaint when either axis moves from ANYWHERE (a preset load, a DAW automation
+        // lane, a mapped CC, the FOCUS rail beside us) -- the indicator and the readout
+        // must show the live value, never a stale echo of the last drag.
+        xAtt = std::make_unique<juce::ParameterAttachment> (*xParam, [this] (float) { repaint(); });
+        yAtt = std::make_unique<juce::ParameterAttachment> (*yParam, [this] (float) { repaint(); });
+        addContextMenuItem ("Reset noise to WHITE (bypass)", [this] { resetToBypass(); });
+        setHelp ("Noise character: drag across for colour (brown/pink/white/bright), up to focus it "
+                 "into a band; double-click resets to white");
+    }
+
+    // ---- gestures ----------------------------------------------------------
+    // Priority order mirrors ModSlider exactly, so the pad behaves like every other
+    // target: LFO-Link bounds drag, then LINK connect, then MIDI-learn, then the value.
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        if (beginBoundsCapture (normX (e), true)) { applyMouse (e); return; }
+        LearnableComponent::mouseDown (e);          // LINK connect / context menu / long-press arm
+        if (inLinkDrag() || e.mods.isPopupMenu()) return;
+        beginGestures();
+        dragging = true;
+        applyMouse (e);
+    }
+
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (inBoundsCapture()) { applyMouse (e); updateBounds (normX (e)); return; }
+        if (inLinkDrag())      { dragLinkDepth (e); return; }
+        LearnableComponent::mouseDrag (e);          // cancels a pending long-press once it is a real drag
+        if (dragging) applyMouse (e);
+    }
+
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        if (inBoundsCapture())
+        {
+            const float mid = endBoundsCapture (e.mouseWasDraggedSinceMouseDown(), normX (e));
+            if (mid >= 0.0f) setNorm (*xParam, mid);
+            return;
+        }
+        if (inLinkDrag()) { endLinkGesture(); return; }
+        LearnableComponent::mouseUp (e);
+        if (dragging) { endGestures(); dragging = false; }
+        repaint();
+    }
+
+    // The pad has no single number to type, so the double-click slot carries the reset
+    // instead of numeric entry (enableNumericEntry is deliberately never called here).
+    void mouseDoubleClick (const juce::MouseEvent&) override { resetToBypass(); }
+
+    void paint (juce::Graphics& g) override
+    {
+        auto b = getLocalBounds().toFloat().reduced (1.0f);
+        g.setColour (VASynthLookAndFeel::track());
+        g.fillRoundedRectangle (b, 5.0f);
+
+        // The bottom edge carries the colour axis as an actual gradient, so the map is
+        // legible before you have read a word of the manual: dark at brown, neutral at
+        // white, bright toward the right.
+        auto strip = b.withTop (b.getBottom() - 7.0f).reduced (3.0f, 0.0f);
+        juce::ColourGradient grad (juce::Colour (0xff4a3626), strip.getX(), 0.0f,
+                                   juce::Colour (0xffcfe6ea), strip.getRight(), 0.0f, false);
+        grad.addColour (0.5, juce::Colour (0xff9aa3a6));
+        g.setGradientFill (grad);
+        g.fillRoundedRectangle (strip, 2.0f);
+
+        const float x = xNorm(), y = yNorm();
+        const auto pos = pointFor (x, y);
+
+        // Crosshair + puck: PERSISTENT, so the field's position is readable at rest.
+        g.setColour (VASynthLookAndFeel::accent().withAlpha (0.28f));
+        g.drawLine (b.getX(), pos.y, b.getRight(), pos.y, 1.0f);
+        g.drawLine (pos.x, b.getY(), pos.x, b.getBottom(), 1.0f);
+        g.setColour (VASynthLookAndFeel::accent());
+        g.fillEllipse (pos.x - 4.5f, pos.y - 4.5f, 9.0f, 9.0f);
+        g.setColour (juce::Colours::black.withAlpha (0.6f));
+        g.drawEllipse (pos.x - 4.5f, pos.y - 4.5f, 9.0f, 9.0f, 1.0f);
+
+        // Live readout. In the tilt region it names the COLOUR (deliberately a word, not a
+        // slope in dB/oct -- this is a character control, not a measurement tool). It swaps to
+        // whichever half the puck is NOT in, so the value never hides under your own finger,
+        // and rides a translucent chip so it stays legible over the colour axis.
+        auto text = b.reduced (5.0f, 0.0f).withHeight (13.0f);
+        text = y < 0.5f ? text.withY (b.getY() + 3.0f)                     // puck low  -> read high
+                        : text.withY (b.getBottom() - 22.0f);              // puck high -> read low
+        g.setColour (VASynthLookAndFeel::track().withAlpha (0.85f));
+        g.fillRoundedRectangle (text, 3.0f);
+        g.setColour (VASynthLookAndFeel::ink());
+        g.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 9.5f, juce::Font::bold)));
+        g.drawFittedText (readout(), text.reduced (4.0f, 0.0f).toNearestInt(), juce::Justification::centredLeft, 1);
+
+        paintLearnDecorations (g);
+        paintModRing (g);
+    }
+
+    void resized() override
+    {
+        if (ghost) { ghost->setBounds (getLocalBounds()); ghost->toFront (false); }
+    }
+
+    bool hasModIndicator() const override { return ghost != nullptr; }
+
+    // Exposed for the smoke harness: what the panel is currently telling the user.
+    juce::String readoutText() const { return readout(); }
+
+protected:
+    void modTargetAttached() override
+    {
+        if (ghost == nullptr) { ghost = std::make_unique<XYModOverlay> (*this); addAndMakeVisible (*ghost); }
+        ghost->begin();
+        resized();
+    }
+
+private:
+    // Mouse-transparent ghost column at the MODULATED x position. The Y axis draws its own
+    // on the FOCUS rail beside the pad, so a route to either axis is visible where it acts.
+    // Motion-gated like every other indicator: nothing is drawn while the route sits still.
+    struct XYModOverlay : juce::Component, private juce::Timer
+    {
+        explicit XYModOverlay (NoiseXYPad& o) : owner (o) { setInterceptsMouseClicks (false, false); }
+        void begin() { startTimerHz (modanim::kTimerHz); }
+        void timerCallback() override { if (st.tick (owner.modAnim(), juce::Time::getMillisecondCounter())) repaint(); }
+        void paint (juce::Graphics& g) override
+        {
+            if (! st.visible()) return;
+            const float a = st.alpha();
+            auto inner = getLocalBounds().toFloat().reduced (6.0f);
+            const float base = owner.xNorm();
+            const float xCur = inner.getX() + juce::jlimit (0.0f, 1.0f, base + st.cur) * inner.getWidth();
+            const float xLag = inner.getX() + juce::jlimit (0.0f, 1.0f, base + st.lag) * inner.getWidth();
+            auto b = getLocalBounds().toFloat().reduced (2.0f);
+            g.setColour (owner.modColour().withAlpha (0.30f * a));      // trail echo -> current
+            g.fillRect (juce::jmin (xCur, xLag), b.getY(), std::abs (xCur - xLag), b.getHeight());
+            g.setColour (owner.modColour().withAlpha (0.9f * a));       // ghost column at current
+            g.fillRoundedRectangle (xCur - 1.5f, b.getY(), 3.0f, b.getHeight(), 1.5f);
+        }
+        NoiseXYPad& owner; modanim::State st;
+    };
+
+    float xNorm() const { return xParam != nullptr ? xParam->getValue() : NoiseShaper::kDefaultX; }
+    float yNorm() const { return yParam != nullptr ? yParam->getValue() : NoiseShaper::kDefaultY; }
+
+    juce::Point<float> pointFor (float x, float y) const
+    {
+        auto b = getLocalBounds().toFloat().reduced (6.0f);
+        return { b.getX() + juce::jlimit (0.0f, 1.0f, x) * b.getWidth(),
+                 b.getBottom() - juce::jlimit (0.0f, 1.0f, y) * b.getHeight() };
+    }
+    float normX (const juce::MouseEvent& e) const
+    {
+        auto b = getLocalBounds().toFloat().reduced (6.0f);
+        return b.getWidth()  <= 0.0f ? 0.5f : juce::jlimit (0.0f, 1.0f, ((float) e.position.x - b.getX()) / b.getWidth());
+    }
+    float normY (const juce::MouseEvent& e) const
+    {
+        auto b = getLocalBounds().toFloat().reduced (6.0f);
+        return b.getHeight() <= 0.0f ? 0.0f : juce::jlimit (0.0f, 1.0f, (b.getBottom() - (float) e.position.y) / b.getHeight());
+    }
+
+    static void setNorm (juce::RangedAudioParameter& p, float v) { p.setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, v)); }
+    void applyMouse (const juce::MouseEvent& e)
+    {
+        if (xParam != nullptr) setNorm (*xParam, normX (e));
+        if (yParam != nullptr) setNorm (*yParam, normY (e));
+        repaint();
+    }
+    void beginGestures() { if (xParam) xParam->beginChangeGesture(); if (yParam) yParam->beginChangeGesture(); }
+    void endGestures()   { if (xParam) xParam->endChangeGesture();   if (yParam) yParam->endChangeGesture(); }
+
+    void resetToBypass()
+    {
+        // Exactly the defaults, not "about the middle": the DSP bypass is an equality test,
+        // so an approximate reset would leave the filter in the path for no benefit.
+        beginGestures();
+        if (xParam != nullptr) setNorm (*xParam, NoiseShaper::kDefaultX);
+        if (yParam != nullptr) setNorm (*yParam, NoiseShaper::kDefaultY);
+        endGestures();
+        repaint();
+    }
+
+    juce::String readout() const
+    {
+        const float x = xNorm(), y = yNorm();
+        if (y > 0.0f)
+            return juce::String (juce::roundToInt (NoiseShaper::focusHz (x))) + " Hz FOCUS "
+                 + juce::String (juce::roundToInt (y * 100.0f)) + "%";
+        return colourWord (x);
+    }
+    // Four named zones across the tilt axis, centred on the documented anchors
+    // (0.0 brown / 0.25 pink / 0.5 white) with everything clearly rising called BRIGHT.
+    static const char* colourWord (float x)
+    {
+        if (x < 0.125f) return "BROWN";
+        if (x < 0.400f) return "PINK";
+        if (x < 0.600f) return "WHITE";
+        return "BRIGHT";
+    }
+
+    juce::RangedAudioParameter* xParam = nullptr;
+    juce::RangedAudioParameter* yParam = nullptr;
+    std::unique_ptr<juce::ParameterAttachment> xAtt, yAtt;
+    std::unique_ptr<XYModOverlay> ghost;
+    bool dragging = false;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NoiseXYPad)
 };
 
 // ---------------------------------------------------------------------------

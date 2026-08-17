@@ -59,6 +59,11 @@ namespace ParamID
     // switches. Old patches migrate osc_mix -> osc1/2 levels on load.
     inline constexpr auto oscMix      = "osc_mix";       // legacy: 0 = osc1 only, 1 = osc2 only
     inline constexpr auto noiseLevel  = "noise_level";
+    // NOISE XY (Phase B). Two ADDITIVE ids — the APVTS freeze permits adding, never renaming.
+    // Together they are one continuous shaping field for the noise source; the exact defaults
+    // (0.5, 0.0) are a true bypass, so presets saved before this feature load unshaped.
+    inline constexpr auto noiseX      = "noise_x";       // y=0: spectral tilt (brown..bright); y>0: focus centre
+    inline constexpr auto noiseY      = "noise_y";       // focus amount (0 = tilt region, 1 = near-ring)
     inline constexpr auto osc1Level   = "osc1_level";    // 0..1
     inline constexpr auto osc2Level   = "osc2_level";
     inline constexpr auto osc3Level   = "osc3_level";
@@ -315,6 +320,10 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::osc2Level, 1},  "Osc2 Level", juce::NormalisableRange<float>(0.0f, 1.0f), 0.8f));
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::osc3Level, 1},  "Osc3 Level", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<P>(juce::ParameterID{ID::noiseLevel, 1}, "Noise", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
+    // NOISE XY field. Defaults are the exact bypass point (x centred = white, y = no focus),
+    // so an old preset that carries neither key bakes to unshaped white noise.
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::noiseX, 1}, "Noise X", juce::NormalisableRange<float>(0.0f, 1.0f), 0.5f));
+    params.push_back(std::make_unique<P>(juce::ParameterID{ID::noiseY, 1}, "Noise Y", juce::NormalisableRange<float>(0.0f, 1.0f), 0.0f));
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::osc1On, 1},    "Osc1 On", true));
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::osc2On, 1},    "Osc2 On", true));
     params.push_back(std::make_unique<Pb>(juce::ParameterID{ID::osc3On, 1},    "Osc3 On", false));

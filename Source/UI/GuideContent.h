@@ -118,6 +118,14 @@ namespace guide
                   "Chains a 2nd FM stage (3->2->1) for richer, metallic tones." },
                 { "noise_level", "NOISE",            "White-noise source level (the 4th source).",
                   "A touch adds breath/attack; more gives wind and percussion." },
+                { "noise_x",     "NOISE FIELD",      "A drag pad for the noise's character: across the bottom edge are the classic "
+                                                     "noise colours (brown, pink, white, bright); dragging upward focuses the noise "
+                                                     "into a band around that point, and at the top the band is tight enough to ring "
+                                                     "into pitched noise.",
+                  "Bottom-left for rumble and wind, bottom-right for air and hiss; lift it for a "
+                  "whistle or a resonant sweep. Double-click returns it to white." },
+                { "noise_y",     "FOC",              "The field's focus axis on its own, so it can be modulated by itself.",
+                  "Route an LFO or envelope here to open and close the noise band; at the top it rings." },
               } },
 
             // ---- Filter ----------------------------------------------------------------------

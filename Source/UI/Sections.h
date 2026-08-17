@@ -128,14 +128,20 @@ public:
             o.waveAtt->sendInitialUpdate();
         }
 
-        // NOISE — the 4th sound source (white noise), given the SAME row anatomy as an oscillator
-        // at slim height: a tinted "NOISE" source label on the left (where the osc ON/wave headers
-        // sit) and a LEVEL knob aligned under the three oscillator LEVEL knobs (column alignment is
-        // what makes it read as part of the mixer, not an orphan). The open middle is reserved for
-        // the post-1.0 noise COLOR selector (white / pink) — see docs/roadmap.
+        // NOISE — the 4th sound source, now two stacked rows. The top row keeps the original
+        // anatomy (a tinted "NOISE" source label on the left, the LEVEL fill bar filling the
+        // rest). The bottom row is the XY field that used to be the reserved "colour selector"
+        // slot: a 2D surface for the noise's character, with the FOCUS axis also exposed as its
+        // own slim rail so it can be a LINK/learn target in its own right.
         noise = std::make_unique<HBarControl> (p.apvts, ID::noiseLevel, "NOISE", p.getMidiLearn());
         noise->setHelp ("White-noise source level (the 4th sound source) — drag the bar left/right");
         addAndMakeVisible (*noise);
+
+        noiseXY = std::make_unique<NoiseXYPad> (p.apvts, ID::noiseX, ID::noiseY, p.getMidiLearn());
+        addAndMakeVisible (*noiseXY);
+        noiseFocus = std::make_unique<VBarControl> (p.apvts, ID::noiseY, "FOC", p.getMidiLearn());
+        noiseFocus->setHelp ("How tightly the noise is focused into a band — at the top it rings into pitched noise");
+        addAndMakeVisible (*noiseFocus);
     }
 
     void paint (juce::Graphics& g) override
@@ -163,9 +169,9 @@ public:
                 g.drawText (i == 1 ? "MOD > OSC 1" : "MOD > OSC 2", chip, juce::Justification::centred, false);
             }
 
-        // "NOISE" source label (left), tinted like the osc rows — the 4th mixer source.
-        auto nb = chrome::subBoxContent (noiseBox());
-        auto lbl = nb.removeFromLeft (juce::jmin (76, nb.getWidth() / 2));
+        // "NOISE" source caption, top of the left column — tinted like the osc rows so the block
+        // still reads as the 4th mixer source rather than an unrelated widget.
+        auto lbl = chrome::subBoxContent (noiseBox()).removeFromLeft (kNoiseLabelCol).removeFromTop (kNoiseRowH);
         g.setColour (sectiontint::osc().withAlpha (0.22f));
         g.fillRoundedRectangle (lbl.toFloat().reduced (1.0f), 4.0f);
         g.setColour (sectiontint::osc().brighter (0.35f));
@@ -200,15 +206,32 @@ public:
             o.k[4]->setBounds (c.reduced (2, 0));                       // LEVEL
             o.wtpos->setBounds (o.k[3]->getBounds());   // shares the PW slot (visibility swaps)
         }
-        // NOISE fill-bar: fills the row to the right of the "NOISE" source label (the open middle
-        // between them is the reserved post-1.0 COLOR-selector slot). The bar itself shows the level.
+        // Left column: NOISE caption over the LEVEL fill bar. Right: the XY field at full block
+        // height, with the FOCUS rail on its right edge (the rail mirrors the field's vertical
+        // axis, so the two read as one control even though they are separate mod targets).
         auto nc = chrome::subBoxContent (noiseBox());
-        nc.removeFromLeft (juce::jmin (76, nc.getWidth() / 2) + 10);   // clear the NOISE label + a gap
-        noise->setBounds (nc.reduced (2, 12));
+        auto col = nc.removeFromLeft (kNoiseLabelCol);
+        col.removeFromTop (kNoiseRowH + 2);                     // the painted caption sits here
+        noise->setBounds (col.removeFromTop (kNoiseRowH));
+        nc.removeFromLeft (6);
+        noiseFocus->setBounds (nc.removeFromRight (kNoiseFocusRail));
+        nc.removeFromRight (4);
+        noiseXY->setBounds (nc);
     }
 
 private:
-    static constexpr int kNoiseStrip   = 46;   // compact 4th-source row height
+    // The 4th-source block: a compact LEVEL row plus the XY character field beneath it.
+    // The three oscillator rows share whatever is left, so this height is the one number
+    // that trades panel space between the mixer sources and the noise character surface.
+    // The 4th-source block. The XY field wants HEIGHT (it is a two-axis drag target, and a
+    // letterbox strip is a poor one), while the NOISE label and LEVEL bar only want width —
+    // so they stack into a left column and the field takes the block's full height beside
+    // them. That costs the three oscillator rows ~6 px each instead of ~18, which is the
+    // difference between their dials staying arm's-length legible and visibly shrinking.
+    static constexpr int kNoiseStrip     = 64;   // whole 4th-source block
+    static constexpr int kNoiseLabelCol  = 108;  // left column: NOISE caption over the LEVEL bar
+    static constexpr int kNoiseRowH      = 20;   // caption / LEVEL bar height within that column
+    static constexpr int kNoiseFocusRail = 20;   // slim FOCUS rail on the field's right edge
     static constexpr int kWtWaveIndex  = 4;    // wave choice index of "WT" (5th option)
 
     static const char* waveId (int osc)
@@ -339,7 +362,9 @@ private:
         std::unique_ptr<juce::ParameterAttachment> waveAtt;  // morphs PW <-> WT POS on wave change
     };
     std::array<Osc, 3> oscs;
-    std::unique_ptr<HBarControl> noise;   // 4th source: white-noise level (horizontal fill bar)
+    std::unique_ptr<HBarControl> noise;      // 4th source: noise level (horizontal fill bar)
+    std::unique_ptr<NoiseXYPad>  noiseXY;    // the noise character field (drives both axes)
+    std::unique_ptr<VBarControl> noiseFocus; // the field's FOCUS axis as its own LINK/learn target
     VASynthProcessor& proc;               // for the WT table picker (reads/sets osc*_wt_kind)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OscSection)

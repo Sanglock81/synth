@@ -31,7 +31,13 @@ build, trust the build._
 - **Unison** (top bar UNI/DET/WID): up to a **7-voice** detuned + panned + phase-decorrelated stack
   (a proper supersaw), off by default; Efficient/HQ oscillator quality trade-off.
 - **Analog drift** (ANALOG): subtle per-voice pitch + pulse-width wander (0 = bit-exact).
-- **Noise** — a 4th sound source (white noise) with its own LEVEL, under the oscillators.
+- **Noise** — a 4th sound source with its own LEVEL, under the oscillators, plus a **NOISE XY
+  field**: a 2D drag pad that sweeps the noise's character. Along the bottom edge it moves through
+  the classic noise colours (brown / pink / white / bright); dragging upward focuses the noise into a
+  band centred on that point (40 Hz – 12 kHz), and at the top the band is tight enough to ring into
+  pitched noise. The two regions crossfade into one continuous surface. Both axes are mod
+  destinations (**Noise Tilt**, **Noise Focus**). Centre-bottom is white — and an exact bypass, so a
+  patch that leaves the field alone sounds exactly as it did before the field existed.
 - **Anti-aliasing**: PolyBLEP + 4× oversample + FIR decimation; Efficient (live) vs HQ (studio) modes.
 
 ## 2. Sound engine — filter
@@ -66,7 +72,8 @@ build, trust the build._
 - **Mod matrix** (8 slots): any **source** → any **registry destination** with bipolar depth.
   - Sources: LFO1/2/3, Mod Env, Amp Env, Velocity, Note, Mod Wheel, Pitch Bend, Random (per-note
     S&H), Macro 1–8.
-  - Destinations: pitch, cutoff, resonance, PW, wave pos, osc 1/2/3 level, noise level, **osc FM
+  - Destinations: pitch, cutoff, resonance, PW, wave pos, osc 1/2/3 level, noise level, **noise
+    tilt + noise focus (the NOISE XY field)**, **osc FM
     depth (Osc 1/2 FM)**, amp, all FX params (chorus/delay/reverb/width/SAT/EQ bands), LFO rate/depth,
     every envelope stage, filter env-amt/keytrack/vel routes, osc octave/detune, glide, trim,
     **part level (tremolo)** and **part pan (equal-power auto-pan)**.

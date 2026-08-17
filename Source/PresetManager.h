@@ -158,6 +158,7 @@ public:
             else if (id == ID::lfoDepth)      v = 0.6f  * rng.nextFloat();  // subtle-to-moderate mod
             else if (id == ID::filterReso)    v = 0.7f  * rng.nextFloat();  // avoid a constant scream
             else if (id == ID::noiseLevel)    v = 0.3f  * rng.nextFloat();  // seasoning, not the dish
+            else if (id == ID::noiseY)        v = 0.7f  * rng.nextFloat();  // shape the noise, but stop short of a full-Q whistle
             else if (id == ID::delayFeedback) v = 0.6f  * rng.nextFloat();  // no runaway repeats
             else if (id == ID::chorusMix || id == ID::delayMix || id == ID::reverbMix)
                                               v = 0.6f  * rng.nextFloat();  // wet, but the note still reads

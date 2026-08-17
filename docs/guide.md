@@ -42,6 +42,8 @@ The three tone sources, mixed (with noise) into the filter. Osc 2 and 3 can also
 9. **FM 2>1** - How hard osc 2 phase-modulates osc 1 (FM). _Raise on a SIN/TRI/WT carrier for e-piano/bells; osc 2 SEMI = ratio._
 10. **FM 3>2** - How hard osc 3 phase-modulates osc 2. _Chains a 2nd FM stage (3->2->1) for richer, metallic tones._
 11. **NOISE** - White-noise source level (the 4th source). _A touch adds breath/attack; more gives wind and percussion._
+12. **NOISE FIELD** - A drag pad for the noise's character: across the bottom edge are the classic noise colours (brown, pink, white, bright); dragging upward focuses the noise into a band around that point, and at the top the band is tight enough to ring into pitched noise. _Bottom-left for rumble and wind, bottom-right for air and hiss; lift it for a whistle or a resonant sweep. Double-click returns it to white._
+13. **FOC** - The field's focus axis on its own, so it can be modulated by itself. _Route an LFO or envelope here to open and close the noise band; at the top it rings._
 
 ## Filter
 

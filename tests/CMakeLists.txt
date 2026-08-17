@@ -60,6 +60,7 @@ add_executable(dsp_tests
     dsp/test_wavetable_gen.cpp
     dsp/test_unison.cpp
     dsp/test_fm.cpp
+    dsp/test_noise_xy.cpp
     ${CMAKE_SOURCE_DIR}/Source/DSP/WavetableGen.cpp
     dsp/alloc_hook.cpp)
 
@@ -150,6 +151,8 @@ add_executable(plugin_tests
     plugin/test_drumkits.cpp
     plugin/test_kit_picker_mockup.cpp
     plugin/test_editfocus.cpp
+    plugin/test_preset_bypass_golden.cpp
+    plugin/test_noise_xy_plugin.cpp
     dsp/alloc_hook.cpp)                # global-new counter, shared with dsp_tests
 
 target_include_directories(plugin_tests PRIVATE
@@ -168,7 +171,8 @@ target_link_libraries(plugin_tests PRIVATE
 # above. Mirror the plugin's compile defs so headers agree.
 target_compile_definitions(plugin_tests PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
-    VASYNTH_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs")
+    VASYNTH_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs"
+    VASYNTH_PRESET_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden")
 
 catch_discover_tests(plugin_tests)
 

@@ -2,6 +2,7 @@
 #pragma once
 #include "PolyBlepOscillator.h"
 #include "SVFilter.h"
+#include "NoiseShaper.h"
 #include "ADSREnvelope.h"
 #include "ModMatrix.h"
 #include <random>
@@ -55,6 +56,10 @@ struct VoiceParams
     // levels here — already folded in the on/off kill switch, so a level of ~0
     // means "skip this oscillator"). oscMix stays as a legacy/no-op field.
     float  oscMix = 0.5f, noiseLevel = 0.0f;
+    // NOISE XY: one continuous shaping field on the noise source (see NoiseShaper.h).
+    // The exact defaults are the bypass point, so the filter is not in the path at all
+    // for any patch that leaves the field alone — the golden-render guarantee.
+    float  noiseX = NoiseShaper::kDefaultX, noiseY = NoiseShaper::kDefaultY;
     float  osc1Level = 0.8f, osc2Level = 0.8f, osc3Level = 0.0f;
 
     // velocity routing
@@ -133,6 +138,7 @@ public:
         if (uosc.empty()) uosc.resize ((std::size_t) (kMaxUnison - 1));
         for (auto& mem : uosc) for (auto& o : mem) { o.setQuality (oscQual); o.prepare (newSampleRate); }
         filterR.prepare (newSampleRate);
+        noiseShaper.prepare (newSampleRate);
         // ~5 ms one-pole for the velocity->amp gain glide (mono-retrigger declick). -60 dB in 5 ms.
         ampScaleCoef_ = 1.0f - std::exp ((float) (-6.9077552789821368 / (0.005 * sampleRate)));
     }
@@ -162,6 +168,11 @@ public:
             osc2.reset (startPhaseFor (pm2));
             osc3.reset (startPhaseFor (pm3));
             filter.reset();
+            // A fresh voice starts on the field where the patch parks it — no glide in from
+            // whatever the PREVIOUS note left the shaper at (that would be an audible sweep on
+            // the attack). A retrigger/steal keeps the state, like the oscillators and filter.
+            noiseShaper.reset();
+            noiseShaper.snapToTarget();
             drift1 = drift2 = drift3 = driftPw = 0.0f;   // Tier 1b: a fresh voice starts un-drifted
             if (unisonLatched > 1 && ! uosc.empty())   // #96: members start with RANDOM phase (mandatory — equal phases collapse the stack)
             {
@@ -296,6 +307,9 @@ public:
         const bool o3 = l3 > 1.0e-4f;
         const float nl = std::clamp (p.noiseLevel + mm.noiseLevel, 0.0f, 1.0f);   // + mod-matrix noise level
         const bool useNoise = nl > 1.0e-4f;
+        const bool shapeNoise = useNoise && noiseFieldLive (p, mtx);
+        if (shapeNoise) noiseShaper.setTarget (std::clamp (p.noiseX + mm.noiseX, 0.0f, 1.0f),
+                                               std::clamp (p.noiseY + mm.noiseY, 0.0f, 1.0f));
 
         // #132 FM (phase-mod) chain osc3 -> osc2 -> osc1. Depth uses the modulator's RAW output
         // (independent of its mix level, so an inaudible modulator still shapes its carrier), scaled
@@ -339,7 +353,7 @@ public:
             if (o1) s += m1 * l1;
             if (o2) s += m2 * l2;
             if (o3) s += m3 * l3;
-            if (useNoise) s += noise() * nl;
+            if (useNoise) s += (shapeNoise ? noiseShaper.process (noise()) : noise()) * nl;
 
             s = filter.process (s);
             out[i] += s * ampLevel * ampScaleCur_ * ampMul * p.gain;   // p.gain == 1.0 for non-kit voices
@@ -404,6 +418,9 @@ public:
         const bool o1 = l1 > 1.0e-4f, o2 = l2 > 1.0e-4f, o3 = l3 > 1.0e-4f;
         const float nl = std::clamp (p.noiseLevel + mm.noiseLevel, 0.0f, 1.0f);
         const bool useNoise = nl > 1.0e-4f;
+        const bool shapeNoise = useNoise && noiseFieldLive (p, mtx);
+        if (shapeNoise) noiseShaper.setTarget (std::clamp (p.noiseX + mm.noiseX, 0.0f, 1.0f),
+                                               std::clamp (p.noiseY + mm.noiseY, 0.0f, 1.0f));
 
         // #132 FM chain (per stack-voice pair — each member's osc3->osc2->osc1, never across members).
         const float fm1 = (fmCarrier (p.osc1Wave) ? std::clamp (p.osc1Fm + mm.osc1Fm, 0.0f, kFmMaxDepth) : 0.0f) * kFmDepthToCycles;
@@ -436,7 +453,9 @@ public:
                 if (o1) sm += m1 * l1;
                 if (o2) sm += m2 * l2;
                 if (o3) sm += m3 * l3;
-                if (useNoise) sm += noise() * nl;                // noise stays centred (with member 0)
+                // Noise stays centred (with member 0) — and there is ONE shaper per voice, not
+                // per unison member, so the field colours the stack as a single source.
+                if (useNoise) sm += (shapeNoise ? noiseShaper.process (noise()) : noise()) * nl;
                 accL += sm * panL[0]; accR += sm * panR[0];
             }
             for (int mIdx = 1; mIdx < N; ++mIdx)
@@ -566,6 +585,18 @@ private:
         fltEnv.setParameters (p.fltA, p.fltD, p.fltS, p.fltR);
     }
 
+    // Is the NOISE XY field in the signal path at all? Only when the patch has moved it off
+    // its exact defaults, or a route EXISTS to one of its axes. Deliberately keyed on route
+    // existence rather than the momentary offset: a bipolar LFO on the field passes through
+    // zero twice a cycle, and a value-keyed test would drop the filter out of the path there
+    // and back in a sample later. Otherwise the shaper is never constructed into the chain —
+    // the true bypass that keeps every untouched patch bit-identical.
+    static bool noiseFieldLive (const VoiceParams& p, const ModMatrix* mtx)
+    {
+        if (! NoiseShaper::isBypass (p.noiseX, p.noiseY)) return true;
+        return mtx != nullptr && (mtx->targets (ModMatrix::NoiseX) || mtx->targets (ModMatrix::NoiseY));
+    }
+
     float noise()
     {
         // Fast xorshift white noise; good enough, allocation-free.
@@ -576,6 +607,7 @@ private:
     PolyBlepOscillator osc1, osc2, osc3;                 // unison member 0 (the bit-exact mono path)
     SVFilter           filter;
     ADSREnvelope       ampEnv, fltEnv;
+    NoiseShaper        noiseShaper;                      // NOISE XY field (skipped entirely at bypass)
 
     // #96 Unison: members 1..N-1 (member 0 is osc1/2/3 above). Only touched when unison > 1, so a
     // non-unison voice never allocates work here and stays bit-identical. filterR is the right

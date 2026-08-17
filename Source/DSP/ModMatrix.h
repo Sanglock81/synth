@@ -83,6 +83,10 @@ public:
                                 // stability but VOICE-applied (evaluate() fills Offsets.osc1Fm/osc2Fm; the
                                 // voice reads them) — like NoiseLevel, NOT block dests despite position, so
                                 // blockOffsets() collects them harmlessly (no mod() entry consumes them).
+                  NoiseX, NoiseY, // NOISE XY field (tilt/centre, focus amount). APPENDED for state stability
+                                // but VOICE-applied like NoiseLevel/Osc1Fm — the voice reads the offsets and
+                                // the shaper glides between them, so a modulated Q never steps (a stepped Q
+                                // on a ringing filter clicks).
                   kNumDests };
     static constexpr int kFirstBlockDest = ChorusRate;
     static constexpr int kNumBlockDests  = kNumDests - kFirstBlockDest;
@@ -104,6 +108,8 @@ public:
         float noiseLevel = 0.0f;   // added to noise level (0..1 domain)
         float osc1Fm     = 0.0f;   // #132 added to osc1/osc2 FM depth (0..1 domain)
         float osc2Fm     = 0.0f;
+        float noiseX     = 0.0f;   // added to the noise field coordinates (0..1 domain)
+        float noiseY     = 0.0f;
     };
 
     // Full-scale destination ranges at |depth| = 1 and a full-scale source.
@@ -115,6 +121,7 @@ public:
     static constexpr float kRangeWavePos  = 1.0f;    // +/- full wavetable sweep (reserved)
     static constexpr float kRangeOscLevel = 1.0f;    // +/- full source level
     static constexpr float kRangeFm       = 1.0f;    // #132 +/- full FM depth (velocity -> FM is the headline)
+    static constexpr float kRangeNoiseXY  = 1.0f;    // +/- the full noise field (0..1 in each axis)
 
     std::array<Slot, kSlots> slots { };
 
@@ -123,6 +130,16 @@ public:
     {
         for (auto& s : slots)
             if (s.source != SrcNone && s.dest != DstNone && s.depth != 0.0f) return true;
+        return false;
+    }
+
+    // Does any LIVE slot drive this destination? Route EXISTENCE, not its momentary value —
+    // a fast-path decision (e.g. "is the noise field in the signal path?") must not flicker
+    // as a bipolar source crosses zero, or the path would switch in and out mid-note.
+    bool targets (int dest) const
+    {
+        for (auto& s : slots)
+            if (s.dest == dest && s.source != SrcNone && s.depth != 0.0f) return true;
         return false;
     }
 
@@ -161,6 +178,8 @@ public:
                 case NoiseLevel: o.noiseLevel += v * kRangeOscLevel; break;
                 case Osc1Fm:     o.osc1Fm     += v * kRangeFm;       break;   // #132 voice-tier FM depth
                 case Osc2Fm:     o.osc2Fm     += v * kRangeFm;       break;
+                case NoiseX:     o.noiseX     += v * kRangeNoiseXY;  break;   // voice-tier noise field
+                case NoiseY:     o.noiseY     += v * kRangeNoiseXY;  break;
                 default: break;
             }
         }

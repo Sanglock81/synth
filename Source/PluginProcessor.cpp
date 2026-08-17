@@ -219,6 +219,7 @@ void VASynthProcessor::clearFocusedPartToBlank()
     set01 (ID::osc1On, 1.0f); set01 (ID::osc1Wave, 0.75f);         // osc1 sine (index 3 of saw/sqr/tri/sin/WT)
     set01 (ID::osc2On, 0.0f); set01 (ID::osc3On, 0.0f);            // single oscillator
     set01 (ID::noiseLevel, 0.0f);
+    set01 (ID::noiseX, 0.5f); set01 (ID::noiseY, 0.0f);            // noise field back to bypass
     set01 (ID::fxChorusOn, 0.0f); set01 (ID::fxDelayOn, 0.0f);
     set01 (ID::fxReverbOn, 0.0f); set01 (ID::fxWidthOn, 0.0f);     // dry
 }
@@ -431,6 +432,8 @@ static VoiceParams buildVoiceParams (const juce::AudioProcessorValueTreeState& a
     p.unisonWidth  = rp (apvts, ID::oscUnisonWidth);
     p.oscMix     = rp (apvts, ID::oscMix);        // legacy; unused by the engine
     p.noiseLevel = rp (apvts, ID::noiseLevel);
+    p.noiseX     = rp (apvts, ID::noiseX);        // NOISE XY field (defaults = bypass, bit-identical)
+    p.noiseY     = rp (apvts, ID::noiseY);
 
     // Fold each kill switch into its level (off -> 0); the engine smooths these
     // effective levels, so toggling is click-free and off oscillators are skipped.
@@ -548,7 +551,8 @@ static const juce::StringArray& perPartSoundIds()
         ID::osc1WtKind, ID::osc2WtKind, ID::osc3WtKind, ID::osc1WtPos, ID::osc2WtPos, ID::osc3WtPos,   // #95 WT
         ID::osc1WtSeed, ID::osc2WtSeed, ID::osc3WtSeed,   // #95 3c WT random seed (per-part + persist)
         ID::oscUnison, ID::oscUnisonDetune, ID::oscUnisonWidth,   // #96 unison (per-part sound)
-        ID::oscMix, ID::noiseLevel, ID::osc1Level, ID::osc2Level, ID::osc3Level, ID::osc1On, ID::osc2On, ID::osc3On,
+        ID::oscMix, ID::noiseLevel, ID::noiseX, ID::noiseY,   // noise level + the XY shaping field
+        ID::osc1Level, ID::osc2Level, ID::osc3Level, ID::osc1On, ID::osc2On, ID::osc3On,
         ID::velToAmp, ID::velToCutoff,
         ID::filterType, ID::filterCutoff, ID::filterReso, ID::filterEnvAmt, ID::filterKeytrack, ID::filterDrive,
         ID::ampAttack, ID::ampDecay, ID::ampSustain, ID::ampRelease,
@@ -2709,6 +2713,19 @@ namespace
         return ((float) set[rng.nextInt (9)] + 24.0f) / 48.0f;
     }
 
+    // Normalized value for the NOISE FOCUS axis. Mostly 0 — that is the TILT half of the field,
+    // where the classic noise colours live and where most patches want their noise. A focused
+    // band is a distinct colour rather than a default, and the top of the axis is a near-ring
+    // whistle, so the wild tier stops short of it (RANDOM culls defects, not character; a whistle
+    // on every other roll would be a defect).
+    inline float randNoiseFocusNorm (juce::Random& rng)
+    {
+        const float r = rng.nextFloat();
+        if (r < 0.55f) return 0.0f;                             // ~55%: tilt only (brown..bright)
+        if (r < 0.90f) return 0.15f + 0.45f * rng.nextFloat();  // ~35%: a broad-to-medium focused band
+        return 0.60f + 0.30f * rng.nextFloat();                 // ~10%: tight, short of the ring
+    }
+
     // #132 Normalized value for an osc FM depth: MOSTLY 0 (FM is a special colour, not a default),
     // an occasional tasteful amount, a rare wild one. Range is 0..1 so the normalized value == depth.
     inline float randFmNorm (juce::Random& rng)
@@ -2735,6 +2752,7 @@ namespace
             if      (id == ID::osc1On) v = 1.0f;                                     // guarantee a live source
             else if (id == ID::osc1Semi || id == ID::osc2Semi || id == ID::osc3Semi) v = randSemiNorm (rng);
             else if (id == ID::osc1Fm   || id == ID::osc2Fm)   v = randFmNorm (rng);   // #132 mostly 0, occasional tasteful
+            else if (id == ID::noiseY)  v = randNoiseFocusNorm (rng);                  // noise field: mostly tilt, sometimes focused
             else if (id == ID::osc1Level || id == ID::osc2Level || id == ID::osc3Level) v = midBias (rng);         // middle-biased levels
             else if (id == ID::chorusMix || id == ID::delayMix || id == ID::reverbMix)  v = 0.55f * midBias (rng); // wet, but the note still reads
             else if (id == ID::filterReso) v = (rng.nextFloat() < randcal::selfOscP) ? (0.9f + 0.1f * rng.nextFloat())   // ~5% self-osc excursion
@@ -2764,6 +2782,17 @@ namespace
         if (auto* pa = a.getParameter (ID::ampAttack))
             setN (a, ID::ampAttack, juce::jmin (pa->getNormalisableRange().convertTo0to1 (0.5f), getN (a, ID::ampAttack)));
         setN (a, ID::filterCutoff, juce::jmax (0.18f, getN (a, ID::filterCutoff)));   // not fully closed
+        // ...and the MIRROR of that rule: a HIGH-PASS or BAND-PASS parked at the top of the range
+        // passes only air, so the patch reads as silence exactly the way a shut low-pass does. The
+        // floor above never caught it (for HP/BP a high cutoff is the closed end). Cap those two
+        // types by NATURAL value so the fundamental still gets through; LP/Notch are untouched.
+        {
+            const int ftype = (int) std::lround (getN (a, ID::filterType) * 3.0f);   // 0 LP / 1 HP / 2 BP / 3 Notch
+            if ((ftype == 1 || ftype == 2) && a.getParameter (ID::filterCutoff) != nullptr)
+                setN (a, ID::filterCutoff,
+                      juce::jmin (a.getParameter (ID::filterCutoff)->getNormalisableRange().convertTo0to1 (4000.0f),
+                                  getN (a, ID::filterCutoff)));
+        }
         if (getN (a, ID::ampSustain) < 0.05f && getN (a, ID::ampDecay) < 0.2f) // silent env -> give it a decay tail
             setN (a, ID::ampDecay, 0.4f);
         // INVARIANT: attack + release must not BOTH sit at sluggish extremes over near-zero sustain

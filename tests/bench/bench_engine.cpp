@@ -205,13 +205,14 @@ namespace
     // DRIVE and self-oscillating RESONANCE all LATCH at note-on (they're read from paramsFor(part)
     // at noteOn, which the part-0 liveParams path can't set before the note). Full renderMaster
     // path: per-part FX (all five when allFx) + a cutoff LFO. `voices` = held notes = pool size.
-    Stat measureLocked (PolyBlepOscillator::Quality q, VoiceParams vp, int voices, bool allFx, int blocks)
+    Stat measureLocked (PolyBlepOscillator::Quality q, VoiceParams vp, int voices, bool allFx, int blocks,
+                        const ModMatrix& mtx = {})
     {
         SynthEngine engine;
         engine.setOscQuality (q);
         engine.setMaxVoices (voices);
         engine.prepare (kSR, kBlock);
-        engine.setLockedPartParams (1, vp);
+        engine.setLockedPartParams (1, vp, {}, {}, mtx);
 
         std::array<FXParams, SynthEngine::maxParts> fx {};
         std::array<PartLfos, SynthEngine::maxParts> lfo {};
@@ -458,6 +459,34 @@ int main()
         f.cutoffHz = 2000.0f; f.resonance = 0.4f; f.filterEnvAmt = 0.5f; f.ampS = 0.9f;
         row ("16 notes FM", measureLocked (Q::Efficient, f, 16, true, 4000));
         row ("24 notes FM", measureLocked (Q::Efficient, f, 24, true, 4000));
+    }
+
+    // NOISE XY (Phase B). The field is per-voice, so its cost scales with polyphony — the
+    // rows below are the FULL 24-voice pool + ALL FX, which is the worst case that can
+    // actually happen live. Read them against the "field bypassed" row: that difference IS
+    // the feature's cost, and the bypass row must land exactly where the engine did before.
+    //
+    // The nastiest configuration is NOT max Q (above the crossfade only the bandpass runs);
+    // it is a field sitting INSIDE the crossfade, where the tilt cascade and the bandpass
+    // both run and are mixed. The modulated row is nastier still: a static field computes
+    // its coefficients once, a modulated one recomputes them every control chunk.
+    std::printf ("\nNOISE XY field (24 voices, noise-forward, + ALL FX):\n");
+    {
+        VoiceParams n; n.osc1Wave = n.osc2Wave = n.osc3Wave = 0;
+        n.osc1Level = n.osc2Level = n.osc3Level = 0.8f; n.noiseLevel = 0.9f;
+        n.cutoffHz = 2000.0f; n.resonance = 0.4f; n.filterEnvAmt = 0.5f; n.ampS = 0.9f;
+
+        row ("24v field bypassed",  measureLocked (Q::Efficient, n, 24, true, 4000));
+        n.noiseX = 0.0f;  n.noiseY = 0.0f;   row ("24v tilt (brown)",    measureLocked (Q::Efficient, n, 24, true, 4000));
+        n.noiseX = 0.6f;  n.noiseY = 1.0f;   row ("24v focus (max Q)",   measureLocked (Q::Efficient, n, 24, true, 4000));
+        n.noiseX = 0.35f; n.noiseY = 0.07f;  row ("24v crossfade (both)",measureLocked (Q::Efficient, n, 24, true, 4000));
+
+        // An LFO at FULL depth on the focus axis: every voice re-derives its bandpass
+        // coefficients at the control rate, all block long, for the whole pool.
+        ModMatrix mm; mm.slots[0] = { ModMatrix::LFO1, ModMatrix::NoiseY, 1.0f };
+        mm.slots[1] = { ModMatrix::LFO1, ModMatrix::NoiseX, 1.0f };
+        n.noiseX = 0.5f; n.noiseY = 0.5f;
+        row ("24v LFO->field (max)", measureLocked (Q::Efficient, n, 24, true, 4000, mm));
     }
 
     // 2C rider: sustained pedaled chords on a HEAVILY DRIVEN patch + a SELF-OSCILLATING filter —
