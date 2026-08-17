@@ -1,5 +1,8 @@
-# Sample-exact FNV-1a hashes of a fixed phrase rendered through each
-# factory preset. Regenerate ONLY for an intended, reviewed sound change.
+# Sample-exact FNV-1a hashes of a fixed phrase rendered through each factory
+# preset. Regenerate ONLY for an intended, reviewed sound change.
+# The exact comparison runs only on the toolchain named below — the last bits
+# of std::tan/pow/exp legitimately differ elsewhere. See the test's header.
+#toolchain linux-gcc
 606 Kick	17268332836309628927
 808 Hat Cl	2953172416627164647
 808 Kick	2784129263538292943

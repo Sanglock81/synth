@@ -29,8 +29,24 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the focus axis, so an LFO can be routed at focus alone. Modulated coordinates glide between control
   chunks — stepping Q on a ringing filter would tick, and does not.
 
+- **Sequencer default rows are the foundational eight.** The drum grid now ships with kick, snare,
+  rim, closed hat, open hat, crash, ride and low tom instead of the old 808-flavoured row set, on
+  **this project's own kit trigger notes** (36 / 38 / 39 / 42 / 43 / 48 / 47 / 44) rather than GM's —
+  every factory kit already agrees on kick 36, snare 38, rim 39, closed hat 42, open hat 43 and the
+  tom trio 44-46. Ride 47 / crash 48 follow the 909/707/RX5/R50 cluster, the one pair the library
+  already used consistently. Saved patterns are untouched: they carry their own row notes.
+
 ### Fixed
 
+- **The sequencer's default rows never actually shipped.** Three copies of the default note array
+  had drifted apart, and the one that won at startup was a *fallback* — a chromatic 36..43 run used
+  when the saved state has no `seq_notes` property, which a fresh state never does. So the grid
+  opened on notes nobody had chosen. There is now one definition, used by the DSP default, the
+  processor's default and the fallback alike, and a test asserts a fresh processor really shows it.
+- **The drum grid mislabelled its own rows.** Row names came from the GM drum map, which disagrees
+  with this library on most of its range — it called 39 a clap (every kit puts a rim there), 43 a
+  tom (it is the open hat) and 44 a pedal hat (it is the low tom). Labels now follow the kit map, and
+  the label column was widened so the longest of them stops truncating.
 - **RANDOM could roll a silent patch through a wide-open high-pass.** The audibility repair pass floored
   the filter cutoff so a low-pass could not be fully shut, but a **high-pass or band-pass** parked at the
   TOP of the range is the same failure mirrored — it passes only air, and the patch reads as silence. Those

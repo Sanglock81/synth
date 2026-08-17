@@ -166,19 +166,33 @@ private:
                          [this, row] (int r) { if (r > 0) { proc.setSeqNote (row, r); repaint(); } });
     }
 
+    // THIS PROJECT'S kit trigger map — not GM. Every factory kit lays its pads out this way,
+    // so a row must be named by what it will actually trigger. The old GM table disagreed with
+    // the library on most of the range (it called 39 a clap when every kit puts a rim there,
+    // 43 a tom when it is the open hat, 44 a pedal hat when it is the low tom), which meant the
+    // grid confidently mislabelled its own rows. Cross-kit consistency is what makes a pattern
+    // portable between kits, so the labels follow the kits.
     static juce::String noteLabel (int note)
     {
-        switch (note)   // common GM drum map for the default 808 range
+        switch (note)
         {
-            case 35: case 36: return "Kick";
-            case 37: return "Rim";  case 38: case 40: return "Snare";
-            case 39: return "Clap"; case 41: case 43: case 45: return "Tom";
-            case 42: return "Hat";  case 44: return "Pedal";  case 46: return "OpHat";
-            case 49: return "Crash"; case 51: return "Ride";
+            case 36: return "Kick";     case 37: return "Kick 2";
+            case 38: return "Snare";    case 39: return "Rim";
+            case 40: return "Clap";     case 41: return "Snare 2";
+            case 42: return "Hat";      case 43: return "OpHat";
+            case 44: return "Tom Lo";   case 45: return "Tom Mid";  case 46: return "Tom Hi";
+            case 47: return "Ride";     case 48: return "Crash";
+            // 49-51 are the kit-specific colour pads (clave / maraca / tamb / cowbell / splash,
+            // depending on the kit), so they get a neutral name rather than a wrong one.
+            case 49: return "Perc 1";   case 50: return "Perc 2";   case 51: return "Perc 3";
             default: return juce::String (note);
         }
     }
 
+public:
+    // Test hook: what a row's label reads on the panel (the coverage gate for the kit map above).
+    static juce::String rowLabelForTest (int note) { return rowLabel (note); }
+private:
     // Note name, e.g. 36 -> "C1" (middle C = C3 = MIDI 60).
     static juce::String noteName (int note)
     {
@@ -214,7 +228,9 @@ private:
     bool dragWasOn = false;
     juce::uint32 pressDownMs = 0;
     int velR = -1, velS = -1;              // step currently showing its numeric velocity
-    static constexpr int kLabelW = 74;
+    // Wide enough for the longest row label the kit map can produce ("Tom Mid G#1") plus the
+    // mute button. The foundational-eight defaults pushed past the old 74 and truncated.
+    static constexpr int kLabelW = 88;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SeqPanel)
 };

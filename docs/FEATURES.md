@@ -139,7 +139,10 @@ build, trust the build._
   **HOLD** (latch), per-step velocity/accent; clocked to tempo; resyncs to the running clock (no
   restart-and-reset at the bar).
 - **Step sequencer** — 8-row grid drives a target part (typ. a kit); per-step velocity, its own
-  **GATE**, row mutes; default rows map across the kit; changing the target part doesn't hang notes.
+  **GATE**, row mutes; changing the target part doesn't hang notes. The default rows are the
+  **foundational eight** — kick, snare, rim, closed hat, open hat, crash, ride, low tom — on this
+  project's own kit trigger notes (36/38/39/42/43/48/47/44), so the same pattern stays meaningful
+  when you switch kits. Row labels name the pad each row actually triggers.
 - **Chord engine** — one-finger diatonic chords: root + quality, plus held **modifier keys**
   (Maj/Min/Sus4/Sus2/Dim/Dom7/7th); held chords re-voice live.
 

@@ -2388,9 +2388,15 @@ void VASynthProcessor::applySeqProperty()
             seqVel[(std::size_t) r][(std::size_t) s] = (unsigned char) (hasVel ? juce::jlimit (0, 200, vels[idx].getIntValue())
                                                                                : (v == 2 ? 127 : 0));   // migrate accent
         }
+    // A saved pattern carries its own row notes and keeps them. Only a state tree from before
+    // seq_notes existed falls back — and it falls back to the SAME foundational eight the
+    // sequencer ships with, not a chromatic 36.. run (which used to clobber the real default
+    // at startup, since a fresh state has no seq_notes property either).
     auto notes = juce::StringArray::fromTokens (apvts.state.getProperty ("seq_notes").toString(), ",", "");
+    const auto fallback = StepSequencer::defaultNotes();
     for (int r = 0; r < kSeqRows; ++r)
-        seqNotes[(std::size_t) r] = (r < notes.size()) ? juce::jlimit (0, 127, notes[r].getIntValue()) : (36 + r);
+        seqNotes[(std::size_t) r] = (r < notes.size()) ? juce::jlimit (0, 127, notes[r].getIntValue())
+                                                       : fallback[(std::size_t) r];
     const auto mutes = apvts.state.getProperty ("seq_mutes").toString();
     for (int r = 0; r < kSeqRows; ++r) seqMutes[(std::size_t) r] = (r < mutes.length()) && (mutes[r] == '1');
 }

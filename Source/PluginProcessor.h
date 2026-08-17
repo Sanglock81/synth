@@ -901,7 +901,7 @@ private:
     // Step sequencer grid <-> "seq_cells" / "seq_notes" / "seq_mutes" state properties.
     std::array<std::array<unsigned char, kSeqSteps>, kSeqRows> seqCells { };
     std::array<std::array<unsigned char, kSeqSteps>, kSeqRows> seqVel { };   // per-step velocity % (0 = default 100)
-    std::array<int, kSeqRows>  seqNotes { { 36, 38, 40, 42, 43, 44, 49, 48 } };
+    std::array<int, kSeqRows>  seqNotes = StepSequencer::defaultNotes();   // the foundational eight
     std::array<bool, kSeqRows> seqMutes { };
     void writeSeqProperty();
     void applySeqProperty();

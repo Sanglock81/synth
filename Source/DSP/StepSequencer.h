@@ -23,6 +23,19 @@ public:
     static constexpr int kSteps = 16;
     enum Cell : unsigned char { Off = 0, On = 1 };   // (accent absorbed into per-step velocity)
 
+    // The eight rows a drummer reaches for first: kick, snare, rim, closed hat, open hat,
+    // crash, ride, low tom. Trigger notes are THIS PROJECT'S kit convention, not GM — every
+    // factory kit puts kick on 36, snare on 38, rim on 39, closed hat on 42 and open hat on
+    // 43, and the tom trio on 44/45/46 (GM would say 46 is the open hat, which is wrong here).
+    // Ride 47 / crash 48 follow the 909/707/RX5/R50 cluster, the one pair the library already
+    // used consistently; the remaining kits are brought onto it by the kit harmonization pass.
+    //
+    // ONE definition, used by the DSP default, the processor's default, and the fallback for a
+    // state tree that predates the seq_notes property — those had drifted apart, and the
+    // fallback (a chromatic 36..43 run) was silently winning at startup.
+    static std::array<int, kRows> defaultNotes()
+    { return { { 36, 38, 39, 42, 43, 48, 47, 44 } }; }
+
     struct Config
     {
         bool   enabled = false;
@@ -33,7 +46,7 @@ public:
         // Per-step velocity PERCENT (task #54): 0 uses the default (100%); 10..200 sets it
         // explicitly (accent = >100). Emitted velocity = clamp(vel% / 100, 0..1).
         std::array<std::array<unsigned char, kSteps>, kRows> vel { };
-        std::array<int, kRows>  note { { 36, 38, 40, 42, 43, 44, 49, 48 } };   // 808: kick snare clap CH OH loTom crash cowbell
+        std::array<int, kRows>  note = defaultNotes();
         std::array<bool, kRows> mute { };
     };
 

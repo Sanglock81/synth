@@ -51,16 +51,34 @@ TEST_CASE ("stepseq fires a row's note on its on-steps", "[dsp][stepseq]")
     REQUIRE (ons == 4);                            // steps 0,4,8,12
 }
 
+TEST_CASE ("stepseq default rows are the foundational eight", "[dsp][stepseq]")
+{
+    // The grid ships with the eight rows a drummer reaches for first, on THIS PROJECT'S kit
+    // trigger notes (not GM — every factory kit puts the rim on 39 and the open hat on 43,
+    // where GM would say clap and ride). Pinned here because three copies of this array had
+    // already drifted apart once, and the chromatic fallback was silently winning at startup.
+    const auto d = StepSequencer::defaultNotes();
+    REQUIRE (d[0] == 36);   // kick
+    REQUIRE (d[1] == 38);   // snare
+    REQUIRE (d[2] == 39);   // rim
+    REQUIRE (d[3] == 42);   // closed hat
+    REQUIRE (d[4] == 43);   // open hat
+    REQUIRE (d[5] == 48);   // crash
+    REQUIRE (d[6] == 47);   // ride
+    REQUIRE (d[7] == 44);   // low tom
+    REQUIRE (StepSequencer::Config{}.note == d);   // the DSP default really uses it
+}
+
 TEST_CASE ("stepseq layers independent rows", "[dsp][stepseq]")
 {
     StepSequencer s; auto c = baseCfg();
     c.cells[0][0] = StepSequencer::On;             // kick (row 0 = note 36) on step 0
-    c.cells[2][0] = StepSequencer::On;             // clap (row 2 = note 40) on step 0 too
+    c.cells[2][0] = StepSequencer::On;             // rim  (row 2 = note 39) on step 0 too
     s.setConfig (c);
     auto e = run (s, 200, 200);
-    bool kick = false, clap = false;
-    for (auto& x : e) if (x.on) { if (x.note == 36) kick = true; if (x.note == 40) clap = true; }
-    REQUIRE (kick); REQUIRE (clap);
+    bool kick = false, rim = false;
+    for (auto& x : e) if (x.on) { if (x.note == 36) kick = true; if (x.note == 39) rim = true; }
+    REQUIRE (kick); REQUIRE (rim);
 }
 
 TEST_CASE ("stepseq mute silences a row", "[dsp][stepseq]")

@@ -74,3 +74,84 @@ TEST_CASE ("seq UI: hold + vertical drag sets the cell's velocity, never togglin
     REQUIRE (up > 100);
     REQUIRE (proc.getSeqCell (0, 0) != 0);          // still ON
 }
+
+// ---------------------------------------------------------------------------
+// B6 — the grid's DEFAULT ROWS. The eight a drummer reaches for first, on this
+// project's own kit trigger notes, labelled by what they will actually trigger.
+// ---------------------------------------------------------------------------
+
+TEST_CASE ("seq default rows: the foundational eight reach the live sequencer", "[plugin][seq][defaults]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+
+    // A FRESH processor, i.e. what a first-run user sees. This is the assertion that would
+    // have caught the old defect: the declared default was {36,38,40,...} but the state read
+    // fell back to a chromatic 36..43 run when seq_notes was absent, which it always is on a
+    // fresh state — so the panel shipped showing notes nobody had chosen.
+    const int want[] { 36, 38, 39, 42, 43, 48, 47, 44 };
+    for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
+    { INFO ("row " << r); REQUIRE (p.getSeqNote (r) == want[r]); }
+}
+
+TEST_CASE ("seq default rows: labels name the pad each row triggers", "[plugin][seq][defaults][ui]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    SeqPanel panel (p);
+    panel.setSize (1000, 320);
+
+    // The labels must follow the KIT map, not GM — GM calls 39 a clap and 43 a ride, and both
+    // are wrong for every kit in this library. A grid that mislabels its own rows is worse than
+    // one with no labels at all.
+    const char* want[] { "Kick", "Snare", "Rim", "Hat", "OpHat", "Crash", "Ride", "Tom Lo" };
+    for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
+    {
+        INFO ("row " << r << " note " << p.getSeqNote (r));
+        REQUIRE (SeqPanel::rowLabelForTest (p.getSeqNote (r)).startsWith (want[r]));
+    }
+}
+
+TEST_CASE ("seq default rows: a saved pattern keeps its own notes", "[plugin][seq][defaults][state]")
+{
+    // Changing the DEFAULT must not reach back into patterns people already have. A saved
+    // state carries seq_notes, so it restores exactly what was saved, defaults or not.
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor a;
+    const int custom[] { 60, 61, 62, 63, 64, 65, 66, 67 };
+    for (int r = 0; r < VASynthProcessor::kSeqRows; ++r) a.setSeqNote (r, custom[r]);
+    a.setSeqCell (0, 0, 1);
+    juce::MemoryBlock state;
+    a.getStateInformation (state);
+
+    VASynthProcessor b;
+    b.setStateInformation (state.getData(), (int) state.getSize());
+    for (int r = 0; r < VASynthProcessor::kSeqRows; ++r)
+    { INFO ("row " << r); REQUIRE (b.getSeqNote (r) == custom[r]); }
+    REQUIRE (b.getSeqCell (0, 0) != 0);
+}
+
+TEST_CASE ("seq default rows: screenshot of the grid's default row labels", "[plugin][seq][defaults][smoke]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    SeqPanel panel (p);
+    panel.setSize (1000, 320);
+    // A four-on-the-floor with hats and a backbeat, so the shot shows the rows in use rather
+    // than an empty grid — the point of review is that each row is named for what it triggers.
+    for (int s = 0; s < 16; s += 4)  p.setSeqCell (0, s, 1);          // kick
+    for (int s = 4; s < 16; s += 8)  p.setSeqCell (1, s, 1);          // snare
+    for (int s = 0; s < 16; s += 2)  p.setSeqCell (3, s, 1);          // closed hat
+    p.setSeqCell (4, 14, 1);                                          // open hat lift
+    p.setSeqCell (5, 0, 1);                                           // crash on the one
+    for (int s = 2; s < 16; s += 4)  p.setSeqCell (6, s, 1);          // ride
+    p.setSeqCell (7, 11, 1);                                          // tom fill
+
+    auto img = panel.createComponentSnapshot (panel.getLocalBounds(), false, 1.0f);
+    REQUIRE (img.isValid());
+    juce::File out (juce::String (VASYNTH_DOCS_DIR) + "/smoke/seq-default-rows.png");
+    out.getParentDirectory().createDirectory();
+    out.deleteFile();
+    juce::FileOutputStream os (out); REQUIRE (os.openedOk());
+    juce::PNGImageFormat png; REQUIRE (png.writeImageToStream (img, os));
+}
