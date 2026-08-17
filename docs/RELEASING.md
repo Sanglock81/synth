@@ -4,6 +4,36 @@ The tag is a **deliberate, human-triggered** cut. It fires **only on the maintai
 call**, after the performance validation and the UAT are done and every **BLOCKER**
 defect is fixed + re-gated. This runbook makes the actual cut a clean, one-pass job.
 
+## Pre-tag BENCH GATE (blocking, applies to `v1.0.0-rc1` and every later cut)
+
+Added during Phase B, when the bench could not be certified: several rows that shipped under
+30% measured *over* it on **unchanged** code, because the machine was not quiesced. A control
+run on the pre-feature tree confirmed the inflation was machine state, not the change. The
+differential was accepted for that increment; the absolute check moves here.
+
+Maintainer's ruling, quoted:
+
+> "before cutting v1.0.0-rc1, the full bench must be re-run under #100-equivalent quiesced
+> conditions (performance governor, desktop/browser closed — John will quiesce or run it
+> himself and hand you the numbers if needed). Acceptance at that gate: all live
+> configurations ≤30% of budget with the feature engaged at realistic settings. Report the
+> synthetic worst-case stack (all voices noise 0.9 + LFO focus max + driven) as its own row,
+> verdict deferred to John — he decides whether that stack is a live configuration or a
+> torture row, per the report's existing OK-vs-runs distinction. Option 4 is rejected:
+> docs/target-report.txt is not re-baselined against an unquiesced machine under any
+> circumstances."
+
+- [ ] Governor is `performance` on every core (`cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor`).
+      The bench is **invalid** at `powersave` — it roughly doubles and fails for no real reason.
+- [ ] Desktop and browser closed; load average settled. Nothing else building or testing.
+- [ ] `./build/tests/dsp_bench` run **alone**, not alongside `ctest`.
+- [ ] Every **live** configuration ≤ 30% of the 2.667 ms budget with the noise field engaged at
+      realistic settings.
+- [ ] The synthetic worst-case row (`24v noise+field+LFO+driven`) reported with its number and
+      **no verdict** — whether it counts as a live configuration or a torture row is the
+      maintainer's call, per this report's existing `OK<30%` vs `runs` distinction.
+- [ ] `docs/target-report.txt` is **not** regenerated from an unquiesced machine. Ever.
+
 ## Pre-flight — all must be true
 - [ ] `git status` clean, on `master`, up to date with origin.
 - [ ] **Performance validation** complete and acceptable (latency + no xruns + voice cap settled).

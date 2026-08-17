@@ -487,6 +487,14 @@ int main()
         mm.slots[1] = { ModMatrix::LFO1, ModMatrix::NoiseX, 1.0f };
         n.noiseX = 0.5f; n.noiseY = 0.5f;
         row ("24v LFO->field (max)", measureLocked (Q::Efficient, n, 24, true, 4000, mm));
+
+        // SYNTHETIC WORST-CASE STACK — every expensive thing at once: the full pool, noise at
+        // 0.9 on every voice, both field axes swept by an LFO at full depth, AND a driven filter
+        // (which puts each voice on the 2x oversampled path). Reported deliberately WITHOUT a
+        // verdict: whether this counts as a live configuration or a torture row is the
+        // maintainer's call (see the pre-tag bench gate in docs/RELEASING.md).
+        n.drive = 1.0f; n.resonance = 0.98f;
+        row ("24v noise+field+LFO+driven [synthetic]", measureLocked (Q::Efficient, n, 24, true, 4000, mm));
     }
 
     // 2C rider: sustained pedaled chords on a HEAVILY DRIVEN patch + a SELF-OSCILLATING filter —
