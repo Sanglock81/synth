@@ -108,3 +108,55 @@ TEST_CASE ("bounce: realignBars defaults to 1 with no loops; the override wins",
     REQUIRE (loadWav (dir.getChildFile ("master.wav"), master) == 192000);   // two bars
     dir.deleteRecursively();
 }
+
+// --- regression: the bounce must not render wider blocks than prepareToPlay allocated ----------
+// bounceSession() drives renderBlockImpl offline, and renderBlockImpl writes numSamples into
+// buffers sized ONCE by prepareToPlay: stereoScratch, and every per-part mono/stereo/capture and
+// FX bus in the engine (engine.prepare (sr, samplesPerBlock)). The bounce used a hardcoded
+// 512-sample chunk, so on any host running a smaller buffer it wrote past the end of all of them
+// -- glibc reported "malloc(): smallbin double linked list corrupted", and the guarding jassert is
+// compiled out of Release. 128 and 256 are the NORMAL live buffer settings, so this was reachable
+// by most users through Session Export. Both existing bounce tests prepared at exactly 512, which
+// is why it stayed hidden.
+TEST_CASE ("bounce: renders safely at every host block size, not a fixed 512",
+           "[plugin][bounce][regression]")
+{
+    for (const int blockSize : { 16, 32, 64, 128, 256, 512, 1024 })
+    {
+        VASynthProcessor p;
+        p.prepareToPlay (48000.0, blockSize);
+
+        auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                       .getChildFile ("synth-bounce-bs" + juce::String (blockSize)
+                                      + "-" + juce::String (juce::Time::currentTimeMillis()));
+        INFO ("host block size = " << blockSize);
+
+        p.setAudioSuspended (true);
+        const bool ok = p.bounceSession (dir, 1);
+        p.setAudioSuspended (false);
+
+        REQUIRE (ok);
+        auto master = dir.getChildFile ("master.wav");
+        REQUIRE (master.existsAsFile());
+
+        // The render must be the full cycle regardless of the chunk size it was split into.
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::AudioFormatReader> r (wav.createReaderFor (master.createInputStream().release(), true));
+        REQUIRE (r != nullptr);
+        REQUIRE (r->lengthInSamples == 96000);        // 1 bar @ 120 BPM, 48 kHz
+        r.reset();
+
+        dir.deleteRecursively();
+    }
+}
+
+// An unprepared processor has nothing allocated to render into, so the bounce must refuse
+// rather than render into zero-length buffers.
+TEST_CASE ("bounce: an unprepared processor refuses to bounce", "[plugin][bounce][regression]")
+{
+    VASynthProcessor p;                               // no prepareToPlay
+    auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                   .getChildFile ("synth-bounce-unprepared-" + juce::String (juce::Time::currentTimeMillis()));
+    REQUIRE_FALSE (p.bounceSession (dir, 1));
+    dir.deleteRecursively();
+}

@@ -86,6 +86,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Session Export corrupted the heap on any normal audio buffer size.** The offline bounce drove the
+  render in a hardcoded **512-sample** chunk, but `renderBlockImpl` writes into buffers allocated
+  **once** by `prepareToPlay` — `stereoScratch` plus every per-part mono/stereo/capture and FX bus
+  inside the engine. On a host running a smaller buffer it therefore wrote **past the end of all of
+  them**; glibc reported `malloc(): smallbin double linked list corrupted`, and the `jassert` meant to
+  catch it is compiled out of Release. **128 and 256 are the normal live buffer settings**, so this was
+  reachable by most users simply by exporting a session. The bounce now never renders wider than what
+  was prepared (a no-op at 512 and above, so an export that already worked is bit-identical), and
+  refuses outright on an unprepared processor. It stayed hidden because both existing bounce tests
+  prepared at exactly 512; the regression test now bounces at 16 through 1024.
 - **The sequencer's default rows never actually shipped.** Three copies of the default note array
   had drifted apart, and the one that won at startup was a *fallback* — a chromatic 36..43 run used
   when the saved state has no `seq_notes` property, which a fresh state never does. So the grid

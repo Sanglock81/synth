@@ -2691,7 +2691,16 @@ bool VASynthProcessor::bounceSession (const juce::File& dir, int bars)
     std::array<juce::AudioBuffer<float>, SynthEngine::maxParts> stems;
     for (auto& s : stems) { s.setSize (2, total); s.clear(); }
 
-    const int block = 512;
+    // The offline render drives renderBlockImpl, which writes `numSamples` into buffers that were
+    // sized ONCE by prepareToPlay -- stereoScratch here, plus every per-part mono/stereo/capture and
+    // FX bus inside the engine (engine.prepare (sr, samplesPerBlock)). A fixed 512-sample chunk
+    // therefore OVERFLOWS all of them on any host running a smaller buffer, and 128/256 is the normal
+    // live setting, so Session Export corrupted the heap for most users (the jassert that guards this
+    // is compiled out of Release). Never render wider than what was prepared; at >= 512 this is a
+    // no-op, so a bounce that already worked is bit-identical.
+    const int prepared = stereoScratch.getNumSamples();
+    if (prepared <= 0) return false;                  // never prepared: nothing is allocated to render into
+    const int block = juce::jmin (512, prepared);
     juce::AudioBuffer<float> buf (2, block);
     juce::MidiBuffer midi;
     for (int off = 0; off < total; off += block)
