@@ -17,6 +17,8 @@
 #include "PluginEditor.h"
 #include "UI/Widgets.h"
 #include "UI/Sections.h"
+#include "UI/PartRail.h"
+#include <cmath>
 #include "UI/BottomZones.h"
 #include "UI/SessionExportDialog.h"
 #include "UI/OutputsDialog.h"
@@ -783,3 +785,131 @@ TEST_CASE ("FX reorder chevron: tapping a block's down-arrow moves it one slot i
     for (int i = 0; i < 5; ++i) REQUIRE (after[i] == want[i]);
     REQUIRE (want[1] != before[1]);        // sanity: this really is a different order than the default
 }
+
+// --- proportional layout: every split holds its share at every window size --------------
+// Windows report (Aug 2026): "the arpeggiator and the looper are too tall, compacting the
+// upper parts". The panels were laid out at FIXED pixel sizes (a 476 px bottom band, a 232 px
+// part rail, a 286 px scope column), so on a 1280x720 surface -- a 720p laptop, or 1080p at
+// 150% display scaling -- the band swallowed the editor (osc..fx got 136 px) and the FX panel
+// was squeezed to ~20 px wide. Every split is now a share of the space available; this pins
+// BOTH that the shares are held at every size AND that the controls stay usable.
+TEST_CASE ("layout: panel splits are proportional to the window at every size",
+           "[plugin][smoke][layout][shortscreen]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setVisible (true);                 // getComponentAt() ignores an invisible tree
+
+    BottomZones* band = nullptr;
+    OscSection*  osc  = nullptr;
+    LfoSection*  lfo  = nullptr;
+    FXPanel*     fx   = nullptr;
+    PartRail*    rail = nullptr;
+    std::function<void (juce::Component&)> find = [&] (juce::Component& c)
+    {
+        if (auto* b = dynamic_cast<BottomZones*> (&c)) band = b;
+        if (auto* o = dynamic_cast<OscSection*>  (&c)) osc  = o;
+        if (auto* l = dynamic_cast<LfoSection*>  (&c)) lfo  = l;
+        if (auto* f = dynamic_cast<FXPanel*>     (&c)) fx   = f;
+        if (auto* r = dynamic_cast<PartRail*>    (&c)) rail = r;
+        for (auto* ch : c.getChildren()) find (*ch);
+    };
+    auto layout = [&] (int w, int h)
+    {
+        ed->setSize (w, h);
+        band = nullptr; osc = nullptr; lfo = nullptr; fx = nullptr; rail = nullptr;
+        find (*ed);
+        REQUIRE (band != nullptr); REQUIRE (osc != nullptr); REQUIRE (lfo != nullptr);
+        REQUIRE (fx != nullptr);   REQUIRE (rail != nullptr);
+    };
+
+    // The share constants ARE the signed-off 1920x1080 pixel sizes, so that screen must come out
+    // byte-identical to the hand-tuned layout -- proportional everywhere else, unchanged here.
+    layout (1920, 1080);
+    REQUIRE (osc->getY() == 6 + VASynthEditor::kTopBarH + 5);
+    REQUIRE (band->getHeight() == VASynthEditor::kBandShare);
+    REQUIRE (osc->getHeight()  == VASynthEditor::kCentreVShare);
+    REQUIRE (rail->getWidth()  == VASynthEditor::kRailShare);
+    REQUIRE (band->getHeight() == band->preferredHeight());
+
+    struct Size { int w, h; };
+    for (auto sz : { Size { 1280, 720 }, Size { 1366, 768 }, Size { 1600, 900 },
+                     Size { 1920, 1080 }, Size { 2560, 1440 }, Size { 1760, 1000 },
+                     Size { 900, 480 } })
+    {
+        layout (sz.w, sz.h);
+        INFO ("size @" << sz.w << "x" << sz.h
+              << "  centre=" << osc->getHeight() << "  band=" << band->getHeight()
+              << "  rail=" << rail->getWidth());
+
+        // ---- vertical share: band vs centre, of the flexible space below the top bar ----
+        const int flexV = osc->getHeight() + band->getHeight();
+        REQUIRE (flexV > 0);
+        const int gotV  = band->getHeight() * 1000 / flexV;
+        const int wantV = VASynthEditor::kBandShare * 1000
+                        / (VASynthEditor::kBandShare + VASynthEditor::kCentreVShare);
+        REQUIRE (std::abs (gotV - wantV) <= 3);          // same proportion at every size
+
+        // ---- horizontal share: part rail vs centre vs scope/EQ column ----
+        const int centreW = fx->getRight() - osc->getX();
+        const int flexH   = rail->getWidth() + centreW + (ed->getWidth() - 6 - fx->getRight() - 5);
+        REQUIRE (flexH > 0);
+        const int gotH  = rail->getWidth() * 1000 / flexH;
+        const int wantH = VASynthEditor::kRailShare * 1000
+                        / (VASynthEditor::kRailShare + VASynthEditor::kCentreHShare + VASynthEditor::kRightShare);
+        REQUIRE (std::abs (gotH - wantH) <= 3);
+
+        // Nothing may be crowded out of existence, and the FX panel must keep real width
+        // (fixed side columns used to leave it ~20 px on a 1280-wide screen).
+        REQUIRE (lfo->getHeight() == osc->getHeight());   // the centre row lays out as one band
+        REQUIRE (fx->getWidth() >= centreW / 8);
+        REQUIRE (osc->getHeight() + band->getHeight() <= band->getBottom() - osc->getY());
+
+        // Every zone inside the band keeps a usable height and stays within it.
+        for (juce::Component* z : { &band->chordZone(), &band->arpZone(),
+                                    &band->seqZone(),   &band->looperZone() })
+        {
+            REQUIRE (z->getHeight() >= 40);
+            REQUIRE (band->getLocalBounds().contains (z->getBounds()));
+        }
+        REQUIRE (band->chordZone().getBottom() <= band->arpZone().getY());
+        REQUIRE (band->arpZone().getBottom()   <= band->seqZone().getY());
+
+        // Knob usability is asserted for real display sizes only. 900x480 is the setResizeLimits
+        // FLOOR -- a deliberately tiny window where the controls are legitimately miniature; what
+        // matters there is only that the shares are still held (asserted above).
+        if (sz.h < 700) continue;
+
+        // A knob crushed to a sliver is not a knob: RotaryKnob::resized() carves its inner slider
+        // out of its own bounds, so once the section is short enough the slider gets a degenerate
+        // (even negative) height, the hit-test never reaches it, and the control silently stops
+        // responding to the mouse. Drive the REAL hit path, then a REAL drag.
+        auto* cutoff = findKnob (*ed, ParamID::filterCutoff);
+        REQUIRE (cutoff != nullptr);
+        REQUIRE (cutoff->getWidth()  >= 20);
+        REQUIRE (cutoff->getHeight() >= 20);
+
+        juce::Slider* sl = nullptr;
+        for (auto* ch : cutoff->getChildren()) if (auto* c = dynamic_cast<juce::Slider*> (ch)) sl = c;
+        REQUIRE (sl != nullptr);
+        REQUIRE (sl->getHeight() >= 16);
+        REQUIRE (sl->getWidth()  >= 16);
+        // The OS hit-test from the editor root must actually reach that slider.
+        REQUIRE (ed->getComponentAt (ed->getLocalPoint (sl, sl->getLocalBounds().getCentre())) == sl);
+
+        auto* prm = p.apvts.getParameter (ParamID::filterCutoff);
+        prm->setValueNotifyingHost (0.5f);
+        const float before = prm->getValue();
+        const auto grab = sl->getLocalBounds().getCentre().toFloat();
+        const auto lift = grab.translated (0.0f, -30.0f);         // rotary vertical drag: up = more
+        const auto now  = juce::Time::getCurrentTime();
+        const auto mods = juce::ModifierKeys().withFlags (juce::ModifierKeys::leftButtonModifier);
+        auto src = juce::Desktop::getInstance().getMainMouseSource();
+        sl->mouseDown (juce::MouseEvent (src, grab, mods, 1.0f, 0, 0, 0, 0, sl, sl, now, grab, now, 1, false));
+        sl->mouseDrag (juce::MouseEvent (src, lift, mods, 1.0f, 0, 0, 0, 0, sl, sl, now, grab, now, 1, true));
+        sl->mouseUp   (juce::MouseEvent (src, lift, mods, 1.0f, 0, 0, 0, 0, sl, sl, now, grab, now, 1, true));
+        REQUIRE (prm->getValue() > before);                        // the knob actually turns
+    }
+}
+

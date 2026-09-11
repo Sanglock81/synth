@@ -96,6 +96,14 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   was prepared (a no-op at 512 and above, so an export that already worked is bit-identical), and
   refuses outright on an unprepared processor. It stayed hidden because both existing bounce tests
   prepared at exactly 512; the regression test now bounces at 16 through 1024.
+- **The layout no longer breaks on a short screen (Windows).** Every panel split was a **fixed pixel
+  size** — a 476 px bottom band, a 232 px part rail, a 286 px scope column — so on a 1280x720 surface
+  (a 720p laptop, or 1080p at 150% display scaling) the chord/arp/seq/looper band swallowed the editor,
+  leaving osc..fx 136 px tall, and the FX panel was squeezed to about 20 px wide. Every split is now a
+  **share of the space actually available**, and the share numbers *are* the pixel sizes of the
+  signed-off 1920x1080 layout, so that screen is reproduced exactly and every other size scales from
+  it. Knob usability is asserted too, not just the proportions: a rotary crushed to a sliver stops
+  hit-testing, so the test drives a real drag on a real knob at every size from 1280x720 to 2560x1440.
 - **The sequencer's default rows never actually shipped.** Three copies of the default note array
   had drifted apart, and the one that won at startup was a *fallback* — a chromatic 36..43 run used
   when the saved state has no `seq_notes` property, which a fresh state never does. So the grid

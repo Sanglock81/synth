@@ -141,6 +141,20 @@ class VASynthEditor : public juce::AudioProcessorEditor,
 public:
     static constexpr int kDefaultWidth = 1760;
 
+    // ---- proportional layout shares -----------------------------------------------------
+    // There are NO fixed panel sizes here. Every split in resized() is a SHARE of the space
+    // actually available, so the layout keeps its proportions at any window size -- 1280x720
+    // (a Windows laptop, or 1080p at 150% display scaling) through 4K. The share numbers ARE
+    // the pixel sizes of the signed-off 1920x1080 layout, so that screen is reproduced exactly
+    // and every other size scales from it.
+    //
+    // The top bar is the one exception: it is two rows of fixed-size buttons, so it takes the
+    // height they need rather than a share (scaling it would need every control in it to scale).
+    static constexpr int kTopBarH      = 86;
+    static constexpr int kBandShare    = 476, kCentreVShare = 496;                 // vertical, below the top bar
+    static constexpr int kRailShare    = 232, kCentreHShare = 1380, kRightShare = 286;   // horizontal
+    static constexpr int kScopePct     = 40;    // % of the right column: scope+FFT over the EQ (B2)
+
     explicit VASynthEditor (VASynthProcessor& p)
         : AudioProcessorEditor (p), proc (p), presets (p.apvts)
     {
@@ -200,6 +214,11 @@ public:
         if (std::getenv ("VASYNTH_TOUCH_TRACE") != nullptr)
         {
             touchTrace = true;
+            tracer.keys = [this]
+            {
+                return juce::String (qwerty.anyHeld() ? "held" : "-")
+                     + "/mod" + juce::String ((int) readChordModifierKeys());
+            };
             juce::Desktop::getInstance().addGlobalMouseListener (&tracer);
             juce::Logger::writeToLog ("TOUCH trace enabled");
         }
@@ -242,23 +261,38 @@ public:
         auto area = getLocalBounds().reduced (6);
         const int gap = 5;
 
-        topBar->setBounds (area.removeFromTop (86)); area.removeFromTop (gap);
+        topBar->setBounds (area.removeFromTop (kTopBarH)); area.removeFromTop (gap);
 
+        // Vertical: the bottom workstation and the centre synth column split what is left below
+        // the top bar, by share. It used to take a FLAT 476 px whenever the window was taller than
+        // ~596, so on a 1280x720 surface the chord/arp/seq/looper band swallowed the editor and
+        // left osc..fx 136 px tall (Windows report, Aug 2026). BottomZones lays its own rows out
+        // by share too, so the whole band scales rather than overflowing.
         if (bottomZones != nullptr)
         {
-            const int bh = juce::jmin (area.getHeight() - 120, bottomZones->preferredHeight());
-            bottomZones->setBounds (area.removeFromBottom (juce::jmax (60, bh)));
+            const int flex = juce::jmax (0, area.getHeight() - gap);
+            bottomZones->setBounds (area.removeFromBottom (flex * kBandShare / (kBandShare + kCentreVShare)));
             area.removeFromBottom (gap);
         }
 
-        partRail->setBounds (area.removeFromLeft (232)); area.removeFromLeft (gap);
+        // Horizontal: part rail | centre synth column | scope+EQ, by share. Fixed 232/286 px side
+        // columns left the centre only 740 px on a 1280-wide screen -- with the sections at their
+        // minimum unit width that squeezed the FX panel down to ~20 px.
+        const int flexW  = juce::jmax (0, area.getWidth() - 2 * gap);
+        const int shareW = kRailShare + kCentreHShare + kRightShare;
 
-        auto right = area.removeFromRight (286); area.removeFromRight (gap);
-        scopeView->setBounds (right.removeFromTop (right.getHeight() * 40 / 100)); right.removeFromTop (gap);   // scope+spectrum stack; EQ gets the larger share (B2)
+        partRail->setBounds (area.removeFromLeft (flexW * kRailShare / shareW)); area.removeFromLeft (gap);
+
+        auto right = area.removeFromRight (flexW * kRightShare / shareW); area.removeFromRight (gap);
+        scopeView->setBounds (right.removeFromTop (right.getHeight() * kScopePct / 100)); right.removeFromTop (gap);   // scope+spectrum stack; EQ gets the larger share (B2)
         eqPanel->setBounds (right);
 
         auto centre = area;
-        const int u = juce::jmax (70, (centre.getWidth() - 4 * gap) / 13);
+        // 13 unit-columns across the centre: OSC 3 | FILTER 2 | ENV 2 | LFO 3 | FX (the rest).
+        // The unit is a share of the centre's real width -- it used to have a 70 px floor, which
+        // on a narrow window made the four fixed sections claim more than the centre had and left
+        // the FX panel with nothing.
+        const int u = juce::jmax (1, (centre.getWidth() - 4 * gap) / 13);
         auto placeL = [&] (juce::Component& c, int units)
         {
             c.setBounds (centre.removeFromLeft (juce::jmin (u * units, centre.getWidth())));
@@ -302,6 +336,16 @@ public:
         // M=SUS4 ,=SUS2 .=DIM /=spare. Published as a bitmask the processor diffs.
         const std::uint32_t mask = readChordModifierKeys();
         proc.setQwertyChordModifiers (mask);
+
+        // Interleaved with the TOUCH mouse lines, this says whether a key-down changed anything
+        // that could swallow pointer input (focus / modal state) — the Windows "held key kills the
+        // knobs" report. Env-gated with the touch trace; silent in a normal session.
+        if (touchTrace)
+            juce::Logger::writeToLog (juce::String ("TOUCH key held=") + (qwerty.anyHeld() ? "1" : "0")
+                + " mod="   + juce::String ((int) mask)
+                + " focus=" + juce::String (hasKeyboardFocus (true) ? 1 : 0)
+                + " modal=" + juce::String (juce::Component::getCurrentlyModalComponent() != nullptr ? 1 : 0));
+
         return qwerty.anyHeld() || mask != 0;
     }
 
@@ -585,8 +629,15 @@ private:
     bool hadFocus = false;
 
     // R2 touch diagnosis: global mouse-event tracer (env-gated; see constructor).
+    // It is a DESKTOP-GLOBAL listener, and JUCE forwards mouse events to global listeners even
+    // when a modal component is swallowing them — so a missing line means the event never reached
+    // JUCE at all (OS / driver / window level), while a present line with keys=held means the
+    // event did arrive and something inside the app dropped it. `keys` is the QWERTY note state,
+    // for the Windows report that a held note key kills all pointer input (Aug 2026).
     struct TouchTracer : public juce::MouseListener
     {
+        std::function<juce::String()> keys;      // editor-supplied QWERTY/modifier state
+
         void emit (const char* kind, const juce::MouseEvent& e)
         {
             auto* c = e.eventComponent;
@@ -595,7 +646,8 @@ private:
                 + " @"      + e.getScreenPosition().toString()
                 + " on="    + (c != nullptr ? (c->getName().isNotEmpty() ? c->getName() : juce::String (typeid (*c).name())) : juce::String ("null"))
                 + " drags=" + juce::String (juce::Desktop::getInstance().getNumDraggingMouseSources())
-                + " modal=" + juce::String (juce::Component::getCurrentlyModalComponent() != nullptr ? 1 : 0));
+                + " modal=" + juce::String (juce::Component::getCurrentlyModalComponent() != nullptr ? 1 : 0)
+                + " keys="  + (keys ? keys() : juce::String ("?")));
         }
         void mouseDown (const juce::MouseEvent& e) override { emit ("DOWN", e); }
         void mouseUp   (const juce::MouseEvent& e) override { emit ("UP  ", e); }

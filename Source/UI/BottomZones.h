@@ -453,7 +453,10 @@ public:
         auto c = chrome::sectionContent (getLocalBounds());
         // Top bar: [SCENE 1..8]  [launch quantum]  ......  [MIDI][WAV]. Taller + wider than the lane
         // rows so the scenes read as the primary control (the rows below give up ~10% of their height).
-        auto top = c.removeFromTop (42); c.removeFromTop (5);
+        // Scene bar: a share of the panel's content height (42 px of the signed-off 288), floored
+        // at the height its buttons need. A flat 42 px plus the row floor below overflowed the
+        // panel on a short screen and clipped the P4 lane clean off.
+        auto top = c.removeFromTop (juce::jmin (42, juce::jmax (26, c.getHeight() * 42 / 288))); c.removeFromTop (5);
         auto exports = top.removeFromRight (98); exports.removeFromTop (exports.getHeight() / 2 - 12);
         bounce.setBounds  (exports.removeFromRight (64).reduced (2, 2)); exports.removeFromRight (3);
         expoWav.setBounds (exports.removeFromRight (46).reduced (2, 2)); exports.removeFromRight (3);
@@ -464,8 +467,9 @@ public:
         auto q = top; q.removeFromTop (q.getHeight() / 2 - 13);
         sceneQuant->setBounds (q.removeFromLeft (juce::jmin (155, juce::jmax (60, q.getWidth()))).reduced (2, 2));
 
-        // Four lane rows: [P# label] [R][P] [MIDI/AUD] [BARS] [Q] [x] [content strip].
-        const int rh = juce::jmax (22, (c.getHeight() - (kLanes - 1) * 4) / kLanes);
+        // Four lane rows: [P# label] [R][P] [MIDI/AUD] [BARS] [Q] [x] [content strip]. They divide
+        // what the scene bar leaves -- no pixel floor, which would push the last lane out of view.
+        const int rh = juce::jmax (1, (c.getHeight() - (kLanes - 1) * 4) / kLanes);
         for (int i = 0; i < kLanes; ++i)
         {
             auto row = c.removeFromTop (rh); c.removeFromTop (4);
@@ -567,15 +571,39 @@ public:
     juce::Component& seqZone()    { return seq; }
     juce::Component& looperZone() { return looper; }
 
-    // Editor calls this to size the bottom band: chord bar + arp bar + [seq | looper].
+    // The band's height at the signed-off 1920x1080 layout -- the sum of the row shares below.
+    // The editor sizes the band by share, not from this; it is the reference the shares encode.
     int preferredHeight() const { return kChordH + gap + kArpH + gap + kGridH; }
     std::function<void()> onResizeNeeded;   // kept for API compatibility (unused now)
 
+    // Proportional rows: chord : arp : [seq | looper] keep their share of whatever height the
+    // editor hands the band, so the whole workstation scales with the window instead of
+    // overflowing a short screen (Windows report, Aug 2026).
     void resized() override
     {
         auto r = getLocalBounds();
-        chord.setBounds (r.removeFromTop (kChordH)); r.removeFromTop (gap);
-        arp.setBounds   (r.removeFromTop (kArpH));   r.removeFromTop (gap);
+        const int flex  = juce::jmax (0, r.getHeight() - 2 * gap);
+        const int total = kChordH + kArpH + kGridH;
+
+        // The one place pixels survive: the chord and arp bars are single rows wearing fixed
+        // chrome (a 24 px section header + padding + one row of chips/knobs), so below these
+        // floors they stop being readable rather than merely smaller. They bite only under a
+        // ~430 px band -- i.e. on a 720p-class screen -- and the grid takes what is left.
+        int chordH = juce::jmax (kChordMinH, flex * kChordH / total);
+        int arpH   = juce::jmax (kArpMinH,   flex * kArpH   / total);
+
+        // On a window too small even for those, the two rows share what there is so the grid
+        // never goes negative.
+        const int room = juce::jmax (0, r.getHeight() - kGridMinH / 2 - 2 * gap);
+        if (chordH + arpH > room)
+        {
+            const int sum = chordH + arpH;
+            chordH = room * chordH / sum;
+            arpH   = room - chordH;
+        }
+
+        chord.setBounds (r.removeFromTop (chordH)); r.removeFromTop (gap);
+        arp.setBounds   (r.removeFromTop (arpH));   r.removeFromTop (gap);
         // 8-row sequencer needs the width; the looper takes the remainder on the right.
         seq.setBounds   (r.removeFromLeft (r.getWidth() * 58 / 100)); r.removeFromLeft (gap);
         looper.setBounds (r);
@@ -587,7 +615,11 @@ private:
     // J4#4/#5: seq + looper row ~20% taller (268 -> 322); looper already shares this height with the
     // sequencer. The synth centre section shrinks to fit (#6). (+20%, not +35%, so the right-hand
     // scope/EQ column still lays out cleanly; the master-EQ consolidation is a separate increment.)
+    // Row SHARES (the signed-off 1920x1080 pixel heights), not fixed sizes -- see resized().
     static constexpr int kChordH = 70, kArpH = 74, kGridH = 322, gap = 5;
+    // Chrome floors: each row loses 24 px of section header + 10 px of padding before any of its
+    // content is drawn, so these are where a row stops being readable rather than just smaller.
+    static constexpr int kChordMinH = 58, kArpMinH = 62, kGridMinH = 150;
     ChordBar chord;
     ArpBar arp;
     SeqPanel seq;

@@ -62,7 +62,7 @@ public:
             g.fillRoundedRectangle (cell.toFloat(), 6.0f);
             if (focused) { g.setColour (VASynthLookAndFeel::accent().withAlpha (0.9f)); g.drawRoundedRectangle (cell.toFloat().reduced (1), 6.0f, 2.0f); }
 
-            cell.removeFromRight (kKnobCol);           // level + pan knob column (laid out in resized)
+            cell.removeFromRight (knobColW());           // level + pan knob column (laid out in resized)
             auto body = cell.reduced (7, 5);
 
             g.setColour ((focused || lit) ? VASynthLookAndFeel::accent() : VASynthLookAndFeel::dim());
@@ -105,7 +105,7 @@ public:
         auto cells = cellRects (rl);
         for (int i = 0; i < SynthEngine::maxParts; ++i)
         {
-            auto col = cells[(std::size_t) i].removeFromRight (kKnobCol).reduced (2, 6);
+            auto col = cells[(std::size_t) i].removeFromRight (knobColW()).reduced (2, 6);
             lvl[(std::size_t) i]->setBounds (col.removeFromLeft (col.getWidth() / 2).reduced (1, 0));
             pan[(std::size_t) i]->setBounds (col.reduced (1, 0));
         }
@@ -136,7 +136,7 @@ private:
     {
         auto cells = cellRects (chrome::sectionContent (getLocalBounds()));
         for (int i = 0; i < SynthEngine::maxParts; ++i)
-            if (cells[(std::size_t) i].withTrimmedRight (kKnobCol).contains (pos)) return i;
+            if (cells[(std::size_t) i].withTrimmedRight (knobColW()).contains (pos)) return i;
         return -1;
     }
     void showCellMenu (int i)
@@ -230,7 +230,14 @@ private:
         repaint();
     }
 
-    static constexpr int kKnobCol = 100;   // per-cell level+pan knob column width
+    // The per-cell level+pan knob column is a SHARE of the cell width (100 px of the signed-off
+    // 220 px content width), so a narrower rail shrinks the knobs instead of eating the part name.
+    // The floor is two just-grabbable knobs.
+    int knobColW() const
+    {
+        const int w = chrome::sectionContent (getLocalBounds()).getWidth();
+        return juce::jmax (56, w * 100 / 220);
+    }
 
     VASynthProcessor& proc;
     std::function<void()> restoreFocus;
