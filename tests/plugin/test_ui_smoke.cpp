@@ -1060,17 +1060,29 @@ TEST_CASE ("rec dialog: the save dialog offers the formats and writes the chosen
     juce::AudioFormatManager fm; fm.registerBasicFormats();
     for (int i = 0; i < fmts.size(); ++i)
     {
-        dlg.formatBox().setSelectedId (i + 1);               // fires onChange, as a click would
+        // sendNotificationSync, NOT the default: ComboBox::setSelectedId defaults to
+        // sendNotificationAsync, which posts onChange to the message loop. A test with no
+        // loop running would never see refreshStatus() fire, so the dialog would look like
+        // it ignored the format change. A real click gets the callback via the running loop.
+        dlg.formatBox().setSelectedId (i + 1, juce::sendNotificationSync);
         auto dest = dir.getChildFile ("t" + juce::String (i) + "." + fmts[i].ext);
         juce::String error;
         const bool ok = dlg.saveToForTest (dest, error);
         INFO ("format=" << fmts[i].label << " error=" << error);
 
-        if (fmts[i].kind == MasterRecorder::Kind::Mp3 && ! MasterRecorder::mp3Available())
+        // The encoder hint must appear EXACTLY when MP3 is picked with no encoder present,
+        // and never otherwise. Asserted in both directions so this covers the same ground on
+        // a machine that has an encoder and one that does not -- the earlier one-sided version
+        // silently skipped the whole no-encoder path on any dev box with ffmpeg installed, and
+        // only CI (which has neither) ever ran it.
+        const bool wantHint = fmts[i].kind == MasterRecorder::Kind::Mp3 && ! MasterRecorder::mp3Available();
+        REQUIRE (dlg.statusText().contains (MasterRecorder::installEncoderHint()) == wantHint);
+
+        if (wantHint)
         {
-            REQUIRE_FALSE (ok);
-            // The dialog must have TOLD the user, not just failed.
-            REQUIRE (dlg.statusText().contains (MasterRecorder::installEncoderHint()));
+            REQUIRE_FALSE (ok);                              // no encoder -> no file, and the user was told
+            REQUIRE (error == MasterRecorder::installEncoderHint());
+            REQUIRE_FALSE (dest.existsAsFile());
             continue;
         }
         REQUIRE (ok);
