@@ -19,6 +19,8 @@
 #include "MasterRecorder.h"
 #include <cmath>
 #include <cstring>
+#include <vector>
+#include <set>
 
 namespace
 {
@@ -232,7 +234,7 @@ TEST_CASE ("rec: saving transcodes to every built-in format", "[plugin][rec]")
     const juce::int64 n = (juce::int64) blocks * bs;
 
     auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory)
-                   .getChildFile ("synth-rec-test-" + juce::String (juce::Time::currentTimeMillis()));
+                   .getChildFile ("synth-rec-test-" + juce::Uuid().toDashedString());
     REQUIRE (dir.createDirectory().wasOk());
 
     for (const auto& fmt : MasterRecorder::formats())
@@ -309,7 +311,7 @@ TEST_CASE ("rec: MP3 encoding is embedded and needs nothing installed", "[plugin
     REQUIRE (p.stopMasterRecording());
 
     auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory)
-                   .getChildFile ("synth-mp3-" + juce::String (juce::Time::currentTimeMillis()));
+                   .getChildFile ("synth-mp3-" + juce::Uuid().toDashedString());
     REQUIRE (dir.createDirectory().wasOk());
 
     // Encode with PATH emptied: proof that no external binary is consulted. The old
@@ -379,7 +381,7 @@ TEST_CASE ("rec: an offline bounce does not contaminate an armed take", "[plugin
 
     // A 2-bar bounce is many thousands of samples -- far more than the live take so far.
     auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory)
-                   .getChildFile ("synth-bounce-rec-" + juce::String (juce::Time::currentTimeMillis()));
+                   .getChildFile ("synth-bounce-rec-" + juce::Uuid().toDashedString());
     p.setAudioSuspended (true);
     const bool bounced = p.bounceSession (dir, 2);
     p.setAudioSuspended (false);
@@ -418,4 +420,57 @@ TEST_CASE ("rec: a suspended device records nothing rather than garbage", "[plug
     REQUIRE (p.masterRecorder().recordedSamples() == before + 10 * 128);
     REQUIRE (p.stopMasterRecording());
     p.masterRecorder().discardTake();
+}
+
+// Two recorders that start in the SAME millisecond must not share a take file. The name used
+// to be "synth-take-<millis>.wav", so any two recordings starting in one millisecond aliased:
+// one's discardTake() deleted the other's file, or both writers wrote the same path, and a
+// take was silently lost. Reachable for real with two plugin instances in a DAW, or a DAW
+// plus the standalone -- and it reddened CI, where ctest -j4 runs these tests as parallel
+// processes. Uniqueness must not depend on the clock's resolution.
+TEST_CASE ("rec: concurrent recordings never share a take file", "[plugin][rec]")
+{
+    constexpr int kRecorders = 16;
+    std::vector<std::unique_ptr<MasterRecorder>> recs;
+    std::vector<juce::File> takes;
+
+    // Started in a tight loop, so many of these land in the same millisecond.
+    for (int i = 0; i < kRecorders; ++i)
+    {
+        auto r = std::make_unique<MasterRecorder>();
+        REQUIRE (r->start (48000.0, 2));
+        auto f = r->takeFile();
+        REQUIRE (f.existsAsFile());
+        takes.push_back (f);
+        recs.push_back (std::move (r));
+    }
+
+    // Every path distinct, and every file still present -- i.e. nobody clobbered anybody.
+    std::set<juce::String> unique;
+    for (const auto& f : takes) unique.insert (f.getFullPathName());
+    REQUIRE ((int) unique.size() == kRecorders);
+    for (const auto& f : takes) REQUIRE (f.existsAsFile());
+
+    // Feed each a distinct amount, then confirm each take kept its OWN length: a shared path
+    // would have them overwriting one another.
+    for (int i = 0; i < kRecorders; ++i)
+    {
+        const int n = 128 * (i + 1);
+        std::vector<float> L ((size_t) n, 0.25f), R ((size_t) n, -0.25f);
+        recs[(size_t) i]->write (L.data(), R.data(), n);
+    }
+    for (int i = 0; i < kRecorders; ++i)
+    {
+        REQUIRE (recs[(size_t) i]->stop());
+        REQUIRE (recs[(size_t) i]->recordedSamples() == 128 * (i + 1));
+        auto d = decode (recs[(size_t) i]->takeFile());
+        REQUIRE (d.ok);
+        REQUIRE (d.length == 128 * (i + 1));
+    }
+
+    // Discarding one must not disturb any other.
+    recs[0]->discardTake();
+    REQUIRE_FALSE (takes[0].existsAsFile());
+    for (int i = 1; i < kRecorders; ++i) REQUIRE (takes[(size_t) i].existsAsFile());
+    for (int i = 1; i < kRecorders; ++i) recs[(size_t) i]->discardTake();
 }

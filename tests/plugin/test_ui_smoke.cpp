@@ -1053,7 +1053,7 @@ TEST_CASE ("rec dialog: the save dialog offers the formats and writes the chosen
     snapshot (dlg, "rec-save-dialog.png");
 
     auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory)
-                   .getChildFile ("synth-recdlg-" + juce::String (juce::Time::currentTimeMillis()));
+                   .getChildFile ("synth-recdlg-" + juce::Uuid().toDashedString());
     REQUIRE (dir.createDirectory().wasOk());
 
     // Pick a format through the real ComboBox, then save: the file must appear and decode.

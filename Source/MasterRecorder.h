@@ -75,8 +75,13 @@ public:
         if (sampleRate <= 0.0) return false;
         discardTake();                                  // one take at a time
 
+        // The take name must be unique per RECORDER, not per millisecond. A millisecond stamp
+        // collides whenever two recordings start in the same one: two plugin instances in a DAW,
+        // a DAW plus the standalone, or (how this was found) parallel test processes. The loser's
+        // file is then deleted or written by the other's writer, and its take is silently lost.
+        // A UUID cannot collide across processes or instances.
         auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory);
-        take = dir.getChildFile ("synth-take-" + juce::String (juce::Time::currentTimeMillis()) + ".wav");
+        take = dir.getChildFile ("synth-take-" + juce::Uuid().toDashedString() + ".wav");
         take.deleteFile();
         auto os = take.createOutputStream();
         if (os == nullptr) { take = juce::File(); return false; }
