@@ -89,6 +89,7 @@ add_executable(plugin_tests
     plugin/test_wavetable_plugin.cpp
     plugin/test_unison_plugin.cpp
     plugin/test_bounce.cpp
+    plugin/test_master_recorder.cpp
     plugin/test_midi_learn.cpp
     plugin/test_output_bounds.cpp
     plugin/test_device_curation.cpp
@@ -223,3 +224,7 @@ else()
     message(WARNING "pluginval not found; the 'pluginval_vst3' CTest will be skipped. "
                     "run-all-checks.sh fetches it automatically.")
 endif()
+
+# Third-party UB exemption for the vendored FLAC/libvorbis translation unit; see the
+# function's definition in the root CMakeLists for why this is compile-time on GCC.
+vasynth_exempt_thirdparty_codec_ub()

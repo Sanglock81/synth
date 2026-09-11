@@ -8,6 +8,25 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **REC records what you hear.** The top bar's **REC** button was a placeholder that only posted a
+  toast; it is now the real thing. Tap **REC** and it captures the **master output** — every part, the
+  sequencer, the arpeggiator, the looper lanes, samples and all FX, taken *after* master gain and the
+  safety clipper, so a take is bit-identical to what leaves the DAC. The button becomes **STOP** on a
+  filled red ground (it always reads as the action it will perform), and stopping opens a **save
+  dialog** straight away: pick a format, pick a file, done. Takes have **no length limit** — audio
+  streams to a temp WAV through a lock-free FIFO and a background writer thread, so the audio thread
+  never allocates, locks or touches the disk, and an hour-long session costs no more RAM than a
+  ten-second one. A take that outran the disk is reported as a dropout count rather than left to be
+  discovered on playback, and a sample-rate change mid-take closes the file cleanly instead of writing
+  samples its header misdescribes. Works in the standalone **and** in a DAW.
+- **Recordings save as WAV, FLAC, Ogg Vorbis or MP3.** The save dialog offers WAV 24-bit (the default)
+  and 16-bit, FLAC, Ogg Vorbis, and MP3 at 320 or 192 kbps. WAV/FLAC/Ogg encode inside JUCE, so they
+  are always available on **both Linux and Windows**. JUCE ships no MP3 *encoder*, so MP3 uses an
+  external one (`lame`, else `ffmpeg`), located at save time by searching **beside the app binary**
+  (plus `bin/` and `tools/`) and then every entry of `PATH` — so a `lame.exe` dropped into the Windows
+  install folder just works, with nothing on `PATH`. When no encoder is present the dialog says exactly
+  what to install for that platform instead of leaving a dead menu entry. Escaping the dialog **keeps**
+  the take and reports its temp path, so a stray keypress cannot lose a performance.
 - **NOISE XY — a shaping field for the noise source.** The noise strip's reserved slot becomes a 2D
   drag pad over the fourth sound source. Along the **bottom edge** it sweeps spectral **tilt** through
   the classic noise colours — brown, pink, white, bright; **dragging upward** narrows the noise into a

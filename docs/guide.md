@@ -16,7 +16,7 @@ The performance + patch strip. Preset name and its actions on the left, the voic
 8. **TRIM** - Per-patch output level (baked with the preset). _Match a patch's loudness to the rest of the bank without touching its sound._
 9. **MASTER** - Master output level (a performance control, not saved with presets). _Set your overall level; the safety clipper still guarantees the output never exceeds +/-1._
 10. **MACROS (1-8)** - Eight assignable knobs; each label shows what it drives. _Assign via the mod matrix (or LINK); mapped to a controller's knobs for hands-on control._
-11. **REC** - Arm/record the master output to a WAV file (standalone). _Capture a take of whatever you play; the file lands in your output folder._
+11. **REC / STOP** - Records everything you hear (the master output) to an audio file; tap again to stop and save. _REC starts a take of any length; STOP opens a save dialog -- WAV, FLAC, Ogg or MP3._
 12. **LINK / MOD / OUTPUTS / INPUTS** - Open the routing tools: touch-connect a mod source, the mod overlay, and device I/O. _LINK then tap a control to route the armed source; INPUTS maps surfaces to parts._
 
 ## Parts rail

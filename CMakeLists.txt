@@ -34,6 +34,40 @@ if (VASYNTH_UBSAN)
     add_compile_definitions(VASYNTH_UBSAN=1)
 endif()
 
+# Third-party UB exemption, scoped to ONE translation unit: the JUCE audio-formats unity
+# TU, which is what #includes Xiph's vendored FLAC and libvorbis sources. Both carry UB
+# that is theirs, not ours, and that we cannot fix without forking a codec:
+#
+#   * juce_FlacAudioFormat.cpp + libvorbis psy.c -- left shift of a negative value. UB on
+#     paper before C++20, well-defined on every two's-complement target we ship to, and
+#     made well-defined outright IN C++20.
+#   * libvorbis psy.c:347 -- reads index 17 of a float[17] (a one-past-the-end over-read
+#     in the tonemask/ATH interpolation). A known upstream libvorbis 1.3.7 report.
+#
+# Both surfaced from the REC export tests, the first thing in this project to exercise
+# FLAC/Ogg ENCODING. The exemption is deliberately the whole TU rather than a list of
+# individual checks: a per-check list is brittle (fixing shift-base merely revealed the
+# over-read beneath it) and every line in this TU is vendored code either way.
+#
+# This does NOT weaken our own gate. Exactly one TU is exempt; all of Source/ and every
+# other translation unit stay fully UB-checked. Never widen this to cover our own code --
+# see the same policy in tests/lsan.supp.
+#
+# tests/ubsan.supp states the same intent as a runtime suppression, but GCC's libubsan
+# IGNORES suppression files (an LLVM-only feature), so the exemption that actually takes
+# effect on our gate is this compile-time one.
+#
+# Call this from each directory that defines targets consuming the JUCE module (source
+# file properties are directory-scoped).
+function(vasynth_exempt_thirdparty_codec_ub)
+    if (NOT VASYNTH_UBSAN)
+        return()
+    endif()
+    set_source_files_properties(
+        ${juce_SOURCE_DIR}/modules/juce_audio_formats/juce_audio_formats.cpp
+        PROPERTIES COMPILE_OPTIONS -fno-sanitize=undefined)
+endfunction()
+
 # Fetch JUCE. Pin the tag so builds are reproducible; bump deliberately.
 include(FetchContent)
 FetchContent_Declare(
@@ -43,6 +77,10 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(JUCE)
+
+# juce_SOURCE_DIR exists from here on, so the exemption can be applied to this
+# directory's targets (VASynth and its artefacts).
+vasynth_exempt_thirdparty_codec_ub()
 
 # Install the built VST3 into the user plugin dir after each build. OFF by default:
 # a post-build COPY overwrites the ~/.vst3/synth.vst3 SYMLINK that tools/install-vst3.sh

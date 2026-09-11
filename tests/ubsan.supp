@@ -1,0 +1,22 @@
+# UndefinedBehaviourSanitizer suppressions.
+#
+# Our own code must be UB-free. Entries here are ONLY for VENDORED THIRD-PARTY
+# code we do not own — never suppress UB in Source/.
+#
+# Xiph's FLAC and libvorbis shift negative values in their bit-twiddling hot
+# paths (juce_FlacAudioFormat.cpp, libvorbis psy.c). That is UB on paper before
+# C++20, but well-defined on every two's-complement target we ship to, and it
+# was made well-defined outright in C++20. It is idiomatic throughout both
+# codecs and is not ours to fix. Surfaced by the REC export tests, which are the
+# first thing here to exercise FLAC/Ogg encoding.
+#
+# NOTE: GCC's libubsan ignores suppression files -- they are an LLVM/clang feature. On
+# GCC (our gate) the exemption that actually takes effect is the compile-time
+# -fno-sanitize=shift-base applied to the single juce_audio_formats.cpp translation unit
+# by vasynth_exempt_thirdparty_codec_ub() in CMakeLists.txt. This file is kept so the
+# intent lives in one readable place and a clang-built gate behaves identically.
+shift-base:juce_FlacAudioFormat.cpp
+shift-base:psy.c
+# libvorbis psy.c:347 reads index 17 of a float[17] -- a one-past-the-end over-read in the
+# tonemask/ATH interpolation, reported upstream against libvorbis 1.3.7.
+array-bounds:psy.c

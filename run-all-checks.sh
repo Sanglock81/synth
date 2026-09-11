@@ -49,7 +49,11 @@ if [[ $SANITIZE -eq 1 ]]; then
     # here, so it's excluded; correctness is covered by the normal gate.
     export ASAN_OPTIONS="detect_leaks=1:halt_on_error=1:abort_on_error=1"
     export LSAN_OPTIONS="suppressions=$ROOT/tests/lsan.supp:print_suppressions=0"
-    export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
+    # ubsan.supp exempts the vendored Xiph FLAC/libvorbis shift-base UB. GCC's libubsan
+    # IGNORES suppression files (an LLVM-only feature), so the real exemption on this
+    # toolchain is the compile-time one in CMakeLists.txt; this keeps the intent declared
+    # in one readable place and makes a clang-built gate behave the same way.
+    export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1:suppressions=$ROOT/tests/ubsan.supp"
 
     for SAN in ASAN UBSAN; do
         DIR="build-$(echo "$SAN" | tr '[:upper:]' '[:lower:]')"

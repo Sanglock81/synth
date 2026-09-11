@@ -6,15 +6,16 @@
 #include "ModMatrixPanel.h"
 #include "InputsDialog.h"
 #include "OutputsDialog.h"
+#include "RecordSaveDialog.h"
 #include "../PluginProcessor.h"
 #include "../PresetManager.h"
 #include <map>
 
 // ============================================================================
 // R2 top bar: the preset name (tap to load), Save / Random, a live CPU readout,
-// eight MACRO knobs (M1-M8), the big MASTER knob, a REC placeholder (the looper
-// lands in R3), and the help (?) button. Refuses keyboard focus so QWERTY note
-// input keeps working; the preset menu restores focus on close.
+// eight MACRO knobs (M1-M8), the big MASTER knob, the REC/STOP master recorder,
+// and the help (?) button. Refuses keyboard focus so QWERTY note input keeps
+// working; the preset menu restores focus on close.
 // ============================================================================
 
 class TopBar : public juce::Component,
@@ -72,9 +73,12 @@ public:
         };
         addAndMakeVisible (clear);
 
-        rec.setButtonText ("REC"); styleBtn (rec);
-        rec.setColour (juce::TextButton::textColourOffId, juce::Colour (0xffd8443a));
-        rec.onClick = [this] { proc.postToast ("Recording lands with the looper (R3)"); if (restoreFocus) restoreFocus(); };
+        // REC / STOP: a toggle that records the master output to a file. Idle it reads REC in
+        // red; recording it reads STOP on a filled red ground, so the armed state is readable
+        // across a stage at a glance. STOP opens the save dialog immediately.
+        styleBtn (rec);
+        rec.onClick = [this] { onRecClicked(); };
+        refreshRecButton();
         addAndMakeVisible (rec);
 
         full.setButtonText ("FS"); styleBtn (full);
@@ -242,6 +246,10 @@ private:
         if ((proc.modLinkArmedSource() >= 0) != linkWasArmed)
         { linkWasArmed = proc.modLinkArmedSource() >= 0; refreshLinkButton(); repaintTop(); }
 
+        // REC can also be stopped from outside the button (a failed start, a shutdown), so the
+        // label is driven from the recorder's real state, never from what we last set it to.
+        if (proc.isMasterRecording() != recWasOn) refreshRecButton();
+
         // Poly/Mono/Legato + glide are per-part VOICE controls; a kit part is always poly
         // and its pads don't glide, so grey them out (disabled) when a kit is the active part.
         const bool kitActive = proc.isPartKit (proc.playFocus());
@@ -251,6 +259,38 @@ private:
             if (mode)  { mode->setEnabled  (! kitActive); mode->setAlpha  (kitActive ? 0.35f : 1.0f); }
             if (glide) { glide->setEnabled (! kitActive); glide->setAlpha (kitActive ? 0.35f : 1.0f); }
         }
+    }
+
+    // REC / STOP. Recording? stop, then open the save dialog straight away (the take is
+    // already closed on disk by then, so the dialog can take as long as the user likes).
+    // Idle? start. Either way the label flips so the button always says what it will DO next.
+    void onRecClicked()
+    {
+        if (proc.isMasterRecording())
+        {
+            const bool got = proc.stopMasterRecording();
+            refreshRecButton();
+            // Nothing captured (armed and stopped instantly, or the device never ran) -- there is
+            // no file to offer, and an empty save dialog would be a dead end.
+            if (got)
+                RecordSaveDialog::show (proc, getTopLevelComponent(), [this] { refreshRecButton(); if (restoreFocus) restoreFocus(); });
+            else if (restoreFocus) restoreFocus();
+            return;
+        }
+        proc.startMasterRecording();
+        refreshRecButton();
+        if (restoreFocus) restoreFocus();
+    }
+
+    void refreshRecButton()
+    {
+        const bool on = proc.isMasterRecording();
+        rec.setButtonText (on ? "STOP" : "REC");
+        rec.setColour (juce::TextButton::buttonColourId,  on ? kRecRed : VASynthLookAndFeel::track());
+        rec.setColour (juce::TextButton::textColourOffId, on ? VASynthLookAndFeel::panel() : kRecRed);
+        rec.setTooltip (on ? "STOP: end the recording and save it to a file"
+                           : "REC: record the master output (everything you hear) to a file");
+        recWasOn = on;
     }
 
     // LINK: armed? disarm. Otherwise pop the source list; picking one arms it and lights every
@@ -482,7 +522,9 @@ private:
     juce::TextButton panic;                             // all-notes-off (live + loops + seq/arp + samples)
     juce::TextButton link, mod, inputs, outputs;        // global-action row
     bool linkWasArmed = false;
+    bool recWasOn = false;                                       // REC label state, resynced by the timer
     inline static const juce::Colour kLinkRing { 0xff4bb3c4 };   // LINK cyan (matches the knob armed ring)
+    inline static const juce::Colour kRecRed  { 0xffd8443a };    // REC/PANIC red (the existing danger colour)
     juce::OwnedArray<RotaryKnob> macros;
     juce::OwnedArray<juce::ParameterAttachment> macroAtt;
     std::unique_ptr<RotaryKnob> master, glide, analog, uni, uniDet, uniWid, trim;

@@ -22,6 +22,8 @@
 #include "UI/BottomZones.h"
 #include "UI/SessionExportDialog.h"
 #include "UI/OutputsDialog.h"
+#include "UI/RecordSaveDialog.h"
+#include "MasterRecorder.h"
 #include "UI/ModMatrixPanel.h"
 #include "UI/FXPanel.h"
 #include "ModDestRegistry.h"
@@ -913,3 +915,204 @@ TEST_CASE ("layout: panel splits are proportional to the window at every size",
     }
 }
 
+// --- REC/STOP: the top bar's record toggle, driven as a real button ---------------------
+// The button shipped as a placeholder that only posted a toast, so this drives the REAL
+// TextButton found in the REAL editor tree (never TopBar's handler) -- a REC button wired
+// to nothing, or relabelled without actually recording, fails here. Per the smoke-harness
+// rule: real events, end-to-end state, and a screenshot of the armed state.
+namespace
+{
+    // Depth-first search for a TextButton by its current label.
+    juce::TextButton* findButton (juce::Component& c, const juce::String& text)
+    {
+        for (auto* ch : c.getChildren())
+        {
+            if (auto* b = dynamic_cast<juce::TextButton*> (ch))
+                if (b->getButtonText() == text) return b;
+            if (auto* found = findButton (*ch, text)) return found;
+        }
+        return nullptr;
+    }
+}
+
+TEST_CASE ("rec button: tapping REC records the master output and relabels to STOP",
+           "[plugin][smoke][rec]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (VASynthEditor::kDefaultWidth, 1000);
+    ed->setVisible (true);                          // tap() needs a real, hit-testable tree
+
+    auto* rec = findButton (*ed, "REC");
+    REQUIRE (rec != nullptr);                       // the button exists and reads REC when idle
+    REQUIRE (rec->getWidth()  > 10);                // ...and is actually on screen
+    REQUIRE (rec->getHeight() > 10);
+    REQUIRE_FALSE (p.isMasterRecording());
+
+    // ---- a REAL tap on the REAL button arms the recorder ----
+    // This is the assertion the placeholder REC button would have failed: it posted a toast
+    // and nothing else, so the tap reached the button but never reached the recorder.
+    tap (*rec);
+    REQUIRE (p.isMasterRecording());
+    REQUIRE (rec->getButtonText() == "STOP");       // the label says what the button will DO next
+    REQUIRE (findButton (*ed, "REC") == nullptr);   // ...and no stale REC label is left anywhere
+
+    snapshot (*ed, "rec-armed.png");
+
+    // Audio rendered while armed must land in the take -- this proves the audio-thread TAP is
+    // wired into the render path, not merely that a flag flipped.
+    for (int b = 0; b < 40; ++b)
+    {
+        juce::AudioBuffer<float> buf (2, 128); buf.clear();
+        juce::MidiBuffer midi;
+        if (b == 0) midi.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0);
+        p.processBlock (buf, midi);
+    }
+    REQUIRE (p.masterRecorder().recordedSamples() == 40 * 128);
+    REQUIRE (p.masterRecorder().droppedBlocks() == 0);
+
+    // Stopping THIS take would open the modal save dialog, and this suite never launches
+    // native modal windows (see the SessionExportDialog/OutputsDialog tests, which construct
+    // their dialog directly). So finish the take off-button and cover the save path in the
+    // dialog test below.
+    REQUIRE (p.stopMasterRecording());
+    auto take = p.masterRecorder().takeFile();
+    REQUIRE (take.existsAsFile());
+    REQUIRE (take.getSize() > 0);
+    p.masterRecorder().discardTake();
+}
+
+// The STOP branch of the same handler, driven as a real tap. An armed take that captured
+// NOTHING has no file to offer, so the handler stops without opening a dialog -- which lets
+// the real button be tapped twice, end to end, with no modal window in the way.
+TEST_CASE ("rec button: tapping STOP disarms and returns the label to REC",
+           "[plugin][smoke][rec]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
+    ed->setSize (VASynthEditor::kDefaultWidth, 1000);
+    ed->setVisible (true);
+
+    auto* rec = findButton (*ed, "REC");
+    REQUIRE (rec != nullptr);
+
+    tap (*rec);                                     // arm
+    REQUIRE (p.isMasterRecording());
+    REQUIRE (rec->getButtonText() == "STOP");
+
+    tap (*rec);                                     // stop -- nothing was rendered, so no dialog
+    REQUIRE_FALSE (p.isMasterRecording());
+    REQUIRE (rec->getButtonText() == "REC");        // the toggle really is a toggle
+    REQUIRE (juce::Component::getCurrentlyModalComponent() == nullptr);
+    REQUIRE (findButton (*ed, "STOP") == nullptr);
+
+    // And it arms again afterwards: the button is not a one-shot.
+    tap (*rec);
+    REQUIRE (p.isMasterRecording());
+    REQUIRE (rec->getButtonText() == "STOP");
+    p.stopMasterRecording();
+    p.masterRecorder().discardTake();
+}
+
+// The save dialog is what "immediately upon selecting STOP" produces, so it must build on a
+// real finished take, offer the formats, and actually write the file the picker chose. Driven
+// through the dialog's own controls + its test seam (a native file chooser cannot run headless).
+TEST_CASE ("rec dialog: the save dialog offers the formats and writes the chosen one",
+           "[plugin][smoke][rec]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+
+    REQUIRE (p.startMasterRecording());
+    for (int b = 0; b < 60; ++b)
+    {
+        juce::AudioBuffer<float> buf (2, 128); buf.clear();
+        juce::MidiBuffer midi;
+        if (b == 0) midi.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0);
+        p.processBlock (buf, midi);
+    }
+    REQUIRE (p.stopMasterRecording());
+
+    RecordSaveDialog dlg (p);
+    dlg.setVisible (true);                                   // it sizes itself in the constructor
+    REQUIRE (dlg.getWidth()  > 0);
+    REQUIRE (dlg.getHeight() > 0);
+
+    // Every format in the model is offered in the picker, in order.
+    const auto fmts = MasterRecorder::formats();
+    REQUIRE (dlg.formatBox().getNumItems() == fmts.size());
+    for (int i = 0; i < fmts.size(); ++i)
+        REQUIRE (dlg.formatBox().getItemText (i) == juce::String (fmts[i].label));
+    REQUIRE (dlg.formatBox().getSelectedId() == 1);          // defaults to WAV 24-bit
+
+    snapshot (dlg, "rec-save-dialog.png");
+
+    auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                   .getChildFile ("synth-recdlg-" + juce::String (juce::Time::currentTimeMillis()));
+    REQUIRE (dir.createDirectory().wasOk());
+
+    // Pick a format through the real ComboBox, then save: the file must appear and decode.
+    juce::AudioFormatManager fm; fm.registerBasicFormats();
+    for (int i = 0; i < fmts.size(); ++i)
+    {
+        dlg.formatBox().setSelectedId (i + 1);               // fires onChange, as a click would
+        auto dest = dir.getChildFile ("t" + juce::String (i) + "." + fmts[i].ext);
+        juce::String error;
+        const bool ok = dlg.saveToForTest (dest, error);
+        INFO ("format=" << fmts[i].label << " error=" << error);
+
+        if (fmts[i].kind == MasterRecorder::Kind::Mp3 && ! MasterRecorder::mp3Available())
+        {
+            REQUIRE_FALSE (ok);
+            // The dialog must have TOLD the user, not just failed.
+            REQUIRE (dlg.statusText().contains (MasterRecorder::installEncoderHint()));
+            continue;
+        }
+        REQUIRE (ok);
+        REQUIRE (dest.existsAsFile());
+        REQUIRE (dest.getSize() > 0);
+        if (fmts[i].kind == MasterRecorder::Kind::Mp3) continue;   // JUCE's MP3 reader is compiled out
+        std::unique_ptr<juce::AudioFormatReader> r (fm.createReaderFor (dest));
+        REQUIRE (r != nullptr);
+        REQUIRE (r->lengthInSamples > 0);
+    }
+
+    p.masterRecorder().discardTake();
+    dir.deleteRecursively();
+}
+
+// Discard is the dialog's destructive path, so drive it as a real tap: the take must actually
+// be deleted from the temp dir, not merely forgotten about.
+TEST_CASE ("rec dialog: tapping Discard deletes the take", "[plugin][smoke][rec]")
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+
+    REQUIRE (p.startMasterRecording());
+    for (int b = 0; b < 20; ++b)
+    {
+        juce::AudioBuffer<float> buf (2, 128); buf.clear();
+        juce::MidiBuffer midi;
+        if (b == 0) midi.addEvent (juce::MidiMessage::noteOn (1, 60, 0.9f), 0);
+        p.processBlock (buf, midi);
+    }
+    REQUIRE (p.stopMasterRecording());
+    const auto take = p.masterRecorder().takeFile();
+    REQUIRE (take.existsAsFile());
+
+    {
+        RecordSaveDialog dlg (p);
+        dlg.setVisible (true);
+        tap (dlg.discardButton());
+        REQUIRE_FALSE (take.existsAsFile());                 // gone from disk
+        REQUIRE (p.masterRecorder().takeFile() == juce::File());
+    }
+    // Leaving scope must not resurrect a "take kept" claim about a file that was discarded.
+    REQUIRE_FALSE (take.existsAsFile());
+}

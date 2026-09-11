@@ -324,6 +324,16 @@ void VASynthProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         }
     }
 
+    // REC: a take's WAV header carries the rate it was opened at, so continuing across a rate
+    // change would write samples the file claims are something else -- the take would play back
+    // at the wrong pitch and length. Close it cleanly instead and tell the user; the take is kept
+    // (its temp path is recoverable) rather than silently corrupted.
+    if (recorder.isRecording() && recorder.sampleRate() != sampleRate)
+    {
+        recorder.stop();
+        postToast ("Recording stopped: the sample rate changed");
+    }
+
     // #95: (re)build the wavetable factory bank at this sample rate (message thread). The mip pitch
     // selection is sample-rate dependent, so rebuild on every prepare; pointers stay stable for the run.
     for (int id = 0; id < wtgen::kFactoryMax; ++id) wtFactory[(std::size_t) id] = wtgen::buildFactory (id, sampleRate);
@@ -2663,6 +2673,36 @@ bool VASynthProcessor::writePartMidiFile (const juce::File& file, int part, int 
     return os.openedOk() && mf.writeTo (os);
 }
 
+// --- REC: master-output recording (message thread) --------------------------------------
+// The audio thread's half of this lives in renderBlockImpl (one recorder.write() call at the
+// master output stage). Everything file-shaped happens here, off the audio thread.
+bool VASynthProcessor::startMasterRecording()
+{
+    const double sr = getSampleRate() > 0.0 ? getSampleRate() : 48000.0;
+    // Always stereo: the take is the master bus, whatever channel count the host bus has.
+    const bool ok = recorder.start (sr, 2);
+    postToast (ok ? "Recording" : "Could not start recording");
+    return ok;
+}
+
+bool VASynthProcessor::stopMasterRecording()
+{
+    if (! recorder.isRecording()) return false;
+    const bool ok = recorder.stop();
+    // A dropped block means the writer FIFO overflowed (the disk could not keep up), so the
+    // take has a gap. Say so now rather than let it be found on playback.
+    if (ok && recorder.droppedBlocks() > 0)
+        postToast ("Recorded with " + juce::String (recorder.droppedBlocks()) + " dropout(s)");
+    else if (! ok)
+    {
+        // Armed and stopped without capturing anything (or the device never ran): there is no
+        // take to offer, so drop the empty temp file rather than leaving it in the temp dir.
+        recorder.discardTake();
+        postToast ("Nothing was recorded");
+    }
+    return ok;
+}
+
 // #98 Session export = DAW-handoff BOUNCE. Renders the session OFFLINE (from a bar-1 origin) for
 // `bars` bars and writes master.wav + per-part stems + manifest.json into `dir`. Must be called with
 // the audio device suspended (no concurrent processBlock). Audio-loop RECORDINGS are excluded so
@@ -2996,6 +3036,18 @@ void VASynthProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
 {
     if (audioSuspended.load (std::memory_order_acquire)) { buffer.clear(); return; }
     renderBlockImpl (buffer, midi);
+
+    // REC tap -- deliberately in processBlock, NOT in renderBlockImpl. bounceSession() drives
+    // renderBlockImpl directly to bypass the suspend guard, so a tap inside it would splice the
+    // whole offline bounce (minutes of audio rendered in seconds) into an armed live take. Only
+    // the real-time path may feed the recorder.
+    //
+    // stereoScratch holds the finished master mix: post master-gain, post safety-clipper, exactly
+    // what renderBlockImpl copied to the output bus (a mono host's L+R fold is a bus concern, not
+    // the recording). RT-safe and a no-op when idle.
+    if (recorder.isRecording())
+        recorder.write (stereoScratch.getReadPointer (0), stereoScratch.getReadPointer (1),
+                        juce::jmin (buffer.getNumSamples(), stereoScratch.getNumSamples()));
 }
 
 void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
@@ -3509,6 +3561,9 @@ void VASynthProcessor::renderBlockImpl (juce::AudioBuffer<float>& buffer,
     health.logClip (clipSamples);
     health.logMasterPeak (masterPeak);            // F12 meter: disambiguate "sound at 0 voices" (FX tail vs hole)
     pushScope (L, R, numSamples);                 // master scope/FFT tap (RT-safe)
+    // NOTE: the REC tap is NOT here. stereoScratch still holds this post-clip master mix when
+    // renderBlockImpl returns, and processBlock records it from there -- see the comment on the
+    // recorder.write() call in processBlock for why it must not run on this (shared) path.
 
     // --- write to the output bus. Stereo: L/R; extra channels get L; a mono host
     //     gets the L+R average so nothing wet is lost.

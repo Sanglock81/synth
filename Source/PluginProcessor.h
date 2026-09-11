@@ -20,6 +20,7 @@
 #include "DSP/MidiClock.h"
 #include "Observability/AudioHealthLogger.h"
 #include "Observability/MidiTraceWriter.h"
+#include "MasterRecorder.h"
 #include <atomic>
 #include <functional>
 #include <vector>
@@ -762,6 +763,20 @@ public:
         copyXmlToBinary (xml, out);
     }
 
+    // -- REC: record the master output to a file -------------------------------
+    // The top bar's REC/STOP toggle. Captures the FINAL master output (post gain, post
+    // safety-clipper -- what actually leaves the DAC) for an unbounded length, streaming
+    // to a temp WAV; STOP hands the take to the save dialog, which transcodes it to the
+    // chosen format. Works in the standalone AND in a DAW (the tap is in the render path,
+    // not the standalone shell). See MasterRecorder.h for the RT-safety handshake.
+    //
+    // Start/stop are MESSAGE-THREAD calls (they open and close files). The audio thread
+    // only ever calls recorder.write(), from renderBlockImpl.
+    bool startMasterRecording();
+    bool stopMasterRecording();
+    bool isMasterRecording() const noexcept { return recorder.isRecording(); }
+    MasterRecorder& masterRecorder() noexcept { return recorder; }
+
     // Audio-health telemetry + RT-safe logging. The editor reads health.snapshot()
     // for the debug overlay.
     AudioHealthLogger health;
@@ -796,6 +811,11 @@ public:
     VoiceParams currentVoiceParams() const { return snapshotParams(); }
 
 private:
+    // REC capture. Owns a writer thread and a temp file, both message-thread lifetime;
+    // the audio thread only calls recorder.write(). Reached from outside via
+    // masterRecorder() / startMasterRecording() / stopMasterRecording().
+    MasterRecorder recorder;
+
     VoiceParams snapshotParams() const;
     FXParams    snapshotFXParams() const;
     // Bake a source preset -> VoiceParams (+ optionally its FX + 3 LFOs). Shared by
