@@ -10,10 +10,9 @@
 // format, pick a file, done. The take is already complete on disk (a temp WAV) by the
 // time this appears, so nothing here is time-critical and nothing can lose audio.
 //
-// Formats come from MasterRecorder::formats() -- WAV 24/16, FLAC and Ogg Vorbis encode
-// inside JUCE and are always available on Linux and Windows alike. MP3 needs an external
-// encoder, so picking it checks for one up front and says exactly what to install rather
-// than failing at save time (see MasterRecorder::findMp3Encoder).
+// Formats come from MasterRecorder::formats(). All of them -- WAV 24/16, FLAC, Ogg Vorbis
+// and MP3 -- encode inside the binary on Linux and Windows alike, so every entry in the
+// picker always works and there is nothing for the user to install.
 //
 // Closing with Escape does NOT delete the take: the temp path is toasted so it can still
 // be recovered, and the next recording (or app shutdown) cleans it up. Losing a take to a
@@ -139,23 +138,18 @@ private:
         return juce::String (m) + ":" + juce::String (secs - m * 60.0, 1).paddedLeft ('0', 4);
     }
 
+    // The only thing the status strip carries up front is a dropout warning -- with the
+    // encoder embedded there is no "install something" case for any format.
     void refreshStatus()
     {
-        juce::String s = warn;
-        if (selectedFormat().kind == MasterRecorder::Kind::Mp3 && ! MasterRecorder::mp3Available())
-            s = (s.isNotEmpty() ? s + "\n" : juce::String()) + MasterRecorder::installEncoderHint();
         const bool had = status.getText().isNotEmpty();
-        status.setText (s, juce::dontSendNotification);
-        // Grow/shrink to fit: the hint only appears once MP3 is picked, after sizing.
-        if (had != s.isNotEmpty() && getWidth() > 0) setSize (getWidth(), s.isNotEmpty() ? 158 : 118);
+        status.setText (warn, juce::dontSendNotification);
+        if (had != warn.isNotEmpty() && getWidth() > 0) setSize (getWidth(), warn.isNotEmpty() ? 158 : 118);
     }
 
     void doSave()
     {
         const auto fmt = selectedFormat();
-        if (fmt.kind == MasterRecorder::Kind::Mp3 && ! MasterRecorder::mp3Available())
-        { proc.postToast ("No MP3 encoder found"); refreshStatus(); return; }
-
         const auto stamp = juce::Time::getCurrentTime().formatted ("%Y-%m-%d-%H%M%S");
         const auto suggested = juce::File::getSpecialLocation (juce::File::userMusicDirectory)
                                    .getChildFile ("synth-take-" + stamp + "." + fmt.ext);

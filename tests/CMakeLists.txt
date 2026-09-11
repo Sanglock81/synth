@@ -162,6 +162,7 @@ target_include_directories(plugin_tests PRIVATE
 target_link_libraries(plugin_tests PRIVATE
     Catch2::Catch2WithMain
     VASynth                       # plugin shared-code (processor/editor object code)
+    vasynth_mp3lame               # VASynth links it PRIVATE, so name it again for the link line
     juce::juce_audio_utils        # JUCE module include dirs + libs (INTERFACE)
     juce::juce_dsp
     juce::juce_recommended_config_flags

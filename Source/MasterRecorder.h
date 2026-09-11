@@ -32,10 +32,10 @@
 // clears `active`, waits for the audio thread to leave write(), and only then destroys
 // the writer.
 //
-// PORTABILITY. Linux and Windows share this file. WAV / FLAC / Ogg Vorbis encode inside
-// JUCE, so they always work on both. MP3 is the exception: JUCE ships an MP3 *decoder*
-// only, so it needs an external encoder (`lame`, else `ffmpeg`), located at save time by
-// findMp3Encoder() — see that function for the search order and the Windows story.
+// PORTABILITY. Linux and Windows share this file, and every format works on both with no
+// setup: WAV / FLAC / Ogg Vorbis encode inside JUCE, and MP3 uses libmp3lame compiled
+// INTO the plugin (cmake/lame.cmake, encode path in MasterRecorder.cpp). There is no
+// encoder to install and no bundled executable to find.
 // ============================================================================
 class MasterRecorder
 {
@@ -153,67 +153,15 @@ public:
 
     // ================================ save / transcode ===============================
 
-    // Locate an MP3 encoder. JUCE has no MP3 encoder of its own, so this is the whole MP3
-    // story on BOTH platforms, and the search order is what makes it portable:
-    //
-    //   1. Beside the running binary (and a `bin`/`tools` subfolder). This is the Windows
-    //      answer: drop lame.exe into the install folder and MP3 works with nothing on PATH.
-    //   2. Every entry of PATH — the Linux answer (`apt install lame`, or ffmpeg, which
-    //      most machines already carry).
-    //
-    // Both candidate names are tried with and without ".exe" on every platform, so there is
-    // no per-OS name table to keep in sync. Returns a non-existent File when nothing is found;
-    // callers surface installEncoderHint() rather than failing silently.
-    static juce::File findMp3Encoder()
-    {
-        juce::Array<juce::File> dirs;
-        auto exeDir = juce::File::getSpecialLocation (juce::File::currentExecutableFile).getParentDirectory();
-        dirs.add (exeDir);
-        dirs.add (exeDir.getChildFile ("bin"));
-        dirs.add (exeDir.getChildFile ("tools"));
+    // The MP3 encoder is embedded (libmp3lame, linked in), so MP3 is ALWAYS available --
+    // there is nothing to discover and nothing for the user to install. This reports which
+    // encoder and version is built in, for the About/NOTICES surface and the tests.
+    // Defined in MasterRecorder.cpp, the only TU that sees <lame.h>.
+    static juce::String mp3EncoderName();
 
-        // The PATH separator is the one real per-OS difference here.
-       #if JUCE_WINDOWS
-        const char* pathSep = ";";
-       #else
-        const char* pathSep = ":";
-       #endif
-        juce::StringArray pathEntries;
-        pathEntries.addTokens (juce::SystemStats::getEnvironmentVariable ("PATH", {}), pathSep, "");
-        for (const auto& entry : pathEntries)
-            if (entry.isNotEmpty())     // getChildFile passes an absolute entry straight through
-                dirs.add (juce::File::getCurrentWorkingDirectory().getChildFile (entry));
-
-        // `lame` first: a dedicated encoder, smaller and likelier to be the bundled one.
-        for (const char* name : { "lame", "ffmpeg" })
-            for (const auto& d : dirs)
-            {
-                if (! d.isDirectory()) continue;
-                for (const auto& leaf : { juce::String (name), juce::String (name) + ".exe" })
-                {
-                    auto f = d.getChildFile (leaf);
-                    if (f.existsAsFile()) return f;
-                }
-            }
-        return {};
-    }
-
-    static bool mp3Available() { return findMp3Encoder().existsAsFile(); }
-
-    // Shown in the dialog when MP3 is picked and no encoder exists. Names the fix per platform
-    // instead of leaving the user with a dead menu entry.
-    static juce::String installEncoderHint()
-    {
-       #if JUCE_WINDOWS
-        return "MP3 needs an encoder: put lame.exe (or ffmpeg.exe) next to the app, or on your PATH.";
-       #else
-        return "MP3 needs an encoder: install lame (sudo apt install lame) or ffmpeg.";
-       #endif
-    }
-
-    // Write the finished take to `dest` in `fmt`. WAV/FLAC/Ogg are re-encoded through JUCE
-    // (portable, always present); MP3 shells out to the located encoder. Returns false and
-    // fills `error` on any failure. Runs on the message thread (a save is not RT work).
+    // Write the finished take to `dest` in `fmt`. WAV/FLAC/Ogg are re-encoded through JUCE;
+    // MP3 goes through the embedded libmp3lame (MasterRecorder.cpp). Returns false and fills
+    // `error` on any failure. Runs on the message thread (a save is not RT work).
     bool transcodeTo (const juce::File& dest, const Format& fmt, juce::String& error) const
     {
         if (! take.existsAsFile()) { error = "There is no recorded take to save."; return false; }
@@ -258,40 +206,9 @@ public:
     }
 
 private:
-    // MP3 via an external encoder. ChildProcess is handed an argv StringArray (never a
-    // command line), so a path with spaces — "C:\Program Files\..." — needs no quoting and
-    // no shell on either platform.
-    bool encodeMp3 (const juce::File& dest, int kbps, juce::String& error) const
-    {
-        auto enc = findMp3Encoder();
-        if (! enc.existsAsFile()) { error = installEncoderHint(); return false; }
-
-        dest.deleteFile();
-        const bool isFfmpeg = enc.getFileNameWithoutExtension().equalsIgnoreCase ("ffmpeg");
-        juce::StringArray args;
-        args.add (enc.getFullPathName());
-        if (isFfmpeg)
-            args.addArray ({ "-y", "-loglevel", "error", "-i", take.getFullPathName(),
-                             "-codec:a", "libmp3lame", "-b:a", juce::String (kbps) + "k",
-                             dest.getFullPathName() });
-        else
-            args.addArray ({ "--quiet", "-b", juce::String (kbps),
-                             take.getFullPathName(), dest.getFullPathName() });
-
-        juce::ChildProcess proc;
-        if (! proc.start (args, juce::ChildProcess::wantStdOut | juce::ChildProcess::wantStdErr))
-        { error = "Could not run the MP3 encoder at " + enc.getFullPathName(); return false; }
-
-        const auto out = proc.readAllProcessOutput();
-        if (! proc.waitForProcessToFinish (600000)) { proc.kill(); error = "The MP3 encoder timed out."; return false; }
-        if (proc.getExitCode() != 0 || ! dest.existsAsFile() || dest.getSize() == 0)
-        {
-            error = "MP3 encoding failed" + (out.isNotEmpty() ? ": " + out.trim().upToFirstOccurrenceOf ("\n", false, false)
-                                                              : juce::String ("."));
-            return false;
-        }
-        return true;
-    }
+    // MP3 via the embedded libmp3lame. Out-of-line in MasterRecorder.cpp so <lame.h> stays
+    // out of every TU that includes this header (which is most of them, via PluginProcessor.h).
+    bool encodeMp3 (const juce::File& dest, int kbps, juce::String& error) const;
 
     juce::TimeSliceThread thread { "synth-rec-writer" };
     std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> writer;

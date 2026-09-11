@@ -7,16 +7,18 @@
 // REAL processBlock render path (never MasterRecorder::write directly) so a tap wired
 // into the wrong stage -- or not wired at all -- fails here.
 //
-// PORTABILITY. WAV/FLAC/Ogg encode inside JUCE and are asserted unconditionally on every
-// platform. MP3 needs an external encoder that a CI box may not have, so its test asserts
-// the CONTRACT rather than the outcome: either it encodes a playable file, or it fails with
-// the install hint. Never silently skipped.
+// PORTABILITY. Every format is asserted unconditionally on every platform, with no
+// environment dependence at all: WAV/FLAC/Ogg encode inside JUCE and MP3 uses the embedded
+// libmp3lame. The earlier version of this file tolerated a missing external MP3 encoder,
+// which meant the MP3 path silently took a different branch on a machine that happened to
+// have ffmpeg -- exactly the hole that let a broken assertion reach CI.
 // ============================================================================
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include "PluginProcessor.h"
 #include "MasterRecorder.h"
 #include <cmath>
+#include <cstring>
 
 namespace
 {
@@ -65,7 +67,23 @@ namespace
 
         const double expected = seconds * (kbps * 1000.0 / 8.0);
         const double got      = (double) f.getSize();
-        return got > expected * 0.3 && got < expected * 5.0 + 4096.0;       // + room for tags
+        if (got <= expected * 0.3 || got >= expected * 5.0 + 4096.0) return false;   // + room for tags
+
+        // The LAME/Xing info tag must be present in the frame reserved at offset 0. We write it
+        // by seeking BACK to 0 after encoding (it carries the final frame count), so a wrong tag
+        // size would silently overwrite real audio instead of the reserved frame. Players also
+        // need it to report duration rather than estimating from file size.
+        in.setPosition (0);
+        juce::MemoryBlock firstFrames;
+        in.readIntoMemoryBlock (firstFrames, 2048);
+        // Raw byte search, NOT via juce::String: MP3 frame data is full of NUL bytes, and a
+        // String built from it truncates at the first one -- long before the tag at ~offset 36.
+        const auto* b = (const char*) firstFrames.getData();
+        const int n = (int) firstFrames.getSize();
+        for (int i = 0; i + 4 <= n; ++i)
+            if (std::memcmp (b + i, "Info", 4) == 0 || std::memcmp (b + i, "Xing", 4) == 0)
+                return true;
+        return false;
     }
 }
 
@@ -225,16 +243,7 @@ TEST_CASE ("rec: saving transcodes to every built-in format", "[plugin][rec]")
         const bool ok = p.masterRecorder().transcodeTo (dest, fmt, error);
         INFO ("format=" << fmt.label << "  ok=" << (int) ok << "  error=" << error);
 
-        if (fmt.kind == MasterRecorder::Kind::Mp3 && ! MasterRecorder::mp3Available())
-        {
-            // No encoder on this machine: the contract is a clear, actionable failure.
-            REQUIRE_FALSE (ok);
-            REQUIRE (error == MasterRecorder::installEncoderHint());
-            REQUIRE (error.containsIgnoreCase ("mp3"));
-            continue;
-        }
-
-        REQUIRE (ok);
+        REQUIRE (ok);        // every format, every platform -- nothing to install
         REQUIRE (error.isEmpty());
         REQUIRE (dest.existsAsFile());
         REQUIRE (dest.getSize() > 0);
@@ -258,13 +267,15 @@ TEST_CASE ("rec: saving transcodes to every built-in format", "[plugin][rec]")
 
     // A higher bitrate must produce a bigger file -- i.e. the kbps argument really reaches the
     // encoder rather than every MP3 entry yielding the same default.
-    if (MasterRecorder::mp3Available())
     {
         auto hi = dir.getChildFile ("hi.mp3"), lo = dir.getChildFile ("lo.mp3");
         juce::String e1, e2;
         REQUIRE (p.masterRecorder().transcodeTo (hi, MasterRecorder::Format { "MP3 320", "mp3", MasterRecorder::Kind::Mp3, 320 }, e1));
         REQUIRE (p.masterRecorder().transcodeTo (lo, MasterRecorder::Format { "MP3 128", "mp3", MasterRecorder::Kind::Mp3, 128 }, e2));
+        INFO ("320k=" << hi.getSize() << " 128k=" << lo.getSize());
         REQUIRE (hi.getSize() > lo.getSize());
+        // ...and roughly in the right proportion, so a silently-ignored bitrate cannot pass.
+        REQUIRE ((double) hi.getSize() / (double) lo.getSize() > 1.8);
     }
 
     // The lossy formats must actually be smaller than the lossless take -- i.e. they really
@@ -279,31 +290,59 @@ TEST_CASE ("rec: saving transcodes to every built-in format", "[plugin][rec]")
     dir.deleteRecursively();
 }
 
-// The MP3 story is the one platform-dependent piece, so pin the discovery contract itself:
-// availability and the located file must agree, and the hint must name this platform's fix.
-TEST_CASE ("rec: the MP3 encoder discovery contract holds on this platform", "[plugin][rec]")
+// MP3 must need NOTHING from the host machine. This is the whole point of embedding the
+// encoder: the previous build shelled out to `lame`/`ffmpeg` and told the user to install
+// one when absent, which on a fresh Windows box made "Save as MP3" a dead end.
+TEST_CASE ("rec: MP3 encoding is embedded and needs nothing installed", "[plugin][rec][mp3]")
 {
-    const auto enc = MasterRecorder::findMp3Encoder();
-    REQUIRE (MasterRecorder::mp3Available() == enc.existsAsFile());
+    // The encoder is compiled in, and says which one it is.
+    const auto enc = MasterRecorder::mp3EncoderName();
+    INFO ("encoder=" << enc);
+    REQUIRE (enc.containsIgnoreCase ("libmp3lame"));
+    REQUIRE (enc.containsIgnoreCase ("3.100"));
 
-    const auto hint = MasterRecorder::installEncoderHint();
-    REQUIRE (hint.isNotEmpty());
-    REQUIRE (hint.containsIgnoreCase ("mp3"));
+    VASynthProcessor p;
+    p.prepareToPlay (48000.0, 128);
+    REQUIRE (p.startMasterRecording());
+    const int blocks = 120, bs = 128;
+    renderNote (p, blocks, bs);
+    REQUIRE (p.stopMasterRecording());
+
+    auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                   .getChildFile ("synth-mp3-" + juce::String (juce::Time::currentTimeMillis()));
+    REQUIRE (dir.createDirectory().wasOk());
+
+    // Encode with PATH emptied: proof that no external binary is consulted. The old
+    // discovery-based build failed outright under these conditions.
+    const auto savedPath = juce::SystemStats::getEnvironmentVariable ("PATH", {});
    #if JUCE_WINDOWS
-    REQUIRE (hint.containsIgnoreCase ("lame.exe"));
+    _putenv_s ("PATH", "");
    #else
-    REQUIRE (hint.containsIgnoreCase ("lame"));
+    ::setenv ("PATH", "", 1);
    #endif
 
-    if (enc.existsAsFile())
-    {
-        // Whatever was found must be one of the two encoders we know how to drive.
-        const auto name = enc.getFileNameWithoutExtension().toLowerCase();
-        REQUIRE ((name == "lame" || name == "ffmpeg"));
-    }
+    auto dest = dir.getChildFile ("take.mp3");
+    juce::String error;
+    const bool ok = p.masterRecorder().transcodeTo (
+        dest, MasterRecorder::Format { "MP3 320 kbps", "mp3", MasterRecorder::Kind::Mp3, 320 }, error);
+
+   #if JUCE_WINDOWS
+    _putenv_s ("PATH", savedPath.toRawUTF8());
+   #else
+    ::setenv ("PATH", savedPath.toRawUTF8(), 1);
+   #endif
+
+    INFO ("error=" << error);
+    REQUIRE (ok);
+    REQUIRE (error.isEmpty());
+    REQUIRE (dest.existsAsFile());
+    REQUIRE (looksLikeMp3 (dest, 320, (double) (blocks * bs) / 48000.0));
+
+    p.masterRecorder().discardTake();
+    dir.deleteRecursively();
 }
 
-// Formats are the dialog's menu contents, so their shape is a UI contract: MP3 and WAV must
+// Formats are the dialog's menu contents// Formats are the dialog's menu contents, so their shape is a UI contract: MP3 and WAV must
 // both be offered (the requested minimum), and every entry needs a usable label + extension.
 TEST_CASE ("rec: the format list offers at least WAV and MP3, all well-formed", "[plugin][rec]")
 {

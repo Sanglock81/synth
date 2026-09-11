@@ -19,14 +19,15 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ten-second one. A take that outran the disk is reported as a dropout count rather than left to be
   discovered on playback, and a sample-rate change mid-take closes the file cleanly instead of writing
   samples its header misdescribes. Works in the standalone **and** in a DAW.
-- **Recordings save as WAV, FLAC, Ogg Vorbis or MP3.** The save dialog offers WAV 24-bit (the default)
-  and 16-bit, FLAC, Ogg Vorbis, and MP3 at 320 or 192 kbps. WAV/FLAC/Ogg encode inside JUCE, so they
-  are always available on **both Linux and Windows**. JUCE ships no MP3 *encoder*, so MP3 uses an
-  external one (`lame`, else `ffmpeg`), located at save time by searching **beside the app binary**
-  (plus `bin/` and `tools/`) and then every entry of `PATH` — so a `lame.exe` dropped into the Windows
-  install folder just works, with nothing on `PATH`. When no encoder is present the dialog says exactly
-  what to install for that platform instead of leaving a dead menu entry. Escaping the dialog **keeps**
-  the take and reports its temp path, so a stray keypress cannot lose a performance.
+- **Recordings save as WAV, FLAC, Ogg Vorbis or MP3 — with nothing to install.** The save dialog
+  offers WAV 24-bit (the default) and 16-bit, FLAC, Ogg Vorbis, and MP3 at 320 or 192 kbps. Every one
+  of them encodes **inside the binary**, identically on Linux and Windows. WAV/FLAC/Ogg come from
+  JUCE; JUCE ships no MP3 *encoder*, so **libmp3lame 3.100 is compiled in** (`cmake/lame.cmake`,
+  pinned by URL + SHA-256, encoder sources only — no mpglib decoder, no SSE path, no assembly). There
+  is no `lame`/`ffmpeg` to find, no bundled executable, and no PATH dependence: a test encodes MP3
+  with `PATH` emptied to prove it. MP3 output carries a LAME/Xing info tag so players report the
+  correct duration instead of estimating it. Escaping the dialog **keeps** the take and reports its
+  temp path, so a stray keypress cannot lose a performance.
 - **NOISE XY — a shaping field for the noise source.** The noise strip's reserved slot becomes a 2D
   drag pad over the fourth sound source. Along the **bottom edge** it sweeps spectral **tilt** through
   the classic noise colours — brown, pink, white, bright; **dragging upward** narrows the noise into a

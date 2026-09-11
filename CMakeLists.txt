@@ -82,6 +82,9 @@ FetchContent_MakeAvailable(JUCE)
 # directory's targets (VASynth and its artefacts).
 vasynth_exempt_thirdparty_codec_ub()
 
+# Vendored libmp3lame -- the embedded MP3 encoder for REC exports (see cmake/lame.cmake).
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/lame.cmake)
+
 # Install the built VST3 into the user plugin dir after each build. OFF by default:
 # a post-build COPY overwrites the ~/.vst3/synth.vst3 SYMLINK that tools/install-vst3.sh
 # creates (the symlink is the never-stale install path). Turn ON for a one-shot copy if
@@ -104,6 +107,7 @@ juce_add_plugin(VASynth
 target_sources(VASynth PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
+    Source/MasterRecorder.cpp                   # MP3 encode: keeps <lame.h> out of every other TU
     Source/BuildStamp.cpp                       # greppable "VASYNTHBUILD:<hash>" freshness stamp
     Source/DSP/WavetableGen.cpp
     Source/Observability/AudioHealthLogger.cpp)
@@ -187,6 +191,7 @@ option(VASYNTH_ENABLE_LTO "Enable JUCE recommended link-time optimisation" ON)
 target_link_libraries(VASynth PRIVATE
     juce::juce_audio_utils
     juce::juce_dsp
+    vasynth_mp3lame              # embedded MP3 encoder (MasterRecorder); no runtime dependency
     PUBLIC
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags)

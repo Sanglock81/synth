@@ -1070,22 +1070,10 @@ TEST_CASE ("rec dialog: the save dialog offers the formats and writes the chosen
         const bool ok = dlg.saveToForTest (dest, error);
         INFO ("format=" << fmts[i].label << " error=" << error);
 
-        // The encoder hint must appear EXACTLY when MP3 is picked with no encoder present,
-        // and never otherwise. Asserted in both directions so this covers the same ground on
-        // a machine that has an encoder and one that does not -- the earlier one-sided version
-        // silently skipped the whole no-encoder path on any dev box with ffmpeg installed, and
-        // only CI (which has neither) ever ran it.
-        const bool wantHint = fmts[i].kind == MasterRecorder::Kind::Mp3 && ! MasterRecorder::mp3Available();
-        REQUIRE (dlg.statusText().contains (MasterRecorder::installEncoderHint()) == wantHint);
-
-        if (wantHint)
-        {
-            REQUIRE_FALSE (ok);                              // no encoder -> no file, and the user was told
-            REQUIRE (error == MasterRecorder::installEncoderHint());
-            REQUIRE_FALSE (dest.existsAsFile());
-            continue;
-        }
+        // Every format in the picker must save, on every platform, with nothing installed --
+        // the encoder is embedded, so there is no conditional branch left here at all.
         REQUIRE (ok);
+        REQUIRE (dlg.statusText().isEmpty());                // no warning: a clean take saved cleanly
         REQUIRE (dest.existsAsFile());
         REQUIRE (dest.getSize() > 0);
         if (fmts[i].kind == MasterRecorder::Kind::Mp3) continue;   // JUCE's MP3 reader is compiled out
